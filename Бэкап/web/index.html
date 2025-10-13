@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+  <title>Tourist03</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+
+  <link rel="stylesheet" href="/static/styles.css?v=13" />
+</head>
+<body>
+  <!-- ===== Фильтры ===== -->
+  <div id="topbar">
+    <div class="topbar-title span2">Заполните данные для поиска баз по параметрам</div>
+    <label>Заезд <input type="date" id="dateFrom"></label>
+    <label>Выезд <input type="date" id="dateTo"></label>
+    <div class="row span2">
+      <div class="stepper"><div class="cap">Взрослые</div><div class="ctrl" data-target="adults">
+        <button class="minus">−</button><span class="val" id="adultsVal">1</span><button class="plus">+</button>
+      </div></div>
+      <div class="stepper"><div class="cap">Дети</div><div class="ctrl" data-target="children">
+        <button class="minus">−</button><span class="val" id="childrenVal">0</span><button class="plus">+</button>
+      </div></div>
+    </div>
+    <div class="row span2 actions-row">
+      <button id="reset" class="secondary">Сбросить</button>
+      <button id="apply" class="primary">Показать</button>
+    </div>
+  </div>
+
+  <!-- ===== Карта ===== -->
+  <div id="map" class="screen active"></div>
+
+  <!-- FAB-кнопки -->
+  <button class="fab fab-soft" id="toggleFilters" aria-label="Фильтр по датам" title="Фильтр по датам">📅</button>
+  <button class="fab fab-soft" id="geoBtn" aria-label="Моё местоположение" title="Моё местоположение">📍</button>
+
+  <!-- ===== Панель доступности ===== -->
+  <div id="panel">
+    <h4>Доступные номера</h4>
+    <div id="panelList"></div>
+    <div class="actions"><button class="secondary" onclick="hidePanel()">Закрыть</button></div>
+  </div>
+
+  <!-- ===== Экран: Личный кабинет ===== -->
+  <section id="accountScreen" class="screen">
+    <div class="wrap">
+      <h2>Личный кабинет</h2>
+      <div id="accountGuest" class="card" style="display:none">
+        <p class="muted">Для входа в личный кабинет и бронирования необходимо авторизоваться.</p>
+        <div class="actions-row">
+          <button class="primary" id="btnLogin">Вход</button>
+          <button class="secondary" id="btnRegister">Регистрация</button>
+        </div>
+      </div>
+
+      <div id="accountUser" class="card" style="display:none">
+        <div id="helloLine" class="hello"></div>
+        <div class="actions-row" style="margin-top:10px">
+          <button class="primary" id="btnYourData">Ваши данные</button>
+        </div>
+      </div>
+
+      <div id="yourData" class="card" style="display:none">
+        <h3 style="margin:6px 0 12px">Ваши данные</h3>
+        <div class="form-row">
+          <label>Имя и фамилия<input id="yd_name" placeholder="Ваше имя и фамилия"></label>
+          <label>Телефон<input id="yd_phone" placeholder="Ваш номер телефона" disabled></label>
+          <label>E‑mail<input id="yd_email" placeholder="example@domain.ru"></label>
+        </div>
+        <div class="actions-row">
+          <button class="primary" id="btnSaveEmail">Сохранить</button>
+          <button class="secondary" id="btnBack">Назад</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Экран: Услуги ===== -->
+  <section id="servicesScreen" class="screen">
+    <div class="wrap">
+      <h2>Дополнительные услуги</h2>
+      <div class="card"><p class="muted">Пример: аренда лодки, баня, питание.</p></div>
+    </div>
+  </section>
+
+  <!-- ===== Экран: Помощь ===== -->
+  <section id="helpScreen" class="screen">
+    <div class="wrap">
+      <h2>Помощь</h2>
+      <div class="card card-xl">
+        <div class="settings-row">
+          <div class="settings-title">Тема интерфейса</div>
+          <label class="switch">
+            <input type="checkbox" id="themeToggle" />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Нижний таббар ===== -->
+  <nav class="tabbar">
+    <div class="tab active" data-tab="map">
+      <div class="icon">🗺️</div>
+      <div class="label">Карта</div>
+    </div>
+    <div class="tab" data-tab="account">
+      <div class="icon">👤</div>
+      <div class="label">Личный кабинет</div>
+    </div>
+    <div class="tab" data-tab="services">
+      <div class="icon">🛎️</div>
+      <div class="label">Услуги</div>
+    </div>
+    <div class="tab" data-tab="help">
+      <div class="icon">❓</div>
+      <div class="label">Помощь</div>
+    </div>
+  </nav>
+
+  <!-- ===== Модалки ===== -->
+  <div id="modal" class="modal" style="display:none">
+    <div class="modal-card" id="modalCard"></div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <script src="/static/app.js?v=13"></script>
+</body>
+</html>

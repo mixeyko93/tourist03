@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Карта баз отдыха — Tourist03</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+
+  <style>
+    html, body { height: 100%; margin: 0; font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto; }
+    body { background:#fff; }
+
+    #topbar {
+      position: fixed; z-index: 1000; top: 10px; left: 50%; transform: translateX(-50%);
+      background: rgba(255,255,255,.96); box-shadow: 0 2px 10px rgba(0,0,0,.12);
+      border-radius: 12px; padding: 8px 12px; display: flex; gap: 8px; align-items: center;
+    }
+    #topbar input, #topbar button, #topbar select {
+      height: 34px; border-radius: 8px; border: 1px solid #ddd; padding: 0 10px;
+    }
+
+    /* ВАЖНО: корректный блок для карты */
+    #map {
+      position: fixed;
+      inset: 0;              /* top/right/bottom/left: 0 */
+      height: 100vh;         /* во всю высоту вьюпорта (в том числе в Telegram WebApp) */
+    }
+
+    #panel {
+      position: fixed; left: 0; right: 0; bottom: 0; max-height: 65%;
+      background: #fff; box-shadow: 0 -8px 24px rgba(0,0,0,.2);
+      border-radius: 16px 16px 0 0; transform: translateY(110%); transition: .25s ease;
+      z-index: 2000; padding: 14px;
+    }
+    #panel.show { transform: translateY(0); }
+    #panel h4 { margin: 6px 0 12px; font-size: 16px; text-align: center; }
+    #panel .item {
+      display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center;
+      border: 1px solid #eee; border-radius: 10px; padding: 10px; margin-bottom: 8px;
+    }
+    #panel .item .name { font-weight: 600; }
+    #panel .item .meta { font-size: 12px; color: #666; }
+    #panel .item .price { font-weight: 600; }
+    #panel .actions { display: flex; gap: 8px; justify-content: center; margin-top: 8px; }
+    #panel button.secondary { background: #fff; color: #0a84ff; border: 1px solid #0a84ff; }
+    #links { position: fixed; z-index: 1000; top: 10px; left: 10px; background: rgba(255,255,255,.96); padding: 6px 10px; border-radius: 10px; }
+    #links a { margin-right: 8px; text-decoration: none; }
+    /* Чтобы длинный контент попапа прокручивался, а не вылазил за экран */
+.leaflet-popup-content {
+  max-height: 60vh;
+  overflow: auto;
+}
+.popup img {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+  </style>
+</head>
+<body>
+  <div id="links">
+    <a href="admin.html">Админ броней</a>
+    <a href="admin_objects.html">Админ базы</a>
+  </div>
+
+  <div id="topbar">
+    <label>Заезд <input type="date" id="dateFrom"></label>
+    <label>Выезд <input type="date" id="dateTo"></label>
+    <label>Гостей
+      <select id="guests">
+        <option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option>
+      </select>
+    </label>
+    <button id="apply">Показать</button>
+  </div>
+
+  <div id="map"></div>
+
+  <div id="panel">
+    <h4>Доступные номера</h4>
+    <div id="panelList"></div>
+    <div class="actions">
+      <button class="secondary" onclick="hidePanel()">Закрыть</button>
+    </div>
+  </div>
+
+  <!-- JS библиотеки -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+  <!-- ВЕСЬ JS ВНУТРИ одного <script> -->
+  <script>
+    // Telegram WebApp detection
+    const isTG = !!(window.Telegram && window.Telegram.WebApp);
+    if (isTG) {
+    Telegram.WebApp.ready();
+    // Форсируем разворот на максимум (иногда нужно «толкнуть» несколько раз)
+    const expand = () => Telegram.WebApp.expand();
+    expand();
+    Telegram.WebApp.onEvent('viewportChanged', expand);
+    // ещё один «пинок» после первого пользовательского тапа
+    document.addEventListener('click', expand, { once: true });
+  }
+
+    // Карта
+    const map = L.map('map', { zoomControl: true }).setView([56.0, 43.5], 5);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    // Перерасчёт размеров карты (важно для Telegram WebApp)
+    function fixMapSize(){ setTimeout(()=> map.invalidateSize(true), 50); }
+    window.addEventListener('load', fixMapSize);
+    window.addEventListener('resize', fixMapSize);
+    if (isTG) Telegram.WebApp.onEvent('viewportChanged', fixMapSize);
+
+    const TOPBAR_H = 76; // подгони под свой topbar
+    map.on('popupopen', (e) => {
+      e.popup.options.autoPan = true;
+      e.popup.options.autoPanPaddingTopLeft = L.point(0, TOPBAR_H + 12);
+      e.popup.options.autoPanPadding = L.point(20, 20);
+      e.popup.update();
+    });
+
+
+    const cluster = L.markerClusterGroup(); map.addLayer(cluster);
+
+    async function loadCamps() {
+      const res = await fetch('/api/camps');
+      const list = await res.json();
+      cluster.clearLayers();
+
+      list.forEach(c => {
+        const m = L.marker([c.lat, c.lng]);
+        const img = (c.photos && c.photos[0]) ? c.photos[0] : 'https://via.placeholder.com/600x400?text=%D0%A4%D0%BE%D1%82%D0%BE';
+        const price = (c.min_price != null) ? `${c.min_price} ₽/сутки` : 'Цена по запросу';
+        const lake = c.lake_name ? `<em>${c.lake_name}</em>` : '';
+        const siteBtn = c.site_url ? `<a class="secondary" href="${c.site_url}" target="_blank" rel="noopener">Подробнее</a>` : '';
+        const popup = `
+          <div class="popup">
+            <img src="${img}" alt="Фото" style="width:100%;height:150px;object-fit:cover;border-radius:8px;margin-bottom:6px;">
+            <h3 style="margin:0;text-align:center;font-size:16px">${c.name}</h3>
+            ${lake}
+            <div class="row"><span>${c.address ?? ''}</span></div>
+            <div class="row"><strong>${price}</strong><span>${c.phone ?? ''}</span></div>
+            <div class="btns" style="display:flex;gap:8px;">
+              ${siteBtn}
+              <button onclick='showAvailability(${c.id})'>Доступность</button>
+            </div>
+          </div>`;
+        m.bindPopup(popup, { maxWidth: 300 });
+        cluster.addLayer(m);
+      });
+
+      if (list.length) {
+        const bounds = L.latLngBounds(list.map(c => [c.lat, c.lng]));
+        map.fitBounds(bounds.pad(0.2));
+        fixMapSize();
+      }
+    }
+
+    function getFilters(){
+      const dateFrom = document.getElementById('dateFrom').value;
+      const dateTo   = document.getElementById('dateTo').value;
+      const guests   = Number(document.getElementById('guests').value || 1);
+      return { dateFrom, dateTo, guests };
+    }
+    function requireDates(){
+      const { dateFrom, dateTo } = getFilters();
+      if (!dateFrom || !dateTo) { alert('Выберите даты заезда и выезда.'); return false; }
+      if (new Date(dateTo) <= new Date(dateFrom)) { alert('Дата выезда должна быть позже даты заезда.'); return false; }
+      return true;
+    }
+
+    async function showAvailability(campId) {
+      if (!requireDates()) return;
+      const { dateFrom, dateTo, guests } = getFilters();
+      const url = `/api/availability?camp_id=${campId}&date_from=${dateFrom}&date_to=${dateTo}&guests=${guests}`;
+      const res = await fetch(url);
+      if (!res.ok) { alert('Ошибка запроса доступности'); return; }
+      const items = await res.json();
+
+      const list = document.getElementById('panelList');
+      list.innerHTML = '';
+      if (!items.length) {
+        list.innerHTML = '<div class="item"><div>Нет доступных номеров на выбранные даты.</div></div>';
+      } else {
+        items.forEach(x => {
+          const div = document.createElement('div');
+          div.className = 'item';
+          div.innerHTML = `
+            <div>
+              <div class="name">${x.room_name}</div>
+              <div class="meta">Вместимость: ${x.capacity} · Ночей: ${x.nights}</div>
+            </div>
+            <div style="text-align:right">
+              <div class="price">${x.total_price} ₽</div>
+              <button onclick="bookRoom(${x.room_id})">Забронировать</button>
+            </div>`;
+          list.appendChild(div);
+        });
+      }
+      showPanel();
+    }
+
+    async function bookRoom(roomId) {
+      if (!requireDates()) return;
+      const { dateFrom, dateTo, guests } = getFilters();
+
+      let name = prompt('Ваше имя:'); if (!name) return;
+      let phone = prompt('Телефон:');  if (!phone) return;
+
+      const payload = {
+        room_id: roomId,
+        date_from: dateFrom,
+        date_to: dateTo,
+        guests: Number(guests),
+        customer_name: name,
+        phone: phone
+      };
+
+      if (isTG) {
+        Telegram.WebApp.MainButton.setText('Отправить заявку');
+        Telegram.WebApp.MainButton.onClick(() => {
+          Telegram.WebApp.sendData(JSON.stringify(payload));
+          Telegram.WebApp.MainButton.hide();
+          alert('Заявка отправлена боту, проверьте чат.');
+        });
+        Telegram.WebApp.MainButton.show();
+      } else {
+        const res = await fetch('/api/bookings', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          const data = await res.json();
+          alert('Заявка создана! Номер #' + data.id + ' (статус: ' + data.status + ')');
+          hidePanel();
+        } else {
+          const err = await res.text();
+          alert('Не удалось создать бронь: ' + err);
+        }
+      }
+    }
+
+    function showPanel(){ document.getElementById('panel').classList.add('show'); }
+    function hidePanel(){ document.getElementById('panel').classList.remove('show'); }
+
+    document.getElementById('apply').addEventListener('click', loadCamps);
+    loadCamps();
+  </script>
+</body>
+</html>

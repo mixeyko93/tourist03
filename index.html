@@ -1,0 +1,100 @@
+<!-- web/index.html -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Турист_03 ⛺️</title>
+
+  <!-- Telegram WebApp API -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+  <!-- Leaflet (карта) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- (если используете кластеры, подключите свои скрипты/стили здесь же) -->
+
+  <!-- Наши стили -->
+  <link rel="stylesheet" href="/static/styles.css?v=204" />
+</head>
+<body>
+  <div class="tg-app">
+
+<section id="tab-map" class="tab-content">
+  <div class="map-wrap">
+    <div id="map"></div>
+
+    <div class="map-ui">
+      <button class="map-btn left"  id="openBookingFilter" title="Выбрать даты">📅</button>
+      <button class="map-btn right" id="geoBtn"             title="Моё местоположение">🧭</button>
+    </div>
+  </div>
+</section>
+
+    <!-- Вкладка: Личный кабинет -->
+    <section id="tab-account" class="tab-content" style="display:none;">
+      <h1 class="page-title">Личный кабинет</h1>
+
+      <!-- Блок гостя (покажется, когда не авторизован) -->
+      <div class="card" id="accountGuest">
+        <p class="muted">Для входа в личный кабинет и бронирования необходимо авторизоваться.</p>
+        <div class="row gap">
+          <button class="button primary" id="btnLoginOpen">Вход</button>
+          <button class="button ghost"   id="btnRegisterOpen">Регистрация</button>
+        </div>
+      </div>
+
+      <!-- Блок пользователя (скрыт по умолчанию; отрисует app.js) -->
+      <div class="card" id="accountUser" style="display:none;">
+        <div class="muted" id="helloLine">Здравствуйте!</div>
+        <div style="margin-top:8px;">
+          <div><b id="profileName"></b></div>
+          <div class="muted" id="profilePhone"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Вкладка: Услуги -->
+    <section id="tab-services" class="tab-content" style="display:none;">
+      <h1 class="page-title">Услуги</h1>
+      <div class="card"><p class="muted">Раздел находится в разработке.</p></div>
+    </section>
+
+    <!-- Вкладка: Помощь -->
+    <section id="tab-help" class="tab-content" style="display:none;">
+      <h1 class="page-title">Помощь</h1>
+      <div class="card"><p class="muted">По вопросам работы приложения пишите в поддержку @tourist_03_bot</p></div>
+    </section>
+
+    <!-- Нижнее меню -->
+    <nav class="tabbar">
+      <div class="tab active" data-target="tab-map">
+        <div class="icon">🗺️</div>
+        <div class="label">Карта</div>
+      </div>
+      <div class="tab" data-target="tab-account">
+        <div class="icon">👤</div>
+        <div class="label">Личный кабинет</div>
+      </div>
+      <div class="tab" data-target="tab-services">
+        <div class="icon">🔔</div>
+        <div class="label">Услуги</div>
+      </div>
+      <div class="tab" data-target="tab-help">
+        <div class="icon">❓</div>
+        <div class="label">Помощь</div>
+      </div>
+    </nav>
+
+  </div>
+
+  <!-- Модальное окно (ВАЖНО: требуется app.js) -->
+  <div id="modal" class="modal" style="display:none;">
+    <div id="modalCard" class="modal-card"></div>
+  </div>
+
+  <!-- Скрипты -->
+  <script defer src="/static/ui.js?v=204"></script>
+  <script defer src="/static/app.js?v=204"></script>
+</body>
+</html>

@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Админ — Базы и Номера</title>
+<style>
+  :root { --blue:#0a84ff; --red:#d32f2f; --green:#24a148; }
+  html,body{margin:0;font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto}
+  header{position:sticky;top:0;background:#fff;padding:10px 12px;box-shadow:0 2px 10px rgba(0,0,0,.08);display:flex;gap:8px;align-items:center}
+  header a{margin-left:auto;text-decoration:none}
+  .wrap{display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:1300px;margin:10px auto;padding:0 10px}
+  h3{margin:0 0 8px}
+  .card{border:1px solid #eee;border-radius:12px;padding:12px}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:8px;border-bottom:1px solid #eee;vertical-align:top}
+  th{background:#fafafa;text-align:left}
+  input,button,textarea{border:1px solid #ddd;border-radius:8px;padding:6px 8px;font:inherit}
+  button.primary{background:var(--blue);border-color:var(--blue);color:#fff;cursor:pointer}
+  button.danger{background:#fff;border-color:var(--red);color:var(--red);cursor:pointer}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .muted{color:#666;font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <strong>Базы и номера</strong>
+  <a href="admin.html">→ Брони</a>
+  <a href="index.html">→ Карта</a>
+</header>
+
+<div class="wrap">
+  <div class="card">
+    <h3>Базы</h3>
+    <div class="row">
+      <input id="camp_name" placeholder="Название"/>
+      <input id="camp_lake" placeholder="Озеро (необязательно)"/>
+      <input id="camp_lat" placeholder="Широта (например 55.75)"/>
+      <input id="camp_lng" placeholder="Долгота (например 37.62)"/>
+      <input id="camp_addr" placeholder="Адрес"/>
+      <input id="camp_phone" placeholder="Телефон"/>
+      <input id="camp_site" placeholder="Сайт (URL)"/>
+      <input id="camp_min" placeholder="Мин. цена, ₽"/>
+    </div>
+    <textarea id="camp_photos" placeholder='Ссылки фото через запятую' style="width:100%;margin-top:8px"></textarea>
+    <div style="margin-top:8px">
+      <button class="primary" onclick="createCamp()">Добавить базу</button>
+    </div>
+    <table id="camps_tbl" style="margin-top:12px">
+      <thead><tr>
+        <th>ID</th><th>Название</th><th>Озеро</th><th>Коорд.</th><th>Мин.цена</th><th>Действия</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+    <p class="muted">Нажми «Ред.» чтобы подтянуть базу для редактирования.</p>
+  </div>
+
+  <div class="card">
+    <h3>Номера</h3>
+    <div class="row">
+      <input id="room_camp_id" placeholder="ID базы"/>
+      <input id="room_name" placeholder="Название номера"/>
+      <input id="room_capacity" placeholder="Вместимость (число)"/>
+      <input id="room_price" placeholder="Цена за ночь, ₽"/>
+    </div>
+    <textarea id="room_photos" placeholder='Ссылки фото через запятую' style="width:100%;margin-top:8px"></textarea>
+    <div style="margin-top:8px">
+      <button class="primary" onclick="createRoom()">Добавить номер</button>
+    </div>
+    <table id="rooms_tbl" style="margin-top:12px">
+      <thead><tr>
+        <th>ID</th><th>База</th><th>Название</th><th>Вместимость</th><th>Цена</th><th>Действия</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+    <p class="muted">Введите ID базы и нажмите «Показать номера базы».</p>
+    <div style="display:flex;gap:8px;margin-top:6px">
+      <input id="rooms_for_camp" placeholder="ID базы"/>
+      <button onclick="loadRoomsForCamp()">Показать номера базы</button>
+    </div>
+  </div>
+</div>
+
+<script>
+async function api(path, opts={}) {
+  const res = await fetch(path, opts);
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+function val(id){return document.getElementById(id).value.trim()}
+function setVal(id,v){document.getElementById(id).value = v ?? ''}
+
+async function loadCamps(){
+  const list = await api('/api/camps');
+  const tb = document.querySelector('#camps_tbl tbody');
+  tb.innerHTML = '';
+  list.forEach(c=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${c.id}</td>
+      <td>${c.name}</td>
+      <td>${c.lake_name ?? ''}</td>
+      <td>${c.lat.toFixed(3)}, ${c.lng.toFixed(3)}</td>
+      <td>${c.min_price ?? ''}</td>
+      <td>
+        <button onclick='prefillCamp(${JSON.stringify(c).replace(/'/g,"&apos;")})'>Ред.</button>
+        <button class="danger" onclick="delCamp(${c.id})">Удалить</button>
+      </td>`;
+    tb.appendChild(tr);
+  });
+}
+
+function parsePhotos(text){ return text ? text.split(',').map(s=>s.trim()).filter(Boolean) : [] }
+
+async function createCamp(){
+  try{
+    const payload = {
+      name: val('camp_name'),
+      lake_name: val('camp_lake') || null,
+      lat: Number(val('camp_lat')),
+      lng: Number(val('camp_lng')),
+      address: val('camp_addr') || null,
+      phone: val('camp_phone') || null,
+      site_url: val('camp_site') || null,
+      min_price: val('camp_min') ? Number(val('camp_min')) : null,
+      photos: parsePhotos(val('camp_photos'))
+    };
+    await api('/api/camps', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+    await loadCamps();
+    alert('База добавлена');
+  }catch(e){ alert('Ошибка: '+e.message); }
+}
+
+function prefillCamp(c){
+  setVal('camp_name', c.name);
+  setVal('camp_lake', c.lake_name||'');
+  setVal('camp_lat', c.lat);
+  setVal('camp_lng', c.lng);
+  setVal('camp_addr', c.address||'');
+  setVal('camp_phone', c.phone||'');
+  setVal('camp_site', c.site_url||'');
+  setVal('camp_min', c.min_price??'');
+  setVal('camp_photos', (c.photos||[]).join(', '));
+  // Кнопка "Сохранить"
+  let btn = document.getElementById('camp_save_btn');
+  if(!btn){
+    btn = document.createElement('button');
+    btn.id='camp_save_btn'; btn.className='primary'; btn.style.marginLeft='8px';
+    btn.textContent='Сохранить изменения';
+    const container = document.querySelector('.card').children[3];
+    container.appendChild(btn);
+  }
+  btn.onclick = async ()=>{
+    try{
+      const payload = {
+        name: val('camp_name'),
+        lake_name: val('camp_lake') || null,
+        lat: Number(val('camp_lat')),
+        lng: Number(val('camp_lng')),
+        address: val('camp_addr') || null,
+        phone: val('camp_phone') || null,
+        site_url: val('camp_site') || null,
+        min_price: val('camp_min') ? Number(val('camp_min')) : null,
+        photos: parsePhotos(val('camp_photos'))
+      };
+      await api(`/api/camps/${c.id}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+      await loadCamps();
+      alert('Сохранено');
+    }catch(e){ alert('Ошибка: '+e.message); }
+  }
+}
+
+async function delCamp(id){
+  if(!confirm('Удалить базу #' + id + ' ?')) return;
+  try{ await api(`/api/camps/${id}`, {method:'DELETE'}); await loadCamps(); }
+  catch(e){ alert('Ошибка: '+e.message); }
+}
+
+async function loadRoomsForCamp(){
+  const cid = Number(val('rooms_for_camp'));
+  if(!cid) { alert('Укажи ID базы'); return; }
+  const list = await api(`/api/rooms?camp_id=${cid}`);
+  const tb = document.querySelector('#rooms_tbl tbody');
+  tb.innerHTML = '';
+  list.forEach(r=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${r.id}</td>
+      <td>${r.camp_id}</td>
+      <td>${r.name}</td>
+      <td>${r.capacity}</td>
+      <td>${r.price}</td>
+      <td>
+        <button onclick='prefillRoom(${JSON.stringify(r).replace(/'/g,"&apos;")})'>Ред.</button>
+        <button class="danger" onclick="delRoom(${r.id})">Удалить</button>
+      </td>`;
+    tb.appendChild(tr);
+  });
+}
+
+async function createRoom(){
+  try{
+    const payload = {
+      camp_id: Number(val('room_camp_id')),
+      name: val('room_name'),
+      capacity: Number(val('room_capacity')),
+      price: Number(val('room_price')),
+      photos: parsePhotos(val('room_photos'))
+    };
+    await api('/api/rooms', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+    alert('Номер добавлен'); loadRoomsForCamp();
+  }catch(e){ alert('Ошибка: '+e.message); }
+}
+
+function prefillRoom(r){
+  setVal('room_camp_id', r.camp_id);
+  setVal('room_name', r.name);
+  setVal('room_capacity', r.capacity);
+  setVal('room_price', r.price);
+  setVal('room_photos', (r.photos||[]).join(', '));
+  // Добавим кнопку "Сохранить номер"
+  let btn = document.getElementById('room_save_btn');
+  if(!btn){
+    btn = document.createElement('button');
+    btn.id='room_save_btn'; btn.className='primary'; btn.style.marginLeft='8px';
+    btn.textContent='Сохранить изменения';
+    document.querySelectorAll('.card')[1].children[3].appendChild(btn);
+  }
+  btn.onclick = async ()=>{
+    try{
+      const payload = {
+        camp_id: Number(val('room_camp_id')),
+        name: val('room_name'),
+        capacity: Number(val('room_capacity')),
+        price: Number(val('room_price')),
+        photos: parsePhotos(val('room_photos'))
+      };
+      await api(`/api/rooms/${r.id}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+      alert('Сохранено'); loadRoomsForCamp();
+    }catch(e){ alert('Ошибка: '+e.message); }
+  }
+}
+
+async function delRoom(id){
+  if(!confirm('Удалить номер #' + id + ' ?')) return;
+  try{ await api(`/api/rooms/${id}`, {method:'DELETE'}); loadRoomsForCamp(); }
+  catch(e){ alert('Ошибка: '+e.message); }
+}
+
+loadCamps();
+</script>
+</body>
+</html>
