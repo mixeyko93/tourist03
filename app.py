@@ -69,15 +69,22 @@ def init_camps_db():
     );
     """)
 
+    # --- мягкие миграции полей для UI суперадмина ---
+    try: cur.execute("ALTER TABLE camps ADD COLUMN lake_name TEXT")
+    except sqlite3.OperationalError: pass
+    try: cur.execute("ALTER TABLE camps ADD COLUMN photo_main TEXT")
+    except sqlite3.OperationalError: pass
+
+
     # seed демо-данных
     cur.execute("SELECT COUNT(*) FROM camps")
     if cur.fetchone()[0] == 0:
         cur.executemany(
-            "INSERT INTO camps(name, lat, lng, min_price, emoji) VALUES(?,?,?,?,?)",
+            "INSERT INTO camps(name, lat, lng, min_price, emoji, lake_name, photo_main) VALUES(?,?,?,?,?,?,?)",
             [
-                ("Байкал Резиденс", 51.870, 107.600, 4500, "🏕️"),
-                ("Уютный берег",    51.780, 107.520, 3200, "🏡"),
-                ("Таёжный домик",   51.820, 107.670, 3800, "🌲"),
+                ("Байкал Резиденс", 51.870, 107.600, 4500, "🏕️", "Байкал", None),
+                ("Уютный берег", 51.780, 107.520, 3200, "🏡", None, None),
+                ("Таёжный домик", 51.820, 107.670, 3800, "🌲", None, None),
             ]
         )
         # Пара номеров для примера
@@ -306,13 +313,15 @@ def _conn_camps():
 async def api_camps_list():
     """Список баз из SQLite для карты/суперадмина."""
     conn = _conn_camps()
-    rows = conn.execute("SELECT id, name, lat, lng, min_price, emoji FROM camps").fetchall()
+    rows = conn.execute("SELECT id, name, lat, lng, min_price, emoji, lake_name, photo_main FROM camps").fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
 @app.post("/api/camps")
 async def api_camps_create(req: Request):
     data = await req.json()
+    lake_name = (data.get("lake_name") or None)
+    photo_main = (data.get("photo_main") or None)
     name = (data.get("name") or "").strip()
     lat  = float(data.get("lat"))
     lng  = float(data.get("lng"))
@@ -325,11 +334,15 @@ async def api_camps_create(req: Request):
     conn = _conn_camps()
     cur = conn.cursor()
     cur.execute(
-        "INSERT INTO camps(name, lat, lng, min_price, emoji) VALUES(?,?,?,?,?)",
-        (name, lat, lng, min_price, emoji)
+        "INSERT INTO camps(name, lat, lng, min_price, emoji, lake_name, photo_main) VALUES(?,?,?,?,?,?,?)",
+        (name, lat, lng, min_price, emoji, lake_name, photo_main)
     )
     new_id = cur.lastrowid
-    row = cur.execute("SELECT id, name, lat, lng, min_price, emoji FROM camps WHERE id=?", (new_id,)).fetchone()
+    row = cur.execute(
+        "SELECT id, name, lat, lng, min_price, emoji, lake_name, photo_main FROM camps WHERE id=?",
+        (new_id,)
+    ).fetchone()
+
     conn.commit(); conn.close()
     return dict(row)
 
@@ -337,7 +350,7 @@ async def api_camps_create(req: Request):
 async def api_camps_update(camp_id: int, req: Request):
     data = await req.json()
     fields, values = [], []
-    for k in ("name","lat","lng","min_price","emoji"):
+    for k in ("name","lat","lng","min_price","emoji","lake_name","photo_main"):
         if k in data:
             fields.append(f"{k}=?")
             if k in ("lat","lng"):
@@ -352,7 +365,11 @@ async def api_camps_update(camp_id: int, req: Request):
     conn = _conn_camps()
     cur = conn.cursor()
     cur.execute(f"UPDATE camps SET {', '.join(fields)} WHERE id=?", (*values, camp_id))
-    row = cur.execute("SELECT id, name, lat, lng, min_price, emoji FROM camps WHERE id=?", (camp_id,)).fetchone()
+    row = cur.execute(
+        "SELECT id, name, lat, lng, min_price, emoji, lake_name, photo_main FROM camps WHERE id=?",
+        (camp_id,)
+    ).fetchone()
+
     conn.commit(); conn.close()
     if not row:
         return JSONResponse({"detail": "not found"}, status_code=404)
@@ -416,6 +433,21 @@ async def debug_info():
         "static": STATIC_DIR,
     }
     return JSONResponse(info)
+
+@app.post("/api/availability/check")
+async def availability_check(req: Request):
+    """
+    Заглушка: принимает {from, to, guests} и возвращает {camp_id: [room_ids]}.
+    Реальную логику бронирований добавим позже.
+    """
+    data = await req.json()
+    guests = int(data.get("guests") or 1)
+    # Простейшая логика: доступно всё, где capacity >= guests
+    result = {}
+    for r in ROOMS:
+        if (r.get("capacity") or 0) >= guests:
+            result.setdefault(r["camp_id"], []).append(r["id"])
+    return result
 
 
 # ======= АДМИН-СТРАНИЦЫ (статические HTML) =======

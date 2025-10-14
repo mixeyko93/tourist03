@@ -110,7 +110,10 @@ if (isTG) Telegram.WebApp.onEvent('viewportChanged', fixMapSize);
 function emojiHouseIcon(emoji = '🏡') {
   return L.divIcon({
     html: `<div class="emoji-pin" aria-hidden="true">${emoji}</div>`,
-    className: 'emoji-marker', iconSize: [36, 44], iconAnchor: [18, 40], popupAnchor: [0, -36]
+    className: 'emoji-marker',
+    iconSize: [72, 88],      // было [36, 44] — x2
+    iconAnchor: [36, 80],    // якорь пропорционально
+    popupAnchor: [0, -72]    // чтобы попап не перекрывал пин
   });
 }
 
@@ -289,21 +292,56 @@ async function loadCamps() {
   try {
     const res = await fetch('/api/camps');
     if (!res.ok) throw new Error('Ошибка загрузки баз');
+    const items = await res.json(); // [{id,name,lat,lng,min_price,emoji,photo_main,lake_name?}]
 
-    const items = await res.json(); // массив [{id,name,lat,lng,min_price,emoji}, ...]
+    // Очистим маркеры
     if (typeof cluster !== 'undefined') cluster.clearLayers();
 
-    items.forEach(c => {
+    // Если задан фильтр — фильтруем базы по вместимости номеров (быстрый способ без календаря)
+    let filtered = items;
+    const f = window.__bookingFilter;
+    if (f && Number.isFinite(f.total) && f.total > 0) {
+      // Получаем номера один раз для всех баз
+      const roomsResp = await fetch('/api/rooms');
+      const allRooms = roomsResp.ok ? await roomsResp.json() : [];
+      const roomsByCamp = allRooms.reduce((acc, r) => {
+        (acc[r.camp_id] ||= []).push(r);
+        return acc;
+      }, {});
+      filtered = items.filter(c => (roomsByCamp[c.id] || []).some(r => (r.capacity || 0) >= f.total));
+    }
+
+    // Отрисуем маркеры
+    filtered.forEach(c => {
       if (c.lat == null || c.lng == null) return;
-      const marker = L.marker([c.lat, c.lng], {
-        icon: emojiHouseIcon(c.emoji || '🏕️')
-      }).bindPopup(`<b>${c.name}</b>${c.min_price ? `<br>от ${c.min_price} ₽` : ''}`);
+      const photo = c.photo_main ? `<div style="margin:6px 0"><img src="${c.photo_main}" alt="" style="max-width:220px;border-radius:10px;"></div>` : '';
+      const price = c.min_price ? `от ${c.min_price} ₽` : '';
+      const html = `
+        <b>${c.name}</b>${price ? `<div class="muted">${price}</div>` : ''}
+        ${photo}
+        <div style="display:flex;gap:8px;margin-top:6px;">
+          <button class="button ghost"   onclick="window.__showCampBrief(${c.id})" style="padding:6px 10px;">Подробнее</button>
+          <button class="button primary" onclick="window.__openCampBooking(${c.id})" style="padding:6px 10px;">Забронировать</button>
+        </div>
+      `;
+     const marker = L.marker([c.lat, c.lng], { icon: emojiHouseIcon(c.emoji || '🏕️') })
+      .bindPopup(html, { maxWidth: 260, className: 'camp-popup' });
+
       if (typeof cluster !== 'undefined') cluster.addLayer(marker); else marker.addTo(map);
     });
   } catch (e) {
     console.error(e);
   }
 }
+
+// Вспомогательные обработчики кнопок на балуне (заглушки для следующего этапа)
+window.__showCampBrief = async (campId) => {
+  // Здесь позже выведем «Свободные домики на ваши даты» (когда появится бэкенд-доступность).
+  showModal(`<div class="card"><h3>Краткая информация</h3><p class="muted">Camp ID: ${campId}</p></div>`);
+};
+window.__openCampBooking = (campId) => {
+  openBookingFilterModal();
+};
 
 // --- Инициализация кликов по таббару (единая версия)
 function initTabs(){
@@ -331,31 +369,39 @@ function initTabs(){
   });
 }
 
-// --- фильтр-бронирование: простая модалка с датами и гостями ---
 function openBookingFilterModal() {
   showModal(`
     <div class="auth">
-      <div class="title">Бронирование</div>
-      <div class="field">
-        <label>Заезд</label>
-        <input id="bf_from" type="date">
+      <div class="title" style="text-align:center;margin-bottom:12px;">
+        Выберете даты желаемой брони и количество гостей
       </div>
-      <div class="field">
-        <label>Выезд</label>
-        <input id="bf_to" type="date">
+
+      <div class="field" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div>
+          <label>Заезд</label>
+          <input id="bf_from" type="date" style="height:44px;font-size:16px;">
+        </div>
+        <div>
+          <label>Выезд</label>
+          <input id="bf_to" type="date" style="height:44px;font-size:16px;">
+        </div>
       </div>
-      <div class="field">
-        <label>Взрослые</label>
-        <input id="bf_adults" type="number" min="1" value="2">
+
+      <div class="field" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">
+        <div>
+          <label>Взрослые</label>
+          <input id="bf_adults" type="number" min="1" value="2" style="height:44px;font-size:16px;">
+        </div>
+        <div>
+          <label>Дети</label>
+          <input id="bf_kids" type="number" min="0" value="0" style="height:44px;font-size:16px;">
+        </div>
       </div>
-      <div class="field">
-        <label>Дети</label>
-        <input id="bf_kids" type="number" min="0" value="0">
-      </div>
-      <div class="actions">
-        <button class="button ghost"   id="bf_close">Закрыть</button>
-        <button class="button ghost"   id="bf_reset">Сбросить</button>
-        <button class="button primary" id="bf_apply">Показать</button>
+
+      <div class="actions" style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+        <button class="button ghost"   id="bf_close"  style="height:44px;">Закрыть</button>
+        <button class="button ghost"   id="bf_reset"  style="height:44px;">Сбросить</button>
+        <button class="button primary" id="bf_apply"  style="height:44px;">Показать</button>
       </div>
     </div>
   `);
@@ -374,7 +420,7 @@ function openBookingFilterModal() {
     const to     = $('bf_to').value;
     const adults = $('bf_adults').valueAsNumber || 1;
     const kids   = $('bf_kids').valueAsNumber || 0;
-    window.__bookingFilter = { from, to, adults, kids };
+    window.__bookingFilter = { from, to, adults, kids, total: (adults + kids) };
     closeModal();
     if (typeof loadCamps === 'function') loadCamps();
   };
@@ -402,9 +448,11 @@ function initGeoButton() {
 
 // --- кнопка открытия фильтра ---
 function initBookingFilterButton() {
-  const btn = document.getElementById('openBookingFilter');
-  if (!btn) return;
-  btn.addEventListener('click', openBookingFilterModal);
+  const ids = ['openBookingFilter','toggleFilters']; // поддерживаем оба варианта id
+  ids.forEach(id => {
+    const btn = document.getElementById(id);
+    if (btn) btn.addEventListener('click', openBookingFilterModal);
+  });
 }
 
 // --- Переключение вкладок по data-target

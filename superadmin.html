@@ -20,18 +20,52 @@
   th{background:#fafafa;text-align:left}
   input,button,textarea{border:1px solid #ddd;border-radius:8px;padding:6px 8px;font:inherit}
   button.primary{background:var(--blue);border-color:var(--blue);color:#fff;cursor:pointer}
-  button.danger{background:#fff;border-color:var(--red);color:#red;cursor:pointer}
+  button.danger{background:#fff;border-color:#d32f2f;color:#d32f2f;cursor:pointer}
   .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   .muted{color:#666;font-size:12px}
+
+    /* Тумблер темы */
+  .switch { position: relative; display: inline-block; width: 48px; height: 26px; }
+  .switch input { display:none; }
+  .slider { position:absolute; cursor:pointer; inset:0; background:#ddd; border-radius:999px; transition: .2s; }
+  .slider:before { content:""; position:absolute; height:20px; width:20px; left:3px; top:3px; background:white; border-radius:50%; transition:.2s; box-shadow:0 2px 6px rgba(0,0,0,.2);}
+  .switch input:checked + .slider { background:#0a84ff; }
+  .switch input:checked + .slider:before { transform: translateX(22px); }
+
+  /* Кликабельный отклик на все кнопки */
+  button { cursor:pointer; transition:transform .08s ease, box-shadow .12s ease; }
+  button:active { transform: scale(0.97); }
+
+    /* ==== ТЕМА: light/dark ==== */
+  html[data-theme="dark"] body { background:#0f1216; color:#f2f4f7; }
+  html[data-theme="dark"] header { background:#111317; box-shadow:0 2px 12px rgba(0,0,0,.5); }
+  html[data-theme="dark"] .card { background:#171a21; border-color:#262a34; }
+  html[data-theme="dark"] th { background:#141821; color:#c9d1d9; }
+  html[data-theme="dark"] input, html[data-theme="dark"] textarea,
+  html[data-theme="dark"] button { background:#0f1216; color:#f2f4f7; border-color:#2a2f3a; }
+  html[data-theme="dark"] .tabs button { background:#141821; border-color:#2a2f3a; color:#e6eaf0; }
+  html[data-theme="dark"] .tabs button.active { background:var(--blue); border-color:var(--blue); color:#fff; }
+
+
 </style>
 </head>
 <body>
 <header>
-  <div class="title">Суперадмин</div>
-  <div class="tabs">
-    <button id="tab_camps" class="active">Базы и номера</button>
-    <button id="tab_users">Пользователи</button>
-    <button id="tab_accounts">Учётные записи</button>
+  <div class="title">Суперадмин. Администрирование Турист_03 ⛺️</div>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:14px;">
+    <div class="tabs">
+      <button id="tab_camps" class="active">Базы и номера</button>
+      <button id="tab_users">Пользователи</button>
+      <button id="tab_accounts">Учётные записи</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span title="Светлая тема">☀️</span>
+      <label class="switch">
+        <input type="checkbox" id="saThemeToggle"/>
+        <span class="slider"></span>
+      </label>
+      <span title="Тёмная тема">🌙</span>
+    </div>
   </div>
 </header>
 
@@ -39,7 +73,7 @@
   <!-- ====== БАЗЫ И НОМЕРА (как было) ====== -->
   <section id="sec_camps" style="display:block">
     <div class="card">
-      <h3>Базы</h3>
+      <h3>Базы отдыха</h3>
       <div class="row">
         <input id="camp_name" placeholder="Название"/>
         <input id="camp_lake" placeholder="Озеро (необязательно)"/>
@@ -50,12 +84,29 @@
         <input id="camp_site" placeholder="Сайт (URL)"/>
         <input id="camp_min" placeholder="Мин. цена, ₽"/>
       </div>
-      <textarea id="camp_photos" placeholder="Ссылки фото через запятую" style="width:100%;margin-top:8px"></textarea>
       <div style="margin-top:8px"><button class="primary" onclick="createCamp()">Добавить базу</button></div>
       <table id="camps_tbl" style="margin-top:12px"><thead><tr>
         <th>ID</th><th>Название</th><th>Озеро</th><th>Коорд.</th><th>Мин.цена</th><th>Действия</th>
       </tr></thead><tbody></tbody></table>
       <p class="muted">Нажми «Ред.» чтобы подтянуть базу для редактирования.</p>
+    </div>
+        <div class="muted" style="margin-top:8px">Загрузка фото (предпросмотр, без сохранения на сервер):</div>
+    <div class="row" style="align-items:start">
+      <div>
+        <label class="muted">Главное фото</label>
+        <input type="file" id="ph_main" accept="image/*">
+        <div id="ph_main_preview" style="margin-top:6px"></div>
+      </div>
+      <div>
+        <label class="muted">Фото домиков (до 5)</label>
+        <input type="file" id="ph_houses" accept="image/*" multiple>
+        <div id="ph_houses_preview" style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"></div>
+      </div>
+      <div>
+        <label class="muted">Фото территории (до 4)</label>
+        <input type="file" id="ph_area" accept="image/*" multiple>
+        <div id="ph_area_preview" style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"></div>
+      </div>
     </div>
 
     <div class="card">
@@ -139,14 +190,14 @@ async function loadCamps(){
   tb.innerHTML = '';
   list.forEach(c=>{
     const tr = document.createElement('tr');
-    tr.innerHTML = `
+  tr.innerHTML = `
       <td>${c.id}</td>
       <td>${c.name}</td>
       <td>${c.lake_name ?? ''}</td>
-      <td>${c.lat.toFixed(3)}, ${c.lng.toFixed(3)}</td>
+      <td>${Number(c.lat).toFixed(3)}, ${Number(c.lng).toFixed(3)}</td>
       <td>${c.min_price ?? ''}</td>
       <td>
-        <button onclick='prefillCamp(${JSON.stringify(c).replace(/'/g,"&apos;")})'>Ред.</button>
+        <button onclick='prefillCamp(${JSON.stringify(c).replace(/'/g,"&apos;")})'>Редактировать</button>
         <button class="danger" onclick="delCamp(${c.id})">Удалить</button>
       </td>`;
     tb.appendChild(tr);
@@ -158,29 +209,61 @@ async function createCamp(){
       name: val('camp_name'), lake_name: val('camp_lake') || null,
       lat: Number(val('camp_lat')), lng: Number(val('camp_lng')),
       address: val('camp_addr') || null, phone: val('camp_phone') || null,
-      site_url: val('camp_site') || null, min_price: val('camp_min') ? Number(val('camp_min')) : null,
-      photos: parsePhotos(val('camp_photos'))
+      site_url: val('camp_site') || null, min_price: val('camp_min') ? Number(val('camp_min')) : null
     };
     await api('/api/camps', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
     await loadCamps(); alert('База добавлена');
   }catch(e){ alert('Ошибка: '+e.message); }
 }
 function prefillCamp(c){
-  setVal('camp_name', c.name); setVal('camp_lake', c.lake_name||''); setVal('camp_lat', c.lat); setVal('camp_lng', c.lng);
-  setVal('camp_addr', c.address||''); setVal('camp_phone', c.phone||''); setVal('camp_site', c.site_url||''); setVal('camp_min', c.min_price??''); setVal('camp_photos', (c.photos||[]).join(', '));
+  setVal('camp_name', c.name);
+  setVal('camp_lake', c.lake_name||'');
+  setVal('camp_lat', c.lat);
+  setVal('camp_lng', c.lng);
+  setVal('camp_addr', c.address||'');
+  setVal('camp_phone', c.phone||'');
+  setVal('camp_site', c.site_url||'');
+  setVal('camp_min', c.min_price??'');
+
+// спрячем «Добавить базу»
+const addBtn = document.querySelector('#sec_camps .card button.primary');
+if (addBtn) addBtn.style.display = 'none';
+
+  // добавить/показать кнопку «Сохранить изменения»
   let btn = document.getElementById('camp_save_btn');
-  if(!btn){ btn = document.createElement('button'); btn.id='camp_save_btn'; btn.className='primary'; btn.style.marginLeft='8px'; btn.textContent='Сохранить изменения'; document.querySelector('#sec_camps .card').children[3].appendChild(btn); }
+  if(!btn){
+    btn = document.createElement('button');
+    btn.id='camp_save_btn';
+    btn.className='primary';
+    btn.style.marginLeft='8px';
+    btn.textContent='Сохранить изменения';
+    document.querySelector('#sec_camps .card').children[3].appendChild(btn);
+  }
   btn.onclick = async ()=>{
     try{
       const payload = {
-        name: val('camp_name'), lake_name: val('camp_lake') || null,
-        lat: Number(val('camp_lat')), lng: Number(val('camp_lng')),
-        address: val('camp_addr') || null, phone: val('camp_phone') || null,
-        site_url: val('camp_site') || null, min_price: val('camp_min') ? Number(val('camp_min')) : null,
+        name: val('camp_name'),
+        lake_name: val('camp_lake') || null,
+        lat: Number(val('camp_lat')),
+        lng: Number(val('camp_lng')),
+        address: val('camp_addr') || null,
+        phone: val('camp_phone') || null,
+        site_url: val('camp_site') || null,
+        min_price: val('camp_min') ? Number(val('camp_min')) : null,
         photos: parsePhotos(val('camp_photos'))
       };
-      await api(`/api/camps/${c.id}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
-      await loadCamps(); alert('Сохранено');
+      await api(`/api/camps/${c.id}`, {
+        method:'PUT',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
+      await loadCamps();
+      alert('Сохранено');
+
+      // очистим форму и вернём «Добавить базу»
+      ['camp_name','camp_lake','camp_lat','camp_lng','camp_addr','camp_phone','camp_site','camp_min','camp_photos'].forEach(id=>setVal(id,''));
+      if (addBtn) addBtn.style.display = '';
+      btn.remove();
     }catch(e){ alert('Ошибка: '+e.message); }
   }
 }
@@ -218,4 +301,66 @@ async function loadUsers(){
 loadCamps();
 </script>
 </body>
+<script>
+(function(){
+  const KEY='sa_theme';
+  const html=document.documentElement;
+  const tgl=()=>document.getElementById('saThemeToggle');
+  function apply(theme){ html.setAttribute('data-theme', theme); try{localStorage.setItem(KEY,theme);}catch(_){}}
+  const saved = (localStorage.getItem(KEY) || 'light');
+  apply(saved);
+  window.addEventListener('DOMContentLoaded', ()=>{
+    const el = tgl(); if (!el) return;
+    el.checked = (saved==='dark');
+    el.addEventListener('change', (e)=> apply(e.target.checked ? 'dark' : 'light'));
+  });
+})();
+  (function(){
+  const toImg = (file, maxW=180)=> new Promise(res=>{
+    const fr=new FileReader(); fr.onload=()=>{
+      const url=fr.result;
+      const img=new Image(); img.onload=()=>{
+        const w = Math.min(maxW, img.width);
+        const ratio = w / img.width;
+        const h = Math.round(img.height * ratio);
+        const cnv=document.createElement('canvas'); cnv.width=w; cnv.height=h;
+        const ctx=cnv.getContext('2d'); ctx.drawImage(img,0,0,w,h);
+        res(cnv.toDataURL('image/jpeg', .85));
+      };
+      img.src=url;
+    }; fr.readAsDataURL(file);
+  });
+
+  function previewOne(inputId, targetId){
+    const inp=document.getElementById(inputId);
+    const out=document.getElementById(targetId);
+    if(!inp || !out) return;
+    inp.addEventListener('change', async ()=>{
+      out.innerHTML='';
+      const f=inp.files && inp.files[0]; if(!f) return;
+      const url=await toImg(f, 240);
+      out.innerHTML=`<img src="${url}" style="max-width:240px;border-radius:10px;">`;
+    });
+  }
+  function previewMany(inputId, targetId, limit){
+    const inp=document.getElementById(inputId);
+    const out=document.getElementById(targetId);
+    if(!inp || !out) return;
+    inp.addEventListener('change', async ()=>{
+      out.innerHTML='';
+      const files = Array.from(inp.files||[]).slice(0, limit);
+      for (const f of files) {
+        const url=await toImg(f, 120);
+        const img=document.createElement('img');
+        img.src=url; img.style.cssText='max-width:120px;border-radius:8px';
+        out.appendChild(img);
+      }
+    });
+  }
+  previewOne('ph_main','ph_main_preview');
+  previewMany('ph_houses','ph_houses_preview', 5);
+  previewMany('ph_area','ph_area_preview', 4);
+})();
+
+</script>
 </html>

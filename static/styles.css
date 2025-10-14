@@ -179,6 +179,8 @@ body.tab-transition .tg-app {
 .map-btn:active { transform: scale(.97); }
 .map-btn.left  { left: 14px; }
 .map-btn.right { right: 14px; }
+.map-btn:hover { background: rgba(255,255,255,0.10); box-shadow: 0 8px 20px rgba(0,0,0,.35); }
+
 
 /* таббар: выравнивание и не даём лейблам переноситься */
 .tabbar .tab { gap: 4px; }
@@ -193,4 +195,22 @@ html, body { overflow: hidden; overscroll-behavior: none; touch-action: manipula
 .map-ui { z-index: 500; }           /* поверх карты — календарь/гео */
 .tabbar { z-index: 1000; }          /* таббар всегда выше карты */
 
+/* Увеличим сам символ эмоджи внутри маркера */
+.emoji-marker .emoji-pin {
+  font-size: 44px;   /* под крупный iconSize */
+  line-height: 1;
+  transform: translateY(-2px);
+}
 
+/* Габариты контейнера эмоджи-маркера под iconSize [72,88] */
+.emoji-marker {
+  width:72px; height:88px;
+  display:flex; align-items:flex-end; justify-content:center;
+}
+.emoji-marker .emoji-pin { font-size:44px; line-height:1; transform:translateY(-2px); }
+
+/* Кнопки в попапах карты выглядят как в приложении */
+.camp-popup .button {
+  font-size: 13px; border-radius: 12px; padding: 8px 12px;
+}
+.camp-popup .button.ghost { border:1px solid var(--border-color); }
