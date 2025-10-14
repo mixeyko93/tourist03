@@ -1,32 +1,63 @@
-# --- Python ---
+# === Python / FastAPI ===
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
-*.egg-info/
-*.egg
 *.log
-
-# Virtual env
+*.sqlite3
+*.db
+.env
 .venv/
-venv/
-
-# Editors/IDE
+*.egg-info/
+*.pytest_cache/
 .idea/
 .vscode/
-
-# OS junk
 .DS_Store
+
+# === Node / Frontend JS ===
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# === PyCharm project files ===
+*.iml
+.idea/*
+!.idea/runConfigurations
+!.idea/codeStyles
+!.idea/inspectionProfiles
+
+# === Local DBs (не пушим в GitFlic) ===
+db/*.db
+db/*.sqlite
+*.db-journal
+
+# === Backup / temporary ===
+Бэкап/
+backup/
+*.bak
+*.tmp
+*.old
+
+# === System files ===
 Thumbs.db
+desktop.ini
 
-# Builds / PyInstaller
-build/
-dist/
-*.spec
+# === Media uploads / cache ===
+uploads/
+__cache__/
+cache/
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
 
-# Local env & secrets
-.env
-
-# Caches
-*.cache/
-.cache/
+# === Git ignore exceptions (разрешаем нужное) ===
+!README.md
+!requirements.txt
+!app.py
+!bot.py
+!static/**
+!templates/**
+!*.html
