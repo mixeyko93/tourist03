@@ -202,15 +202,127 @@ html, body { overflow: hidden; overscroll-behavior: none; touch-action: manipula
   transform: translateY(-2px);
 }
 
-/* Габариты контейнера эмоджи-маркера под iconSize [72,88] */
-.emoji-marker {
-  width:72px; height:88px;
-  display:flex; align-items:flex-end; justify-content:center;
-}
-.emoji-marker .emoji-pin { font-size:44px; line-height:1; transform:translateY(-2px); }
+/* Габариты контейнера эмоджи-маркера: стандарт и VIP */
+.emoji-marker { display:flex; align-items:flex-end; justify-content:center; }
+.emoji-marker.std { width:36px; height:44px; }
+.emoji-marker.vip { width:72px; height:88px; }
+
+/* Размер самого эмоджи под контейнер */
+.emoji-marker.std .emoji-pin { font-size:22px; line-height:1; transform:translateY(-1px); }
+.emoji-marker.vip .emoji-pin { font-size:44px; line-height:1; transform:translateY(-2px); }
+
 
 /* Кнопки в попапах карты выглядят как в приложении */
 .camp-popup .button {
   font-size: 13px; border-radius: 12px; padding: 8px 12px;
 }
 .camp-popup .button.ghost { border:1px solid var(--border-color); }
+
+/* Кластеры Leaflet (кружок с числом) */
+.cl-marker { border-radius: 999px; background: rgba(10,132,255,.15);
+             border: 1px solid rgba(10,132,255,.5); box-shadow: 0 6px 18px rgba(0,0,0,.35);
+             display:flex; align-items:center; justify-content:center; }
+.cl-marker .cl-inner { color:#fff; font-weight:800; font-size:14px; }
+.cl-medium { width:52px!important; height:52px!important; }
+.cl-large  { width:60px!important; height:60px!important; }
+
+/* Тёмные инпуты в модалке фильтра */
+.modal-card.auth input[type="date"],
+.modal-card.auth input[type="number"],
+.modal-card.auth select {
+  background: rgba(255,255,255,0.06);
+  color: var(--tg-text);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 10px 12px;
+  height: 44px;
+  font-size: 16px;
+}
+.modal-card.auth label { display:block; margin-bottom:6px; color: var(--tg-hint); font-size:13px; }
+.modal-card.auth { max-height: 82vh; } /* ширину контролирует нижний блок 360px */
+
+
+/* === Booking Filter — современный вид === */
+.modal-card.auth {
+  width: min(360px, 92vw);              /* поуже */
+  max-height: 85vh;
+  padding: 18px 18px 14px;
+}
+.modal-card.auth .title {
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+/* универсальный инпут/селект */
+.tg-input, .tg-select, .tg-date {
+  width: 100%;
+  height: 44px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  background: rgba(255,255,255,0.06);
+  color: var(--tg-text);
+  font-size: 16px;
+  outline: none;
+}
+.tg-input:focus, .tg-select:focus, .tg-date:focus {
+  box-shadow: 0 0 0 3px rgba(10,132,255,0.25);
+}
+
+/* лейблы и сетки */
+.modal-card.auth label{
+  display:block; margin: 0 0 6px; font-size: 13px; color: var(--tg-hint);
+}
+.modal-card.auth .grid-2 {
+  display:grid; grid-template-columns:1fr 1fr; gap: 12px;
+}
+.modal-card.auth .actions {
+  margin-top:16px; display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;
+}
+
+/* кнопки — чуть «пухлее» */
+.modal-card.auth .button { height:44px; border-radius: 12px; }
+
+/* ===== Superadmin tidy ===== */
+.sa-wrap{max-width:1200px;margin:0 auto;padding:12px 16px;}
+.sa-header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px;}
+.sa-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.sa-filters{display:grid;grid-template-columns:repeat(6,minmax(160px,1fr));gap:8px;flex:1}
+@media(max-width:1100px){.sa-filters{grid-template-columns:repeat(3,minmax(160px,1fr))}}
+@media(max-width:720px){.sa-filters{grid-template-columns:repeat(2,minmax(150px,1fr))}}
+input.sa,select.sa{height:40px;border-radius:10px;border:1px solid var(--border-color);
+  background:rgba(255,255,255,.06);color:var(--tg-text);padding:8px 10px;font-size:14px}
+.table-wrap{overflow:auto;border-radius:12px;border:1px solid var(--border-color)}
+.table-wrap table{min-width:1000px}
+
+/* === Подписи к полям ввода в суперадмине === */
+.cf-field {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cf-field label {
+  font-size: 12px;
+  color: var(--tg-hint);
+  margin-left: 2px;
+}
+
+.cf-field input,
+.cf-field select,
+.cf-field textarea {
+  background: rgba(255,255,255,0.06);
+  color: var(--tg-text);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 14px;
+  outline: none;
+}
+
+.cf-field input:focus,
+.cf-field select:focus,
+.cf-field textarea:focus {
+  box-shadow: 0 0 0 3px rgba(10,132,255,0.25);
+}

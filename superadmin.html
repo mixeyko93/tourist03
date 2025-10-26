@@ -1,53 +1,271 @@
 <!doctype html>
 <html lang="ru">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Суперадмин — Управление</title>
-<style>
-  :root { --blue:#0a84ff; --red:#d32f2f; --green:#24a148; --gray:#666; }
-  html,body{margin:0;font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto}
-  header{position:sticky;top:0;background:#fff;padding:10px 12px;box-shadow:0 2px 10px rgba(0,0,0,.08);display:flex;gap:8px;align-items:center}
-  .title{font-weight:800;margin-right:auto}
-  .tabs{display:flex;gap:8px}
-  .tabs button{border:1px solid #ddd;border-radius:10px;background:#fff;padding:8px 12px;cursor:pointer}
-  .tabs button.active{background:var(--blue);color:#fff;border-color:var(--blue)}
-  .wrap{max-width:1300px;margin:10px auto;padding:0 10px}
-  .card{border:1px solid #eee;border-radius:12px;padding:12px;margin-bottom:12px}
-  h3{margin:0 0 8px}
-  table{width:100%;border-collapse:collapse}
-  th,td{padding:8px;border-bottom:1px solid #eee;vertical-align:top}
-  th{background:#fafafa;text-align:left}
-  input,button,textarea{border:1px solid #ddd;border-radius:8px;padding:6px 8px;font:inherit}
-  button.primary{background:var(--blue);border-color:var(--blue);color:#fff;cursor:pointer}
-  button.danger{background:#fff;border-color:#d32f2f;color:#d32f2f;cursor:pointer}
-  .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-  .muted{color:#666;font-size:12px}
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Суперадмин — Управление</title>
+  <style>
+    :root { --blue:#0a84ff; --red:#d32f2f; }
+
+    html,body{margin:0;font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto}
+    header{position:sticky;top:0;background:#fff;padding:10px 12px;box-shadow:0 2px 10px rgba(0,0,0,.08);display:flex;gap:8px;align-items:center}
+    .title{font-weight:800;margin-right:auto}
+    .tabs{display:flex;gap:8px}
+    .tabs button{border:1px solid #ddd;border-radius:10px;background:#fff;padding:8px 12px;cursor:pointer}
+    .tabs button.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+    .wrap{max-width:1200px;margin:16px auto;padding:0 10px}
+    .card{border:1px solid #eee;border-radius:12px;padding:16px;margin-bottom:12px}
+    h3{margin:0 0 12px}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:8px;border-bottom:1px solid #eee;vertical-align:top}
+    th{background:#fafafa;text-align:left}
+    input,button,select{border:1px solid #ddd;border-radius:10px;padding:8px 10px;font:inherit}
+    button.primary{background:var(--blue);border-color:var(--blue);color:#fff;cursor:pointer}
+    button.danger{background:#fff;border-color:var(--red);color:var(--red);cursor:pointer}
+    .muted{color:#8a8f98;font-size:12px}
 
     /* Тумблер темы */
-  .switch { position: relative; display: inline-block; width: 48px; height: 26px; }
-  .switch input { display:none; }
-  .slider { position:absolute; cursor:pointer; inset:0; background:#ddd; border-radius:999px; transition: .2s; }
-  .slider:before { content:""; position:absolute; height:20px; width:20px; left:3px; top:3px; background:white; border-radius:50%; transition:.2s; box-shadow:0 2px 6px rgba(0,0,0,.2);}
-  .switch input:checked + .slider { background:#0a84ff; }
-  .switch input:checked + .slider:before { transform: translateX(22px); }
+    .switch { position: relative; display: inline-block; width: 48px; height: 26px; }
+    .switch input { display:none; }
+    .slider { position:absolute; cursor:pointer; inset:0; background:#ddd; border-radius:999px; transition:.2s; }
+    .slider:before { content:""; position:absolute; height:20px; width:20px; left:3px; top:3px; background:white; border-radius:50%; transition:.2s; box-shadow:0 2px 6px rgba(0,0,0,.2);}
+    .switch input:checked + .slider { background:#0a84ff; }
+    .switch input:checked + .slider:before { transform: translateX(22px); }
 
-  /* Кликабельный отклик на все кнопки */
-  button { cursor:pointer; transition:transform .08s ease, box-shadow .12s ease; }
-  button:active { transform: scale(0.97); }
+    /* Тёмная тема */
+    html[data-theme="dark"] body{background:#0f1216;color:#f2f4f7;}
+    html[data-theme="dark"] header{background:#111317;box-shadow:0 2px 12px rgba(0,0,0,.5);}
+    html[data-theme="dark"] .card{background:#171a21;border-color:#262a34;}
+    html[data-theme="dark"] th{background:#141821;color:#c9d1d9;}
+    html[data-theme="dark"] input,html[data-theme="dark"] button,html[data-theme="dark"] select{background:#0f1216;color:#f2f4f7;border-color:#2a2f3a;}
+    html[data-theme="dark"] .tabs button{background:#141821;border-color:#2a2f3a;color:#e6eaf0;}
+    html[data-theme="dark"] .tabs button.active{background:var(--blue);border-color:var(--blue);color:#fff;}
 
-    /* ==== ТЕМА: light/dark ==== */
-  html[data-theme="dark"] body { background:#0f1216; color:#f2f4f7; }
-  html[data-theme="dark"] header { background:#111317; box-shadow:0 2px 12px rgba(0,0,0,.5); }
-  html[data-theme="dark"] .card { background:#171a21; border-color:#262a34; }
-  html[data-theme="dark"] th { background:#141821; color:#c9d1d9; }
-  html[data-theme="dark"] input, html[data-theme="dark"] textarea,
-  html[data-theme="dark"] button { background:#0f1216; color:#f2f4f7; border-color:#2a2f3a; }
-  html[data-theme="dark"] .tabs button { background:#141821; border-color:#2a2f3a; color:#e6eaf0; }
-  html[data-theme="dark"] .tabs button.active { background:var(--blue); border-color:var(--blue); color:#fff; }
+/* ----- Форма базы ----- */
+.cf-grid{
+  display:grid;
+  grid-template-columns: repeat(12, 1fr); /* 12-колоночная сетка — гибко раскладываем */
+  gap:12px;
+  max-width: 1200px;                      /* растягиваем почти на всю карточку */
+}
+.cf-field{min-width:0}
+.cf-input{
+  width:100%; height:44px; box-sizing:border-box;
+  border:1px solid #2a2f3a; border-radius:12px;
+  padding:10px 12px; background:#0f1216; color:#f2f4f7; font-size:15px;
+}
+
+/* мелкие серые подсказки над инпутами */
+.cf-field {
+  position: relative;
+}
+.cf-field::before {
+  content: attr(data-label);
+  position: absolute;
+  top: -14px;
+  left: 4px;
+  font-size: 12px;
+  color: #8a8f98;
+  pointer-events: none;
+}
 
 
-</style>
+/* инпуты-числа без спиннеров */
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0 }
+input[type=number]{ -moz-appearance:textfield }
+
+.seg{display:inline-flex;gap:6px;background:#141821;border:1px solid #2a2f3a;padding:4px;border-radius:12px}
+.seg .seg-btn{border:0;border-radius:10px;padding:8px 12px;cursor:pointer;background:transparent;color:#e6eaf0;transition:transform .06s ease}
+.seg .seg-btn:active{transform:translateY(1px)}
+/* Сегмент статуса: зелёный/оранжевый */
+#cf_status_seg .seg-btn[data-val="active"].active  {background:#22c55e;border-color:#22c55e;color:#0b1a0f}
+#cf_status_seg .seg-btn[data-val="disabled"].active{background:#fb923c;border-color:#fb923c;color:#1c1007}
+
+/* Общий вид кликабельных кнопок */
+.button{
+  background:#1f2937; color:#e6eaf0; border:1px solid #2a2f3a; border-radius:12px;
+  padding:10px 14px; cursor:pointer; transition:transform .06s ease, box-shadow .12s ease, background .12s ease;
+}
+.button:hover{ box-shadow:0 6px 18px rgba(0,0,0,.25); background:#253041 }
+.button:active{ transform:translateY(1px) }
+.button.primary{ background:#0a84ff; border-color:#0a84ff; color:#fff }
+.button.primary:hover{ background:#2b96ff }
+.button.danger{ background:#1b1212; border-color:#a11f1f; color:#ffb4b4 }
+.button.danger:hover{ background:#2a1616 }
+
+.emoji-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.emoji-picker{display:flex;gap:8px;flex-wrap:wrap}
+.emoji-picker .emoji{width:44px;height:44px;border-radius:12px;border:1px solid #2a2f3a;background:#141821;cursor:pointer;font-size:22px;display:flex;align-items:center;justify-content:center;transition:transform .06s ease}
+.emoji-picker .emoji:active{transform:translateY(1px)}
+.emoji-picker .emoji.selected{outline:3px solid rgba(10,132,255,.35)}
+
+/* overlay-кнопки в карточке фото */
+.photo-ov{position:absolute;inset:auto 6px 6px auto;display:flex;gap:6px}
+.photo-ov .btn{width:28px;height:28px;border-radius:10px;border:1px solid #2a2f3a;background:#141821;color:#e6eaf0;cursor:pointer}
+.photo-ov .btn:hover{background:#1b2330}
+.photo-star{position:absolute;left:6px;top:6px}
+.photo-star .btn{width:28px;height:28px;border-radius:10px;border:1px solid #2a2f3a;background:#141821}
+
+
+  .rooms-editor{margin-top:8px;border-top:1px dashed #2a2f3a;padding-top:10px}
+
+  .room-row input::placeholder{color:#8791a1}
+  .room-row select{
+    height:40px;border-radius:10px;border:1px solid #2a2f3a;
+    background:#0f1216;color:#f2f4f7;padding:8px 10px
+  }
+
+    .appconfirm-actions{display:flex;justify-content:end;gap:8px}
+    .appconfirm-actions .ok{order:0}
+    .appconfirm-actions .cancel{order:1}
+
+    /* активная сегмент-кнопка видно чётко */
+.seg .seg-btn.active{
+  background:var(--blue);
+  color:#fff;
+  box-shadow:0 0 0 3px rgba(10,132,255,.25) inset, 0 6px 18px rgba(0,0,0,.25);
+  font-weight:600;
+}
+
+/* инфо-кнопка (всплывает title) */
+.info-btn{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:20px;height:20px;border-radius:50%;
+  border:1px solid #2a2f3a;background:#141821;color:#d7e0ea; cursor:pointer;
+  font-size:12px; line-height:1;
+}
+.info-btn:hover{ background:#1b2330 }
+
+/* заголовок подменю «Описание апартаментов» */
+.rooms-title{
+  font-size:16px; font-weight:700; margin:16px 0 8px; color:#dfe6ef;
+  border-top:1px dashed #2a2f3a; padding-top:10px;
+}
+
+/* Карточка одного домика — ровно 3 строки */
+.room-card{
+  border:1px solid #2a2f3a; border-radius:12px; padding:10px; background:#11151b;
+}
+/* контейнер карточки домика — НЕ сетка; сетки заданы на .room-line, .room-line-2, .room-line-3 */
+.room-row{ display:block; margin-bottom:12px; }
+
+
+/* 1-я строка: Тип | Название | этаж | 🛏️1 | 🛏️2 | Душ/ванна | Туалет */
+.room-line{
+  display:grid; gap:8px;
+  grid-template-columns:
+    1.2fr                 /* Тип */
+    1.6fr                 /* Название */
+    fit-content(90px)     /* этаж */
+    fit-content(90px)     /* 🛏️1 */
+    fit-content(90px)     /* 🛏️2 */
+    1fr                   /* Душ/ванна */
+    1fr;                  /* Туалет */
+}
+
+
+/* 2-я строка: BBQ | Кухня | Беседка | Терраса | Балкон | (чекбокс «Кондиционер»)
+   порядок: [1] BBQ, [2] Кухня, [3] Беседка, [4] Терраса, [5] Балкон, [6] чекбокс
+*/
+.room-line-2{
+  display:grid; gap:8px; align-items:center; margin-top:6px;
+  grid-template-columns: 1fr 1fr 1fr 1fr 1fr auto;
+}
+
+
+/* 3-я строка: Описание | ₽ взр. | ₽ дет. | ₽ домик | (группа скидки: % + i + сут.)
+   порядок: [1] Описание, [2] ₽ взр., [3] ₽ дет., [4] ₽ домик, [5] группа скидки
+*/
+.room-line-3{
+  display:grid; gap:8px; align-items:center; margin-top:6px;
+  grid-template-columns: 2.2fr 0.9fr 0.9fr 1fr auto;
+}
+
+
+
+/* компактные числовые поля — тянутся по сетке, но не шире max */
+.input-num-3{
+  width:100%;           /* берём ширину из grid-колонки */
+  max-width:84px;       /* ограничение сверху (≈3 символа + паддинги) */
+  text-align:center;
+}
+.input-num-5{
+  width:100%;
+  max-width:120px;      /* ≈5 символов + паддинги */
+  text-align:right;
+}
+
+
+/* мини-лейблы внутри строк */
+.badge{display:inline-block;padding:4px 8px;border:1px solid #2a2f3a;border-radius:10px;background:#0f1216;color:#cfd7e2;font-size:12px;white-space:nowrap}
+
+/* инфо-кнопка (подсказка в title) */
+.info-btn{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:20px;height:20px;border-radius:50%;
+  border:1px solid #2a2f3a;background:#141821;color:#d7e0ea; cursor:pointer;
+  font-size:12px; line-height:1;
+}
+.info-btn:hover{ background:#1b2330 }
+
+/* панель на фото — в один ряд */
+.photo-ov-row{
+  position:absolute; left:6px; right:6px; bottom:6px;
+  display:flex; gap:6px; justify-content:flex-start;
+}
+.photo-ov-row .btn{
+  height:28px; padding:0 10px; border-radius:10px;
+  border:1px solid #2a2f3a; background:#141821; color:#e6eaf0; cursor:pointer;
+}
+.photo-star{ position:absolute; left:6px; top:6px; }
+.photo-star .btn{
+  width:28px;height:28px;border-radius:10px;border:1px solid #2a2f3a;background:#141821;color:#e6eaf0;
+}
+
+/* активная сегмент-кнопка (Стандарт/VIP) видно отчётливо */
+.seg .seg-btn.active{
+  background:var(--blue);
+  color:#fff;
+  box-shadow:0 0 0 3px rgba(10,132,255,.25) inset, 0 6px 18px rgba(0,0,0,.25);
+  font-weight:600;
+}
+
+/* ровная панель кнопок на фото */
+.photo-ov-row{
+  position:absolute; left:6px; right:6px; bottom:6px;
+  display:flex; gap:6px; justify-content:flex-start;
+}
+.photo-ov-row .btn{
+  height:28px; padding:0 10px; border-radius:10px;
+  border:1px solid #2a2f3a; background:#141821; color:#e6eaf0; cursor:pointer;
+}
+.photo-star{ position:absolute; left:6px; top:6px; }
+.photo-star .btn{
+  width:28px;height:28px;border-radius:10px;border:1px solid #2a2f3a;background:#141821;color:#e6eaf0;
+}
+
+/* мини-галерея в апартаментах */
+.room-photos { display:flex; gap:10px; flex-wrap:wrap; margin:8px 0 2px; }
+.room-photos .ph {
+  position:relative; width:96px; height:72px; border:1px solid #2a2f3a;
+  border-radius:10px; overflow:hidden; background:#0f1216;
+}
+.room-photos .ph img { width:100%; height:100%; object-fit:cover; display:block; }
+.room-photos .ov { position:absolute; left:4px; right:4px; bottom:4px; display:flex; gap:4px; }
+.room-photos .ov .btn {
+  height:24px; padding:0 8px; border-radius:8px; border:1px solid #2a2f3a;
+  background:#141821; color:#e6eaf0; cursor:pointer; font-size:12px;
+}
+.room-photos .star { position:absolute; left:4px; top:4px; }
+.room-photos .star .btn {
+  width:24px; height:24px; border-radius:8px; border:1px solid #2a2f3a;
+  background:#141821; color:#e6eaf0; cursor:pointer; font-size:12px;
+}
+/* кнопка загрузки */
+.room-upload { margin-top:6px; display:inline-flex; gap:8px; align-items:center; }
+
+  </style>
 </head>
 <body>
 <header>
@@ -57,310 +275,1094 @@
       <button id="tab_camps" class="active">Базы и номера</button>
       <button id="tab_users">Пользователи</button>
       <button id="tab_accounts">Учётные записи</button>
+      <button id="tab_archive">Архив</button>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;">
-      <span title="Светлая тема">☀️</span>
-      <label class="switch">
-        <input type="checkbox" id="saThemeToggle"/>
-        <span class="slider"></span>
-      </label>
-      <span title="Тёмная тема">🌙</span>
-    </div>
+<script>
+  // фиксируем только тёмную тему
+  document.documentElement.setAttribute('data-theme','dark');
+  try { localStorage.setItem('sa_theme','dark'); } catch(_) {}
+</script>
+
   </div>
 </header>
 
 <div class="wrap">
-  <!-- ====== БАЗЫ И НОМЕРА (как было) ====== -->
+  <!-- Список баз -->
   <section id="sec_camps" style="display:block">
     <div class="card">
       <h3>Базы отдыха</h3>
-      <div class="row">
-        <input id="camp_name" placeholder="Название"/>
-        <input id="camp_lake" placeholder="Озеро (необязательно)"/>
-        <input id="camp_lat" placeholder="Широта (например 55.75)"/>
-        <input id="camp_lng" placeholder="Долгота (например 37.62)"/>
-        <input id="camp_addr" placeholder="Адрес"/>
-        <input id="camp_phone" placeholder="Телефон"/>
-        <input id="camp_site" placeholder="Сайт (URL)"/>
-        <input id="camp_min" placeholder="Мин. цена, ₽"/>
-      </div>
-      <div style="margin-top:8px"><button class="primary" onclick="createCamp()">Добавить базу</button></div>
-      <table id="camps_tbl" style="margin-top:12px"><thead><tr>
-        <th>ID</th><th>Название</th><th>Озеро</th><th>Коорд.</th><th>Мин.цена</th><th>Действия</th>
-      </tr></thead><tbody></tbody></table>
-      <p class="muted">Нажми «Ред.» чтобы подтянуть базу для редактирования.</p>
-    </div>
-        <div class="muted" style="margin-top:8px">Загрузка фото (предпросмотр, без сохранения на сервер):</div>
-    <div class="row" style="align-items:start">
-      <div>
-        <label class="muted">Главное фото</label>
-        <input type="file" id="ph_main" accept="image/*">
-        <div id="ph_main_preview" style="margin-top:6px"></div>
-      </div>
-      <div>
-        <label class="muted">Фото домиков (до 5)</label>
-        <input type="file" id="ph_houses" accept="image/*" multiple>
-        <div id="ph_houses_preview" style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"></div>
-      </div>
-      <div>
-        <label class="muted">Фото территории (до 4)</label>
-        <input type="file" id="ph_area" accept="image/*" multiple>
-        <div id="ph_area_preview" style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h3>Номера</h3>
-      <div class="row">
-        <input id="room_camp_id" placeholder="ID базы"/>
-        <input id="room_name" placeholder="Название номера"/>
-        <input id="room_capacity" placeholder="Вместимость (число)"/>
-        <input id="room_price" placeholder="Цена за ночь, ₽"/>
-      </div>
-      <textarea id="room_photos" placeholder="Ссылки фото через запятую" style="width:100%;margin-top:8px"></textarea>
-      <div style="margin-top:8px"><button class="primary" onclick="createRoom()">Добавить номер</button></div>
-      <table id="rooms_tbl" style="margin-top:12px"><thead><tr>
-        <th>ID</th><th>База</th><th>Название</th><th>Вместимость</th><th>Цена</th><th>Действия</th>
-      </tr></thead><tbody></tbody></table>
-      <p class="muted">Введите ID базы и нажмите «Показать номера базы».</p>
-      <div style="display:flex;gap:8px;margin-top:6px">
-        <input id="rooms_for_camp" placeholder="ID базы"/>
-        <button onclick="loadRoomsForCamp()">Показать номера базы</button>
+      <button class="primary" id="btnAddCamp">Добавить базу</button>
+      <div class="table-wrap" style="margin-top:12px;overflow:auto">
+        <table id="camps_tbl">
+          <thead><tr>
+            <th>ID</th><th>Название</th><th>Озеро</th><th>Координаты</th>
+            <th>Владелец</th><th>Управляющий</th><th>Мин. цена</th><th>Действия</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
       </div>
     </div>
   </section>
 
-  <!-- ====== ПОЛЬЗОВАТЕЛИ ====== -->
+  <!-- Форма базы -->
+  <section id="sec_camp_form" style="display:none">
+    <div class="card">
+      <h3 id="cf_title">Добавить базу</h3>
+
+      <!-- Архив/Удалить в правом верхнем углу -->
+      <div style="position:relative;height:0">
+        <div style="position:absolute;right:0;top:-34px;display:flex;gap:8px">
+          <button type="button" class="button" id="cf_archive" title="Переместить в архив" style="display:none">Архив</button>
+          <button type="button" class="danger" id="cf_delete"  title="Удалить из БД (из архива)" style="display:none">Удалить</button>
+        </div>
+      </div>
+
+<div class="cf-grid">
+  <!-- 0. Статус -->
+  <div class="cf-field" style="grid-column:1/13">
+    <div class="seg" id="cf_status_seg">
+      <button type="button" class="seg-btn active"  data-val="active">Активный</button>
+      <button type="button" class="seg-btn"         data-val="disabled">Отключен</button>
+    </div>
+  </div>
+
+<!-- 1-я строка: Название, Озеро, Координаты, Адрес -->
+<div class="cf-field" style="grid-column:1/3">
+  <label for="cf_name">Название базы</label>
+  <input id="cf_name" class="cf-input" placeholder="Байкал-Отель">
+</div>
+<div class="cf-field" style="grid-column:3/5">
+  <label for="cf_lake">Озеро</label>
+  <input id="cf_lake" class="cf-input" placeholder="Байкал">
+</div>
+<div class="cf-field" style="grid-column:5/8">
+  <label for="cf_coords">Координаты</label>
+  <input id="cf_coords" class="cf-input" placeholder="51.830, 107.600">
+</div>
+<div class="cf-field" style="grid-column:8/13">
+  <label for="cf_addr">Адрес</label>
+  <input id="cf_addr" class="cf-input" placeholder="Респ. Бурятия, Кабанский р-н…">
+</div>
+
+<!-- 2-я строка: Владелец / Управляющий -->
+<div class="cf-field" style="grid-column:1/5">
+  <label for="cf_owner_name">Владелец — ФИО</label>
+  <input id="cf_owner_name" class="cf-input" placeholder="Иванов Иван Иванович">
+</div>
+<div class="cf-field" style="grid-column:5/7">
+  <label for="cf_owner_phone">Владелец — телефон</label>
+  <input id="cf_owner_phone" class="cf-input" placeholder="+7 9ХХ ХХХ-ХХ-ХХ">
+</div>
+<div class="cf-field" style="grid-column:7/11">
+  <label for="cf_manager_name">Управляющий — ФИО</label>
+  <input id="cf_manager_name" class="cf-input" placeholder="Петров Пётр Петрович">
+</div>
+<div class="cf-field" style="grid-column:11/13">
+  <label for="cf_manager_phone">Управляющий — телефон</label>
+  <input id="cf_manager_phone" class="cf-input" placeholder="+7 9ХХ ХХХ-ХХ-ХХ">
+</div>
+
+<!-- 3-я строка: телефоны администраторов + сайт -->
+<div class="cf-field" style="grid-column:1/4">
+  <label for="cf_admin1">Телефон администратора №1</label>
+  <input id="cf_admin1" class="cf-input" placeholder="+7 9ХХ ХХХ-ХХ-ХХ">
+</div>
+<div class="cf-field" style="grid-column:4/7">
+  <label for="cf_admin2">Телефон администратора №2</label>
+  <input id="cf_admin2" class="cf-input" placeholder="+7 9ХХ ХХХ-ХХ-ХХ">
+</div>
+<div class="cf-field" style="grid-column:7/10">
+  <label for="cf_admin3">Телефон администратора №3</label>
+  <input id="cf_admin3" class="cf-input" placeholder="+7 9ХХ ХХХ-ХХ-ХХ">
+</div>
+<div class="cf-field" style="grid-column:10/13">
+  <label for="cf_site">Сайт базы</label>
+  <input id="cf_site" class="cf-input" placeholder="https://пример.рф">
+</div>
+
+<!-- строка 4а -->
+<div class="cf-field" style="grid-column:1/4">
+  <label for="cf_rooms">Количество апартаментов</label>
+  <input id="cf_rooms" type="text" readonly class="cf-input" value="0">
+</div>
+<div class="cf-field" style="grid-column:4/7">
+  <label for="cf_beds">Спальных мест</label>
+  <input id="cf_beds"  type="text" readonly class="cf-input" value="0">
+</div>
+<div class="cf-field" style="grid-column:7/9">
+  <label for="cf_bbq_indiv">Зон BBQ индивидуальных</label>
+  <input id="cf_bbq_indiv" type="text" readonly class="cf-input" value="0">
+</div>
+<div class="cf-field" style="grid-column:9/11">
+  <label for="cf_bbq_shared">Зон BBQ общих</label>
+  <input id="cf_bbq_shared" type="number" min="0" class="cf-input" placeholder="0">
+</div>
+<div class="cf-field" style="grid-column:11/13">
+  <label for="cf_bath">Бань</label>
+  <input id="cf_bath" type="number" min="0" class="cf-input" placeholder="0">
+</div>
+
+<!-- строка 4б -->
+<div class="cf-field" style="grid-column:1/4">
+  <label for="cf_pool_indiv">Бассейнов индивидуальных</label>
+  <input id="cf_pool_indiv" type="text" readonly class="cf-input" value="0">
+</div>
+<div class="cf-field" style="grid-column:4/6">
+  <label for="cf_pool_shared">Бассейнов общих</label>
+  <input id="cf_pool_shared" type="number" min="0" class="cf-input" placeholder="0">
+</div>
+<div class="cf-field" style="grid-column:6/8">
+  <label for="cf_sauna">Саун</label>
+  <input id="cf_sauna" type="number" min="0" class="cf-input" placeholder="0">
+</div>
+
+  <!-- Фото -->
+  <div class="cf-field" style="grid-column:1/13">
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <input id="cf_photo_file" type="file" accept="image/*" multiple style="display:none">
+      <button type="button" class="button" id="cf_photo_pick">Загрузить фото</button>
+    </div>
+    <div id="cf_gallery" style="margin-top:8px;display:grid;grid-template-columns:repeat(auto-fill, minmax(120px,1fr));gap:10px"></div>
+    <div class="muted" style="margin-top:6px">До 20 фото. Первое (со звёздочкой) — обложка/балун.</div>
+  </div>
+
+  <!-- Эмодзи + размер -->
+  <div class="cf-field" style="grid-column:1/13">
+    <div class="emoji-row">
+      <span class="muted">Размер значка:</span>
+      <div class="seg" id="cf_emoji_size_seg">
+        <button type="button" class="seg-btn active" data-val="standard">Стандарт</button>
+        <button type="button" class="seg-btn" data-val="vip">VIP</button>
+      </div>
+      <div class="emoji-picker" id="cf_emoji_picker">
+        <button type="button" class="emoji selected" data-emoji="🏕️">🏕️</button>
+        <button type="button" class="emoji" data-emoji="🏡">🏡</button>
+        <button type="button" class="emoji" data-emoji="🌲">🌲</button>
+        <button type="button" class="emoji" data-emoji="🏖️">🏖️</button>
+        <button type="button" class="emoji" data-emoji="🛶">🛶</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Динамические параметры домиков -->
+  <div class="cf-field" style="grid-column:1/13">
+    <div id="cf_rooms_editor" class="rooms-editor" style="display:none"></div>
+  </div>
+</div>
+
+
+    <div style="margin-top:16px;display:flex;gap:10px;align-items:center">
+      <button class="button primary" id="cf_save">Сохранить</button>
+      <button class="button" id="cf_back">Назад</button>
+      <div style="margin-left:auto"></div>
+      <button class="button" id="cf_reset">Сбросить</button>
+    </div>
+
+    </div>
+  </section>
+
+  <!-- Пустые секции для вкладок (чтобы не ломать скрипт вкладок) -->
   <section id="sec_users" style="display:none">
     <div class="card">
       <h3>Пользователи</h3>
-      <table id="users_tbl">
-        <thead>
-          <tr>
-            <th>ID</th><th>Имя</th><th>Телефон</th><th>E‑mail</th><th>Подтв.тел</th><th>Подтв.почта</th><th>Брони</th><th>Создан</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
-      </table>
-      <p class="muted">Список формируется автоматически при регистрации пользователей в приложении.</p>
+      <table id="users_tbl"><thead><tr><th>ID</th><th>Имя</th><th>Телефон</th><th>Email</th><th>Создан</th></tr></thead><tbody></tbody></table>
     </div>
   </section>
 
-  <!-- ====== УЧЁТНЫЕ ЗАПИСИ (заглушка) ====== -->
   <section id="sec_accounts" style="display:none">
     <div class="card">
-      <h3>Учётные записи администраторов баз</h3>
-      <p class="muted">Здесь будет создание учёток администраторов баз и назначение прав (в следующем этапе).</p>
-      <div class="row">
-        <input placeholder="Имя администратора" />
-        <input placeholder="Телефон" />
-        <input placeholder="E‑mail" />
-        <input placeholder="Роли (пример: base_admin)" />
-      </div>
-      <div style="margin-top:8px"><button class="primary">Создать учётную запись (заглушка)</button></div>
+      <h3>Учётные записи</h3>
+      <div class="muted">Раздел в разработке.</div>
     </div>
   </section>
 </div>
 
+<section id="sec_archive" style="display:none">
+  <div class="card">
+    <h3>Архив баз</h3>
+    <div class="table-wrap" style="margin-top:12px;overflow:auto">
+      <table id="archive_tbl">
+        <thead><tr>
+          <th>ID</th><th>Название</th><th>Озеро</th><th>Координаты</th>
+          <th>Мин. цена</th><th>Действия</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p class="muted">Из архива можно удалить базу окончательно или восстановить.</p>
+  </div>
+</section>
+
 <script>
-// ===== Переключение разделов =====
-const tabs = { camps:['tab_camps','sec_camps'], users:['tab_users','sec_users'], accounts:['tab_accounts','sec_accounts'] };
-for (const k of Object.keys(tabs)) {
-  const [btnId, secId] = tabs[k];
-  document.getElementById(btnId).onclick = ()=>{
-    for (const kk of Object.keys(tabs)) {
-      const [b,s] = tabs[kk];
-      document.getElementById(b).classList.toggle('active', kk===k);
-      document.getElementById(s).style.display = kk===k ? 'block' : 'none';
+const tabs = {
+  camps:    ['tab_camps','sec_camps'],
+  users:    ['tab_users','sec_users'],
+  accounts: ['tab_accounts','sec_accounts'],
+  archive:  ['tab_archive','sec_archive'],
+};
+
+for (const k in tabs) {
+  const [btn, sec] = tabs[k];
+  document.getElementById(btn).onclick = () => {
+    // если открыта форма и есть изменения — спросим подтверждение
+    const formOpen = document.getElementById('sec_camp_form').style.display === 'block';
+    if (formOpen && _cfDirty) {
+      return appConfirm('Закрыть без сохранения?', () => {
+        _cfDirty = false;
+        document.getElementById(btn).click(); // повторим клик уже без вопроса
+      });
     }
-    if (k==='users') loadUsers();
+
+    // переключаем вкладки
+    for (const kk in tabs) {
+      const [b, s] = tabs[kk];
+      document.getElementById(b).classList.toggle('active', kk === k);
+      document.getElementById(s).style.display = (kk === k) ? 'block' : 'none';
+    }
+
+    // список баз показываем только на своей вкладке
+    document.getElementById('sec_camps').style.display = (k === 'camps') ? 'block' : 'none';
+    // форму всегда прячем при смене вкладки
+    document.getElementById('sec_camp_form').style.display = 'none';
+
+    if (k === 'users') loadUsers();
+    if (k === 'archive') loadArchive();
+
+  };
+}
+
+/* === API helper === */
+const api = (u,o={})=>fetch(u,o).then(r=>{if(!r.ok)throw new Error(r.statusText);return r.json();});
+
+/* === Список баз === */
+async function loadCamps(){
+  try{
+const list = (await api('/api/camps')).filter(c => (c.status||'active') !== 'archived');
+const tb = document.querySelector('#camps_tbl tbody');
+tb.innerHTML = '';
+list.forEach(c => {
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${c.id}</td>
+        <td>${c.name || ''}</td>
+        <td>${c.lake_name || ''}</td>
+        <td>${Number(c.lat).toFixed(3)}, ${Number(c.lng).toFixed(3)}</td>
+        <td>${c.owner || ''}</td>
+        <td>${c.manager || ''}</td>
+        <td>${c.min_price ?? ''}</td>
+        <td><button class="button" onclick='showCampForm("edit", ${JSON.stringify(c).replace(/'/g,"&apos;")})'>Редактировать</button></td>`;
+      tb.appendChild(tr);
+    });
+  } catch (e) { console.error('loadCamps error:', e); }
+}
+
+async function loadArchive(){
+  try{
+    const list = await api('/api/camps');
+    // показываем базы, у которых статус archived
+    const archived = list.filter(c => String(c.status).toLowerCase() === 'archived');
+    const tb = document.querySelector('#archive_tbl tbody');
+    tb.innerHTML = '';
+    archived.forEach(c => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${c.id}</td>
+        <td>${c.name || ''}</td>
+        <td>${c.lake_name || ''}</td>
+        <td>${Number(c.lat).toFixed(3)}, ${Number(c.lng).toFixed(3)}</td>
+        <td>${c.min_price ?? ''}</td>
+        <td style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="button" onclick="restoreCamp(${c.id})">Восстановить</button>
+          <button class="button danger" onclick="deleteCamp(${c.id})">Удалить</button>
+        </td>`;
+      tb.appendChild(tr);
+    });
+
+    if (!archived.length) {
+      tb.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#999;padding:12px">Архив пуст</td></tr>`;
+    }
+
+  } catch (e) {
+    console.error('loadArchive error:', e);
   }
 }
 
-// ===== Общие API-хелперы =====
-async function api(path, opts={}) { const res = await fetch(path, opts); if (!res.ok) throw new Error(await res.text()); return res.json(); }
-function val(id){return document.getElementById(id).value.trim()}
-function setVal(id,v){document.getElementById(id).value = v ?? ''}
-function parsePhotos(text){ return text ? text.split(',').map(s=>s.trim()).filter(Boolean) : [] }
 
-// ===== БАЗЫ =====
-async function loadCamps(){
-  const list = await api('/api/camps');
-  const tb = document.querySelector('#camps_tbl tbody');
-  tb.innerHTML = '';
-  list.forEach(c=>{
-    const tr = document.createElement('tr');
-  tr.innerHTML = `
-      <td>${c.id}</td>
-      <td>${c.name}</td>
-      <td>${c.lake_name ?? ''}</td>
-      <td>${Number(c.lat).toFixed(3)}, ${Number(c.lng).toFixed(3)}</td>
-      <td>${c.min_price ?? ''}</td>
-      <td>
-        <button onclick='prefillCamp(${JSON.stringify(c).replace(/'/g,"&apos;")})'>Редактировать</button>
-        <button class="danger" onclick="delCamp(${c.id})">Удалить</button>
-      </td>`;
+async function restoreCamp(id){
+  try{
+    await api(`/api/camps/${id}`, {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ status:'active' })
+    });
+    await loadArchive(); await loadCamps();
+  }catch(e){ appAlert('Не удалось восстановить'); }
+}
+
+async function deleteCamp(id){
+  appConfirm('Удалить базу безвозвратно?', async ()=>{
+    try{
+      await api(`/api/camps/${id}`, { method:'DELETE' });
+      await loadArchive();
+    }catch(e){ appAlert('Не удалось удалить'); }
+  });
+}
+
+
+/* === Пользователи === */
+async function loadUsers(){
+  const list = await api('/api/users');
+  const tb=document.querySelector('#users_tbl tbody');
+  tb.innerHTML='';
+  list.forEach(u=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${u.id}</td><td>${u.name}</td><td>${u.phone}</td><td>${u.email||''}</td><td>${u.created_at}</td>`;
     tb.appendChild(tr);
   });
 }
-async function createCamp(){
-  try{
-    const payload = {
-      name: val('camp_name'), lake_name: val('camp_lake') || null,
-      lat: Number(val('camp_lat')), lng: Number(val('camp_lng')),
-      address: val('camp_addr') || null, phone: val('camp_phone') || null,
-      site_url: val('camp_site') || null, min_price: val('camp_min') ? Number(val('camp_min')) : null
-    };
-    await api('/api/camps', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
-    await loadCamps(); alert('База добавлена');
-  }catch(e){ alert('Ошибка: '+e.message); }
+
+/* === Общие helpers формы === */
+let _cfMode = 'add', _cfData = null;
+let _roomPhotos = []; // массив массивов: по индексу апартаментов — список {url, cover}
+
+
+function getStatus(){ const a = document.querySelector('#cf_status_seg .seg-btn.active'); return a ? a.dataset.val : 'active'; }
+function setStatus(val){ document.querySelectorAll('#cf_status_seg .seg-btn').forEach(b=> b.classList.toggle('active', b.dataset.val===val)); }
+document.querySelectorAll('#cf_status_seg .seg-btn').forEach(b=> b.addEventListener('click', ()=> setStatus(b.dataset.val)));
+
+function getEmoji(){ const a = document.querySelector('#cf_emoji_picker .emoji.selected'); return a ? a.dataset.emoji : '🏕️'; }
+function setEmoji(val){ document.querySelectorAll('#cf_emoji_picker .emoji').forEach(b=> b.classList.toggle('selected', b.dataset.emoji===val)); }
+document.querySelectorAll('#cf_emoji_picker .emoji').forEach(b=> b.addEventListener('click', ()=> setEmoji(b.dataset.emoji)));
+
+function getEmojiSize(){ const a = document.querySelector('#cf_emoji_size_seg .seg-btn.active'); return a ? a.dataset.val : 'standard'; }
+function setEmojiSize(val){ document.querySelectorAll('#cf_emoji_size_seg .seg-btn').forEach(b=> b.classList.toggle('active', b.dataset.val===val)); }
+document.getElementById('cf_status_seg').addEventListener('click', (e)=>{
+  const b = e.target.closest('.seg-btn'); if(!b) return; setStatus(b.dataset.val);
+});
+document.getElementById('cf_emoji_size_seg').addEventListener('click', (e)=>{
+  const b = e.target.closest('.seg-btn'); if(!b) return; setEmojiSize(b.dataset.val);
+});
+document.getElementById('cf_emoji_picker').addEventListener('click', (e)=>{
+  const b = e.target.closest('.emoji'); if(!b) return; setEmoji(b.dataset.emoji);
+});
+
+
+function packPerson(name, phone){ name=(name||'').trim(); phone=(phone||'').trim(); if(!name && !phone) return null; return [name,phone].filter(Boolean).join(', '); }
+function unpackPerson(v){ const a=(v||'').split(',').map(s=>s.trim()); return {name:a[0]||'', phone:a[1]||''}; }
+
+let _cfSnapshot = "";   // JSON-слепок формы для dirty-check
+let _cfDirty = false;
+
+function getFormSnapshot(){
+  const {lat,lng} = readCoords();
+  const snap = {
+    status: getStatus(),
+    emoji_size: getEmojiSize(),
+    emoji: getEmoji(),
+    name: document.getElementById('cf_name').value.trim(),
+    lake: document.getElementById('cf_lake').value.trim(),
+    addr: document.getElementById('cf_addr').value.trim(),
+    coords: document.getElementById('cf_coords').value.trim(),
+    owner_n: document.getElementById('cf_owner_name').value.trim(),
+    owner_p: document.getElementById('cf_owner_phone').value.trim(),
+    mgr_n:   document.getElementById('cf_manager_name').value.trim(),
+    mgr_p:   document.getElementById('cf_manager_phone').value.trim(),
+    a1: document.getElementById('cf_admin1').value.trim(),
+    a2: document.getElementById('cf_admin2').value.trim(),
+    a3: document.getElementById('cf_admin3').value.trim(),
+    rooms: document.getElementById('cf_rooms').value.trim(),
+    beds:  document.getElementById('cf_beds').value.trim(),
+    bbq_indiv: document.getElementById('cf_bbq_indiv').value.trim(),
+    bbq_shared: document.getElementById('cf_bbq_shared').value.trim(),
+    pool_indiv: document.getElementById('cf_pool_indiv').value.trim(),
+    pool_shared: document.getElementById('cf_pool_shared').value.trim(),
+    bath:  document.getElementById('cf_bath').value.trim(),
+    sauna: document.getElementById('cf_sauna').value.trim(),
+    photos: _cfPhotos.map(p=>p.url),
+    rooms_full: collectRoomsPayload().map(r=>({name:r.name, capacity:r.capacity, price:r.price}))
+  };
+  return JSON.stringify(snap);
 }
-function prefillCamp(c){
-  setVal('camp_name', c.name);
-  setVal('camp_lake', c.lake_name||'');
-  setVal('camp_lat', c.lat);
-  setVal('camp_lng', c.lng);
-  setVal('camp_addr', c.address||'');
-  setVal('camp_phone', c.phone||'');
-  setVal('camp_site', c.site_url||'');
-  setVal('camp_min', c.min_price??'');
+function attachDirtyWatch(){
+  _cfSnapshot = getFormSnapshot();
+  _cfDirty = false;
+  document.querySelector('#sec_camp_form').addEventListener('input', ()=>{ _cfDirty = (getFormSnapshot() !== _cfSnapshot); }, {once:false});
+  document.querySelector('#sec_camp_form').addEventListener('change', ()=>{ _cfDirty = (getFormSnapshot() !== _cfSnapshot); }, {once:false});
+}
 
-// спрячем «Добавить базу»
-const addBtn = document.querySelector('#sec_camps .card button.primary');
-if (addBtn) addBtn.style.display = 'none';
 
-  // добавить/показать кнопку «Сохранить изменения»
-  let btn = document.getElementById('camp_save_btn');
-  if(!btn){
-    btn = document.createElement('button');
-    btn.id='camp_save_btn';
-    btn.className='primary';
-    btn.style.marginLeft='8px';
-    btn.textContent='Сохранить изменения';
-    document.querySelector('#sec_camps .card').children[3].appendChild(btn);
+function readCoords(){
+  const raw = document.getElementById('cf_coords').value.trim();
+  if (!raw) return {lat:null,lng:null};
+  const p = raw.split(',').map(s=>s.trim());
+  const lat = parseFloat(p[0].replace(',', '.'));
+  const lng = parseFloat((p[1]||'').replace(',', '.'));
+  if (Number.isNaN(lat) || Number.isNaN(lng)) throw new Error('Укажите координаты в формате: 55.75, 37.62');
+  return {lat, lng};
+}
+
+/* === Фото галерея === */
+const photoFile = document.getElementById('cf_photo_file');
+const photoPick = document.getElementById('cf_photo_pick');
+let _cfPhotos = []; // {url, cover}
+
+function renderGallery(list){
+  _cfPhotos = (list||[]).slice(0,20).map(p=>({url:p.url||p, cover:!!p.cover}));
+  const g=document.getElementById('cf_gallery');
+  g.innerHTML = _cfPhotos.map((p,i)=>`
+    <div style="position:relative;border:1px solid #2a2f3a;border-radius:10px;overflow:hidden">
+      <img src="${p.url}" style="width:100%;height:110px;object-fit:cover">
+      <div class="photo-star">
+        <button type="button" class="btn" title="Сделать обложкой" onclick="setCover(${i})">${p.cover?'★':'☆'}</button>
+      </div>
+      <div class="photo-ov-row">
+        <button type="button" class="btn" title="Вверх" onclick="movePhoto(${i},-1)">↑</button>
+        <button type="button" class="btn" title="Вниз"  onclick="movePhoto(${i}, 1)">↓</button>
+        <button type="button" class="btn" title="Удалить" onclick="removePhoto(${i})">✕</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+/* управление фото галереи базы */
+function setCover(i){
+  _cfPhotos.forEach((p,k)=>p.cover=(k===i));
+  renderGallery(_cfPhotos);
+  _cfDirty = true;
+}
+function movePhoto(i,d){
+  const j=i+d;
+  if(j<0||j>=_cfPhotos.length) return;
+  [_cfPhotos[i],_cfPhotos[j]]=[_cfPhotos[j],_cfPhotos[i]];
+  renderGallery(_cfPhotos);
+  _cfDirty = true;
+}
+function removePhoto(i){
+  _cfPhotos.splice(i,1);
+  if(_cfPhotos.length && !_cfPhotos.some(p=>p.cover)) _cfPhotos[0].cover=true;
+  renderGallery(_cfPhotos);
+  _cfDirty = true;
+}
+
+// === Мини-галерея для апартаментов (до 5 фото) ===
+function roomOpenPicker(idx){
+  document.getElementById(`room_file_${idx}`).click();
+}
+
+async function uploadOneFile(file){
+  const fd = new FormData(); fd.append('file', file);
+  try{
+    const r = await fetch('/api/upload', { method:'POST', body: fd });
+    if (!r.ok) throw new Error('upload failed');
+    const data = await r.json();
+    return data.url || data.location || null;
+  }catch(e){
+    appAlert('Не удалось загрузить файл');
+    return null;
   }
-  btn.onclick = async ()=>{
+}
+
+async function roomHandleFiles(idx, fileList){
+  const files = Array.from(fileList||[]);
+  if (!files.length) return;
+  const canAdd = Math.max(0, 5 - (_roomPhotos[idx]?.length || 0));
+  for (const f of files.slice(0, canAdd)){
+    const url = await uploadOneFile(f);
+    if (!url) continue;
+    const list = _roomPhotos[idx] || (_roomPhotos[idx]=[]);
+    list.push({ url, cover: list.length === 0 });
+  }
+  renderRoomGallery(idx);
+  _cfDirty = true;
+
+}
+
+function renderRoomGallery(idx){
+  const box = document.getElementById(`room_gal_${idx}`);
+  if (!box) return;
+  const list = _roomPhotos[idx] || [];
+  box.innerHTML = list.map((p,i)=>`
+    <div class="ph">
+      <img src="${p.url}">
+      <div class="star"><button class="btn" title="Обложка" onclick="roomSetCover(${idx},${i})">${p.cover?'★':'☆'}</button></div>
+      <div class="ov">
+        <button class="btn" title="Вверх" onclick="roomMovePhoto(${idx},${i},-1)">↑</button>
+        <button class="btn" title="Вниз"  onclick="roomMovePhoto(${idx},${i}, 1)">↓</button>
+        <button class="btn" title="Удалить" onclick="roomRemovePhoto(${idx},${i})">✕</button>
+      </div>
+    </div>
+  `).join('');
+}
+function roomSetCover(idx,i){ const a=_roomPhotos[idx]||[]; a.forEach((p,k)=>p.cover=(k===i)); renderRoomGallery(idx); _cfDirty = true; }
+function roomMovePhoto(idx,i,d){ const a=_roomPhotos[idx]||[]; const j=i+d; if(j<0||j>=a.length)return; [a[i],a[j]]=[a[j],a[i]]; renderRoomGallery(idx); _cfDirty = true; }
+function roomRemovePhoto(idx,i){ const a=_roomPhotos[idx]||[]; a.splice(i,1); if(a.length && !a.some(p=>p.cover)) a[0].cover=true; renderRoomGallery(idx); _cfDirty = true; }
+
+photoPick.onclick = ()=> photoFile.click();
+photoFile.onchange = async ()=>{
+  const files = Array.from(photoFile.files||[]);
+  if (!files.length) return;
+  const remain = Math.max(0, 20 - _cfPhotos.length);
+  for (const f of files.slice(0,remain)){
+    const fd = new FormData(); fd.append('file', f);
     try{
-      const payload = {
-        name: val('camp_name'),
-        lake_name: val('camp_lake') || null,
-        lat: Number(val('camp_lat')),
-        lng: Number(val('camp_lng')),
-        address: val('camp_addr') || null,
-        phone: val('camp_phone') || null,
-        site_url: val('camp_site') || null,
-        min_price: val('camp_min') ? Number(val('camp_min')) : null,
-        photos: parsePhotos(val('camp_photos'))
-      };
-      await api(`/api/camps/${c.id}`, {
-        method:'PUT',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify(payload)
-      });
-      await loadCamps();
-      alert('Сохранено');
+      const res = await fetch('/api/upload', { method:'POST', body:fd });
+      if(!res.ok) throw new Error('Не удалось загрузить файл');
+      const data = await res.json();
+      _cfPhotos.push({url:data.url, cover:false});
+    }catch(e){ appAlert(e.message||'Ошибка загрузки'); }
+  }
+  if (_cfPhotos.length && !_cfPhotos.some(p=>p.cover)) _cfPhotos[0].cover=true;
+  renderGallery(_cfPhotos);
+  _cfDirty = true;
 
-      // очистим форму и вернём «Добавить базу»
-      ['camp_name','camp_lake','camp_lat','camp_lng','camp_addr','camp_phone','camp_site','camp_min','camp_photos'].forEach(id=>setVal(id,''));
-      if (addBtn) addBtn.style.display = '';
-      btn.remove();
-    }catch(e){ alert('Ошибка: '+e.message); }
+};
+
+/* === Домики === */
+function roomRowTemplate(i, r={}){
+  return `
+<div class="room-card room-row" data-idx="${i}" data-room-id="${r.id||''}">
+    <!-- 1-я строка -->
+    <div class="room-line">
+      <input class="r_type cf-input"   placeholder="Тип" value="${r.room_type||''}">
+      <input class="r_name cf-input"   placeholder="Название" value="${r.name||''}">
+      <input class="r_floors cf-input input-num-3" type="number" min="1" placeholder="этаж" value="${r.floors??''}">
+      <input class="r_beds1  cf-input input-num-3" type="number" min="0" placeholder="🛏️1" value="${r.beds_single??''}">
+      <input class="r_beds2  cf-input input-num-3" type="number" min="0" placeholder="🛏️2" value="${r.beds_double??''}">
+      <select class="r_bath cf-input">
+        <option value="">Душ/ванна — нет</option>
+        <option value="shower" ${(r.bath_type==='shower')?'selected':''}>Душ</option>
+        <option value="bath"   ${(r.bath_type==='bath')?'selected':''}>Ванна</option>
+        <option value="both"   ${(r.bath_type==='both')?'selected':''}>Душ и ванна</option>
+      </select>
+      <select class="r_wc cf-input" title="Тип санузла">
+        <option value="">Туалет — нет</option>
+        <option value="indiv-split"     ${(r.wc_type==='indiv-split')?'selected':''}>Индив./раздельный</option>
+        <option value="indiv-combined"  ${(r.wc_type==='indiv-combined')?'selected':''}>Индив./совмещённый</option>
+        <option value="shared"          ${(r.wc_type==='shared')?'selected':''}>Общий</option>
+      </select>
+    </div>
+
+    <!-- 2-я строка -->
+    <div class="room-line-2">
+      <select class="r_bbq cf-input">
+        <option value="">BBQ — нет</option>
+        <option value="private" ${(r.bbq_type==='private')?'selected':''}>Индивидуальная</option>
+        <option value="shared"  ${(r.bbq_type==='shared')?'selected':''}>Общая</option>
+      </select>
+      <select class="r_kitchen cf-input">
+        <option value="">Кухня — нет</option>
+        <option value="private" ${(r.kitchen_type==='private')?'selected':''}>Индивидуальная</option>
+        <option value="shared"  ${(r.kitchen_type==='shared')?'selected':''}>Общая</option>
+      </select>
+      <select class="r_gazebo cf-input">
+        <option value="">Беседка — нет</option>
+        <option value="private" ${(r.gazebo_type==='private')?'selected':''}>Индивидуальная</option>
+        <option value="shared"  ${(r.gazebo_type==='shared')?'selected':''}>Общая</option>
+      </select>
+      <select class="r_terrace cf-input">
+        <option value="">Терраса — нет</option>
+        <option value="private" ${(r.terrace_type==='private')?'selected':''}>Индивидуальная</option>
+        <option value="shared"  ${(r.terrace_type==='shared')?'selected':''}>Общая</option>
+      </select>
+      <select class="r_pool cf-input">
+        <option value="">Бассейн — нет</option>
+        <option value="private" ${ (r.pool_type==='private') ? 'selected' : '' }>Индивидуальный</option>
+      </select>
+
+      <select class="r_balcony cf-input">
+        <option value="">Балкон — нет</option>
+        <option value="private" ${(r.balcony_type==='private')?'selected':''}>Индивидуальный</option>
+        <option value="shared"  ${(r.balcony_type==='shared')?'selected':''}>Общий</option>
+      </select>
+      <label style="display:flex;align-items:center;gap:8px;justify-content:flex-end">
+        <input type="checkbox" class="r_ac" ${(r.has_ac)?'checked':''}> Кондиционер
+      </label>
+    </div>
+
+    <!-- 3-я строка -->
+    <div class="room-line-3">
+      <input class="r_desc cf-input" placeholder="Описание" value="${r.desc||''}">
+      <input class="r_price_adult cf-input input-num-5" type="number" min="0" placeholder="₽ взр."  value="${r.price_adult??''}">
+      <input class="r_price_child cf-input input-num-5" type="number" min="0" placeholder="₽ дет."  value="${r.price_child??''}">
+      <input class="r_price_house cf-input input-num-5" type="number" min="0" placeholder="₽ домик" value="${r.price??''}">
+      <div style="display:flex;gap:6px;align-items:center;justify-content:flex-end">
+        <input class="r_disc_pct  cf-input input-num-3" type="number" min="0" max="100" placeholder="%"   value="${r.discount_pct??''}">
+        <button class="info-btn" title="С какого количества суток действует скидка">i</button>
+        <input class="r_disc_from cf-input input-num-3" type="number" min="0" placeholder="сут." value="${r.discount_from_nights??''}">
+      </div> <!-- конец flex-группы -->
+    </div> <!-- .room-line-3 -->
+
+
+
+    <!-- мини-галерея фото этого апартамента -->
+    <div class="room-photos" id="room_gal_${i}"></div>
+    <div class="room-upload">
+      <button type="button" class="button" onclick="roomOpenPicker(${i})">Загрузить фото (до 5)</button>
+      <input type="file" id="room_file_${i}" accept="image/*" multiple style="display:none"
+             onchange="roomHandleFiles(${i}, this.files); this.value='';">
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:6px">
+  <button type="button" class="button danger" title="Удалить апартамент" onclick="removeRoom(${i})">🗑️ Удалить</button>
+</div>
+  </div>`;
+}
+
+function removeRoom(idx) {
+  const row = document.querySelector(`#cf_rooms_editor .room-row[data-idx='${idx}']`);
+  if (!row) return;
+  row.remove();
+  _roomPhotos.splice(idx, 1);
+  // пересчитываем номера
+  const rows = document.querySelectorAll('#cf_rooms_editor .room-row');
+  rows.forEach((r, newIdx) => r.dataset.idx = newIdx);
+  document.getElementById('cf_rooms').value = String(rows.length);
+
+  _cfDirty = true;
+}
+updateDerivedTotals();
+
+// --- пересчёт общего количества спальных мест во всех апартаментах ---
+function updateTotalBeds() {
+  const rows = document.querySelectorAll('#cf_rooms_editor .room-row');
+  let total = 0;
+  rows.forEach(row => {
+    const b1 = parseInt(row.querySelector('.r_beds1')?.value || '0', 10);
+    const b2 = parseInt(row.querySelector('.r_beds2')?.value || '0', 10);
+    total += b1 + b2 * 2;
+  });
+  document.getElementById('cf_beds').value = String(total);
+}
+
+function updateDerivedTotals() {
+  const rows = document.querySelectorAll('#cf_rooms_editor .room-row');
+  let totalBeds = 0, bbqIndiv = 0, poolIndiv = 0;
+
+  rows.forEach(row => {
+    const b1 = parseInt(row.querySelector('.r_beds1')?.value || '0', 10);
+    const b2 = parseInt(row.querySelector('.r_beds2')?.value || '0', 10);
+    totalBeds += b1 + b2 * 2;
+
+    const bbq = row.querySelector('.r_bbq')?.value || '';
+    if (bbq === 'private') bbqIndiv++;
+
+    const pool = row.querySelector('.r_pool')?.value || '';
+    if (pool === 'private') poolIndiv++;
+  });
+
+  document.getElementById('cf_beds').value = String(totalBeds);
+  document.getElementById('cf_bbq_indiv').value   = String(bbqIndiv);
+  document.getElementById('cf_pool_indiv').value  = String(poolIndiv);
+}
+
+function renderRoomsEditor(count, prefetched=[]){
+  const n = Math.max(0, parseInt(count||0,10));
+  const root = document.getElementById('cf_rooms_editor');
+  root.innerHTML = '';
+  if (!n){ root.style.display='none'; _roomPhotos=[]; return; }
+  root.style.display='block';
+
+  root.insertAdjacentHTML('beforeend', '<div class="rooms-title">Описание апартаментов</div>');
+root.insertAdjacentHTML('beforeend',
+  `<div style="display:flex;gap:8px;justify-content:flex-end;margin:6px 0 8px">
+     <button type="button" class="button" id="btnAddRoom">Добавить апартамент</button>
+   </div>`
+);
+
+// после вставки кнопки вызовем пересчёт отдельно
+updateTotalBeds();
+
+
+
+for (let i = 0; i < n; i++) {
+  // вставляем разметку строки i
+  root.insertAdjacentHTML('beforeend', roomRowTemplate(i, prefetched[i] || {}));
+
+  // восстанавливаем фото из БД в _roomPhotos[i]
+  const room = prefetched[i] || {};
+  let raw = [];
+  if (Array.isArray(room.photos)) {
+    raw = room.photos;
+  } else if (typeof room.photos_json === 'string') {
+    try { raw = JSON.parse(room.photos_json) || []; } catch { raw = []; }
+  } else if (room.photo_main) {
+    raw = [room.photo_main];
+  }
+  const coverUrl = room.photo_main || raw[0] || null;
+  _roomPhotos[i] = (raw || []).slice(0, 5).map(u => ({ url: u, cover: u === coverUrl }));
+
+  // рисуем мини-галерею для строки i (после заполнения _roomPhotos)
+  renderRoomGallery(i);
+  // пересчитываем спальные места при изменениях полей 🛏️
+const inputs = root.querySelectorAll(`.room-row[data-idx="${i}"] .r_beds1, .room-row[data-idx="${i}"] .r_beds2`);
+inputs.forEach(inp => inp.addEventListener('input', updateTotalBeds));
+
+}
+
+// показываем текущее количество при загрузке карточки
+document.getElementById('cf_rooms').value = String(n);
+
+
+
+// Добавить ещё одну пустую строку апартамента (не пересоздавая все)
+const btnAdd = document.getElementById('btnAddRoom');
+if (btnAdd) {
+  btnAdd.onclick = () => {
+    const root = document.getElementById('cf_rooms_editor');
+    const idx = root.querySelectorAll('.room-row').length; // новый индекс
+    root.insertAdjacentHTML('beforeend', roomRowTemplate(idx, {}));
+    _roomPhotos[idx] = [];
+    renderRoomGallery(idx);
+
+// навешиваем пересчёт на новые поля
+const rowSel = `.room-row[data-idx="${idx}"]`;
+document.querySelectorAll(`${rowSel} .r_beds1, ${rowSel} .r_beds2`).forEach(inp => inp.addEventListener('input', updateDerivedTotals));
+document.querySelectorAll(`${rowSel} .r_bbq, ${rowSel} .r_pool`).forEach(inp => inp.addEventListener('change', updateDerivedTotals));
+
+updateDerivedTotals();
+
+
+// обновляем текстовое поле-индикатор
+const roomsInput = document.getElementById('cf_rooms');
+roomsInput.value = String(idx + 1);
+_cfDirty = true;
+updateDerivedTotals(); // первичный пересчёт при открытии
+
+
+  };
+}
+}
+
+
+
+function collectRoomsPayload(){
+  // Берём все строки-апартаменты и собираем полезную нагрузку для API.
+  const rows = Array.from(document.querySelectorAll('#cf_rooms_editor .room-row'));
+
+  return rows.map((row, idx) => {
+    const val = (sel) => (row.querySelector(sel)?.value ?? '').trim();
+    const num = (sel, min = 0) => {
+      const v = row.querySelector(sel)?.value ?? '';
+      return v === '' ? null : Math.max(min, parseInt(v, 10));
+    };
+    const chk = (sel) => !!row.querySelector(sel)?.checked;
+
+    const beds1 = num('.r_beds1', 0) ?? 0;
+    const beds2 = num('.r_beds2', 0) ?? 0;
+    const capacity = beds1 + beds2 * 2;
+
+
+
+    // Фото этого апартамента храним в _roomPhotos[idx]
+    const photos = (_roomPhotos[idx] || []).map(p => p.url);
+    const cover  = (_roomPhotos[idx] || []).find(p => p.cover)?.url || photos[0] || null;
+
+    // Совместимость с текущей схемой БД (app.py уже готов это принять)
+    const payload = {
+      id: row.dataset.roomId ? Number(row.dataset.roomId) : null,
+      name:        val('.r_name') || null,
+      room_type:   val('.r_type') || null,
+      floors:      num('.r_floors', 1) ?? 1,
+      beds_single: num('.r_beds1', 0)  ?? 0,
+      beds_double: num('.r_beds2', 0)  ?? 0,
+      wc_count:    (val('.r_wc') ? 1 : 0),                 // есть санузел — 1
+      bath_type:   val('.r_bath') || null,
+      has_ac:      chk('.r_ac') ? 1 : 0,
+      has_bbq:     val('.r_bbq')     ? 1 : 0,             // типы детальнее можно внедрить позже
+      has_kitchen: val('.r_kitchen') ? 1 : 0,
+      capacity:    capacity,
+      price:       num('.r_price_house', 0),
+      photo_main:  cover,
+      photos:      photos,
+      photos_json: JSON.stringify(photos),                 // на всякий — для прежнего поля
+      // доп-поля UI (сейчас БД их не хранит, но пусть летят — не мешают)
+      bbq_type:     val('.r_bbq') || null,
+pool_type:    val('.r_pool') || null,
+
+      wc_type:     val('.r_wc') || null,
+      bbq_type:    val('.r_bbq') || null,
+      kitchen_type:val('.r_kitchen') || null,
+      gazebo_type: val('.r_gazebo') || null,
+      terrace_type:val('.r_terrace') || null,
+      balcony_type:val('.r_balcony') || null,
+      desc:        val('.r_desc') || null,
+      price_adult: num('.r_price_adult', 0),
+      price_child: num('.r_price_child', 0),
+      discount_pct:        num('.r_disc_pct', 0),
+      discount_from_nights:num('.r_disc_from', 0),
+    };
+
+    return payload;
+  }).filter(x => x.name || x.room_type);
+}
+
+
+document.getElementById('cf_rooms').addEventListener('input', e => {
+  const raw = (e.target.value || '').trim();
+  // Если поле временно пустое — ничего не делаем (защита от «стер всё»)
+  if (raw === '') return;
+
+  const n = Math.max(0, parseInt(raw, 10) || 0);
+  // Пересобираем только когда число изменилось осознанно
+  _roomPhotos = [];                      // сбрасываем индексы мини-галерей
+  renderRoomsEditor(n);
+  _cfDirty = true;
+});
+
+
+
+// --- Работа с фото в строке апартамента (room-row) ---
+function collectRoomPhotos(row) {
+  // В каждой мини-галерее у превью должен быть data-url (мы ставим его после загрузки)
+  const thumbs = Array.from(row.querySelectorAll('.room-photo-thumb'));
+  return thumbs.map((el, i) => ({
+    url: el.dataset.url,
+    sort: i,
+    cover: el.classList.contains('is-cover') ? 1 : 0,
+  }));
+}
+
+function renderRoomPhotos(row, photos) {
+  const box = row.querySelector('.room-photos');
+  if (!box) return;
+  box.innerHTML = '';
+  (photos || []).forEach((p, i) => {
+    const item = document.createElement('div');
+    item.className = 'room-photo-thumb' + (p.cover ? ' is-cover' : '');
+    item.dataset.url = p.url;
+
+    item.innerHTML = `
+      <img src="${p.url}" alt="" />
+      <div class="room-photo-actions">
+        <button type="button" class="btn-photo btn-cover"  title="Сделать обложкой">★</button>
+        <button type="button" class="btn-photo btn-up"      title="Вверх">↑</button>
+        <button type="button" class="btn-photo btn-down"    title="Вниз">↓</button>
+        <button type="button" class="btn-photo btn-del"     title="Удалить">×</button>
+      </div>
+    `;
+    box.appendChild(item);
+  });
+}
+
+
+/* === Показ формы === */
+async function showCampForm(mode='add', data={}) {
+  _cfMode = mode; _cfData = data || {};
+  document.getElementById('cf_title').textContent = (mode==='edit' ? 'Редактировать базу' : 'Добавить базу');
+
+  const D = (mode==='edit' ? (_cfData || {}) : {});
+  setStatus(D.status || 'active');
+  setEmoji(D.emoji || '🏕️');
+  setEmojiSize(D.emoji_size || 'standard');
+
+  document.getElementById('cf_name').value = D.name || '';
+  document.getElementById('cf_lake').value = D.lake_name || '';
+  document.getElementById('cf_addr').value = D.address || '';
+  document.getElementById('cf_coords').value = (D.lat && D.lng) ? `${D.lat}, ${D.lng}` : '';
+
+  const ow = unpackPerson(D.owner);
+  document.getElementById('cf_owner_name').value  = ow.name || '';
+  document.getElementById('cf_owner_phone').value = ow.phone || '';
+
+  const mg = unpackPerson(D.manager);
+  document.getElementById('cf_manager_name').value  = mg.name || '';
+  document.getElementById('cf_manager_phone').value = mg.phone || '';
+
+  // разложим admin_phones по трём полям
+  const admins = (D.admin_phones||'').split(',').map(s=>s.trim()).filter(Boolean);
+  document.getElementById('cf_admin1').value = admins[0]||'';
+  document.getElementById('cf_admin2').value = admins[1]||'';
+  document.getElementById('cf_admin3').value = admins[2]||'';
+
+  document.getElementById('cf_rooms').value = D.rooms_count ?? '';
+  document.getElementById('cf_beds').value  = D.beds_count  ?? '';
+  document.getElementById('cf_bath').value  = D.bath_count  ?? '';
+  document.getElementById('cf_sauna').value = D.sauna_count ?? '';
+    // новые поля BBQ/Pool
+  document.getElementById('cf_bbq_shared').value  = D.bbq_shared_count  ?? 0;
+  document.getElementById('cf_pool_shared').value = D.pools_shared_count ?? 0;
+
+  // readonly поля пересчитаются из номеров позже, но если есть агрегаты на базе — подставим
+  document.getElementById('cf_bbq_indiv').value  = String(D.bbq_count ?? 0);
+  document.getElementById('cf_pool_indiv').value = String(D.pools_private_count ?? 0);
+
+
+  renderRoomsEditor(D.rooms_count ?? 0, []);
+  updateDerivedTotals();
+  renderGallery(D.photos || []);
+  attachDirtyWatch();
+
+
+  // показать/скрыть верхние кнопки
+  document.getElementById('cf_archive').style.display = (mode==='edit' ? 'inline-flex' : 'none');
+  document.getElementById('cf_delete').style.display  = (mode==='edit' ? 'inline-flex' : 'none');
+
+  // при редактировании подгрузим комнаты/фото
+  if (mode==='edit' && D.id){
+    try{
+const rooms = await api(`/api/rooms?camp_id=${D.id}`);
+
+// нормализуем фото каждого номера...
+for (const r of rooms) {
+  if (!Array.isArray(r.photos)) {
+    try { r.photos = r.photos_json ? JSON.parse(r.photos_json) : (r.photo_main ? [r.photo_main] : []); }
+    catch { r.photos = r.photo_main ? [r.photo_main] : []; }
   }
 }
-async function delCamp(id){ if(!confirm('Удалить базу #' + id + ' ?')) return; try{ await api(`/api/camps/${id}`, {method:'DELETE'}); await loadCamps(); } catch(e){ alert('Ошибка: '+e.message); } }
 
-// ===== НОМЕРА =====
-async function loadRoomsForCamp(){ const cid = Number(val('rooms_for_camp')); if(!cid) { alert('Укажи ID базы'); return; } const list = await api(`/api/rooms?camp_id=${cid}`); renderRooms(list); }
-function renderRooms(list){ const tb = document.querySelector('#rooms_tbl tbody'); tb.innerHTML = ''; list.forEach(r=>{ const tr = document.createElement('tr'); tr.innerHTML = `
-  <td>${r.id}</td><td>${r.camp_id}</td><td>${r.name}</td><td>${r.capacity}</td><td>${r.price}</td>
-  <td><button onclick='prefillRoom(${JSON.stringify(r).replace(/'/g,"&apos;")})'>Ред.</button>
-      <button class="danger" onclick="delRoom(${r.id})">Удалить</button></td>`; tb.appendChild(tr); }); }
-async function createRoom(){ try{ const payload = { camp_id: Number(val('room_camp_id')), name: val('room_name'), capacity: Number(val('room_capacity')), price: Number(val('room_price')), photos: parsePhotos(val('room_photos')) }; await api('/api/rooms', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)}); alert('Номер добавлен'); loadRoomsForCamp(); }catch(e){ alert('Ошибка: '+e.message); } }
-function prefillRoom(r){ setVal('room_camp_id', r.camp_id); setVal('room_name', r.name); setVal('room_capacity', r.capacity); setVal('room_price', r.price); setVal('room_photos', (r.photos||[]).join(', ')); let btn = document.getElementById('room_save_btn'); if(!btn){ btn = document.createElement('button'); btn.id='room_save_btn'; btn.className='primary'; btn.style.marginLeft='8px'; btn.textContent='Сохранить изменения'; document.querySelectorAll('#sec_camps .card')[1].children[3].appendChild(btn); } btn.onclick = async ()=>{ try{ const payload = { camp_id: Number(val('room_camp_id')), name: val('room_name'), capacity: Number(val('room_capacity')), price: Number(val('room_price')), photos: parsePhotos(val('room_photos')) }; await api(`/api/rooms/${r.id}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)}); alert('Сохранено'); loadRoomsForCamp(); }catch(e){ alert('Ошибка: '+e.message); } } }
-async function delRoom(id){ if(!confirm('Удалить номер #' + id + ' ?')) return; try{ await api(`/api/rooms/${id}`, {method:'DELETE'}); loadRoomsForCamp(); } catch(e){ alert('Ошибка: '+e.message); } }
+// Показать столько строк, сколько указано в карточке базы (rooms_count),
+// а если его нет — fallback к количеству сохранённых номеров.
+const desired = (D.rooms_count ?? (rooms?.length || 0));
+renderRoomsEditor(desired, rooms);
 
-// ===== ПОЛЬЗОВАТЕЛИ =====
-async function loadUsers(){
-  try{
-    const list = await api('/api/users');
-    const tb = document.querySelector('#users_tbl tbody');
-    tb.innerHTML = '';
-    list.forEach(u=>{
-      const tr = document.createElement('tr');
-      const dt = new Date(u.created_at).toLocaleString('ru-RU');
-      tr.innerHTML = `
-        <td>${u.id}</td><td>${u.name}</td><td>${u.phone}</td><td>${u.email??''}</td>
-        <td>${u.verified_phone? '✅':'—'}</td><td>${u.verified_email? '✅':'—'}</td>
-        <td>${(u.bookings||[]).length}</td><td>${dt}</td>`;
-      tb.appendChild(tr);
-    })
-  }catch(e){ alert('Не удалось загрузить пользователей: ' + e.message); }
+
+// галерея базы (если в карточке не пришли фото)
+if (!D.photos) {
+  const ph = await api(`/api/camps/${D.id}/photos`).catch(()=>[]);
+  renderGallery(ph);
+}
+    }catch(_) {}
+  }
+
+  document.getElementById('sec_camps').style.display = 'none';
+  document.getElementById('sec_camp_form').style.display = 'block';
 }
 
-// ===== Инициализация =====
+function backToList(){
+  document.getElementById('sec_camp_form').style.display = 'none';
+  document.getElementById('sec_camps').style.display = 'block';
+}
+
+/* === Кнопки формы === */
+document.getElementById('cf_reset').onclick = () => appConfirm('Сбросить форму?', ()=> showCampForm(_cfMode, _cfData));
+
+document.getElementById('cf_back').onclick  = () => {
+  if (!_cfDirty) return backToList();
+  appConfirm('Вернуться без сохранения?', ()=> backToList());
+};
+
+document.getElementById('cf_archive').onclick = async ()=>{
+  if (_cfMode!=='edit' || !_cfData?.id) return;
+  appConfirm('Переместить базу в архив?', async ()=>{
+    await api(`/api/camps/${_cfData.id}`, {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ status:'archived' })
+    });
+      await loadCamps(); backToList(); // appAlert('Сохранено');  <-- убрано
+_cfDirty = false;
+  });
+};
+document.getElementById('cf_delete').onclick = ()=> appAlert('Удаление из БД делаем из раздела «Архив». Здесь не удаляем.');
+
+document.getElementById('cf_save').onclick = async () => {
+  try {
+    const {lat, lng} = readCoords();
+    if (lat==null || lng==null) return appAlert('Укажите координаты в формате: 55.75, 37.62');
+
+    const roomsPayload = collectRoomsPayload();
+    const totalBeds = roomsPayload.reduce((s,r)=>s+(r.capacity||0),0);
+    document.getElementById('cf_beds').value = String(totalBeds); // база берёт итог из апартов
+
+const bbqPrivateCount = roomsPayload.reduce((s,r)=> s + (r.bbq_type==='private' ? 1 : 0), 0);
+const poolPrivateCount = roomsPayload.reduce((s,r)=> s + (r.pool_type==='private' ? 1 : 0), 0);
+const bbqSharedManual = parseInt(document.getElementById('cf_bbq_shared').value||'0',10) || 0;
+const poolSharedManual = parseInt(document.getElementById('cf_pool_shared').value||'0',10) || 0;
+
+const payload = {
+  status: getStatus(),
+  emoji_size: getEmojiSize(),
+  name:   document.getElementById('cf_name').value.trim(),
+  lake_name: document.getElementById('cf_lake').value.trim() || null,
+  ...readCoords(), // lat, lng
+  address: document.getElementById('cf_addr').value.trim() || null,
+  site_url:document.getElementById('cf_site').value.trim() || null,
+  owner:  packPerson(document.getElementById('cf_owner_name').value,    document.getElementById('cf_owner_phone').value),
+  manager:packPerson(document.getElementById('cf_manager_name').value, document.getElementById('cf_manager_phone').value),
+  admin_phones: [document.getElementById('cf_admin1').value.trim(),
+                 document.getElementById('cf_admin2').value.trim(),
+                 document.getElementById('cf_admin3').value.trim()].filter(Boolean).join(', ') || null,
+
+  rooms_count: parseInt(document.getElementById('cf_rooms').value||'0',10) || 0,
+  beds_count:  parseInt(document.getElementById('cf_beds').value ||'0',10) || 0,
+
+  bath_count:  parseInt(document.getElementById('cf_bath').value ||'0',10) || 0,
+  sauna_count: parseInt(document.getElementById('cf_sauna').value||'0',10) || 0,
+
+  // bbq/pools агрегаты
+  bbq_count:          bbqPrivateCount,    // индивидуальные по апартаментам
+  bbq_shared_count:   bbqSharedManual,    // ручной ввод
+  pools_private_count: poolPrivateCount,  // индивидуальные по апартаментам
+  pools_shared_count:  poolSharedManual,  // ручной ввод
+
+  emoji: getEmoji(),
+  photos: _cfPhotos.map((p,idx)=>({url:p.url, sort: idx, cover: !!p.cover})),
+
+  rooms_full: roomsPayload,  // <= ВАЖНО: запятая после этой строки теперь есть!
+};
+
+    if (!payload.name) return appAlert('Укажите название');
+
+    let proceed = false;
+    await new Promise(res=> appConfirm('Сохранить изменения?', ()=>{ proceed=true; res(); }, ()=>res()));
+    if (!proceed) return;
+
+    if (_cfMode === 'edit' && _cfData?.id) {
+      await api(`/api/camps/${_cfData.id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    } else {
+      await api('/api/camps', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    }
+      _cfDirty = false;
+      await loadCamps();
+      backToList();
+
+  } catch(e) { appAlert(e.message || 'Ошибка сохранения'); }
+};
+
+/* === Инициализация === */
+document.getElementById('btnAddCamp').addEventListener('click', () => {
+  // активируем вкладку «Базы и номера» (на всякий случай)
+  document.getElementById('tab_camps').click();
+  showCampForm('add');
+});
+
 loadCamps();
 </script>
-</body>
+
+<!-- Модалки -->
 <script>
-(function(){
-  const KEY='sa_theme';
-  const html=document.documentElement;
-  const tgl=()=>document.getElementById('saThemeToggle');
-  function apply(theme){ html.setAttribute('data-theme', theme); try{localStorage.setItem(KEY,theme);}catch(_){}}
-  const saved = (localStorage.getItem(KEY) || 'light');
-  apply(saved);
-  window.addEventListener('DOMContentLoaded', ()=>{
-    const el = tgl(); if (!el) return;
-    el.checked = (saved==='dark');
-    el.addEventListener('change', (e)=> apply(e.target.checked ? 'dark' : 'light'));
-  });
-})();
-  (function(){
-  const toImg = (file, maxW=180)=> new Promise(res=>{
-    const fr=new FileReader(); fr.onload=()=>{
-      const url=fr.result;
-      const img=new Image(); img.onload=()=>{
-        const w = Math.min(maxW, img.width);
-        const ratio = w / img.width;
-        const h = Math.round(img.height * ratio);
-        const cnv=document.createElement('canvas'); cnv.width=w; cnv.height=h;
-        const ctx=cnv.getContext('2d'); ctx.drawImage(img,0,0,w,h);
-        res(cnv.toDataURL('image/jpeg', .85));
-      };
-      img.src=url;
-    }; fr.readAsDataURL(file);
-  });
+function showModal(html){
+  const div=document.createElement('div');
+  div.style='position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);z-index:9999';
+  div.innerHTML=`<div style="background:#fff;color:#000;padding:16px;border-radius:12px;max-width:420px;width:90%">${html}</div>`;
+  document.body.appendChild(div); window._curModal=div;
+}
+function closeModal(){ if(window._curModal){ window._curModal.remove(); window._curModal=null; } }
 
-  function previewOne(inputId, targetId){
-    const inp=document.getElementById(inputId);
-    const out=document.getElementById(targetId);
-    if(!inp || !out) return;
-    inp.addEventListener('change', async ()=>{
-      out.innerHTML='';
-      const f=inp.files && inp.files[0]; if(!f) return;
-      const url=await toImg(f, 240);
-      out.innerHTML=`<img src="${url}" style="max-width:240px;border-radius:10px;">`;
-    });
-  }
-  function previewMany(inputId, targetId, limit){
-    const inp=document.getElementById(inputId);
-    const out=document.getElementById(targetId);
-    if(!inp || !out) return;
-    inp.addEventListener('change', async ()=>{
-      out.innerHTML='';
-      const files = Array.from(inp.files||[]).slice(0, limit);
-      for (const f of files) {
-        const url=await toImg(f, 120);
-        const img=document.createElement('img');
-        img.src=url; img.style.cssText='max-width:120px;border-radius:8px';
-        out.appendChild(img);
-      }
-    });
-  }
-  previewOne('ph_main','ph_main_preview');
-  previewMany('ph_houses','ph_houses_preview', 5);
-  previewMany('ph_area','ph_area_preview', 4);
-})();
-
+function appAlert(message, onClose){
+  showModal(`
+    <div style="display:grid;gap:12px">
+      <div style="font-weight:700">Сообщение</div>
+      <div>${message}</div>
+      <div style="display:flex;justify-content:end;gap:8px">
+        <button class="primary" id="al_ok">OK</button>
+      </div>
+    </div>
+  `);
+  document.getElementById('al_ok').onclick = ()=>{ closeModal(); onClose && onClose(); };
+}
+function appConfirm(message, onYes, onNo){
+  showModal(`
+    <div style="display:grid;gap:12px">
+      <div style="font-weight:700">Подтвердите действие</div>
+      <div>${message}</div>
+      <div class="appconfirm-actions">
+        <button class="primary ok"   id="cf_yes">OK</button>
+        <button class="cancel" id="cf_no">Отмена</button>
+      </div>
+    </div>
+  `);
+  document.getElementById('cf_no').onclick  = ()=>{ closeModal(); onNo && onNo(); };
+  document.getElementById('cf_yes').onclick = ()=>{ closeModal(); onYes && onYes(); };
+}
 </script>
+</body>
 </html>

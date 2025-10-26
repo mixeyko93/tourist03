@@ -98,8 +98,22 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
 }).addTo(map);
 
 const cluster = (typeof L.markerClusterGroup === 'function')
-  ? L.markerClusterGroup()
-  : L.featureGroup();               // у featureGroup есть getBounds/getLayers
+  ? L.markerClusterGroup({
+      maxClusterRadius: 60,
+      spiderfyOnMaxZoom: true,
+      showCoverageOnHover: false,
+      iconCreateFunction: function (grp) {
+        const count = grp.getChildCount();
+        const size =
+          count < 10 ? 'small' : count < 30 ? 'medium' : 'large';
+        return L.divIcon({
+          html: `<div class="cl-inner">${count}</div>`,
+          className: `cl-marker cl-${size}`,
+          iconSize: L.point(44, 44)
+        });
+      }
+    })
+  : L.featureGroup();
 map.addLayer(cluster);
 
 function fixMapSize(){ setTimeout(()=> map.invalidateSize(true), 50); }
@@ -107,15 +121,20 @@ window.addEventListener('load', fixMapSize);
 window.addEventListener('resize', fixMapSize);
 if (isTG) Telegram.WebApp.onEvent('viewportChanged', fixMapSize);
 
-function emojiHouseIcon(emoji = '🏡') {
+function emojiHouseIcon(emoji = '🏡', size = 'standard') {
+  // standard ≈ 36x44, vip ≈ 72x88
+  const isVip = (String(size).toLowerCase() === 'vip');
+  const iconSize   = isVip ? [72, 88] : [36, 44];
+  const iconAnchor = isVip ? [36, 80] : [18, 40];
+  const popupAnchor= isVip ? [0, -72] : [0, -36];
+
   return L.divIcon({
     html: `<div class="emoji-pin" aria-hidden="true">${emoji}</div>`,
-    className: 'emoji-marker',
-    iconSize: [72, 88],      // было [36, 44] — x2
-    iconAnchor: [36, 80],    // якорь пропорционально
-    popupAnchor: [0, -72]    // чтобы попап не перекрывал пин
+    className: `emoji-marker ${isVip ? 'vip' : 'std'}`,
+    iconSize, iconAnchor, popupAnchor
   });
 }
+
 
 let lastMapView = null;
 map.on('moveend', () => { lastMapView = { center: map.getCenter(), zoom: map.getZoom() }; });
@@ -292,24 +311,28 @@ async function loadCamps() {
   try {
     const res = await fetch('/api/camps');
     if (!res.ok) throw new Error('Ошибка загрузки баз');
-    const items = await res.json(); // [{id,name,lat,lng,min_price,emoji,photo_main,lake_name?}]
+const items = await res.json();
+// на карту выводим только активные базы
+const itemsActive = items.filter(c => (c.status || 'active') === 'active');
 
-    // Очистим маркеры
-    if (typeof cluster !== 'undefined') cluster.clearLayers();
 
-    // Если задан фильтр — фильтруем базы по вместимости номеров (быстрый способ без календаря)
-    let filtered = items;
-    const f = window.__bookingFilter;
-    if (f && Number.isFinite(f.total) && f.total > 0) {
-      // Получаем номера один раз для всех баз
-      const roomsResp = await fetch('/api/rooms');
-      const allRooms = roomsResp.ok ? await roomsResp.json() : [];
-      const roomsByCamp = allRooms.reduce((acc, r) => {
-        (acc[r.camp_id] ||= []).push(r);
-        return acc;
-      }, {});
-      filtered = items.filter(c => (roomsByCamp[c.id] || []).some(r => (r.capacity || 0) >= f.total));
-    }
+// Базовый набор — только активные
+let filtered = itemsActive;
+
+const f = window.__bookingFilter;
+if (f && Number.isFinite(f.total) && f.total > 0) {
+  // Получаем номера один раз для всех баз
+  const roomsResp = await fetch('/api/rooms');
+  const allRooms = roomsResp.ok ? await roomsResp.json() : [];
+  const roomsByCamp = allRooms.reduce((acc, r) => {
+    (acc[r.camp_id] ||= []).push(r);
+    return acc;
+  }, {});
+  // Фильтруем уже активные
+  filtered = filtered.filter(c => (roomsByCamp[c.id] || [])
+    .some(r => (r.capacity || 0) >= f.total));
+}
+
 
     // Отрисуем маркеры
     filtered.forEach(c => {
@@ -324,15 +347,19 @@ async function loadCamps() {
           <button class="button primary" onclick="window.__openCampBooking(${c.id})" style="padding:6px 10px;">Забронировать</button>
         </div>
       `;
-     const marker = L.marker([c.lat, c.lng], { icon: emojiHouseIcon(c.emoji || '🏕️') })
-      .bindPopup(html, { maxWidth: 260, className: 'camp-popup' });
+        const marker = L.marker(
+          [c.lat, c.lng],
+          { icon: emojiHouseIcon(c.emoji || '🏕️', c.emoji_size || 'standard') }
+        );
+        marker.bindPopup(html, { maxWidth: 260, className: 'camp-popup' });
+        cluster.addLayer(marker);
 
-      if (typeof cluster !== 'undefined') cluster.addLayer(marker); else marker.addTo(map);
-    });
+    });                              // <-- закрываем filtered.forEach(...)
   } catch (e) {
-    console.error(e);
+    console.error('loadCamps error:', e);
   }
-}
+}                                     // <-- закрываем function loadCamps
+
 
 // Вспомогательные обработчики кнопок на балуне (заглушки для следующего этапа)
 window.__showCampBrief = async (campId) => {
@@ -372,55 +399,58 @@ function initTabs(){
 function openBookingFilterModal() {
   showModal(`
     <div class="auth">
-      <div class="title" style="text-align:center;margin-bottom:12px;">
+      <div class="title" style="text-align:center;margin-bottom:14px;">
         Выберете даты желаемой брони и количество гостей
       </div>
 
-      <div class="field" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="grid-2">
         <div>
           <label>Заезд</label>
-          <input id="bf_from" type="date" style="height:44px;font-size:16px;">
+          <input id="bf_from" type="date" class="tg-date">
         </div>
         <div>
           <label>Выезд</label>
-          <input id="bf_to" type="date" style="height:44px;font-size:16px;">
+          <input id="bf_to" type="date" class="tg-date">
         </div>
       </div>
 
-      <div class="field" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">
+      <div class="grid-2" style="margin-top:12px;">
         <div>
           <label>Взрослые</label>
-          <input id="bf_adults" type="number" min="1" value="2" style="height:44px;font-size:16px;">
+          <select id="bf_adults" class="tg-select"></select>
         </div>
         <div>
           <label>Дети</label>
-          <input id="bf_kids" type="number" min="0" value="0" style="height:44px;font-size:16px;">
+          <select id="bf_kids" class="tg-select"></select>
         </div>
       </div>
 
-      <div class="actions" style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
-        <button class="button ghost"   id="bf_close"  style="height:44px;">Закрыть</button>
-        <button class="button ghost"   id="bf_reset"  style="height:44px;">Сбросить</button>
-        <button class="button primary" id="bf_apply"  style="height:44px;">Показать</button>
+      <div class="actions">
+        <button class="button ghost"   id="bf_close">Закрыть</button>
+        <button class="button ghost"   id="bf_reset">Сбросить</button>
+        <button class="button primary" id="bf_apply">Показать</button>
       </div>
     </div>
   `);
 
+  // селекты 0..10
+  const fill = (el, from, to, def)=>{ for(let i=from;i<=to;i++){ const o=document.createElement('option'); o.value=i; o.textContent=i; el.appendChild(o);} el.value=String(def); };
+  fill(document.getElementById('bf_adults'), 1, 10, 2);
+  fill(document.getElementById('bf_kids'),   0, 10, 0);
+
   const $ = (id)=>document.getElementById(id);
   $('bf_close').onclick = closeModal;
   $('bf_reset').onclick = () => {
-    $('bf_from').value = '';
-    $('bf_to').value = '';
-    $('bf_adults').value = 2;
-    $('bf_kids').value = 0;
+    $('bf_from').value = ''; $('bf_to').value = '';
+    $('bf_adults').value = '2'; $('bf_kids').value = '0';
     window.__bookingFilter = null;
   };
   $('bf_apply').onclick = () => {
     const from   = $('bf_from').value;
     const to     = $('bf_to').value;
-    const adults = $('bf_adults').valueAsNumber || 1;
-    const kids   = $('bf_kids').valueAsNumber || 0;
-    window.__bookingFilter = { from, to, adults, kids, total: (adults + kids) };
+    const adults = parseInt($('bf_adults').value, 10);
+    const kids   = parseInt($('bf_kids').value, 10);
+    window.__bookingFilter = { from, to, adults, kids, total: adults + kids };
     closeModal();
     if (typeof loadCamps === 'function') loadCamps();
   };
