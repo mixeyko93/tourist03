@@ -8,7 +8,7 @@
     :root { --blue:#0a84ff; --red:#d32f2f; }
 
     html,body{margin:0;font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto}
-    header{position:sticky;top:0;background:#fff;padding:10px 12px;box-shadow:0 2px 10px rgba(0,0,0,.08);display:flex;gap:8px;align-items:center}
+    header{position:sticky;top:0;background:#fff;padding:10px 12px;box-shadow:0 2px 10px rgba(0,0,0,.08);display:flex;gap:8px;align-items:center; z-index: 2000;}
     .title{font-weight:800;margin-right:auto}
     .tabs{display:flex;gap:8px}
     .tabs button{border:1px solid #ddd;border-radius:10px;background:#fff;padding:8px 12px;cursor:pointer}
@@ -155,13 +155,15 @@ input[type=number]{ -moz-appearance:textfield }
 .room-line{
   display:grid; gap:8px;
   grid-template-columns:
-    1.2fr                 /* Тип */
-    1.6fr                 /* Название */
-    fit-content(90px)     /* этаж */
-    fit-content(90px)     /* 🛏️1 */
-    fit-content(90px)     /* 🛏️2 */
-    1fr                   /* Душ/ванна */
-    1fr;                  /* Туалет */
+    1.2fr              /* Тип */
+    1.6fr              /* Название */
+    fit-content(100px) /* Этажность */
+    fit-content(90px)  /* Этаж */
+    fit-content(90px)  /* 🛏️1 */
+    fit-content(90px)  /* 🛏️2 */
+    1fr                /* Душ/ванна */
+    1fr;               /* Туалет */
+
 }
 
 
@@ -264,6 +266,14 @@ input[type=number]{ -moz-appearance:textfield }
 }
 /* кнопка загрузки */
 .room-upload { margin-top:6px; display:inline-flex; gap:8px; align-items:center; }
+
+    /* маленькая кликабельная иконка навигации */
+.nav-emoji{
+  cursor:pointer; font-size:20px; line-height:1;
+  display:inline-flex; align-items:center; justify-content:center;
+  padding:4px 6px; border-radius:8px;
+}
+html[data-theme="dark"] .nav-emoji:hover{ background:#141821; }
 
   </style>
 </head>
@@ -457,7 +467,6 @@ input[type=number]{ -moz-appearance:textfield }
       <div style="margin-left:auto"></div>
       <button class="button" id="cf_reset">Сбросить</button>
     </div>
-
     </div>
   </section>
 
@@ -537,25 +546,33 @@ const api = (u,o={})=>fetch(u,o).then(r=>{if(!r.ok)throw new Error(r.statusText)
 /* === Список баз === */
 async function loadCamps(){
   try{
-const list = (await api('/api/camps')).filter(c => (c.status||'active') !== 'archived');
-const tb = document.querySelector('#camps_tbl tbody');
-tb.innerHTML = '';
-list.forEach(c => {
+    const list = (await api('/api/camps')).filter(c => (c.status||'active') !== 'archived');
+    const tb = document.querySelector('#camps_tbl tbody');
+    tb.innerHTML = '';
+
+    list.forEach(c => {
+      const yMapBtn = (c.lat!=null && c.lng!=null)
+  ? `<span class="nav-emoji" title="Открыть в Яндекс.Картах"
+      onclick="window.open('https://yandex.ru/maps/?pt=${c.lng},${c.lat}&z=15&l=map','_blank')">🧭</span>`
+  : '';
 
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>${c.id}</td>
         <td>${c.name || ''}</td>
         <td>${c.lake_name || ''}</td>
-        <td>${Number(c.lat).toFixed(3)}, ${Number(c.lng).toFixed(3)}</td>
+        <td>${yMapBtn}</td>
         <td>${c.owner || ''}</td>
         <td>${c.manager || ''}</td>
         <td>${c.min_price ?? ''}</td>
         <td><button class="button" onclick='showCampForm("edit", ${JSON.stringify(c).replace(/'/g,"&apos;")})'>Редактировать</button></td>`;
       tb.appendChild(tr);
     });
-  } catch (e) { console.error('loadCamps error:', e); }
+  } catch (e) {
+    console.error('loadCamps error:', e);
+  }
 }
+
 
 async function loadArchive(){
   try{
@@ -565,12 +582,17 @@ async function loadArchive(){
     const tb = document.querySelector('#archive_tbl tbody');
     tb.innerHTML = '';
     archived.forEach(c => {
+      const yMapBtn = (c.lat!=null && c.lng!=null)
+  ? `<span class="nav-emoji" title="Открыть в Яндекс.Картах"
+      onclick="window.open('https://yandex.ru/maps/?pt=${c.lng},${c.lat}&z=15&l=map','_blank')">🧭</span>`
+  : '';
+
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>${c.id}</td>
         <td>${c.name || ''}</td>
         <td>${c.lake_name || ''}</td>
-        <td>${Number(c.lat).toFixed(3)}, ${Number(c.lng).toFixed(3)}</td>
+        <td>${yMapBtn}</td>
         <td>${c.min_price ?? ''}</td>
         <td style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="button" onclick="restoreCamp(${c.id})">Восстановить</button>
@@ -578,6 +600,7 @@ async function loadArchive(){
         </td>`;
       tb.appendChild(tr);
     });
+
 
     if (!archived.length) {
       tb.innerHTML = `<tr><td colspan="6" style="text-align:center;color:#999;padding:12px">Архив пуст</td></tr>`;
@@ -765,6 +788,7 @@ async function uploadOneFile(file){
 async function roomHandleFiles(idx, fileList){
   const files = Array.from(fileList||[]);
   if (!files.length) return;
+  if (!_roomPhotos[idx]) _roomPhotos[idx] = [];
   const canAdd = Math.max(0, 5 - (_roomPhotos[idx]?.length || 0));
   for (const f of files.slice(0, canAdd)){
     const url = await uploadOneFile(f);
@@ -822,25 +846,44 @@ function roomRowTemplate(i, r={}){
   return `
 <div class="room-card room-row" data-idx="${i}" data-room-id="${r.id||''}">
     <!-- 1-я строка -->
-    <div class="room-line">
-      <input class="r_type cf-input"   placeholder="Тип" value="${r.room_type||''}">
-      <input class="r_name cf-input"   placeholder="Название" value="${r.name||''}">
-      <input class="r_floors cf-input input-num-3" type="number" min="1" placeholder="этаж" value="${r.floors??''}">
-      <input class="r_beds1  cf-input input-num-3" type="number" min="0" placeholder="🛏️1" value="${r.beds_single??''}">
-      <input class="r_beds2  cf-input input-num-3" type="number" min="0" placeholder="🛏️2" value="${r.beds_double??''}">
-      <select class="r_bath cf-input">
-        <option value="">Душ/ванна — нет</option>
-        <option value="shower" ${(r.bath_type==='shower')?'selected':''}>Душ</option>
-        <option value="bath"   ${(r.bath_type==='bath')?'selected':''}>Ванна</option>
-        <option value="both"   ${(r.bath_type==='both')?'selected':''}>Душ и ванна</option>
-      </select>
-      <select class="r_wc cf-input" title="Тип санузла">
-        <option value="">Туалет — нет</option>
-        <option value="indiv-split"     ${(r.wc_type==='indiv-split')?'selected':''}>Индив./раздельный</option>
-        <option value="indiv-combined"  ${(r.wc_type==='indiv-combined')?'selected':''}>Индив./совмещённый</option>
-        <option value="shared"          ${(r.wc_type==='shared')?'selected':''}>Общий</option>
-      </select>
-    </div>
+<div class="room-line">
+  <!-- Тип: выбор из списка -->
+  <select class="r_type cf-input" title="Тип">
+    ${[
+      'Дом','Номер','Комната','Апартамент','Коттедж','Палатка','Юрта','Вигвам'
+    ].map(x => `<option value="${x}" ${(r.room_type===x)?'selected':''}>${x}</option>`).join('')}
+  </select>
+
+  <!-- Название -->
+  <input class="r_name cf-input" placeholder="Название" value="${r.name||''}">
+
+  <!-- Этажность (общее количество этажей в строении) -->
+  <input class="r_storeys cf-input input-num-3" type="number" min="1" placeholder="этажн." value="${r.floors??1}">
+
+  <!-- Этаж (на каком этаже расположен номер/комната/апартамент) -->
+  <input class="r_floor cf-input input-num-3" type="number" min="1" placeholder="этаж" value="${r.floor??1}">
+
+  <!-- Кровати -->
+  <input class="r_beds1  cf-input input-num-3" type="number" min="0" placeholder="🛏️1" value="${r.beds_single??''}">
+  <input class="r_beds2  cf-input input-num-3" type="number" min="0" placeholder="🛏️2" value="${r.beds_double??''}">
+
+  <!-- Душ/ванна -->
+  <select class="r_bath cf-input">
+    <option value="">Душ/ванна — нет</option>
+    <option value="shower" ${(r.bath_type==='shower')?'selected':''}>Душ</option>
+    <option value="bath"   ${(r.bath_type==='bath')?'selected':''}>Ванна</option>
+    <option value="both"   ${(r.bath_type==='both')?'selected':''}>Душ и ванна</option>
+    <option value="shower-shared" ${(r.bath_type==='shower-shared')?'selected':''}>Душ общий</option>
+  </select>
+
+  <!-- Туалет -->
+  <select class="r_wc cf-input" title="Тип санузла">
+    <option value="">Туалет — нет</option>
+    <option value="indiv-split"     ${(r.wc_type==='indiv-split')?'selected':''}>Индив./раздельный</option>
+    <option value="indiv-combined"  ${(r.wc_type==='indiv-combined')?'selected':''}>Индив./совмещённый</option>
+    <option value="shared"          ${(r.wc_type==='shared')?'selected':''}>Общий</option>
+  </select>
+</div>
 
     <!-- 2-я строка -->
     <div class="room-line-2">
@@ -866,17 +909,21 @@ function roomRowTemplate(i, r={}){
       </select>
       <select class="r_pool cf-input">
         <option value="">Бассейн — нет</option>
-        <option value="private" ${ (r.pool_type==='private') ? 'selected' : '' }>Индивидуальный</option>
+        <option value="private" ${(r.pool_type==='private')?'selected':''}>Индивидуальный</option>
+        <option value="shared"  ${(r.pool_type==='shared')?'selected':''}>Общий</option>
       </select>
+
 
       <select class="r_balcony cf-input">
         <option value="">Балкон — нет</option>
         <option value="private" ${(r.balcony_type==='private')?'selected':''}>Индивидуальный</option>
         <option value="shared"  ${(r.balcony_type==='shared')?'selected':''}>Общий</option>
       </select>
-      <label style="display:flex;align-items:center;gap:8px;justify-content:flex-end">
-        <input type="checkbox" class="r_ac" ${(r.has_ac)?'checked':''}> Кондиционер
-      </label>
+      <select class="r_ac cf-input" title="Кондиционер">
+        <option value="0" ${(!r.has_ac)?'selected':''}>Кондиционер — нет</option>
+        <option value="1" ${(r.has_ac)?'selected':''}>Кондиционер — есть</option>
+      </select>
+
     </div>
 
     <!-- 3-я строка -->
@@ -922,6 +969,7 @@ function removeRoom(idx) {
 updateDerivedTotals();
 
 // --- пересчёт общего количества спальных мест во всех апартаментах ---
+// --- пересчёт общего количества спальных мест во всех апартаментах ---
 function updateTotalBeds() {
   const rows = document.querySelectorAll('#cf_rooms_editor .room-row');
   let total = 0;
@@ -933,6 +981,7 @@ function updateTotalBeds() {
   document.getElementById('cf_beds').value = String(total);
 }
 
+// --- суммарные показатели от всех апартаментов (кровати, BBQ индив., бассейн индив.) ---
 function updateDerivedTotals() {
   const rows = document.querySelectorAll('#cf_rooms_editor .room-row');
   let totalBeds = 0, bbqIndiv = 0, poolIndiv = 0;
@@ -949,151 +998,159 @@ function updateDerivedTotals() {
     if (pool === 'private') poolIndiv++;
   });
 
-  document.getElementById('cf_beds').value = String(totalBeds);
-  document.getElementById('cf_bbq_indiv').value   = String(bbqIndiv);
-  document.getElementById('cf_pool_indiv').value  = String(poolIndiv);
+  document.getElementById('cf_beds').value       = String(totalBeds);
+  document.getElementById('cf_bbq_indiv').value  = String(bbqIndiv);
+  document.getElementById('cf_pool_indiv').value = String(poolIndiv);
 }
 
-function renderRoomsEditor(count, prefetched=[]){
+// --- редактор списка апартаментов ---
+function renderRoomsEditor(count, prefetched=[]) {
   const n = Math.max(0, parseInt(count||0,10));
   const root = document.getElementById('cf_rooms_editor');
   root.innerHTML = '';
-  if (!n){ root.style.display='none'; _roomPhotos=[]; return; }
+  _roomPhotos = [];
+
+  if (!n){ root.style.display='none'; return; }
   root.style.display='block';
 
   root.insertAdjacentHTML('beforeend', '<div class="rooms-title">Описание апартаментов</div>');
-root.insertAdjacentHTML('beforeend',
-  `<div style="display:flex;gap:8px;justify-content:flex-end;margin:6px 0 8px">
-     <button type="button" class="button" id="btnAddRoom">Добавить апартамент</button>
-   </div>`
-);
+  root.insertAdjacentHTML('beforeend',
+    `<div style="display:flex;gap:8px;justify-content:flex-end;margin:6px 0 8px">
+       <button type="button" class="button" id="btnAddRoom">Добавить апартамент</button>
+     </div>`
+  );
 
-// после вставки кнопки вызовем пересчёт отдельно
-updateTotalBeds();
+  // вставляем n строк
+  for (let i = 0; i < n; i++) {
+    root.insertAdjacentHTML('beforeend', roomRowTemplate(i, prefetched[i] || {}));
 
+    // восстановить фото этой строки в _roomPhotos[i]
+    const room = prefetched[i] || {};
+    let raw = [];
+    if (Array.isArray(room.photos)) {
+      raw = room.photos;
+    } else if (typeof room.photos_json === 'string') {
+      try { raw = JSON.parse(room.photos_json) || []; } catch { raw = []; }
+    } else if (room.photo_main) {
+      raw = [room.photo_main];
+    }
+    const coverUrl = room.photo_main || raw[0] || null;
+    _roomPhotos[i] = (raw || []).slice(0, 5).map(u => ({ url: u, cover: u === coverUrl }));
 
+    // отрисовать мини-галерею и навесить пересчёты
+    renderRoomGallery(i);
 
-for (let i = 0; i < n; i++) {
-  // вставляем разметку строки i
-  root.insertAdjacentHTML('beforeend', roomRowTemplate(i, prefetched[i] || {}));
-
-  // восстанавливаем фото из БД в _roomPhotos[i]
-  const room = prefetched[i] || {};
-  let raw = [];
-  if (Array.isArray(room.photos)) {
-    raw = room.photos;
-  } else if (typeof room.photos_json === 'string') {
-    try { raw = JSON.parse(room.photos_json) || []; } catch { raw = []; }
-  } else if (room.photo_main) {
-    raw = [room.photo_main];
+    const rowSel = `.room-row[data-idx="${i}"]`;
+    document.querySelectorAll(`${rowSel} .r_beds1, ${rowSel} .r_beds2`).forEach(inp =>
+      inp.addEventListener('input', () => { updateTotalBeds(); updateDerivedTotals(); })
+    );
+    document.querySelectorAll(`${rowSel} .r_bbq, ${rowSel} .r_pool`).forEach(sel =>
+      sel.addEventListener('change', updateDerivedTotals)
+    );
   }
-  const coverUrl = room.photo_main || raw[0] || null;
-  _roomPhotos[i] = (raw || []).slice(0, 5).map(u => ({ url: u, cover: u === coverUrl }));
 
-  // рисуем мини-галерею для строки i (после заполнения _roomPhotos)
-  renderRoomGallery(i);
-  // пересчитываем спальные места при изменениях полей 🛏️
-const inputs = root.querySelectorAll(`.room-row[data-idx="${i}"] .r_beds1, .room-row[data-idx="${i}"] .r_beds2`);
-inputs.forEach(inp => inp.addEventListener('input', updateTotalBeds));
+  // показать число строк
+  document.getElementById('cf_rooms').value = String(n);
 
+  // добавить ещё одну строку
+  const btnAdd = document.getElementById('btnAddRoom');
+  if (btnAdd) {
+    btnAdd.onclick = () => {
+      const idx = document.querySelectorAll('#cf_rooms_editor .room-row').length;
+      root.insertAdjacentHTML('beforeend', roomRowTemplate(idx, {}));
+      _roomPhotos[idx] = [];
+      renderRoomGallery(idx);
+
+      const rowSel = `.room-row[data-idx="${idx}"]`;
+      document.querySelectorAll(`${rowSel} .r_beds1, ${rowSel} .r_beds2`).forEach(inp =>
+        inp.addEventListener('input', () => { updateTotalBeds(); updateDerivedTotals(); })
+      );
+      document.querySelectorAll(`${rowSel} .r_bbq, ${rowSel} .r_pool`).forEach(sel =>
+        sel.addEventListener('change', updateDerivedTotals)
+      );
+
+      document.getElementById('cf_rooms').value = String(idx + 1);
+      _cfDirty = true;
+      updateDerivedTotals();
+    };
+  }
+
+  // первичный пересчёт
+  updateTotalBeds();
+  updateDerivedTotals();
 }
-
-// показываем текущее количество при загрузке карточки
-document.getElementById('cf_rooms').value = String(n);
-
-
-
-// Добавить ещё одну пустую строку апартамента (не пересоздавая все)
-const btnAdd = document.getElementById('btnAddRoom');
-if (btnAdd) {
-  btnAdd.onclick = () => {
-    const root = document.getElementById('cf_rooms_editor');
-    const idx = root.querySelectorAll('.room-row').length; // новый индекс
-    root.insertAdjacentHTML('beforeend', roomRowTemplate(idx, {}));
-    _roomPhotos[idx] = [];
-    renderRoomGallery(idx);
-
-// навешиваем пересчёт на новые поля
-const rowSel = `.room-row[data-idx="${idx}"]`;
-document.querySelectorAll(`${rowSel} .r_beds1, ${rowSel} .r_beds2`).forEach(inp => inp.addEventListener('input', updateDerivedTotals));
-document.querySelectorAll(`${rowSel} .r_bbq, ${rowSel} .r_pool`).forEach(inp => inp.addEventListener('change', updateDerivedTotals));
-
-updateDerivedTotals();
-
-
-// обновляем текстовое поле-индикатор
-const roomsInput = document.getElementById('cf_rooms');
-roomsInput.value = String(idx + 1);
-_cfDirty = true;
-updateDerivedTotals(); // первичный пересчёт при открытии
-
-
-  };
-}
-}
-
-
 
 function collectRoomsPayload(){
-  // Берём все строки-апартаменты и собираем полезную нагрузку для API.
   const rows = Array.from(document.querySelectorAll('#cf_rooms_editor .room-row'));
 
   return rows.map((row, idx) => {
     const val = (sel) => (row.querySelector(sel)?.value ?? '').trim();
     const num = (sel, min = 0) => {
       const v = row.querySelector(sel)?.value ?? '';
-      return v === '' ? null : Math.max(min, parseInt(v, 10));
+      if (v === '') return null;
+      const n = parseInt(v, 10);
+      return Number.isNaN(n) ? null : Math.max(min, n);
     };
-    const chk = (sel) => !!row.querySelector(sel)?.checked;
+
+    // сначала читаем числа, потом используем
+    const storeys = num('.r_storeys', 1) ?? 1; // этажность
+    const floor   = num('.r_floor',   1) ?? 1; // этаж
 
     const beds1 = num('.r_beds1', 0) ?? 0;
     const beds2 = num('.r_beds2', 0) ?? 0;
     const capacity = beds1 + beds2 * 2;
 
-
-
-    // Фото этого апартамента храним в _roomPhotos[idx]
+    // фото строки
     const photos = (_roomPhotos[idx] || []).map(p => p.url);
     const cover  = (_roomPhotos[idx] || []).find(p => p.cover)?.url || photos[0] || null;
 
-    // Совместимость с текущей схемой БД (app.py уже готов это принять)
-    const payload = {
+    return {
       id: row.dataset.roomId ? Number(row.dataset.roomId) : null,
+
+      // базовые поля
       name:        val('.r_name') || null,
       room_type:   val('.r_type') || null,
-      floors:      num('.r_floors', 1) ?? 1,
-      beds_single: num('.r_beds1', 0)  ?? 0,
-      beds_double: num('.r_beds2', 0)  ?? 0,
-      wc_count:    (val('.r_wc') ? 1 : 0),                 // есть санузел — 1
-      bath_type:   val('.r_bath') || null,
-      has_ac:      chk('.r_ac') ? 1 : 0,
-      has_bbq:     val('.r_bbq')     ? 1 : 0,             // типы детальнее можно внедрить позже
-      has_kitchen: val('.r_kitchen') ? 1 : 0,
+      floors:      storeys,   // этажность
+      floor:       floor,     // этаж
+
+      // кровати/вместимость
+      beds_single: beds1,
+      beds_double: beds2,
       capacity:    capacity,
-      price:       num('.r_price_house', 0),
+
+      // санузел и ванная
+      wc_type:     val('.r_wc') || null,     // shared | indiv-*
+      wc_count:    val('.r_wc') ? 1 : 0,     // для совместимости
+      bath_type:   val('.r_bath') || null,
+
+      // кондиционер (селект 0/1)
+      has_ac:      ((val('.r_ac') || '0') === '1') ? 1 : 0,
+
+      // удобства
+      bbq_type:      val('.r_bbq') || null,
+      kitchen_type:  val('.r_kitchen') || null,
+      gazebo_type:   val('.r_gazebo') || null,
+      terrace_type:  val('.r_terrace') || null,
+      balcony_type:  val('.r_balcony') || null,
+      pool_type:     val('.r_pool') || null,
+
+      // цены/скидки
+      price:         num('.r_price_house', 0),
+      price_adult:   num('.r_price_adult', 0),
+      price_child:   num('.r_price_child', 0),
+      discount_pct:         num('.r_disc_pct', 0),
+      discount_from_nights: num('.r_disc_from', 0),
+
+      // описание и фото
+      desc:        val('.r_desc') || null,
       photo_main:  cover,
       photos:      photos,
-      photos_json: JSON.stringify(photos),                 // на всякий — для прежнего поля
-      // доп-поля UI (сейчас БД их не хранит, но пусть летят — не мешают)
-      bbq_type:     val('.r_bbq') || null,
-pool_type:    val('.r_pool') || null,
-
-      wc_type:     val('.r_wc') || null,
-      bbq_type:    val('.r_bbq') || null,
-      kitchen_type:val('.r_kitchen') || null,
-      gazebo_type: val('.r_gazebo') || null,
-      terrace_type:val('.r_terrace') || null,
-      balcony_type:val('.r_balcony') || null,
-      desc:        val('.r_desc') || null,
-      price_adult: num('.r_price_adult', 0),
-      price_child: num('.r_price_child', 0),
-      discount_pct:        num('.r_disc_pct', 0),
-      discount_from_nights:num('.r_disc_from', 0),
+      photos_json: JSON.stringify(photos),
     };
-
-    return payload;
   }).filter(x => x.name || x.room_type);
 }
+
+
 
 
 document.getElementById('cf_rooms').addEventListener('input', e => {
@@ -1259,6 +1316,11 @@ document.getElementById('cf_save').onclick = async () => {
     if (lat==null || lng==null) return appAlert('Укажите координаты в формате: 55.75, 37.62');
 
     const roomsPayload = collectRoomsPayload();
+        // минимальная цена за взрослого среди всех апартаментов
+    const minPriceAdult = (() => {
+      const vals = roomsPayload.map(r => r.price_adult).filter(v => Number.isFinite(v));
+      return vals.length ? Math.min(...vals) : null;
+    })();
     const totalBeds = roomsPayload.reduce((s,r)=>s+(r.capacity||0),0);
     document.getElementById('cf_beds').value = String(totalBeds); // база берёт итог из апартов
 
@@ -1267,12 +1329,15 @@ const poolPrivateCount = roomsPayload.reduce((s,r)=> s + (r.pool_type==='private
 const bbqSharedManual = parseInt(document.getElementById('cf_bbq_shared').value||'0',10) || 0;
 const poolSharedManual = parseInt(document.getElementById('cf_pool_shared').value||'0',10) || 0;
 
+
+
 const payload = {
   status: getStatus(),
   emoji_size: getEmojiSize(),
   name:   document.getElementById('cf_name').value.trim(),
   lake_name: document.getElementById('cf_lake').value.trim() || null,
   ...readCoords(), // lat, lng
+  min_price: minPriceAdult,
   address: document.getElementById('cf_addr').value.trim() || null,
   site_url:document.getElementById('cf_site').value.trim() || null,
   owner:  packPerson(document.getElementById('cf_owner_name').value,    document.getElementById('cf_owner_phone').value),
