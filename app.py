@@ -1,19 +1,14 @@
-# app.py — Tourist03_win
-# Полный рабочий файл. Сделано максимально «по-человечески»:
-# — комментарии рядом с «хрупкими» местами
-# — мягкие миграции БД (ALTER IF NOT EXISTS)
-# — аккуратные INSERT/UPDATE для rooms (включая новую колонку floor)
-
 import os
 import json
 import sqlite3
 from pathlib import Path
 from datetime import datetime
 
-from fastapi import FastAPI, Request, UploadFile, File
+from fastapi import FastAPI, Request, HTTPException   # ← добавили HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+
 
 # === Папки проекта ===
 BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
@@ -79,6 +74,86 @@ def _conn_users() -> sqlite3.Connection:
     conn = sqlite3.connect(str(USERS_DB))
     conn.row_factory = sqlite3.Row
     return conn
+
+# --- мягкая миграция схемы: добавляет недостающие столбцы и таблицы ---
+def ensure_schema():
+    conn = _conn_camps()
+    cur = conn.cursor()
+
+    # camps: добавим описание + счётчики и настройки, если их ещё нет
+    cur.execute("PRAGMA table_info(camps)")
+    cols = {row[1] for row in cur.fetchall()}
+
+    def add_camp_col(name: str, ddl: str, default_literal: str | None = None):
+        if name in cols:
+            return
+        # собираем ALTER с литеральным DEFAULT, без плейсхолдеров
+        if default_literal is None:
+            sql = f"ALTER TABLE camps ADD COLUMN {name} {ddl}"
+        else:
+            sql = f"ALTER TABLE camps ADD COLUMN {name} {ddl} DEFAULT {default_literal}"
+        cur.execute(sql)
+
+    # строковые DEFAULT оборачиваем в одинарные кавычки, числа — как есть
+    add_camp_col("description",         "TEXT",    "''")
+    add_camp_col("emoji",               "TEXT",    "'🏕️'")
+    add_camp_col("emoji_size",          "TEXT",    "'standard'")
+    add_camp_col("bbq_count",           "INTEGER", "0")
+    add_camp_col("bbq_shared_count",    "INTEGER", "0")
+    add_camp_col("bath_count",          "INTEGER", "0")
+    add_camp_col("sauna_count",         "INTEGER", "0")
+    add_camp_col("pools_private_count", "INTEGER", "0")
+    add_camp_col("pools_shared_count",  "INTEGER", "0")
+    add_camp_col("beds_count",          "INTEGER", "0")
+    add_camp_col("min_price",           "INTEGER", "0")
+
+    # фото комнат (если ещё нет)
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS room_photos(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            camp_id INTEGER NOT NULL,
+            room_id INTEGER NOT NULL,   -- индекс апартамента (0..N-1)
+            url TEXT NOT NULL,
+            cover INTEGER DEFAULT 0,
+            sort INTEGER DEFAULT 0
+        )
+    """)
+
+    # rooms: недостающие колонки
+    cur.execute("PRAGMA table_info(rooms)")
+    rcols = {row[1] for row in cur.fetchall()}
+
+    def add_room_col(name: str, ddl: str, default_literal: str | None = None):
+        if name in rcols:
+            return
+        if default_literal is None:
+            sql = f"ALTER TABLE rooms ADD COLUMN {name} {ddl}"
+        else:
+            sql = f"ALTER TABLE rooms ADD COLUMN {name} {ddl} DEFAULT {default_literal}"
+        cur.execute(sql)
+
+    add_room_col("room_type", "TEXT")
+    add_room_col("floors", "INTEGER", "1")
+    add_room_col("floor", "INTEGER", "1")
+    add_room_col("beds_single", "INTEGER", "0")
+    add_room_col("beds_double", "INTEGER", "0")
+    add_room_col("bath_type", "TEXT")
+    add_room_col("wc_type", "TEXT")
+    add_room_col("bbq_type", "TEXT")
+    add_room_col("kitchen_type", "TEXT")
+    add_room_col("gazebo_type", "TEXT")
+    add_room_col("terrace_type", "TEXT")
+    add_room_col("pool_type", "TEXT")
+    add_room_col("balcony_type", "TEXT")
+    add_room_col("has_ac", "INTEGER", "0")
+    add_room_col("price_adult", "INTEGER", "0")
+    add_room_col("price_child", "INTEGER", "0")
+    add_room_col("discount_pct", "INTEGER", "0")
+    add_room_col("discount_from_nights", "INTEGER", "0")
+    add_room_col("photos_json", "TEXT")
+
+    conn.commit()
+    conn.close()
 
 
 def init_camps_db():
@@ -250,6 +325,7 @@ def init_users_db():
 # Инициализация БД при старте
 init_camps_db()
 init_users_db()
+ensure_schema()
 
 
 # === Простые страницы ===
@@ -320,248 +396,263 @@ def api_rooms_list(camp_id: int):
     return out
 
 
+def _normalize_move(url: str, camp_id: int, room_idx: int | None = None) -> str:
+    """
+    Если файл лежит во временной папке /static/uploads/temp/..., переносим:
+      camp:  /static/uploads/camp_<id>/
+      room:  /static/uploads/camp_<id>/rooms/room_<idx>/
+    Возвращаем новый URL.
+    """
+    if not url.startswith("/static/uploads/"):
+        return url
+    p = Path(url.lstrip("/"))
+    if "uploads/temp/" not in str(p.as_posix()):
+        # уже разложено
+        return url
+
+    base = Path("static/uploads")
+    dst = base / f"camp_{camp_id}"
+    if room_idx is not None:
+        dst = dst / "rooms" / f"room_{room_idx}"
+    dst.mkdir(parents=True, exist_ok=True)
+
+    fname = p.name
+    src   = Path(url.lstrip("/"))
+    newp  = dst / fname
+    try:
+        newp.write_bytes(src.read_bytes())
+        src.unlink(missing_ok=True)
+    except Exception:
+        pass
+    return "/" + newp.as_posix()
+
+def _int(val, default=0):
+    try:
+        if val is None or val == "": return default
+        return int(val)
+    except Exception:
+        return default
+
+def _sum_derived(rooms: list[dict]) -> dict:
+    beds = 0
+    bbq_private = 0
+    pool_private = 0
+    min_price = None
+    for r in rooms:
+        b1 = _int(r.get("beds_single"))
+        b2 = _int(r.get("beds_double"))
+        beds += b1 + b2 * 2
+        if r.get("bbq_type") == "private":
+            bbq_private += 1
+        if r.get("pool_type") == "private":
+            pool_private += 1
+        pa = _int(r.get("price_adult"), None)
+        if pa is not None:
+            min_price = pa if (min_price is None or pa < min_price) else min_price
+    return {
+        "beds": beds,
+        "bbq_private": bbq_private,
+        "pool_private": pool_private,
+        "min_price": (min_price or 0),
+    }
+
 @app.post("/api/camps")
-async def api_camps_create(req: Request):
+async def api_camps_upsert_new(req: Request):
     data = await req.json()
-
-    name = (data.get("name") or "").strip()
-    if not name:
-        return JSONResponse({"detail": "name required"}, status_code=400)
-
-    lat = float(data.get("lat")) if data.get("lat") not in (None, "") else None
-    lng = float(data.get("lng")) if data.get("lng") not in (None, "") else None
-
-    # агрегаты базы (числа могут прийти пустыми)
-    def _int_or_none(x):
-        return int(x) if x not in (None, "") else None
-
-    min_price = _int_or_none(data.get("min_price"))
-    rooms_count = _int_or_none(data.get("rooms_count"))
-    beds_count  = _int_or_none(data.get("beds_count"))
-    bbq_count   = _int_or_none(data.get("bbq_count"))
-    bbq_shared_count    = _int_or_none(data.get("bbq_shared_count"))
-    bath_count  = _int_or_none(data.get("bath_count"))
-    sauna_count = _int_or_none(data.get("sauna_count"))
-    pools_private_count = _int_or_none(data.get("pools_private_count"))
-    pools_shared_count  = _int_or_none(data.get("pools_shared_count"))
-
-    conn = _conn_camps(); cur = conn.cursor()
-
-    cur.execute(
-        """INSERT INTO camps(
-             name, lat, lng, min_price, emoji,
-             lake_name, photo_main, status, owner, manager, admin_phones,
-             rooms_count, beds_count, address, phone, site_url, emoji_size,
-             bbq_count, bbq_shared_count, bath_count, sauna_count,
-             pools_private_count, pools_shared_count
-           ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-        (
-            name, lat, lng, min_price, (data.get("emoji") or "🏕️"),
-            data.get("lake_name"), data.get("photo_main"), (data.get("status") or "active"),
-            data.get("owner"), data.get("manager"), data.get("admin_phones"),
-            rooms_count, beds_count, data.get("address"), data.get("phone"),
-            data.get("site_url"), (data.get("emoji_size") or "standard"),
-            bbq_count, bbq_shared_count, bath_count, sauna_count,
-            pools_private_count, pools_shared_count
-        )
-    )
-    new_id = cur.lastrowid
-
-    # Фото базы
-    photos = data.get("photos") or []
-    cur.execute("DELETE FROM camp_photos WHERE camp_id=?", (new_id,))
-    for p in photos[:20]:
-        cur.execute(
-            "INSERT INTO camp_photos(camp_id, url, sort, cover) VALUES(?,?,?,?)",
-            (new_id, p.get("url"), int(p.get("sort", 0)), int(bool(p.get("cover"))))
-        )
-
-    # Комнаты
-    rooms_full = data.get("rooms_full") or []
-    for r in rooms_full:
-        photos_json = None
-        if isinstance(r.get("photos"), list):
-            photos_json = json.dumps(r["photos"], ensure_ascii=False)
-        elif isinstance(r.get("photos_json"), str):
-            photos_json = r["photos_json"]
-
-        cap = r.get("capacity")
-        capacity = int(cap) if cap is not None else (int(r.get("beds_single", 0)) + 2 * int(r.get("beds_double", 0)))
-
-        cur.execute(
-            """INSERT INTO rooms(
-                 camp_id,name,room_type,floors,floor,beds_single,beds_double,wc_count,bath_type,
-                 has_ac,has_bbq,has_kitchen,capacity,price,photo_main,photos_json,
-                 desc, price_adult, price_child, discount_pct, discount_from_nights,
-                 wc_type, bbq_type, kitchen_type, gazebo_type, terrace_type, balcony_type, pool_type
-               )
-               VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (
-                new_id,
-                r.get("name"),
-                r.get("room_type"),
-                int(r.get("floors", 1)),
-                int(r.get("floor", 1)),   # ВАЖНО: этаж добавлен в VALUES
-                int(r.get("beds_single", 0)),
-                int(r.get("beds_double", 0)),
-                int(r.get("wc_count", 0)),
-                r.get("bath_type"),
-                int(r.get("has_ac", 0)),
-                int(r.get("has_bbq", 0)),
-                int(r.get("has_kitchen", 0)),
-                int(capacity),
-                r.get("price"),
-                r.get("photo_main"),
-                photos_json,
-                r.get("desc"),
-                r.get("price_adult"),
-                r.get("price_child"),
-                r.get("discount_pct"),
-                r.get("discount_from_nights"),
-                r.get("wc_type"),
-                r.get("bbq_type"),
-                r.get("kitchen_type"),
-                r.get("gazebo_type"),
-                r.get("terrace_type"),
-                r.get("balcony_type"),
-                r.get("pool_type"),
-            )
-        )
-
-    row = cur.execute(CAMP_SELECT_ALL + " WHERE id=?", (new_id,)).fetchone()
-    conn.commit(); conn.close()
-    return dict(row)
-
+    return await _upsert_camp(None, data)
 
 @app.put("/api/camps/{camp_id}")
-async def api_camps_update(camp_id: int, req: Request):
+async def api_camps_upsert(camp_id: int, req: Request):
     data = await req.json()
+    return await _upsert_camp(camp_id, data)
 
-    # Список полей, которые можно обновлять в camps
-    fields = []
-    values = []
-    for k in (
-        "name", "lat", "lng", "min_price", "emoji", "lake_name", "photo_main",
-        "status", "owner", "manager", "admin_phones", "rooms_count", "beds_count",
-        "address", "phone", "site_url", "emoji_size",
-        "bbq_count", "bbq_shared_count", "bath_count", "sauna_count",
-        "pools_private_count", "pools_shared_count",
-    ):
-        if k in data:
-            fields.append(f"{k}=?")
-            v = data[k]
-            if k in ("lat", "lng"):
-                v = float(v) if v not in (None, "") else None
-            elif k in (
-                "min_price", "rooms_count", "beds_count",
-                "bbq_count", "bbq_shared_count",
-                "bath_count", "sauna_count",
-                "pools_private_count", "pools_shared_count",
-            ):
-                v = int(v) if v not in (None, "") else None
-            values.append(v)
+async def _upsert_camp(camp_id: int | None, data: dict):
+    conn = _conn_camps()
+    cur  = conn.cursor()
 
-    if fields:
-        conn = _conn_camps(); cur = conn.cursor()
-        cur.execute(f"UPDATE camps SET {', '.join(fields)} WHERE id=?", (*values, camp_id))
+    # 1) базовые поля из payload
+    name   = (data.get("name") or "").strip()
+    lake   = (data.get("lake_name") or data.get("lake") or "").strip()
+    addr   = (data.get("address") or data.get("addr") or "").strip()
+    lat    = data.get("lat")
+    lng    = data.get("lng")
+    status = (data.get("status") or "active").strip().lower()
+    emoji  = (data.get("emoji") or "🏕️").strip()
+    emoji_size = (data.get("emoji_size") or "standard").strip()
+    description = (data.get("description") or data.get("desc") or "").strip()
 
-        # Фотографии базы (если прислали — пересоздаём)
-        photos = data.get("photos")
-        if photos is not None:
-            cur.execute("DELETE FROM camp_photos WHERE camp_id=?", (camp_id,))
-            for p in photos[:20]:
-                cur.execute(
-                    "INSERT INTO camp_photos(camp_id, url, sort, cover) VALUES(?,?,?,?)",
-                    (camp_id, p.get("url"), int(p.get("sort", 0)), int(bool(p.get("cover"))))
-                )
+    owner   = (data.get("owner")   or "").strip()       # "ФИО, +7..."
+    manager = (data.get("manager") or "").strip()       # "ФИО, +7..."
+    admin_phones = (data.get("admin_phones") or "").strip()
+    site_url = (data.get("site_url") or data.get("site") or "").strip()
 
-        # Комнаты (если прислали — пересоздаём)
-        rooms_full = data.get("rooms_full")
-        if rooms_full is not None:
-            cur.execute("DELETE FROM rooms WHERE camp_id=?", (camp_id,))
-            for r in rooms_full:
-                photos_json = None
-                if isinstance(r.get("photos"), list):
-                    photos_json = json.dumps(r["photos"], ensure_ascii=False)
-                elif isinstance(r.get("photos_json"), str):
-                    photos_json = r["photos_json"]
+    rooms_payload = data.get("rooms_full") or data.get("rooms") or []
 
-                cap = r.get("capacity")
-                capacity = int(cap) if cap is not None else (int(r.get("beds_single", 0)) + 2 * int(r.get("beds_double", 0)))
+    # 2) агрегаты
+    def _i(x, d=0):
+        try:
+            return int(x)
+        except Exception:
+            return d
 
-                cur.execute(
-                    """INSERT INTO rooms(
-                         camp_id,name,room_type,floors,floor,beds_single,beds_double,wc_count,bath_type,
-                         has_ac,has_bbq,has_kitchen,capacity,price,photo_main,photos_json,
-                         desc, price_adult, price_child, discount_pct, discount_from_nights,
-                         wc_type, bbq_type, kitchen_type, gazebo_type, terrace_type, balcony_type, pool_type
-                       )
-                       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                    (
-                        camp_id,                          # camp_id
-                        r.get("name"),                    # name
-                        r.get("room_type"),               # room_type
-                        int(r.get("floors", 1)),          # этажность
-                        int(r.get("floor", 1)),           # этаж
-                        int(r.get("beds_single", 0)),     # beds_single
-                        int(r.get("beds_double", 0)),     # beds_double
-                        int(r.get("wc_count", 0)),        # wc_count
-                        r.get("bath_type"),               # bath_type
-                        int(r.get("has_ac", 0)),          # has_ac
-                        int(r.get("has_bbq", 0)),         # has_bbq
-                        int(r.get("has_kitchen", 0)),     # has_kitchen
-                        int(                              # capacity
-                            (r.get("capacity")
-                             if r.get("capacity") is not None
-                             else (int(r.get("beds_single", 0)) + 2 * int(r.get("beds_double", 0))))
-                        ),
-                        r.get("price"),                   # price
-                        r.get("photo_main"),              # photo_main
-                        photos_json,                      # photos_json (строка JSON)
-                        r.get("desc"),                    # описание
-                        r.get("price_adult"),             # ₽ взрослый
-                        r.get("price_child"),             # ₽ детский
-                        r.get("discount_pct"),            # скидка %
-                        r.get("discount_from_nights"),    # от скольких суток
-                        r.get("wc_type"),                 # тип санузла
-                        r.get("bbq_type"),                # тип BBQ
-                        r.get("kitchen_type"),            # тип кухни
-                        r.get("gazebo_type"),             # тип беседки
-                        r.get("terrace_type"),            # тип террасы
-                        r.get("balcony_type"),            # тип балкона
-                        r.get("pool_type"),               # тип бассейна
-                    )
-                )
+    beds_count = _i(data.get("beds_count"))
+    bbq_count = _i(data.get("bbq_count"))
+    bbq_shared_count = _i(data.get("bbq_shared_count"))
+    bath_count = _i(data.get("bath_count"))
+    sauna_count = _i(data.get("sauna_count"))
+    pools_private_count = _i(data.get("pools_private_count"))
+    pools_shared_count  = _i(data.get("pools_shared_count"))
+    min_price = data.get("min_price")
+    min_price = _i(min_price, None) if min_price is not None else None
+
+    # 3) camps: INSERT / UPDATE — только существующие поля
+    if camp_id is None:
+        cur.execute("""
+            INSERT INTO camps(
+                name, lake_name, address, lat, lng, status,
+                emoji, emoji_size, description,
+                owner, manager, admin_phones, site_url,
+                min_price, bbq_count, bbq_shared_count, bath_count, sauna_count,
+                pools_private_count, pools_shared_count, beds_count
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, (
+            name, lake, addr, lat, lng, status,
+            emoji, emoji_size, description,
+            owner, manager, admin_phones, site_url,
+            min_price, bbq_count, bbq_shared_count, bath_count, sauna_count,
+            pools_private_count, pools_shared_count, beds_count
+        ))
+        camp_id = cur.lastrowid
+    else:
+        cur.execute("""
+            UPDATE camps SET
+                name=?, lake_name=?, address=?, lat=?, lng=?, status=?,
+                emoji=?, emoji_size=?, description=?,
+                owner=?, manager=?, admin_phones=?, site_url=?,
+                min_price=?, bbq_count=?, bbq_shared_count=?, bath_count=?, sauna_count=?,
+                pools_private_count=?, pools_shared_count=?, beds_count=?
+            WHERE id=?
+        """, (
+            name, lake, addr, lat, lng, status,
+            emoji, emoji_size, description,
+            owner, manager, admin_phones, site_url,
+            min_price, bbq_count, bbq_shared_count, bath_count, sauna_count,
+            pools_private_count, pools_shared_count, beds_count,
+            camp_id
+        ))
+
+    # 4) фото базы
+    photos = data.get("photos") or []
+    cur.execute("DELETE FROM camp_photos WHERE camp_id=?", (camp_id,))
+    for sort, p in enumerate(photos[:20]):
+        url = p.get("url") if isinstance(p, dict) else str(p)
+        cover = int(bool(isinstance(p, dict) and p.get("cover")))
+        url = _normalize_move(url, camp_id, None)
+        cur.execute(
+            "INSERT INTO camp_photos(camp_id,url,sort,cover) VALUES(?,?,?,?)",
+            (camp_id, url, sort, cover)
+        )
+
+    # 5) апартаменты + их фото
+    cur.execute("DELETE FROM rooms WHERE camp_id=?", (camp_id,))
+    cur.execute("DELETE FROM room_photos WHERE camp_id=?", (camp_id,))
+    for idx, r in enumerate(rooms_payload):
+        cur.execute("""
+            INSERT INTO rooms(
+                camp_id, name, room_type, floors, floor,
+                beds_single, beds_double, bath_type, wc_type,
+                bbq_type, kitchen_type, gazebo_type, terrace_type, pool_type, balcony_type, has_ac,
+                price_adult, price_child, price, discount_pct, discount_from_nights, desc, photo_main
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """, (
+            camp_id,
+            (r.get("name") or "").strip(),
+            (r.get("room_type") or "").strip(),
+            _i(r.get("floors"), 1),
+            _i(r.get("floor"), 1),
+            _i(r.get("beds_single")),
+            _i(r.get("beds_double")),
+            (r.get("bath_type") or "").strip(),
+            (r.get("wc_type") or "").strip(),
+            (r.get("bbq_type") or "").strip(),
+            (r.get("kitchen_type") or "").strip(),
+            (r.get("gazebo_type") or "").strip(),
+            (r.get("terrace_type") or "").strip(),
+            (r.get("pool_type") or "").strip(),
+            (r.get("balcony_type") or "").strip(),
+            _i(r.get("has_ac")),
+            _i(r.get("price_adult")),
+            _i(r.get("price_child")),
+            _i(r.get("price")),
+            _i(r.get("discount_pct")),
+            _i(r.get("discount_from_nights")),
+            (r.get("desc") or "").strip(),
+            None,  # photo_main — при желании можно отмечать cover и записывать сюда
+        ))
+
+        # фото комнаты (до 5), с раскладкой по папкам camp_<id>/rooms/room_<idx>/
+        rphotos = r.get("photos") or []
+        for s, ph in enumerate(rphotos[:5]):
+            if isinstance(ph, dict):
+                u = ph.get("url")
+                cov = int(bool(ph.get("cover")))
+            else:
+                u = str(ph); cov = 0
+            u = _normalize_move(u, camp_id, idx)
+            cur.execute(
+                "INSERT INTO room_photos(camp_id,room_id,url,cover,sort) VALUES(?,?,?,?,?)",
+                (camp_id, idx, u, cov, s)
+            )
+
+    conn.commit()
+    conn.close()
+    return {"ok": True, "id": camp_id}
 
 
-        conn.commit()
-        conn.close()
-
-    # Отдаём обновлённую карточку
-    conn2 = _conn_camps(); cur2 = conn2.cursor()
-    row = cur2.execute(CAMP_SELECT_ALL + " WHERE id=?", (camp_id,)).fetchone()
-    conn2.close()
-    if not row:
-        return JSONResponse({"detail": "not found"}, status_code=404)
-    return dict(row)
 
 
 # === Upload (фото) ===
 @app.post("/api/upload")
-async def api_upload(file: UploadFile = File(...)):
-    # сохраняем с префиксом «датавремя-рандом»
-    now = datetime.now().strftime("%Y%m%d-%H%M%S")
-    # чуть более случайности — добавим микросекунды в конец
-    target_name = f"{now}{str(id(file))[-6:]}.{file.filename.split('.')[-1].lower()}"
-    path = os.path.join(UPLOAD_DIR, target_name)
+async def api_upload(request: Request):
+    """
+    Принимает файл и опциональные поля:
+      - camp_id: int (если уже есть база)
+      - room_idx: int (если фото относится к апартаментам)
+    Складывает в /static/uploads/camp_<id>/[rooms/room_<idx>/]fname.jpg
+    Если camp_id не пришёл — кладём во временную папку, а при сохранении базы файлы будут "перенормированы".
+    """
+    form = await request.form()
+    file = form.get("file")
+    if not file:
+        raise HTTPException(400, "file not provided")
 
-    content = await file.read()
-    with open(path, "wb") as f:
-        f.write(content)
+    # параметры из формы
+    camp_id  = form.get("camp_id")
+    room_idx = form.get("room_idx")
 
-    # Отдаём путь для фронта
-    rel = f"/static/uploads/{target_name}"
-    return {"url": rel}
+    # базовая папка
+    base_dir = Path("static/uploads")
+    base_dir.mkdir(parents=True, exist_ok=True)
+
+    sub = Path("temp")
+    if camp_id and str(camp_id).isdigit():
+        sub = Path(f"camp_{int(camp_id)}")
+        if room_idx is not None and str(room_idx).isdigit():
+            sub = sub / "rooms" / f"room_{int(room_idx)}"
+
+    save_dir = base_dir / sub
+    save_dir.mkdir(parents=True, exist_ok=True)
+
+    # имя файла — оставим таймштамп + оригинальное расширение
+    suffix = Path(file.filename).suffix or ".jpg"
+    fname  = datetime.now().strftime("%Y%m%d-%H%M%S%f") + suffix
+    path   = save_dir / fname
+    with path.open("wb") as f:
+        f.write(await file.read())
+
+    url = f"/static/uploads/{sub.as_posix()}/{fname}"
+    return {"url": url}
+
 
 
 # === Favicon-заглушка (чтобы не было 404 в логах) ===

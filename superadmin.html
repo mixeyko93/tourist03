@@ -454,6 +454,14 @@ html[data-theme="dark"] .nav-emoji:hover{ background:#141821; }
     </div>
   </div>
 
+  <!-- Общее описание базы -->
+<div class="cf-field" style="grid-column:1/13">
+  <label for="cf_desc">Описание базы</label>
+  <textarea id="cf_desc" class="cf-input" style="height:110px;resize:vertical"
+            placeholder="Краткое описание, которое появится в балуне на карте"></textarea>
+</div>
+
+
   <!-- Динамические параметры домиков -->
   <div class="cf-field" style="grid-column:1/13">
     <div id="cf_rooms_editor" class="rooms-editor" style="display:none"></div>
@@ -701,6 +709,7 @@ function getFormSnapshot(){
     pool_shared: document.getElementById('cf_pool_shared').value.trim(),
     bath:  document.getElementById('cf_bath').value.trim(),
     sauna: document.getElementById('cf_sauna').value.trim(),
+    desc: document.getElementById('cf_desc').value.trim(),
     photos: _cfPhotos.map(p=>p.url),
     rooms_full: collectRoomsPayload().map(r=>({name:r.name, capacity:r.capacity, price:r.price}))
   };
@@ -800,6 +809,17 @@ async function roomHandleFiles(idx, fileList){
   _cfDirty = true;
 
 }
+
+async function uploadOneFileScoped(file, campId, roomIdx){
+  const fd = new FormData();
+  fd.append('file', file);
+  if (campId) fd.append('camp_id', String(campId));
+  if (roomIdx !== undefined) fd.append('room_idx', String(roomIdx));
+  const r = await fetch('/api/upload', { method:'POST', body: fd });
+  if (!r.ok) throw new Error('upload failed');
+  return await r.json(); // {url}
+}
+
 
 function renderRoomGallery(idx){
   const box = document.getElementById(`room_gal_${idx}`);
@@ -1083,72 +1103,45 @@ function renderRoomsEditor(count, prefetched=[]) {
 function collectRoomsPayload(){
   const rows = Array.from(document.querySelectorAll('#cf_rooms_editor .room-row'));
 
-  return rows.map((row, idx) => {
-    const val = (sel) => (row.querySelector(sel)?.value ?? '').trim();
-    const num = (sel, min = 0) => {
+  const payload = rows.map((row, idx) => {
+    const val = sel => (row.querySelector(sel)?.value ?? '').trim();
+    const num = (sel, min=0) => {
       const v = row.querySelector(sel)?.value ?? '';
       if (v === '') return null;
-      const n = parseInt(v, 10);
-      return Number.isNaN(n) ? null : Math.max(min, n);
+      const n = parseInt(v,10);
+      return Number.isNaN(n) ? null : Math.max(min,n);
     };
 
-    // сначала читаем числа, потом используем
-    const storeys = num('.r_storeys', 1) ?? 1; // этажность
-    const floor   = num('.r_floor',   1) ?? 1; // этаж
-
-    const beds1 = num('.r_beds1', 0) ?? 0;
-    const beds2 = num('.r_beds2', 0) ?? 0;
-    const capacity = beds1 + beds2 * 2;
-
-    // фото строки
-    const photos = (_roomPhotos[idx] || []).map(p => p.url);
-    const cover  = (_roomPhotos[idx] || []).find(p => p.cover)?.url || photos[0] || null;
-
-    return {
-      id: row.dataset.roomId ? Number(row.dataset.roomId) : null,
-
-      // базовые поля
-      name:        val('.r_name') || null,
-      room_type:   val('.r_type') || null,
-      floors:      storeys,   // этажность
-      floor:       floor,     // этаж
-
-      // кровати/вместимость
-      beds_single: beds1,
-      beds_double: beds2,
-      capacity:    capacity,
-
-      // санузел и ванная
-      wc_type:     val('.r_wc') || null,     // shared | indiv-*
-      wc_count:    val('.r_wc') ? 1 : 0,     // для совместимости
-      bath_type:   val('.r_bath') || null,
-
-      // кондиционер (селект 0/1)
-      has_ac:      ((val('.r_ac') || '0') === '1') ? 1 : 0,
-
-      // удобства
-      bbq_type:      val('.r_bbq') || null,
-      kitchen_type:  val('.r_kitchen') || null,
-      gazebo_type:   val('.r_gazebo') || null,
-      terrace_type:  val('.r_terrace') || null,
-      balcony_type:  val('.r_balcony') || null,
-      pool_type:     val('.r_pool') || null,
-
-      // цены/скидки
-      price:         num('.r_price_house', 0),
-      price_adult:   num('.r_price_adult', 0),
-      price_child:   num('.r_price_child', 0),
-      discount_pct:         num('.r_disc_pct', 0),
-      discount_from_nights: num('.r_disc_from', 0),
-
-      // описание и фото
-      desc:        val('.r_desc') || null,
-      photo_main:  cover,
-      photos:      photos,
-      photos_json: JSON.stringify(photos),
+    const obj = {
+      name: val('.r_name'),
+      room_type: val('.r_type'),
+      floors: num('.r_storeys', 1) ?? 1,
+      floor:  num('.r_floor',   1) ?? 1,
+      beds_single: num('.r_beds1',0) ?? 0,
+      beds_double: num('.r_beds2',0) ?? 0,
+      bath_type: val('.r_bath'),
+      wc_type:   val('.r_wc'),
+      bbq_type:      val('.r_bbq'),
+      kitchen_type:  val('.r_kitchen'),
+      gazebo_type:   val('.r_gazebo'),
+      terrace_type:  val('.r_terrace'),
+      pool_type:     val('.r_pool'),
+      balcony_type:  val('.r_balcony'),
+      has_ac: (val('.r_ac') === '1') ? 1 : 0,
+      desc: val('.r_desc'),
+      price_adult: num('.r_price_adult',0) ?? 0,
+      price_child: num('.r_price_child',0) ?? 0,
+      price:       num('.r_price_house',0) ?? 0,
+      discount_pct: num('.r_disc_pct',0) ?? 0,
+      discount_from_nights: num('.r_disc_from',0) ?? 0,
+      photos: (_roomPhotos[idx] || []).map(x => ({url:x.url, cover:!!x.cover}))
     };
-  }).filter(x => x.name || x.room_type);
+    return obj;
+  });
+
+  return payload;
 }
+
 
 
 
@@ -1210,6 +1203,8 @@ async function showCampForm(mode='add', data={}) {
   setStatus(D.status || 'active');
   setEmoji(D.emoji || '🏕️');
   setEmojiSize(D.emoji_size || 'standard');
+  document.getElementById('cf_desc').value = (data.description || data.desc || '');
+
 
   document.getElementById('cf_name').value = D.name || '';
   document.getElementById('cf_lake').value = D.lake_name || '';
@@ -1330,39 +1325,61 @@ const bbqSharedManual = parseInt(document.getElementById('cf_bbq_shared').value|
 const poolSharedManual = parseInt(document.getElementById('cf_pool_shared').value||'0',10) || 0;
 
 
-
 const payload = {
   status: getStatus(),
   emoji_size: getEmojiSize(),
-  name:   document.getElementById('cf_name').value.trim(),
+
+  name: document.getElementById('cf_name').value.trim(),
   lake_name: document.getElementById('cf_lake').value.trim() || null,
   ...readCoords(), // lat, lng
-  min_price: minPriceAdult,
   address: document.getElementById('cf_addr').value.trim() || null,
-  site_url:document.getElementById('cf_site').value.trim() || null,
-  owner:  packPerson(document.getElementById('cf_owner_name').value,    document.getElementById('cf_owner_phone').value),
-  manager:packPerson(document.getElementById('cf_manager_name').value, document.getElementById('cf_manager_phone').value),
-  admin_phones: [document.getElementById('cf_admin1').value.trim(),
-                 document.getElementById('cf_admin2').value.trim(),
-                 document.getElementById('cf_admin3').value.trim()].filter(Boolean).join(', ') || null,
+  site_url: document.getElementById('cf_site').value.trim() || null,
 
-  rooms_count: parseInt(document.getElementById('cf_rooms').value||'0',10) || 0,
-  beds_count:  parseInt(document.getElementById('cf_beds').value ||'0',10) || 0,
+  // владельцы / телефоны — уже упакованы в "ФИО, телефон"
+  owner:   packPerson(
+            document.getElementById('cf_owner_name').value,
+            document.getElementById('cf_owner_phone').value
+          ),
+  manager: packPerson(
+            document.getElementById('cf_manager_name').value,
+            document.getElementById('cf_manager_phone').value
+          ),
+  admin_phones: [
+    document.getElementById('cf_admin1').value.trim(),
+    document.getElementById('cf_admin2').value.trim(),
+    document.getElementById('cf_admin3').value.trim(),
+  ].filter(Boolean).join(', ') || null,
 
-  bath_count:  parseInt(document.getElementById('cf_bath').value ||'0',10) || 0,
-  sauna_count: parseInt(document.getElementById('cf_sauna').value||'0',10) || 0,
+  // описание базы (для балуна на карте)
+  description: document.getElementById('cf_desc').value.trim(),
 
-  // bbq/pools агрегаты
-  bbq_count:          bbqPrivateCount,    // индивидуальные по апартаментам
-  bbq_shared_count:   bbqSharedManual,    // ручной ввод
-  pools_private_count: poolPrivateCount,  // индивидуальные по апартаментам
-  pools_shared_count:  poolSharedManual,  // ручной ввод
+  // агрегаты/итоги
+  rooms_count: parseInt(document.getElementById('cf_rooms').value || '0', 10) || 0,
+  beds_count:  parseInt(document.getElementById('cf_beds').value  || '0', 10) || 0,
+  bath_count:  parseInt(document.getElementById('cf_bath').value  || '0', 10) || 0,
+  sauna_count: parseInt(document.getElementById('cf_sauna').value || '0', 10) || 0,
+
+  // BBQ/Бассейны: индив. — из апартаментов, общие — ручной ввод
+  bbq_count:            roomsPayload.reduce((s,r)=> s + (r.bbq_type==='private' ? 1 : 0), 0),
+  bbq_shared_count:     parseInt(document.getElementById('cf_bbq_shared').value  || '0', 10) || 0,
+  pools_private_count:  roomsPayload.reduce((s,r)=> s + (r.pool_type==='private' ? 1 : 0), 0),
+  pools_shared_count:   parseInt(document.getElementById('cf_pool_shared').value || '0', 10) || 0,
+
+  // минимум тарифа берём по взрослому
+  min_price: (() => {
+    const vals = roomsPayload.map(r => r.price_adult).filter(v => Number.isFinite(v));
+    return vals.length ? Math.min(...vals) : null;
+  })(),
 
   emoji: getEmoji(),
-  photos: _cfPhotos.map((p,idx)=>({url:p.url, sort: idx, cover: !!p.cover})),
 
-  rooms_full: roomsPayload,  // <= ВАЖНО: запятая после этой строки теперь есть!
+  // фото базы (до 20)
+  photos: _cfPhotos.map((p, idx) => ({ url: p.url, sort: idx, cover: !!p.cover })),
+
+  // апартаменты — с полной структурой (включая фото)
+  rooms_full: roomsPayload,
 };
+
 
     if (!payload.name) return appAlert('Укажите название');
 
