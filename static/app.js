@@ -15,6 +15,292 @@ if (isTG) {
   setTimeout(forceExpand, 150);
 }
 
+// Быстрый рендер HTML
+const h = (strings, ...vals) => strings.reduce((s, str, i) => s + str + (vals[i] ?? ''), '');
+
+// --- мини-лоадер для коротких операций (детали базы) ---
+let __miniLoader = null, __miniLoaderTimer = null;
+function showMiniLoader(text = 'Загрузка') {
+  hideMiniLoader();
+  __miniLoader = document.createElement('div');
+  __miniLoader.className = 'modal show';
+  __miniLoader.innerHTML = `
+    <div class="modal-card" style="text-align:center;padding:18px;min-width:220px">
+      <div style="font-weight:600;font-size:16px">
+        <span id="miniSpin">${text}</span> <span id="miniEmoji">🏖️</span>
+      </div>
+    </div>`;
+  document.body.appendChild(__miniLoader);
+
+  const list = ['🏖️','⛺','🏕️','🏔️','🌊','🚣‍♀️','🗺️','🌞','🌲','🔥'];
+  let i = 0;
+  __miniLoaderTimer = setInterval(()=>{
+    i = (i+1) % list.length;
+    const el = __miniLoader?.querySelector('#miniEmoji');
+    if (el) el.textContent = list[i];
+  }, 500);
+}
+function hideMiniLoader() {
+  if (__miniLoaderTimer) clearInterval(__miniLoaderTimer);
+  __miniLoaderTimer = null;
+  if (__miniLoader && __miniLoader.parentNode) __miniLoader.parentNode.removeChild(__miniLoader);
+  __miniLoader = null;
+}
+
+
+// антидребезг для стрелок слайдера
+const throttle = (fn, ms=220) => {
+  let t = 0;
+  return (...args) => {
+    const now = Date.now();
+    if (now - t < ms) return;
+    t = now; fn(...args);
+  };
+};
+
+// === СБОРКА БАЛУНА ДЛЯ БАЗЫ (ЗАМЕНА КОНТЕНТА) ===
+function buildCampPopup(camp){
+  // фото для бaлуна — главная фото базы
+  const img = camp.photo_main ? `<img class="popup-photo" src="${camp.photo_main}" alt="">` : '';
+  const priceText = (camp.min_price && Number(camp.min_price) > 0)
+      ? `Стоимость от ${camp.min_price}₽ за человека`
+      : 'Стоимость уточняйте';
+
+  return `
+    <div style="min-width:260px;max-width:320px">
+      <div style="font-weight:800;font-size:22px;text-align:center;margin:0 0 8px">${camp.name||''}</div>
+      ${img}
+      <div style="text-align:center;margin:10px 0 12px;color:#6b7280">${priceText}</div>
+      <div style="display:flex;gap:10px;justify-content:center">
+        <button class="btn btn-primary" onclick="openDetails(${camp.id})">Подробнее</button>
+        <button class="btn btn-success" onclick="openBookingFilterModal()">Забронировать</button>
+      </div>
+    </div>
+  `;
+}
+
+// ↓ Делаем функцию, которую вызывает Leaflet при открытии балуна
+function popupHtmlForCamp(camp){
+  return buildCampPopup(camp);
+}
+
+async function openCampDetails(campId) {
+  const emojis = ['🏖️','⛺','🏕️','🏔️','🌊','🚣‍♀️','🗺️','🌞','🌲','🔥'];
+  const em = emojis[Math.floor(Math.random() * emojis.length)];
+
+  const loading = document.createElement('div');
+  loading.className = 'modal show';
+  loading.innerHTML = `
+    <div class="modal-card" style="text-align:center;padding:20px">
+      <div style="font-weight:600;font-size:16px;">Загрузка ${em}</div>
+    </div>`;
+  document.body.appendChild(loading);
+
+  let spin = true;
+  const symbols = ['🏖️','⛺','🏕️','🏔️','🌊','🚣‍♀️','🗺️','🌞','🌲','🔥'];
+  let idx = 0;
+  const interval = setInterval(() => {
+    idx = (idx + 1) % symbols.length;
+    if (loading.querySelector('div')) loading.querySelector('div').innerHTML = `Загрузка ${symbols[idx]}`;
+  }, 500);
+
+  try {
+    const [camp, photos] = await Promise.all([
+      fetch(`/api/camps/${campId}`).then(r=>r.json()),
+      fetch(`/api/camps/${campId}/photos`).then(r=>r.json())
+    ]);
+
+    clearInterval(interval);
+    loading.remove();
+
+    const ph = photos.length ? photos.map(p=>p.url) : (camp.photo_main ? [camp.photo_main] : []);
+
+    const modal = document.createElement('div');
+    modal.className = 'modal show';
+    modal.innerHTML = `
+      <div class="modal-card auth">
+        <div class="title" style="text-align:center;">${camp.name || 'База'}</div>
+        <div style="margin-top:6px;color:#d1d5db;text-align:center;line-height:1.35;">
+  ${camp.description ? camp.description.replace(/\n/g,'<br>') : 'Описание пока отсутствует'}
+</div>
+
+
+        <div class="camp-gal" style="margin-top:10px;">
+          <div class="viewport">${ph.map(u=>`<img src="${u}">`).join('')}</div>
+          <div class="nav prev">‹</div>
+          <div class="nav next">›</div>
+        </div>
+
+        <div class="actions" style="margin-top:14px;display:flex;gap:10px;justify-content:center;">
+          <button class="button primary" onclick="document.body.removeChild(this.closest('.modal'))">Подробнее</button>
+          <button class="button" style="background:#22c55e;border-color:#22c55e;color:#fff" onclick="openBookingFilter()">Забронировать</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+
+    // Пролистывание фото
+    const vp = modal.querySelector('.viewport');
+    const imgs = vp.querySelectorAll('img');
+    let i = 0;
+    function go(k) {
+      i = (k + imgs.length) % imgs.length;
+      vp.style.transform = `translateX(${-i*100}%)`;
+    }
+    modal.querySelector('.prev').onclick = () => go(i - 1);
+    modal.querySelector('.next').onclick = () => go(i + 1);
+    vp.style.width = `${imgs.length * 100}%`;
+    imgs.forEach(img => img.style.width = `${100 / imgs.length}%`);
+    go(0);
+  } catch (e) {
+    clearInterval(interval);
+    loading.remove();
+    appAlert('Не удалось загрузить данные базы');
+  }
+}
+
+// === Компактный фильтр бронирования (2 строки, аккуратное окно) ===
+function openBookingFilterModal() {
+  // если открыто окно «Подробнее» — закрываем, чтобы фильтр был сверху
+  const details = document.querySelector('.modal.show');
+  if (details) details.remove();
+
+  showModal(`
+    <div class="auth">
+      <div class="title">Выберите даты и гостей</div>
+
+      <div class="grid-2" style="margin-bottom:10px;">
+        <div>
+          <label>Заезд</label>
+          <input id="bf_from" type="date" class="tg-date">
+        </div>
+        <div>
+          <label>Выезд</label>
+          <input id="bf_to" type="date" class="tg-date">
+        </div>
+      </div>
+
+      <div class="grid-2" style="margin-bottom:14px;">
+        <div>
+          <label>Взрослые</label>
+          <select id="bf_adults" class="tg-select"></select>
+        </div>
+        <div>
+          <label>Дети</label>
+          <select id="bf_kids" class="tg-select"></select>
+        </div>
+      </div>
+
+      <div class="actions" style="grid-template-columns:1fr 1fr 1fr;gap:8px;">
+        <button class="button ghost" id="bf_close">Закрыть</button>
+        <button class="button ghost" id="bf_reset">Сбросить</button>
+        <button class="button primary" id="bf_apply">Показать</button>
+      </div>
+    </div>
+  `);
+
+  // наполняем селекты
+  const fill = (id, from, to, def) => {
+    const el = document.getElementById(id);
+    for (let i = from; i <= to; i++) {
+      const o = document.createElement('option');
+      o.value = i;
+      o.textContent = i;
+      el.appendChild(o);
+    }
+    el.value = def;
+  };
+  fill('bf_adults', 1, 10, 2);
+  fill('bf_kids', 0, 10, 0);
+
+  // кнопки
+  const $ = (id)=>document.getElementById(id);
+  $('bf_close').onclick = closeModal;
+  $('bf_reset').onclick = ()=>{ $('bf_from').value='';$('bf_to').value='';$('bf_adults').value='2';$('bf_kids').value='0'; };
+  $('bf_apply').onclick = ()=>{
+    window.__bookingFilter = {
+      from: $('bf_from').value,
+      to: $('bf_to').value,
+      adults: +$('bf_adults').value,
+      kids: +$('bf_kids').value,
+      total: (+$('bf_adults').value) + (+$('bf_kids').value)
+    };
+    closeModal();
+    // при желании тут сразу дернуть обновление списка: loadCamps();
+  };
+}
+
+// для старых вызовов, если где-то остался openBookingFilter:
+function openBookingFilter(){ openBookingFilterModal(); }
+
+
+// ====== СУПЕРАДМИН: апартаменты в карточке базы ======
+let SA_rooms = [];                       // рабочий массив апартаментов в форме
+function saRenderRooms(){
+  const box = document.getElementById('roomsList');
+  if (!box) return;
+  box.innerHTML = '';
+  SA_rooms.forEach((r, idx) => {
+    // компактная карточка одной записи апартамента
+    box.insertAdjacentHTML('beforeend', `
+      <div class="card" data-idx="${idx}">
+        <div class="row gap">
+          <select class="sa sa-type">
+            ${['Дом','Апартамент','Номер','Юрта'].map(v=>`<option ${r.type===v?'selected':''}>${v}</option>`).join('')}
+          </select>
+          <select class="sa sa-class">
+            ${['Стандарт','Комфорт','Люкс'].map(v=>`<option ${r.class===v?'selected':''}>${v}</option>`).join('')}
+          </select>
+          <input class="sa sa-cap" type="number" min="1" value="${r.capacity??2}" placeholder="Вместимость">
+          <input class="sa sa-beds" type="number" min="0" value="${r.beds??1}" placeholder="Кроватей">
+          <input class="sa sa-ad" type="number" min="0" value="${r.adults??2}" placeholder="Взросл.">
+          <input class="sa sa-kd" type="number" min="0" value="${r.kids??0}" placeholder="Детей">
+        </div>
+
+        <div class="row gap" style="margin-top:8px;">
+          <input class="sa sa-title" value="${r.title||''}" placeholder="Название/краткое описание">
+          <input class="sa sa-price-a" type="number" min="0" value="${r.price_adult??0}" placeholder="Цена взрослый">
+          <input class="sa sa-price-c" type="number" min="0" value="${r.price_child??0}" placeholder="Цена ребенок">
+          <input class="sa sa-prepay"   type="number" min="0" value="${r.prepay??0}" placeholder="Предоплата %">
+          <input class="sa sa-count"    type="number" min="1" value="${r.count??1}" placeholder="Кол-во">
+        </div>
+
+        <div class="row gap" style="justify-content:flex-end;margin-top:10px;">
+          <button type="button" class="button ghost" onclick="SA_rooms.splice(${idx},1); saRenderRooms();">Удалить</button>
+        </div>
+      </div>
+    `);
+  });
+}
+
+function saAddRoom(){
+  SA_rooms.push({
+    type:'Дом', class:'Стандарт', capacity:2, beds:1, adults:2, kids:0,
+    title:'', price_adult:0, price_child:0, prepay:0, count:1
+  });
+  saRenderRooms();
+}
+
+// Забор значений из DOM → в SA_rooms (перед сохранением формы базы)
+function saSyncRoomsFromDom(){
+  const box = document.getElementById('roomsList');
+  if (!box) return;
+  const cards = [...box.querySelectorAll('.card')];
+  SA_rooms = cards.map(c => ({
+    type:  c.querySelector('.sa-type')?.value || 'Дом',
+    class: c.querySelector('.sa-class')?.value || 'Стандарт',
+    capacity: +c.querySelector('.sa-cap')?.value || 0,
+    beds:     +c.querySelector('.sa-beds')?.value || 0,
+    adults:   +c.querySelector('.sa-ad')?.value || 0,
+    kids:     +c.querySelector('.sa-kd')?.value || 0,
+    title:     c.querySelector('.sa-title')?.value?.trim() || '',
+    price_adult: +c.querySelector('.sa-price-a')?.value || 0,
+    price_child: +c.querySelector('.sa-price-c')?.value || 0,
+    prepay:      +c.querySelector('.sa-prepay')?.value || 0,
+    count:       +c.querySelector('.sa-count')?.value || 1
+  }));
+}
+
+
 // ==== BOT-БОТТОМ/INSET снизу ====
 function getSafeBottom() {
   try {
@@ -337,21 +623,27 @@ if (f && Number.isFinite(f.total) && f.total > 0) {
     // Отрисуем маркеры
     filtered.forEach(c => {
       if (c.lat == null || c.lng == null) return;
-      const photo = c.photo_main ? `<div style="margin:6px 0"><img src="${c.photo_main}" alt="" style="max-width:220px;border-radius:10px;"></div>` : '';
-      const price = c.min_price ? `от ${c.min_price} ₽` : '';
+      const title = `<div style="text-align:center;font-weight:800;font-size:16px;">${c.name||''}</div>`;
+      const photo = c.photo_main ? `<div style="margin:8px 0;"><img src="${c.photo_main}" alt="" style="width:100%;max-width:240px;border-radius:12px;display:block;margin:0 auto;"></div>` : '';
+      const priceLine = Number.isFinite(c.min_price) && c.min_price>0
+        ? `<div class="muted" style="text-align:center;margin-top:2px;">Стоимость от ${c.min_price}₽ за человека</div>`
+        : '';
+
       const html = `
-        <b>${c.name}</b>${price ? `<div class="muted">${price}</div>` : ''}
+        ${title}
         ${photo}
-        <div style="display:flex;gap:8px;margin-top:6px;">
-          <button class="button ghost"   onclick="window.__showCampBrief(${c.id})" style="padding:6px 10px;">Подробнее</button>
-          <button class="button primary" onclick="window.__openCampBooking(${c.id})" style="padding:6px 10px;">Забронировать</button>
+        ${priceLine}
+        <div style="display:flex;gap:8px;justify-content:center;margin-top:8px;">
+          <button class="button primary" onclick="window.__showCampBrief(${c.id})" style="padding:6px 12px;">Подробнее</button>
+          <button class="button primary" onclick="window.__openCampBooking(${c.id})" style="padding:6px 12px;">Забронировать</button>
         </div>
       `;
+
         const marker = L.marker(
           [c.lat, c.lng],
           { icon: emojiHouseIcon(c.emoji || '🏕️', c.emoji_size || 'standard') }
         );
-        marker.bindPopup(html, { maxWidth: 260, className: 'camp-popup' });
+        marker.bindPopup(popupHtmlForCamp(c), { maxWidth: 260, className: 'camp-popup' });
         cluster.addLayer(marker);
 
     });                              // <-- закрываем filtered.forEach(...)
@@ -361,14 +653,165 @@ if (f && Number.isFinite(f.total) && f.total > 0) {
 }                                     // <-- закрываем function loadCamps
 
 
-// Вспомогательные обработчики кнопок на балуне (заглушки для следующего этапа)
-window.__showCampBrief = async (campId) => {
-  // Здесь позже выведем «Свободные домики на ваши даты» (когда появится бэкенд-доступность).
-  showModal(`<div class="card"><h3>Краткая информация</h3><p class="muted">Camp ID: ${campId}</p></div>`);
+// === Детали базы (модалка «Подробнее») ===
+async function openDetails(campId){
+  showMiniLoader('Загрузка');
+
+  try {
+    // тянем базу и её фото полностью
+    const [camp, photos] = await Promise.all([
+      fetch(`/api/camps/${campId}`).then(r => r.json()),
+      fetch(`/api/camps/${campId}/photos`).then(r => r.json()).catch(()=>[])
+    ]);
+    hideMiniLoader();
+
+    // список картинок: галерея базы или главная
+    const picUrls = (photos && photos.length)
+      ? photos.map(p => p.url)
+      : (camp.photo_main ? [camp.photo_main] : []);
+
+    // читаемое описание
+    const descHtml = (camp.description || 'Описание пока отсутствует').replace(/\n/g,'<br>');
+
+    // основные параметры с единицами (если каких-то полей нет — покажем «—»)
+    // параметры базы с рамками
+    const paramsHtml = [
+      ['Озеро',                    camp.lake_name || '—'],
+      ['Апартаментов',             camp.rooms_count ?? '—'],
+      ['BBQ общая',               `${camp.bbq_shared_count ?? 0} шт.`],
+      ['BBQ индивидуальная',      `${camp.bbq_count ?? 0} шт.`],
+      ['Баня',                    `${camp.bath_count ?? 0} шт.`],
+      ['Сауна',                   `${camp.sauna_count ?? 0} шт.`],
+      ['Бассейн общий',           `${camp.pools_shared_count ?? 0} шт.`],
+      ['Бассейн индивидуальный',  `${camp.pools_private_count ?? 0} шт.`],
+    ].map(([k,v]) => `
+      <div class="param-card"><span>${k}</span><b style="color:#fff">${v}</b></div>
+    `).join('');
+
+
+    // собираем модалку
+    const modal = document.createElement('div');
+    modal.className = 'modal show';
+    modal.innerHTML = `
+      <div class="modal-card auth">
+        <div class="title" style="text-align:center">${camp.name || 'База'}</div>
+        <div style="margin-top:6px;color:#d1d5db;text-align:center;line-height:1.35">${descHtml}</div>
+
+        <div class="camp-gal" style="margin-top:10px">
+          <div class="viewport">${picUrls.map(u=>`<img src="${u}">`).join('')}</div>
+          ${picUrls.length>1 ? '<div class="nav prev">‹</div><div class="nav next">›</div>' : ''}
+        </div>
+
+        <div style="margin-top:10px">${paramsHtml}</div>
+
+        <div class="actions" style="margin-top:14px;display:flex;gap:10px;justify-content:center;">
+          <button class="button ghost" onclick="document.body.removeChild(this.closest('.modal'))">Назад</button>
+          <button class="button" style="background:#22c55e;border-color:#22c55e;color:#fff" onclick="openBookingFilterModal()">Забронировать</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    // инициализируем слайдер (без sliderId, всё внутри модалки)
+    const vp = modal.querySelector('.camp-gal .viewport');
+    if (vp) {
+      const imgs = vp.querySelectorAll('img');
+      let i = 0;
+      function go(k){ i=(k+imgs.length)%imgs.length; vp.style.transform = `translateX(${-i*100}%)`; }
+      if (imgs.length > 1) {
+        modal.querySelector('.camp-gal .prev').onclick = ()=> go(i-1);
+        modal.querySelector('.camp-gal .next').onclick = ()=> go(i+1);
+      }
+      vp.style.width = `${imgs.length * 100}%`;
+      imgs.forEach(img => img.style.width = `${100 / imgs.length}%`);
+      go(0);
+    }
+  } catch (e) {
+    hideMiniLoader();
+    console.error(e);
+    showModal(`
+      <div class="card">
+        <p class="muted">Не удалось загрузить карточку базы.</p>
+        <div class="actions"><button class="button primary" onclick="closeModal()">OK</button></div>
+      </div>`);
+  }
+}
+
+// Глобальные обработчики, на которые ссылается HTML в балуне
+window.__showCampBrief = function(campId) {
+  // закрываем балун, если открыт
+  try { document.querySelectorAll('.leaflet-popup-close-button').forEach(b=>b.click()); } catch(_){}
+  openDetails(campId);
 };
-window.__openCampBooking = (campId) => {
+
+window.__openCampBooking = function(campId) {
+  // закрываем «Подробнее», если открыто
+  const m = document.querySelector('.modal.show');
+  if (m) m.remove();
   openBookingFilterModal();
 };
+
+
+// Универсальная «простая шторка»
+function showSheet(html){
+  const wrap = document.createElement('div');
+  wrap.id = 't03-sheet';
+  wrap.style = 'position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;z-index:9999';
+  wrap.innerHTML = `<div style="width:92%;max-width:520px;background:rgba(17,19,23,.9);backdrop-filter:blur(6px);border-radius:18px;padding:16px;margin:14px;box-shadow:0 20px 40px rgba(0,0,0,.4)">${html}</div>`;
+  document.body.appendChild(wrap);
+  wrap.addEventListener('click', (e)=>{ if(e.target===wrap) closeSheet(); });
+}
+function closeSheet(){ const n = document.getElementById('t03-sheet'); if(n) n.remove(); }
+
+// Фильтр
+function openBooking(campId){
+  // одна форма — два ряда (Заезд/Выезд) и (Взрослые/Дети)
+  showSheet(`
+    <div style="display:grid;gap:10px">
+      <div style="font-weight:700;font-size:18px;text-align:center">Выберите даты и гостей</div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <div style="color:#9aa3af;font-size:12px;margin:2px 0 4px">Заезд</div>
+          <input id="bk_checkin" type="date" style="width:100%;height:44px;border-radius:12px;border:1px solid #2a2f3a;background:#0f1216;color:#f2f4f7;padding:0 10px">
+        </div>
+        <div>
+          <div style="color:#9aa3af;font-size:12px;margin:2px 0 4px">Выезд</div>
+          <input id="bk_checkout" type="date" style="width:100%;height:44px;border-radius:12px;border:1px solid #2a2f3a;background:#0f1216;color:#f2f4f7;padding:0 10px">
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <div style="color:#9aa3af;font-size:12px;margin:2px 0 4px">Взрослые</div>
+          <select id="bk_adults" style="width:100%;height:44px;border-radius:12px;border:1px solid #2a2f3a;background:#0f1216;color:#f2f4f7;padding:0 10px">
+            ${Array.from({length:6},(_,i)=>`<option value="${i+1}">${i+1}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <div style="color:#9aa3af;font-size:12px;margin:2px 0 4px">Дети</div>
+          <select id="bk_children" style="width:100%;height:44px;border-radius:12px;border:1px solid #2a2f3a;background:#0f1216;color:#f2f4f7;padding:0 10px">
+            ${Array.from({length:6},(_,i)=>`<option value="${i}">${i}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;justify-content:space-between;margin-top:6px">
+        <button class="btn btn-light"   onclick="closeSheet()">Закрыть</button>
+        <button class="btn"             onclick="document.getElementById('bk_checkin').value='';document.getElementById('bk_checkout').value='';document.getElementById('bk_adults').selectedIndex=0;document.getElementById('bk_children').selectedIndex=0;">Сбросить</button>
+        <button class="btn btn-primary" onclick="applyBooking(${campId||'null'})">Показать</button>
+      </div>
+    </div>
+  `);
+}
+
+// обработчик отправки фильтра
+function applyBooking(campId){
+  // здесь пока просто закрываем — дальше подключим поиск свободных номеров
+  closeSheet();
+  // … твоя логика фильтрации/запроса
+}
+
 
 // --- Инициализация кликов по таббару (единая версия)
 function initTabs(){
@@ -396,14 +839,17 @@ function initTabs(){
   });
 }
 
+// === Компактный фильтр бронирования (2 строки, аккуратное окно) ===
 function openBookingFilterModal() {
+  // если открыта модалка "Подробнее" — закрываем, чтобы фильтр был сверху
+  const details = document.querySelector('.modal.show');
+  if (details) details.remove();
+
   showModal(`
     <div class="auth">
-      <div class="title" style="text-align:center;margin-bottom:14px;">
-        Выберете даты желаемой брони и количество гостей
-      </div>
+      <div class="title">Выберите даты и гостей</div>
 
-      <div class="grid-2">
+      <div class="grid-2" style="margin-bottom:10px;">
         <div>
           <label>Заезд</label>
           <input id="bf_from" type="date" class="tg-date">
@@ -414,7 +860,7 @@ function openBookingFilterModal() {
         </div>
       </div>
 
-      <div class="grid-2" style="margin-top:12px;">
+      <div class="grid-2" style="margin-bottom:14px;">
         <div>
           <label>Взрослые</label>
           <select id="bf_adults" class="tg-select"></select>
@@ -425,36 +871,44 @@ function openBookingFilterModal() {
         </div>
       </div>
 
-      <div class="actions">
-        <button class="button ghost"   id="bf_close">Закрыть</button>
-        <button class="button ghost"   id="bf_reset">Сбросить</button>
+      <div class="actions" style="grid-template-columns:1fr 1fr 1fr;gap:8px;">
+        <button class="button ghost" id="bf_close">Закрыть</button>
+        <button class="button ghost" id="bf_reset">Сбросить</button>
         <button class="button primary" id="bf_apply">Показать</button>
       </div>
     </div>
   `);
 
-  // селекты 0..10
-  const fill = (el, from, to, def)=>{ for(let i=from;i<=to;i++){ const o=document.createElement('option'); o.value=i; o.textContent=i; el.appendChild(o);} el.value=String(def); };
-  fill(document.getElementById('bf_adults'), 1, 10, 2);
-  fill(document.getElementById('bf_kids'),   0, 10, 0);
+  // наполнение списков
+  const fill = (id, from, to, def) => {
+    const el = document.getElementById(id);
+    for (let i = from; i <= to; i++) {
+      const o = document.createElement('option');
+      o.value = i;
+      o.textContent = i;
+      el.appendChild(o);
+    }
+    el.value = def;
+  };
+  fill('bf_adults', 1, 10, 2);
+  fill('bf_kids', 0, 10, 0);
 
+  // кнопки
   const $ = (id)=>document.getElementById(id);
   $('bf_close').onclick = closeModal;
-  $('bf_reset').onclick = () => {
-    $('bf_from').value = ''; $('bf_to').value = '';
-    $('bf_adults').value = '2'; $('bf_kids').value = '0';
-    window.__bookingFilter = null;
-  };
-  $('bf_apply').onclick = () => {
-    const from   = $('bf_from').value;
-    const to     = $('bf_to').value;
-    const adults = parseInt($('bf_adults').value, 10);
-    const kids   = parseInt($('bf_kids').value, 10);
-    window.__bookingFilter = { from, to, adults, kids, total: adults + kids };
+  $('bf_reset').onclick = ()=>{ $('bf_from').value='';$('bf_to').value='';$('bf_adults').value='2';$('bf_kids').value='0'; };
+  $('bf_apply').onclick = ()=>{
+    window.__bookingFilter = {
+      from: $('bf_from').value,
+      to: $('bf_to').value,
+      adults: +$('bf_adults').value,
+      kids: +$('bf_kids').value
+    };
     closeModal();
-    if (typeof loadCamps === 'function') loadCamps();
   };
 }
+
+
 
 // --- геоцентрирование карты ---
 function initGeoButton() {
@@ -514,6 +968,8 @@ window.addEventListener('DOMContentLoaded', () => {
   setTabById('tab-map');
   loadCamps();
   setTimeout(()=> typeof map!=='undefined' && map.invalidateSize(), 80);
+  document.getElementById('openBookingFilter').onclick = openBookingFilterModal;
+
 });
 
 // Гарантированная фиксация размеров таб-иконок (п.4)

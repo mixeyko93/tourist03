@@ -326,3 +326,160 @@ input.sa,select.sa{height:40px;border-radius:10px;border:1px solid var(--border-
 .cf-field textarea:focus {
   box-shadow: 0 0 0 3px rgba(10,132,255,0.25);
 }
+
+/* — компактнее карточка фильтра — */
+.modal-card.auth {
+  width: min(340px, 92vw);    /* было 360 — сделали чуть уже */
+  padding: 16px 16px 12px;    /* поменьше отступы */
+}
+.modal-card.auth .title {
+  margin: 0 0 10px;
+  text-align: center;
+}
+.modal-card.auth .grid-2 {
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.modal-card.auth .actions {
+  margin-top: 14px;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+}
+
+/* — мини-слайдер в «Подробнее» — */
+.camp-gal {
+  position: relative;
+  margin: 8px 0 0;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(255,255,255,.05);
+}
+.camp-gal .viewport {
+  display: flex;
+  transition: transform .25s ease;
+  will-change: transform;
+}
+.camp-gal img {
+  height: 180px;
+  object-fit: cover;
+  display: block;
+}
+.camp-gal .nav {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 36px; height: 36px; border-radius: 50%;
+  border: 1px solid var(--border-color);
+  background: var(--card-bg); color: var(--tg-text);
+  display: grid; place-items: center; cursor: pointer;
+}
+.camp-gal .nav.prev { left: 8px; }
+.camp-gal .nav.next { right: 8px; }
+.camp-gal .nav:active { transform: translateY(-50%) scale(.96); }
+
+/* === Балун карты с фото === */
+.camp-popup {
+  min-width: 280px;
+  text-align: center;
+}
+.camp-popup .title {
+  font-weight: 800;
+  font-size: 20px;
+  margin: 4px 0 6px;
+}
+.camp-popup .cover {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  margin-bottom: 8px;
+}
+.camp-popup .price {
+  color: var(--tg-hint);
+  margin: 6px 0 10px;
+}
+
+/* кнопка в балуне — как в приложении */
+.camp-popup .button { font-size: 14px; padding: 9px 14px; }
+
+/* === Слайдер в модалке «Подробнее» — читаемые стрелки + защита от «прокрутить всё сразу» === */
+.camp-gal img { width: 100%; height: 200px; object-fit: cover; }
+.camp-gal .nav { width: 40px; height: 40px; font-weight: 900; font-size: 18px; opacity: .95; }
+.camp-gal .nav:hover { box-shadow: 0 6px 18px rgba(0,0,0,.35); }
+.camp-gal .nav.disabled { pointer-events: none; opacity: .4; }
+
+/* === Фильтр бронирования — компактный === */
+.modal-card.auth .grid-2 { grid-template-columns: 1fr 1fr; gap: 10px; }
+.modal-card.auth .title { text-align: center; margin-bottom: 10px; }
+.modal-card.auth input[type="date"]::placeholder { color: transparent; } /* скрываем дд.мм.ггг */
+
+/* кнопки в балуне */
+.button.green {
+  background: #22c55e;
+  border-color: #22c55e;
+  color: #fff;
+}
+.button.green:hover { background: #2ed868; }
+
+/* плавная анимация загрузки */
+@keyframes spinEmoji {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+.loading-emoji {
+  display:inline-block;
+  animation: spinEmoji 1s linear infinite;
+}
+
+/* === КНОПКИ ДЛЯ БАЛУНА/МОДАЛОК === */
+.btn {
+  display:inline-flex; align-items:center; justify-content:center;
+  padding:10px 16px; border-radius:14px; font-weight:700;
+  border:none; cursor:pointer; box-shadow:0 6px 18px rgba(0,0,0,.18);
+}
+.btn-primary { background:#2b7cff; color:#fff; }
+.btn-success { background:#26c281; color:#0c1410; }
+.btn-light   { background:#ffffff; color:#0f1216; }
+
+.popup-photo{
+  width:100%; height:160px; object-fit:cover; border-radius:10px; display:block;
+}
+
+/* читаемее текст в модалке «Подробнее» */
+.modal-card.auth .title { color: #fff; }
+.modal-card.auth .muted, .modal-card.auth p { color: #d1d5db; }
+
+/* --- Компактный фильтр --- */
+.modal-card.auth {
+  width: min(340px, 92vw);
+  padding: 18px 16px;
+  background: var(--tg-bg, #1a1d24);
+  color: #fff;
+}
+.modal-card.auth label {
+  font-size: 13px;
+  color: #d1d5db;
+}
+.modal-card.auth input, .modal-card.auth select {
+  width: 100%;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid #2d313b;
+  background: #11151a;
+  color: #fff;
+  padding: 0 10px;
+}
+
+/* --- Параметры базы в "Подробнее" --- */
+.param-card {
+  border: 1px solid #333;
+  border-radius: 10px;
+  padding: 6px 10px;
+  margin-top: 4px;
+  background: rgba(255,255,255,.05);
+  display: flex;
+  justify-content: space-between;
+}
+.param-card span {
+  color: #9aa3af;
+}

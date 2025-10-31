@@ -304,10 +304,19 @@ html[data-theme="dark"] .nav-emoji:hover{ background:#141821; }
       <button class="primary" id="btnAddCamp">Добавить базу</button>
       <div class="table-wrap" style="margin-top:12px;overflow:auto">
         <table id="camps_tbl">
-          <thead><tr>
-            <th>ID</th><th>Название</th><th>Озеро</th><th>Координаты</th>
-            <th>Владелец</th><th>Управляющий</th><th>Мин. цена</th><th>Действия</th>
-          </tr></thead>
+<thead>
+  <tr>
+    <th>Статус</th>
+    <th>ID</th>
+    <th>Название</th>
+    <th>Озеро</th>
+    <th>Координаты</th>
+    <th>Владелец</th>
+    <th>Управляющий</th>
+    <th>Мин. цена</th>
+    <th>Действия</th>
+  </tr>
+</thead>
           <tbody></tbody>
         </table>
       </div>
@@ -552,34 +561,49 @@ for (const k in tabs) {
 const api = (u,o={})=>fetch(u,o).then(r=>{if(!r.ok)throw new Error(r.statusText);return r.json();});
 
 /* === Список баз === */
+/* === Список баз === */
 async function loadCamps(){
-  try{
-    const list = (await api('/api/camps')).filter(c => (c.status||'active') !== 'archived');
+  try {
+    const list = (await api('/api/camps')).filter(c => (c.status || 'active') !== 'archived');
     const tb = document.querySelector('#camps_tbl tbody');
     tb.innerHTML = '';
 
     list.forEach(c => {
-      const yMapBtn = (c.lat!=null && c.lng!=null)
-  ? `<span class="nav-emoji" title="Открыть в Яндекс.Картах"
-      onclick="window.open('https://yandex.ru/maps/?pt=${c.lng},${c.lat}&z=15&l=map','_blank')">🧭</span>`
-  : '';
+      const yMapBtn = (c.lat != null && c.lng != null)
+        ? `<span class="nav-emoji" title="Открыть в Яндекс.Картах"
+            onclick="window.open('https://yandex.ru/maps/?pt=${c.lng},${c.lat}&z=15&l=map','_blank')">🧭</span>`
+        : '';
+
+      // статус берём из c.status
+      const isActive = String(c.status ?? 'active').toLowerCase() === 'active';
 
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td>${c.id}</td>
+        <td>
+          <span style="font-weight:600;color:${isActive ? '#22c55e' : '#ef4444'};">
+            ${isActive ? 'Активный' : 'Отключен'}
+          </span>
+        </td>
+        <td>#${c.id}</td>
         <td>${c.name || ''}</td>
         <td>${c.lake_name || ''}</td>
         <td>${yMapBtn}</td>
         <td>${c.owner || ''}</td>
         <td>${c.manager || ''}</td>
         <td>${c.min_price ?? ''}</td>
-        <td><button class="button" onclick='showCampForm("edit", ${JSON.stringify(c).replace(/'/g,"&apos;")})'>Редактировать</button></td>`;
+        <td>
+          <button class="button" onclick='showCampForm("edit", ${JSON.stringify(c).replace(/'/g,"&apos;")})'>
+            Редактировать
+          </button>
+        </td>`;
       tb.appendChild(tr);
     });
   } catch (e) {
     console.error('loadCamps error:', e);
   }
 }
+
+
 
 
 async function loadArchive(){
@@ -1023,43 +1047,53 @@ function updateDerivedTotals() {
   document.getElementById('cf_pool_indiv').value = String(poolIndiv);
 }
 
-// --- редактор списка апартаментов ---
-function renderRoomsEditor(count, prefetched=[]) {
-  const n = Math.max(0, parseInt(count||0,10));
+
+// --- редактор списка апартаментов (устойчивая версия, всегда виден) ---
+function renderRoomsEditor(count, prefetched = []) {
   const root = document.getElementById('cf_rooms_editor');
+  if (!root) return;
+
+  // Делаем секцию видимой ВСЕГДА: есть строки или нет — должна быть кнопка «Добавить»
+  root.style.display = 'block';
+
+  const n = Math.max(0, parseInt(count || 0, 10));
   root.innerHTML = '';
   _roomPhotos = [];
 
-  if (!n){ root.style.display='none'; return; }
-  root.style.display='block';
+  // Заголовок и кнопка добавления
+  root.insertAdjacentHTML('beforeend', `
+    <div class="rooms-title" style="margin-bottom:8px;">Описание апартаментов</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin:6px 0 12px">
+      <button type="button" class="button" id="btnAddRoom">Добавить апартамент</button>
+    </div>
+  `);
 
-  root.insertAdjacentHTML('beforeend', '<div class="rooms-title">Описание апартаментов</div>');
-  root.insertAdjacentHTML('beforeend',
-    `<div style="display:flex;gap:8px;justify-content:flex-end;margin:6px 0 8px">
-       <button type="button" class="button" id="btnAddRoom">Добавить апартамент</button>
-     </div>`
-  );
+  // Отрисовываем уже имеющиеся или пустые строки
+  const rowsTargetCount = Math.max(n, prefetched.length);
+  for (let i = 0; i < rowsTargetCount; i++) {
+    const data = prefetched[i] || {};
+    const rid = data?.id;
 
-  // вставляем n строк
-  for (let i = 0; i < n; i++) {
-    root.insertAdjacentHTML('beforeend', roomRowTemplate(i, prefetched[i] || {}));
+    _roomPhotos[i] = Array.isArray(data.photos) ? data.photos.slice(0, 5) : [];
+    root.insertAdjacentHTML('beforeend', roomRowTemplate(i, data));
 
-    // восстановить фото этой строки в _roomPhotos[i]
-    const room = prefetched[i] || {};
-    let raw = [];
-    if (Array.isArray(room.photos)) {
-      raw = room.photos;
-    } else if (typeof room.photos_json === 'string') {
-      try { raw = JSON.parse(room.photos_json) || []; } catch { raw = []; }
-    } else if (room.photo_main) {
-      raw = [room.photo_main];
+    // Подпись ID при наличии
+    if (rid) {
+      const row = root.querySelector(`.room-row[data-idx="${i}"]`);
+      if (row) {
+        row.dataset.roomId = String(rid);
+        const label = document.createElement('div');
+        label.className = 'muted';
+        label.style.margin = '0 0 6px 0';
+        label.textContent = `ID: ${(data.camp_id ?? '?')} - ${rid}`;
+        row.insertAdjacentElement('afterbegin', label);
+      }
     }
-    const coverUrl = room.photo_main || raw[0] || null;
-    _roomPhotos[i] = (raw || []).slice(0, 5).map(u => ({ url: u, cover: u === coverUrl }));
 
-    // отрисовать мини-галерею и навесить пересчёты
+    // восстановить мини-галерею
     renderRoomGallery(i);
 
+    // пересчёты
     const rowSel = `.room-row[data-idx="${i}"]`;
     document.querySelectorAll(`${rowSel} .r_beds1, ${rowSel} .r_beds2`).forEach(inp =>
       inp.addEventListener('input', () => { updateTotalBeds(); updateDerivedTotals(); })
@@ -1069,10 +1103,7 @@ function renderRoomsEditor(count, prefetched=[]) {
     );
   }
 
-  // показать число строк
-  document.getElementById('cf_rooms').value = String(n);
-
-  // добавить ещё одну строку
+  // Кнопка «Добавить апартамент»
   const btnAdd = document.getElementById('btnAddRoom');
   if (btnAdd) {
     btnAdd.onclick = () => {
@@ -1089,58 +1120,82 @@ function renderRoomsEditor(count, prefetched=[]) {
         sel.addEventListener('change', updateDerivedTotals)
       );
 
-      document.getElementById('cf_rooms').value = String(idx + 1);
+      // поддерживаем счётчик в поле «Количество апартаментов»
+      const counter = document.getElementById('cf_rooms');
+      if (counter) counter.value = String(idx + 1);
+
       _cfDirty = true;
       updateDerivedTotals();
     };
   }
 
-  // первичный пересчёт
   updateTotalBeds();
   updateDerivedTotals();
 }
 
-function collectRoomsPayload(){
+
+
+/* === collectRoomsPayload — исправленная версия (без вложенных <script>) === */
+function collectRoomsPayload() {
   const rows = Array.from(document.querySelectorAll('#cf_rooms_editor .room-row'));
 
-  const payload = rows.map((row, idx) => {
-    const val = sel => (row.querySelector(sel)?.value ?? '').trim();
-    const num = (sel, min=0) => {
+  return rows.map((row, idx) => {
+    // помощники
+    const val = (sel) => (row.querySelector(sel)?.value ?? '').trim();
+    const num = (sel, min = 0) => {
       const v = row.querySelector(sel)?.value ?? '';
-      if (v === '') return null;
-      const n = parseInt(v,10);
-      return Number.isNaN(n) ? null : Math.max(min,n);
+      if (v === '') return null;                 // пустое поле — считаем отсутствующим
+      const n = parseInt(v, 10);
+      return Number.isNaN(n) ? null : Math.max(min, n);
     };
 
-    const obj = {
+    // id апартамента берём из data-атрибута строки (если есть)
+    const roomId = (() => {
+      const rid = row.dataset.roomId;
+      return (rid && /^\d+$/.test(rid)) ? parseInt(rid, 10) : null;
+    })();
+
+    const bedsSingle = num('.r_beds1', 0) ?? 0;
+    const bedsDouble = num('.r_beds2', 0) ?? 0;
+
+    return {
+      id: roomId,
       name: val('.r_name'),
       room_type: val('.r_type'),
+
       floors: num('.r_storeys', 1) ?? 1,
       floor:  num('.r_floor',   1) ?? 1,
-      beds_single: num('.r_beds1',0) ?? 0,
-      beds_double: num('.r_beds2',0) ?? 0,
+
+      beds_single: bedsSingle,
+      beds_double: bedsDouble,
+
+      // производные значения можно считать на бэке, но оставлю capacity — удобно для сумм
+      capacity: bedsSingle + bedsDouble * 2,
+
       bath_type: val('.r_bath'),
       wc_type:   val('.r_wc'),
+
       bbq_type:      val('.r_bbq'),
       kitchen_type:  val('.r_kitchen'),
       gazebo_type:   val('.r_gazebo'),
       terrace_type:  val('.r_terrace'),
       pool_type:     val('.r_pool'),
       balcony_type:  val('.r_balcony'),
-      has_ac: (val('.r_ac') === '1') ? 1 : 0,
-      desc: val('.r_desc'),
-      price_adult: num('.r_price_adult',0) ?? 0,
-      price_child: num('.r_price_child',0) ?? 0,
-      price:       num('.r_price_house',0) ?? 0,
-      discount_pct: num('.r_disc_pct',0) ?? 0,
-      discount_from_nights: num('.r_disc_from',0) ?? 0,
-      photos: (_roomPhotos[idx] || []).map(x => ({url:x.url, cover:!!x.cover}))
-    };
-    return obj;
-  });
+      has_ac:        (val('.r_ac') === '1') ? 1 : 0,
 
-  return payload;
+      desc:         val('.r_desc'),
+      price_adult:  num('.r_price_adult', 0) ?? 0,
+      price_child:  num('.r_price_child', 0) ?? 0,
+      price:        num('.r_price_house', 0) ?? 0,
+      discount_pct: num('.r_disc_pct', 0) ?? 0,
+      discount_from_nights: num('.r_disc_from', 0) ?? 0,
+
+      // мини-галерея апартаментов: берём из _roomPhotos[индекс]
+      photos: (_roomPhotos[idx] || []).map(x => ({ url: x.url, cover: !!x.cover }))
+    };
+  });
 }
+
 
 
 
