@@ -483,3 +483,145 @@ input.sa,select.sa{height:40px;border-radius:10px;border:1px solid var(--border-
 .param-card span {
   color: #9aa3af;
 }
+
+/* === [custom svg icons in tabbar] === */
+.tabbar .tab { color: #cfd6df; } /* неактивные */
+.tabbar .tab.active { color: var(--blue); } /* активная вкладка — берёт фирменный синий */
+
+.tabbar .tab .icon {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tabbar .tab .icon svg,
+.tabbar .tab .icon img {
+  width: 28px;
+  height: 28px;
+  display: block;
+}
+
+/* чуть контраста у подписи — уже было, но подстрахуемся */
+.tabbar .tab .label { opacity: .85; }
+
+/* === iOS-like «glass» map buttons === */
+:root{
+  --btn-fg: #0f1115;
+  --btn-bg: rgba(255,255,255,.88);
+  --btn-border: rgba(0,0,0,.08);
+  --btn-shadow: 0 10px 22px rgba(0,0,0,.18), 0 2px 6px rgba(0,0,0,.08);
+  --btn-inset: inset 0 1px 0 rgba(255,255,255,.55);
+}
+.theme-dark :root, .theme-dark{
+  --btn-fg: #f4f6fb;
+  --btn-bg: rgba(20,22,26,.72);
+  --btn-border: rgba(255,255,255,.08);
+  --btn-shadow: 0 10px 22px rgba(0,0,0,.45), 0 2px 6px rgba(0,0,0,.35);
+  --btn-inset: inset 0 1px 0 rgba(255,255,255,.08);
+}
+
+/* контейнеры самих круглых кнопок */
+.map-btn{
+  width: 56px; height: 56px;
+  border-radius: 16px;
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  border: 1px solid var(--btn-border);
+  box-shadow: var(--btn-shadow), var(--btn-inset);
+  backdrop-filter: saturate(180%) blur(18px);
+  -webkit-backdrop-filter: saturate(180%) blur(18px);
+  display: inline-flex;
+  align-items: center; justify-content: center;
+  transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
+}
+
+/* «тактильный» отклик */
+.map-btn:active{
+  transform: translateY(1px) scale(.98);
+  box-shadow: 0 6px 14px rgba(0,0,0,.12);
+}
+
+/* аккуратный размер глифа */
+
+.map-btn svg{ width: 24px; height: 24px; display: block; }
+
+/* === map buttons: визуально как иконки в таббаре === */
+.map-btn { color: #cfd6df; }                 /* базовый цвет как у неактивных табов */
+.map-btn svg { width: 26px; height: 26px; }  /* размер вровень с таббаром */
+.map-btn:active { color: var(--blue); }      /* при тапе подсвечиваемся фирменным синим */
+
+/* Иконки на карте — те же пропорции, что в таббаре */
+.map-btn svg { width: 26px; height: 26px; display: block; }
+
+/* Цвет как у неактивных табов; на тап — фирменный синий */
+.map-btn { color: #cfd6df; }
+.map-btn:active { color: var(--blue); }
+
+/* Единые emoji-кнопки на карте (svg-эмоджи как картинки) */
+.map-btn .emoji-btn{
+  width: 26px;
+  height: 26px;
+  display: block;
+}
+
+/* === обновлённые кнопки карты (эмоджи без фона) === */
+
+/* убираем фон, рамку, тени */
+.map-btn {
+  position: absolute;
+  bottom: 18px;
+  border: none;
+  background: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  width: auto;
+  height: auto;
+  padding: 0;
+  cursor: pointer;
+  transition: transform .12s ease;
+}
+.map-btn.left  { left: 18px; }
+.map-btn.right { right: 18px; }
+.map-btn:active { transform: scale(0.95); }
+
+/* Единые Twemoji-эмоджи в кнопках карты */
+.map-btn {
+  position: absolute;
+  bottom: 18px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: transform .12s ease;
+}
+.map-btn.left  { left: 18px; }
+.map-btn.right { right: 18px; }
+.map-btn:active { transform: scale(.96); }
+
+/* === статичные Telegram-emoji на карте === */
+.map-btn {
+  position: absolute;
+  bottom: 18px;
+  border: none;
+  background: none;
+  box-shadow: none;
+  padding: 0;
+  cursor: pointer;
+  transition: transform .12s ease;
+}
+.map-btn.left  { left: 18px; }
+.map-btn.right { right: 18px; }
+
+/* полностью убираем hover-подложку в Windows */
+.map-btn:hover { background: none; box-shadow: none; }
+.map-btn:active { transform: scale(.96); }
+
+/* размер эмоджи ×2 (было ~34, делаем 68) */
+.map-btn .tg-emoji {
+  width: 68px;
+  height: 68px;
+  display: block;
+}
+
