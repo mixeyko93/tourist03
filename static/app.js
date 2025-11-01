@@ -1,7 +1,47 @@
+// === Tourist_03 • Telegram WebApp: анти-свайпы и защита от случайного закрытия ===
+(function () {
+  const tg = window.Telegram && window.Telegram.WebApp;
+  if (!tg) return;
+
+  try { tg.expand(); } catch (_) {}
+
+  // Если клиент Telegram поддерживает, полностью гасим «подтягивание шторки»
+  try {
+    if (typeof tg.disableVerticalSwipes === 'function') {
+      tg.disableVerticalSwipes();
+    }
+  } catch (_) {}
+
+  // Просим Telegram показывать системное подтверждение при попытке закрыть
+  try { tg.enableClosingConfirmation(); } catch (_) {}
+
+  // Подстраховка: если высота «схлопнулась», снова расширяем
+  try {
+    tg.onEvent && tg.onEvent('viewportChanged', () => {
+      try { tg.expand(); } catch (_) {}
+    });
+  } catch (_) {}
+})();   // ← вот это закрывает первую функцию!
+
+
+// === Локальная защита: тапы/свайпы внутри балуна не «прокидываем» вверх к Телеграму ===
+(function swallowPopupGestures(){
+  const swallow = (e) => {
+    if (e.target && e.target.closest && e.target.closest('.leaflet-popup')) {
+      e.stopPropagation(); // даём Leaflet'у обработать, но не отдаём событие в Telegram
+    }
+  };
+  document.addEventListener('touchstart', swallow, { capture: true, passive: true });
+  document.addEventListener('touchmove',  swallow, { capture: true, passive: true });
+})();
+
+
 // ==== Telegram WebApp — полноэкранный режим ====
 const isTG = !!(window.Telegram && window.Telegram.WebApp);
 if (isTG) {
   Telegram.WebApp.ready();
+    // включаем системное подтверждение закрытия после ready()
+  try { Telegram.WebApp.enableClosingConfirmation(); } catch(_) {}
   const expand = () => Telegram.WebApp.expand();
   expand(); Telegram.WebApp.onEvent('viewportChanged', expand);
   document.addEventListener('click', expand, { once:true });

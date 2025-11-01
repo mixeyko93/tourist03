@@ -625,3 +625,30 @@ input.sa,select.sa{height:40px;border-radius:10px;border:1px solid var(--border-
   display: block;
 }
 
+/* ==== Tourist_03: выравнивание размеров кнопок на карте ==== */
+.map-ui .map-btn .tg-emoji{
+  width: 64px;
+  height: 64px;
+  display: block;
+  /* у разных SVG разный «визуальный вес», поэтому задан общий базовый размер */
+}
+
+/* календарь делаем ещё компактнее, чтобы ровно совпасть с гео-иконкой */
+#openBookingFilter .tg-emoji{
+  transform: scale(0.78);
+  transform-origin: center center;
+}
+
+
+/* ==== Tourist_03: анти-свайпы к телеграм-«шторке» (жёсткий режим) ==== */
+html, body, .tg-app, .map-wrap, #map{
+  overscroll-behavior: none;   /* вообще не «прокидываем» жесты */
+}
+
+#map, .leaflet-container{
+  /* Разрешаем нормальные жесты для Leaflet и не даём «прокинуться» наверх за счёт overscroll */
+  touch-action: pan-x pan-y;
+}
+
+
+
