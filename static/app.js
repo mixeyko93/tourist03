@@ -198,76 +198,6 @@ async function openCampDetails(campId) {
   }
 }
 
-// === Компактный фильтр бронирования (2 строки, аккуратное окно) ===
-function openBookingFilterModal() {
-  // если открыто окно «Подробнее» — закрываем, чтобы фильтр был сверху
-  const details = document.querySelector('.modal.show');
-  if (details) details.remove();
-
-  showModal(`
-    <div class="auth">
-      <div class="title">Выберите даты и гостей</div>
-
-      <div class="grid-2" style="margin-bottom:10px;">
-        <div>
-          <label>Заезд</label>
-          <input id="bf_from" type="date" class="tg-date">
-        </div>
-        <div>
-          <label>Выезд</label>
-          <input id="bf_to" type="date" class="tg-date">
-        </div>
-      </div>
-
-      <div class="grid-2" style="margin-bottom:14px;">
-        <div>
-          <label>Взрослые</label>
-          <select id="bf_adults" class="tg-select"></select>
-        </div>
-        <div>
-          <label>Дети</label>
-          <select id="bf_kids" class="tg-select"></select>
-        </div>
-      </div>
-
-      <div class="actions" style="grid-template-columns:1fr 1fr 1fr;gap:8px;">
-        <button class="button ghost" id="bf_close">Закрыть</button>
-        <button class="button ghost" id="bf_reset">Сбросить</button>
-        <button class="button primary" id="bf_apply">Показать</button>
-      </div>
-    </div>
-  `);
-
-  // наполняем селекты
-  const fill = (id, from, to, def) => {
-    const el = document.getElementById(id);
-    for (let i = from; i <= to; i++) {
-      const o = document.createElement('option');
-      o.value = i;
-      o.textContent = i;
-      el.appendChild(o);
-    }
-    el.value = def;
-  };
-  fill('bf_adults', 1, 10, 2);
-  fill('bf_kids', 0, 10, 0);
-
-  // кнопки
-  const $ = (id)=>document.getElementById(id);
-  $('bf_close').onclick = closeModal;
-  $('bf_reset').onclick = ()=>{ $('bf_from').value='';$('bf_to').value='';$('bf_adults').value='2';$('bf_kids').value='0'; };
-  $('bf_apply').onclick = ()=>{
-    window.__bookingFilter = {
-      from: $('bf_from').value,
-      to: $('bf_to').value,
-      adults: +$('bf_adults').value,
-      kids: +$('bf_kids').value,
-      total: (+$('bf_adults').value) + (+$('bf_kids').value)
-    };
-    closeModal();
-    // при желании тут сразу дернуть обновление списка: loadCamps();
-  };
-}
 
 // для старых вызовов, если где-то остался openBookingFilter:
 function openBookingFilter(){ openBookingFilterModal(); }
@@ -477,17 +407,18 @@ function restoreMapView() {
 }
 
 const topbar = document.getElementById('topbar');
-function popupPaddingTop(){ return topbar && topbar.classList.contains('visible') ? 96 : 16; }
+// Центруем карту так, чтобы балун был в видимой середине
 map.on('popupopen', (e) => {
   try {
-    const px = map.project(e.popup._latlng);
-    px.y -= popupPaddingTop();
-    map.panTo(map.unproject(px), { animate: true });
+    const cont = e && e.popup && e.popup._container ? e.popup._container : null;
+    const h = cont ? cont.offsetHeight : 260;  // приблизительная высота балуна
+    const latlng = e.popup.getLatLng();
+    const px = map.project(latlng);
+    px.y -= (h / 2);                            // сдвиг на половину высоты балуна
+    map.panTo(map.unproject(px), { animate: true, duration: 0.35 });
   } catch(_) {}
 });
 
-// ... тут остаётся вся ваша существующая логика загрузки баз, фильтров, доступности,
-// обработчиков геолокации, и т.п. (ничего не менял)
 
 // ==== AUTH: простая модель на токенах ====
 const AUTH_KEY = 'auth_profile';
@@ -520,7 +451,16 @@ function renderAccount(){
 const modal = document.getElementById('modal');
 const modalCard = document.getElementById('modalCard');
 function showModal(html){ modalCard.innerHTML = html; modal.style.display = 'grid'; }
-function closeModal(){ modal.style.display = 'none'; modalCard.innerHTML = ''; }
+function closeModal(){
+  const modal = document.getElementById('modal');
+  const card  = document.getElementById('modalCard');
+  if (modal) modal.style.display = 'none';
+  if (card) {
+    card.innerHTML = '';
+    card.classList.remove('booking-shell');  // снимаем «узкую» оболочку
+  }
+}
+
 modal.addEventListener('click', (e)=>{ if (e.target === modal) closeModal(); });
 
 function openRegister(){
@@ -635,62 +575,112 @@ function openLogin(){
 
 async function loadCamps() {
   try {
+    // 1) Базы
     const res = await fetch('/api/camps');
     if (!res.ok) throw new Error('Ошибка загрузки баз');
-const items = await res.json();
-// на карту выводим только активные базы
-const itemsActive = items.filter(c => (c.status || 'active') === 'active');
+    const camps = await res.json();
+    const itemsActive = camps.filter(c => (c.status || 'active') === 'active');
 
+    // 2) Комнаты (одним запросом)
+    let roomsByCamp = {};
+    const roomsResp = await fetch('/api/rooms');
+    if (roomsResp.ok) {
+      const allRooms = await roomsResp.json();
+      roomsByCamp = allRooms.reduce((acc, r) => {
+        (acc[r.camp_id] ||= []).push(r);
+        return acc;
+      }, {});
+    }
 
-// Базовый набор — только активные
-let filtered = itemsActive;
+    // Вспомогательные функции для проверки доступности по датам
+    const parseD = (s)=> s ? new Date(s) : null;
+    const overlap = (aStart, aEnd, bStart, bEnd) => {
+      if (!aStart || !aEnd || !bStart || !bEnd) return true; // если нет дат — считаем пересечением по «неизвестности»
+      return (aStart <= bEnd) && (bStart <= aEnd);
+    };
+    // Норма людей в комнате (взрослые + дети, если явно указано; иначе capacity/ beds/ max/2)
+    const roomCapacity = (r) => {
+      if (Number.isFinite(r.adults) || Number.isFinite(r.kids)) {
+        return (Number(r.adults)||0) + (Number(r.kids)||0);
+      }
+      return Number(r.capacity || r.beds || r.max || 2);
+    };
+    // Сколько юнитов у комнаты (сколько одинаковых номеров), по умолчанию 1
+    const roomUnits = (r) => Number(r.count || 1);
 
-const f = window.__bookingFilter;
-if (f && Number.isFinite(f.total) && f.total > 0) {
-  // Получаем номера один раз для всех баз
-  const roomsResp = await fetch('/api/rooms');
-  const allRooms = roomsResp.ok ? await roomsResp.json() : [];
-  const roomsByCamp = allRooms.reduce((acc, r) => {
-    (acc[r.camp_id] ||= []).push(r);
-    return acc;
-  }, {});
-  // Фильтруем уже активные
-  filtered = filtered.filter(c => (roomsByCamp[c.id] || [])
-    .some(r => (r.capacity || 0) >= f.total));
-}
+    // Считаем, сколько юнитов комнаты занято в заданный период
+    function countBookedUnits(r, fFrom, fTo) {
+      // Пытаемся «угадать» формат данных о бронях
+      const ranges =
+        r.bookings || r.reservations || r.busy_ranges || r.busy || r.orders || [];
 
+      if (!Array.isArray(ranges) || ranges.length === 0) return 0;
 
-    // Отрисуем маркеры
+      let used = 0;
+      for (const b of ranges) {
+        // поддержка разных вариантов полей
+        const bFrom = parseD(b.from || b.start || b.date_from || b.checkin);
+        const bTo   = parseD(b.to   || b.end   || b.date_to   || b.checkout);
+        if (!bFrom || !bTo) continue;
+
+        if (overlap(fFrom, fTo, bFrom, bTo)) {
+          // сколько юнитов съедает бронь
+          const u = Number(b.units || b.count || 1);
+          used += u;
+        }
+      }
+      return used;
+    }
+
+    // Проверка: хватает ли свободных мест в лагере на диапазон и людей
+    function campHasAvailability(camp, f) {
+      const rooms = roomsByCamp[camp.id] || [];
+      if (!rooms.length) return false;
+
+      // если нет дат — фильтруем только по общей вместимости
+      const fFrom = parseD(f.from);
+      const fTo   = parseD(f.to);
+
+      let totalCapacity = 0;
+      for (const r of rooms) {
+        const units = roomUnits(r);
+        const capPerUnit = roomCapacity(r);
+
+        let freeUnits = units;
+        if (fFrom && fTo) {
+          const booked = countBookedUnits(r, fFrom, fTo);
+          freeUnits = Math.max(0, units - booked);
+        }
+        totalCapacity += freeUnits * capPerUnit;
+        if (totalCapacity >= f.total) return true; // ранний выход
+      }
+      return totalCapacity >= f.total;
+    }
+
+    // 3) Применяем фильтр (если задан)
+    const f = window.__bookingFilter;
+    let filtered = itemsActive;
+    if (f && Number.isFinite(f.total) && f.total > 0) {
+      filtered = itemsActive.filter(c => campHasAvailability(c, f));
+    }
+
+    // 4) Отрисовка
+    if (typeof cluster?.clearLayers === 'function') cluster.clearLayers();
     filtered.forEach(c => {
       if (c.lat == null || c.lng == null) return;
-      const title = `<div style="text-align:center;font-weight:800;font-size:16px;">${c.name||''}</div>`;
-      const photo = c.photo_main ? `<div style="margin:8px 0;"><img src="${c.photo_main}" alt="" style="width:100%;max-width:240px;border-radius:12px;display:block;margin:0 auto;"></div>` : '';
-      const priceLine = Number.isFinite(c.min_price) && c.min_price>0
-        ? `<div class="muted" style="text-align:center;margin-top:2px;">Стоимость от ${c.min_price}₽ за человека</div>`
-        : '';
 
-      const html = `
-        ${title}
-        ${photo}
-        ${priceLine}
-        <div style="display:flex;gap:8px;justify-content:center;margin-top:8px;">
-          <button class="button primary" onclick="window.__showCampBrief(${c.id})" style="padding:6px 12px;">Подробнее</button>
-          <button class="button primary" onclick="window.__openCampBooking(${c.id})" style="padding:6px 12px;">Забронировать</button>
-        </div>
-      `;
-
-        const marker = L.marker(
-          [c.lat, c.lng],
-          { icon: emojiHouseIcon(c.emoji || '🏕️', c.emoji_size || 'standard') }
-        );
-        marker.bindPopup(popupHtmlForCamp(c), { maxWidth: 260, className: 'camp-popup' });
-        cluster.addLayer(marker);
-
-    });                              // <-- закрываем filtered.forEach(...)
+      const marker = L.marker(
+        [c.lat, c.lng],
+        { icon: emojiHouseIcon(c.emoji || '🏕️', c.emoji_size || 'standard') }
+      );
+      marker.bindPopup(popupHtmlForCamp(c), { maxWidth: 260, className: 'camp-popup' });
+      cluster.addLayer(marker);
+    });
   } catch (e) {
     console.error('loadCamps error:', e);
   }
-}                                     // <-- закрываем function loadCamps
+}
+                                    // <-- закрываем function loadCamps
 
 
 // === Детали базы (модалка «Подробнее») ===
@@ -879,74 +869,111 @@ function initTabs(){
   });
 }
 
-// === Компактный фильтр бронирования (2 строки, аккуратное окно) ===
+
+// === Booking Filter (2×2): кликабельные даты, запоминание значений, применение на карту ===
 function openBookingFilterModal() {
-  // если открыта модалка "Подробнее" — закрываем, чтобы фильтр был сверху
-  const details = document.querySelector('.modal.show');
-  if (details) details.remove();
+  const prev = document.querySelector('.modal.show');
+  if (prev) prev.remove();
 
   showModal(`
-    <div class="auth">
-      <div class="title">Выберите даты и гостей</div>
+    <div class="booking-card">
+      <div class="booking-title">Выберите даты и гостей</div>
 
-      <div class="grid-2" style="margin-bottom:10px;">
-        <div>
-          <label>Заезд</label>
-          <input id="bf_from" type="date" class="tg-date">
-        </div>
-        <div>
-          <label>Выезд</label>
-          <input id="bf_to" type="date" class="tg-date">
-        </div>
+      <div class="booking-grid">
+        <label class="bk-field">
+          <span>Заезд</span>
+          <div class="bk-date">
+            <div class="bk-input" id="bkShowFrom">—</div>
+            <input type="date" id="bkFrom" class="bk-native">
+          </div>
+        </label>
+
+        <label class="bk-field">
+          <span>Выезд</span>
+          <div class="bk-date">
+            <div class="bk-input" id="bkShowTo">—</div>
+            <input type="date" id="bkTo" class="bk-native">
+          </div>
+        </label>
+
+        <label class="bk-field">
+          <span>Взрослые</span>
+          <select id="bkAdults" class="bk-select">
+            ${Array.from({length:30},(_,i)=>`<option>${i+1}</option>`).join('')}
+          </select>
+        </label>
+
+        <label class="bk-field">
+          <span>Дети</span>
+          <select id="bkKids" class="bk-select">
+            ${Array.from({length:31},(_,i)=>`<option>${i}</option>`).join('')}
+          </select>
+        </label>
       </div>
 
-      <div class="grid-2" style="margin-bottom:14px;">
-        <div>
-          <label>Взрослые</label>
-          <select id="bf_adults" class="tg-select"></select>
-        </div>
-        <div>
-          <label>Дети</label>
-          <select id="bf_kids" class="tg-select"></select>
-        </div>
-      </div>
-
-      <div class="actions" style="grid-template-columns:1fr 1fr 1fr;gap:8px;">
-        <button class="button ghost" id="bf_close">Закрыть</button>
-        <button class="button ghost" id="bf_reset">Сбросить</button>
-        <button class="button primary" id="bf_apply">Показать</button>
+      <div class="booking-actions">
+        <button class="button ghost" id="bkClose">Закрыть</button>
+        <button class="button ghost" id="bkReset">Сбросить</button>
+        <button class="button primary" id="bkApply">Сохранить</button>
       </div>
     </div>
   `);
 
-  // наполнение списков
-  const fill = (id, from, to, def) => {
-    const el = document.getElementById(id);
-    for (let i = from; i <= to; i++) {
-      const o = document.createElement('option');
-      o.value = i;
-      o.textContent = i;
-      el.appendChild(o);
-    }
-    el.value = def;
+  // сужаем внешнюю «прозрачную» оболочку только для окна фильтра
+  const shell = document.getElementById('modalCard');
+  if (shell) shell.classList.add('booking-shell');
+
+  // ссылки
+  const card  = document.querySelector('.booking-card');
+  const fromI = card.querySelector('#bkFrom');
+  const toI   = card.querySelector('#bkTo');
+  const fromB = card.querySelector('#bkShowFrom');
+  const toB   = card.querySelector('#bkShowTo');
+  const adSel = card.querySelector('#bkAdults');
+  const kdSel = card.querySelector('#bkKids');
+
+  // заполнение из предыдущего фильтра (если уже выбирали)
+  const F = window.__bookingFilter || {};
+  if (F.from) fromI.value = F.from;
+  if (F.to)   toI.value   = F.to;
+  adSel.value = String(F.adults ?? 2);
+  kdSel.value = String(F.kids   ?? 0);
+
+  // читаемо показываем выбранные даты
+  const fmt  = v => v ? new Date(v).toLocaleDateString('ru-RU') : '—';
+  const sync = () => { fromB.textContent = fmt(fromI.value); toB.textContent = fmt(toI.value); };
+  fromI.addEventListener('change', sync);
+  toI.addEventListener('change',   sync);
+  sync();
+
+  // клики по видимым «кнопкам» — открывают системный пикер (на всех платформах)
+  const openPicker = (inp) => {
+    if (typeof inp.showPicker === 'function') { inp.showPicker(); return; }
+    inp.focus(); inp.click(); // fallback для старых десктопов
   };
-  fill('bf_adults', 1, 10, 2);
-  fill('bf_kids', 0, 10, 0);
+  fromB.addEventListener('click', () => openPicker(fromI));
+  toB.addEventListener('click',   () => openPicker(toI));
 
   // кнопки
-  const $ = (id)=>document.getElementById(id);
-  $('bf_close').onclick = closeModal;
-  $('bf_reset').onclick = ()=>{ $('bf_from').value='';$('bf_to').value='';$('bf_adults').value='2';$('bf_kids').value='0'; };
-  $('bf_apply').onclick = ()=>{
+  card.querySelector('#bkClose').onclick = closeModal;
+  card.querySelector('#bkReset').onclick = ()=>{
+    fromI.value=''; toI.value=''; adSel.value='2'; kdSel.value='0'; sync();
+    // сброс — очищаем общий фильтр и перерисовываем всю карту
+    window.__bookingFilter = null;
+  };
+  card.querySelector('#bkApply').onclick = async ()=>{
     window.__bookingFilter = {
-      from: $('bf_from').value,
-      to: $('bf_to').value,
-      adults: +$('bf_adults').value,
-      kids: +$('bf_kids').value
+      from:   fromI.value || '',
+      to:     toI.value   || '',
+      adults: Number(adSel.value),
+      kids:   Number(kdSel.value),
+      total:  Number(adSel.value) + Number(kdSel.value)
     };
     closeModal();
+    try { await loadCamps(); if (typeof restoreMapView==='function') restoreMapView(); } catch(_) {}
   };
 }
+
 
 
 
@@ -1005,8 +1032,8 @@ window.addEventListener('DOMContentLoaded', () => {
   initTabs();
   initBookingFilterButton();
   initGeoButton();
-  setTabById('tab-map');
-  loadCamps();
+    setTabById('tab-map');
+    loadCamps().then(()=> restoreMapView());  // <-- после загрузки маркеров сразу fitBounds
   setTimeout(()=> typeof map!=='undefined' && map.invalidateSize(), 80);
   document.getElementById('openBookingFilter').onclick = openBookingFilterModal;
 

@@ -1,654 +1,219 @@
-/* web/styles.css */
-
-/* --- Telegram-тема и общие переменные --- */
-:root {
+/* ====================== Tourist_03 — BASE THEME ====================== */
+:root{
   --tg-bg: var(--tg-theme-bg-color, #0d0d0d);
   --tg-text: var(--tg-theme-text-color, #fff);
   --tg-hint: var(--tg-theme-hint-color, #9aa3ad);
   --tg-link: var(--tg-theme-link-color, #2a9df4);
   --tg-button: var(--tg-theme-button-color, #2a9df4);
   --tg-button-text: var(--tg-theme-button-text-color, #fff);
+
   --card-bg: rgba(255,255,255,0.05);
   --border-color: rgba(255,255,255,0.08);
   --blue: var(--tg-link);
   --tabbar-offset: 12px;
 }
 
-/* --- Базовая структура --- */
-html, body {
-  background: var(--tg-bg);
-  color: var(--tg-text);
-  font-family: system-ui, -apple-system, Roboto, sans-serif;
-  height: 100%;
-  margin: 0;
-  overscroll-behavior: none;
+/* ====================== GLOBAL LAYOUT ====================== */
+html, body{
+  height:100%;
+  margin:0;
+  background:var(--tg-bg);
+  color:var(--tg-text);
+  font-family:system-ui,-apple-system,Roboto,sans-serif;
+  overscroll-behavior:none;
+  overflow:hidden;
+  touch-action:manipulation;
 }
+.tg-app{position:fixed; inset:0; display:flex; flex-direction:column; overflow:hidden;}
+.page-title{font-size:24px; font-weight:800; margin:18px 18px 14px;}
+.muted{color:var(--tg-hint); margin:0 0 12px; line-height:1.5;}
 
-.tg-app {
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+/* Cards & Buttons */
+.card{
+  background:var(--card-bg);
+  border:1px solid var(--border-color);
+  border-radius:16px;
+  padding:16px 18px;
+  margin:0 18px 16px;
+  backdrop-filter:blur(8px);
+  box-shadow:0 8px 22px rgba(0,0,0,.25);
+  transition:background .2s ease, transform .2s ease;
 }
+.card:hover{background:rgba(255,255,255,0.08);}
 
-/* --- Заголовки и текст --- */
-.page-title {
-  font-size: 24px;
-  font-weight: 800;
-  margin: 18px 18px 14px;
-}
-
-.muted {
-  color: var(--tg-hint);
-  margin: 0 0 12px;
-  line-height: 1.5;
-}
-
-/* --- Карточки --- */
-.card {
-  background: var(--card-bg);
-  border: 1px solid var(--border-color);
-  border-radius: 16px;
-  padding: 16px 18px;
-  margin: 0 18px 16px;
-  backdrop-filter: blur(8px);
-  box-shadow: 0 8px 22px rgba(0,0,0,.25);
-  transition: background .2s ease, transform .2s ease;
-}
-.card:hover { background: rgba(255,255,255,0.08); }
-
-/* --- Кнопки --- */
-.button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 10px 18px;
-  border-radius: 14px;
-  border: none;
-  cursor: pointer;
-  font-weight: 700;
-  transition: transform .12s ease, opacity .12s ease;
-}
-.button:active { transform: scale(.97); }
-.button.primary {
-  background: var(--tg-button);
-  color: var(--tg-button-text);
-}
-.button.ghost {
-  background: transparent;
-  color: var(--tg-text);
-  border: 1px solid var(--border-color);
-}
-
-/* --- Группы элементов --- */
-.row.gap {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-/* --- Нижний таббар --- */
-.tabbar{
-  position: fixed;
-  left: 0; right: 0;
-  /* было: bottom: 0; */
-  bottom: calc(env(safe-area-inset-bottom) + var(--tabbar-offset));
-  padding: 10px 12px calc(env(safe-area-inset-bottom) + 10px);
-  height: auto;
-  background: var(--card-bg);
-  backdrop-filter: saturate(1.2) blur(10px);
-  border-top: 1px solid var(--border-color);
-  display: flex; gap: 8px; align-items: stretch;
-  z-index: 1000;
-}
-.tabbar .tab {
-  flex: 1 1 0;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-.tabbar .tab .icon { font-size: 26px; line-height: 1; }
-.tabbar .tab .label { font-size: 12px; margin-top: 4px; opacity: .8; }
-.tabbar .tab.active .icon,
-.tabbar .tab.active .label { color: var(--blue); }
-
-/* --- Плавность вкладок --- */
-body.tab-transition .tg-app {
-  transition: opacity .25s ease;
-  opacity: .93;
-}
-
-/* --- Модалки --- */
-.modal {
-  display: none;
-  position: fixed;
-  inset: 0;
-  backdrop-filter: blur(12px);
-  background: rgba(0,0,0,0.45);
-  z-index: 50;
-  align-items: center;
-  justify-content: center;
-}
-.modal.show {
-  display: grid;
-  animation: fadeIn .15s ease;
-}
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-.modal-card {
-  background: var(--card-bg);
-  border: 1px solid var(--border-color);
-  border-radius: 20px;
-  padding: 20px;
-  width: min(440px, 90vw);
-  max-height: 85vh;
-  overflow: auto;
-  box-shadow: 0 6px 25px rgba(0,0,0,0.4);
-  transform: scale(0.97);
-  animation: scaleIn .2s ease forwards;
-}
-@keyframes scaleIn { to { transform: scale(1); } }
-
-/* --- Спец для окна регистрации (фикс высоты) --- */
-.modal-card.auth {
-  min-height: 260px;
-  transition: transform .15s ease, opacity .15s ease, height .15s ease;
-}
-
-/* === Растягиваем карту на экран, делаем слой overlay === */
-.map-wrap { position: relative; height: calc(100vh - 110px); margin: 16px; border-radius: 16px; overflow: hidden; }
-#map { position: absolute; inset: 0; }
-
-/* overlay-элементы */
-.map-ui { position: absolute; inset: 0; pointer-events: none; }
-.map-btn {
-  pointer-events: auto;
-  position: absolute; bottom: 14px;
-  width: 48px; height: 48px; border-radius: 14px; border: 1px solid var(--border-color);
-  background: var(--card-bg); backdrop-filter: blur(8px);
-  box-shadow: 0 6px 16px rgba(0,0,0,.25);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 22px; cursor: pointer;
-  transition: transform .12s ease, background .2s ease;
-}
-.map-btn:active { transform: scale(.97); }
-.map-btn.left  { left: 14px; }
-.map-btn.right { right: 14px; }
-.map-btn:hover { background: rgba(255,255,255,0.10); box-shadow: 0 8px 20px rgba(0,0,0,.35); }
-
-
-/* таббар: выравнивание и не даём лейблам переноситься */
-.tabbar .tab { gap: 4px; }
-.tabbar .tab .label { white-space: nowrap; text-align: center; }
-
-/* гасим системный pull-to-close/резиновый скролл */
-html, body { overflow: hidden; overscroll-behavior: none; touch-action: manipulation; }
-.tg-app { position: fixed; inset: 0; }
-
-/* --- приоритет слоёв --- */
-#map { z-index: 0; }                /* слой карты самый нижний в секции */
-.map-ui { z-index: 500; }           /* поверх карты — календарь/гео */
-.tabbar { z-index: 1000; }          /* таббар всегда выше карты */
-
-/* Увеличим сам символ эмоджи внутри маркера */
-.emoji-marker .emoji-pin {
-  font-size: 44px;   /* под крупный iconSize */
-  line-height: 1;
-  transform: translateY(-2px);
-}
-
-/* Габариты контейнера эмоджи-маркера: стандарт и VIP */
-.emoji-marker { display:flex; align-items:flex-end; justify-content:center; }
-.emoji-marker.std { width:36px; height:44px; }
-.emoji-marker.vip { width:72px; height:88px; }
-
-/* Размер самого эмоджи под контейнер */
-.emoji-marker.std .emoji-pin { font-size:22px; line-height:1; transform:translateY(-1px); }
-.emoji-marker.vip .emoji-pin { font-size:44px; line-height:1; transform:translateY(-2px); }
-
-
-/* Кнопки в попапах карты выглядят как в приложении */
-.camp-popup .button {
-  font-size: 13px; border-radius: 12px; padding: 8px 12px;
-}
-.camp-popup .button.ghost { border:1px solid var(--border-color); }
-
-/* Кластеры Leaflet (кружок с числом) */
-.cl-marker { border-radius: 999px; background: rgba(10,132,255,.15);
-             border: 1px solid rgba(10,132,255,.5); box-shadow: 0 6px 18px rgba(0,0,0,.35);
-             display:flex; align-items:center; justify-content:center; }
-.cl-marker .cl-inner { color:#fff; font-weight:800; font-size:14px; }
-.cl-medium { width:52px!important; height:52px!important; }
-.cl-large  { width:60px!important; height:60px!important; }
-
-/* Тёмные инпуты в модалке фильтра */
-.modal-card.auth input[type="date"],
-.modal-card.auth input[type="number"],
-.modal-card.auth select {
-  background: rgba(255,255,255,0.06);
-  color: var(--tg-text);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  padding: 10px 12px;
-  height: 44px;
-  font-size: 16px;
-}
-.modal-card.auth label { display:block; margin-bottom:6px; color: var(--tg-hint); font-size:13px; }
-.modal-card.auth { max-height: 82vh; } /* ширину контролирует нижний блок 360px */
-
-
-/* === Booking Filter — современный вид === */
-.modal-card.auth {
-  width: min(360px, 92vw);              /* поуже */
-  max-height: 85vh;
-  padding: 18px 18px 14px;
-}
-.modal-card.auth .title {
-  font-weight: 700;
-  letter-spacing: 0.2px;
-}
-
-/* универсальный инпут/селект */
-.tg-input, .tg-select, .tg-date {
-  width: 100%;
-  height: 44px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid var(--border-color);
-  background: rgba(255,255,255,0.06);
-  color: var(--tg-text);
-  font-size: 16px;
-  outline: none;
-}
-.tg-input:focus, .tg-select:focus, .tg-date:focus {
-  box-shadow: 0 0 0 3px rgba(10,132,255,0.25);
-}
-
-/* лейблы и сетки */
-.modal-card.auth label{
-  display:block; margin: 0 0 6px; font-size: 13px; color: var(--tg-hint);
-}
-.modal-card.auth .grid-2 {
-  display:grid; grid-template-columns:1fr 1fr; gap: 12px;
-}
-.modal-card.auth .actions {
-  margin-top:16px; display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;
-}
-
-/* кнопки — чуть «пухлее» */
-.modal-card.auth .button { height:44px; border-radius: 12px; }
-
-/* ===== Superadmin tidy ===== */
-.sa-wrap{max-width:1200px;margin:0 auto;padding:12px 16px;}
-.sa-header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px;}
-.sa-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.sa-filters{display:grid;grid-template-columns:repeat(6,minmax(160px,1fr));gap:8px;flex:1}
-@media(max-width:1100px){.sa-filters{grid-template-columns:repeat(3,minmax(160px,1fr))}}
-@media(max-width:720px){.sa-filters{grid-template-columns:repeat(2,minmax(150px,1fr))}}
-input.sa,select.sa{height:40px;border-radius:10px;border:1px solid var(--border-color);
-  background:rgba(255,255,255,.06);color:var(--tg-text);padding:8px 10px;font-size:14px}
-.table-wrap{overflow:auto;border-radius:12px;border:1px solid var(--border-color)}
-.table-wrap table{min-width:1000px}
-
-/* === Подписи к полям ввода в суперадмине === */
-.cf-field {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.cf-field label {
-  font-size: 12px;
-  color: var(--tg-hint);
-  margin-left: 2px;
-}
-
-.cf-field input,
-.cf-field select,
-.cf-field textarea {
-  background: rgba(255,255,255,0.06);
-  color: var(--tg-text);
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  padding: 8px 10px;
-  font-size: 14px;
-  outline: none;
-}
-
-.cf-field input:focus,
-.cf-field select:focus,
-.cf-field textarea:focus {
-  box-shadow: 0 0 0 3px rgba(10,132,255,0.25);
-}
-
-/* — компактнее карточка фильтра — */
-.modal-card.auth {
-  width: min(340px, 92vw);    /* было 360 — сделали чуть уже */
-  padding: 16px 16px 12px;    /* поменьше отступы */
-}
-.modal-card.auth .title {
-  margin: 0 0 10px;
-  text-align: center;
-}
-.modal-card.auth .grid-2 {
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-.modal-card.auth .actions {
-  margin-top: 14px;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 10px;
-}
-
-/* — мини-слайдер в «Подробнее» — */
-.camp-gal {
-  position: relative;
-  margin: 8px 0 0;
-  border: 1px solid var(--border-color);
-  border-radius: 14px;
-  overflow: hidden;
-  background: rgba(255,255,255,.05);
-}
-.camp-gal .viewport {
-  display: flex;
-  transition: transform .25s ease;
-  will-change: transform;
-}
-.camp-gal img {
-  height: 180px;
-  object-fit: cover;
-  display: block;
-}
-.camp-gal .nav {
-  position: absolute; top: 50%; transform: translateY(-50%);
-  width: 36px; height: 36px; border-radius: 50%;
-  border: 1px solid var(--border-color);
-  background: var(--card-bg); color: var(--tg-text);
-  display: grid; place-items: center; cursor: pointer;
-}
-.camp-gal .nav.prev { left: 8px; }
-.camp-gal .nav.next { right: 8px; }
-.camp-gal .nav:active { transform: translateY(-50%) scale(.96); }
-
-/* === Балун карты с фото === */
-.camp-popup {
-  min-width: 280px;
-  text-align: center;
-}
-.camp-popup .title {
-  font-weight: 800;
-  font-size: 20px;
-  margin: 4px 0 6px;
-}
-.camp-popup .cover {
-  width: 100%;
-  height: 120px;
-  object-fit: cover;
-  border-radius: 10px;
-  border: 1px solid var(--border-color);
-  margin-bottom: 8px;
-}
-.camp-popup .price {
-  color: var(--tg-hint);
-  margin: 6px 0 10px;
-}
-
-/* кнопка в балуне — как в приложении */
-.camp-popup .button { font-size: 14px; padding: 9px 14px; }
-
-/* === Слайдер в модалке «Подробнее» — читаемые стрелки + защита от «прокрутить всё сразу» === */
-.camp-gal img { width: 100%; height: 200px; object-fit: cover; }
-.camp-gal .nav { width: 40px; height: 40px; font-weight: 900; font-size: 18px; opacity: .95; }
-.camp-gal .nav:hover { box-shadow: 0 6px 18px rgba(0,0,0,.35); }
-.camp-gal .nav.disabled { pointer-events: none; opacity: .4; }
-
-/* === Фильтр бронирования — компактный === */
-.modal-card.auth .grid-2 { grid-template-columns: 1fr 1fr; gap: 10px; }
-.modal-card.auth .title { text-align: center; margin-bottom: 10px; }
-.modal-card.auth input[type="date"]::placeholder { color: transparent; } /* скрываем дд.мм.ггг */
-
-/* кнопки в балуне */
-.button.green {
-  background: #22c55e;
-  border-color: #22c55e;
-  color: #fff;
-}
-.button.green:hover { background: #2ed868; }
-
-/* плавная анимация загрузки */
-@keyframes spinEmoji {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-.loading-emoji {
-  display:inline-block;
-  animation: spinEmoji 1s linear infinite;
-}
-
-/* === КНОПКИ ДЛЯ БАЛУНА/МОДАЛОК === */
-.btn {
+.button{
   display:inline-flex; align-items:center; justify-content:center;
-  padding:10px 16px; border-radius:14px; font-weight:700;
-  border:none; cursor:pointer; box-shadow:0 6px 18px rgba(0,0,0,.18);
+  padding:10px 18px; border-radius:14px; border:none; cursor:pointer; font-weight:700;
+  transition:transform .12s ease, opacity .12s ease;
 }
-.btn-primary { background:#2b7cff; color:#fff; }
-.btn-success { background:#26c281; color:#0c1410; }
-.btn-light   { background:#ffffff; color:#0f1216; }
+.button:active{transform:scale(.97);}
+.button.primary{background:var(--tg-button); color:var(--tg-button-text);}
+.button.ghost{background:transparent; color:var(--tg-text); border:1px solid var(--border-color);}
 
-.popup-photo{
-  width:100%; height:160px; object-fit:cover; border-radius:10px; display:block;
-}
+.row.gap{display:flex; gap:10px; flex-wrap:wrap;}
 
-/* читаемее текст в модалке «Подробнее» */
-.modal-card.auth .title { color: #fff; }
-.modal-card.auth .muted, .modal-card.auth p { color: #d1d5db; }
+/* ====================== TABBAR ====================== */
+.tabbar{
+  position:fixed; left:0; right:0;
+  bottom:calc(env(safe-area-inset-bottom) + var(--tabbar-offset));
+  padding:10px 12px calc(env(safe-area-inset-bottom) + 10px);
+  background:var(--card-bg);
+  backdrop-filter:saturate(1.2) blur(10px);
+  border-top:1px solid var(--border-color);
+  display:flex; gap:8px; align-items:stretch;
+  z-index:1000;
+}
+.tabbar .tab{flex:1 1 0; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; color:#cfd6df;}
+.tabbar .tab .icon{width:28px; height:28px; display:flex; align-items:center; justify-content:center;}
+.tabbar .tab .icon svg, .tabbar .tab .icon img{width:28px; height:28px; display:block;}
+.tabbar .tab .label{font-size:12px; white-space:nowrap; opacity:.85; text-align:center;}
+.tabbar .tab.active{color:var(--blue);}
+body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 
-/* --- Компактный фильтр --- */
-.modal-card.auth {
-  width: min(340px, 92vw);
-  padding: 18px 16px;
-  background: var(--tg-bg, #1a1d24);
-  color: #fff;
+/* ====================== MODAL ====================== */
+.modal{
+  display:none; position:fixed; inset:0;
+  backdrop-filter:blur(12px); background:rgba(0,0,0,0.45);
+  z-index:50; align-items:center; justify-content:center;
 }
-.modal-card.auth label {
-  font-size: 13px;
-  color: #d1d5db;
+.modal.show{display:grid; animation:fadeIn .15s ease;}
+@keyframes fadeIn{from{opacity:0} to{opacity:1}}
+.modal-card{
+  background:var(--card-bg); border:1px solid var(--border-color); border-radius:20px;
+  padding:20px; width:min(440px, 90vw); max-height:85vh; overflow:auto;
+  box-shadow:0 6px 25px rgba(0,0,0,.4);
+  transform:scale(.97); animation:scaleIn .2s ease forwards;
 }
-.modal-card.auth input, .modal-card.auth select {
-  width: 100%;
-  height: 40px;
-  border-radius: 10px;
-  border: 1px solid #2d313b;
-  background: #11151a;
-  color: #fff;
-  padding: 0 10px;
-}
+@keyframes scaleIn{to{transform:scale(1)}}
 
-/* --- Параметры базы в "Подробнее" --- */
-.param-card {
-  border: 1px solid #333;
-  border-radius: 10px;
-  padding: 6px 10px;
-  margin-top: 4px;
-  background: rgba(255,255,255,.05);
-  display: flex;
-  justify-content: space-between;
-}
-.param-card span {
-  color: #9aa3af;
+/* Узкая «оболочка» именно для фильтра — внешнюю прозрачную рамку ужимаем */
+.modal-card.booking-shell{
+  background:transparent; border:none; box-shadow:none; padding:0; width:auto; max-width:none;
 }
 
-/* === [custom svg icons in tabbar] === */
-.tabbar .tab { color: #cfd6df; } /* неактивные */
-.tabbar .tab.active { color: var(--blue); } /* активная вкладка — берёт фирменный синий */
-
-.tabbar .tab .icon {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.tabbar .tab .icon svg,
-.tabbar .tab .icon img {
-  width: 28px;
-  height: 28px;
-  display: block;
-}
-
-/* чуть контраста у подписи — уже было, но подстрахуемся */
-.tabbar .tab .label { opacity: .85; }
-
-/* === iOS-like «glass» map buttons === */
-:root{
-  --btn-fg: #0f1115;
-  --btn-bg: rgba(255,255,255,.88);
-  --btn-border: rgba(0,0,0,.08);
-  --btn-shadow: 0 10px 22px rgba(0,0,0,.18), 0 2px 6px rgba(0,0,0,.08);
-  --btn-inset: inset 0 1px 0 rgba(255,255,255,.55);
-}
-.theme-dark :root, .theme-dark{
-  --btn-fg: #f4f6fb;
-  --btn-bg: rgba(20,22,26,.72);
-  --btn-border: rgba(255,255,255,.08);
-  --btn-shadow: 0 10px 22px rgba(0,0,0,.45), 0 2px 6px rgba(0,0,0,.35);
-  --btn-inset: inset 0 1px 0 rgba(255,255,255,.08);
-}
-
-/* контейнеры самих круглых кнопок */
+/* ====================== MAP ====================== */
+.map-wrap{position:relative; height:calc(100vh - 110px); margin:16px; border-radius:16px; overflow:hidden;}
+#map{position:absolute; inset:0; z-index:0;}
+.map-ui{position:absolute; inset:0; pointer-events:none; z-index:500;}
 .map-btn{
-  width: 56px; height: 56px;
-  border-radius: 16px;
-  background: var(--btn-bg);
-  color: var(--btn-fg);
-  border: 1px solid var(--btn-border);
-  box-shadow: var(--btn-shadow), var(--btn-inset);
-  backdrop-filter: saturate(180%) blur(18px);
-  -webkit-backdrop-filter: saturate(180%) blur(18px);
-  display: inline-flex;
-  align-items: center; justify-content: center;
-  transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
+  pointer-events:auto; position:absolute; bottom:18px; border:none; background:none; box-shadow:none;
+  padding:0; cursor:pointer; transition:transform .12s ease;
+}
+.map-btn.left{left:18px;}
+.map-btn.right{right:18px;}
+.map-btn:hover{background:none; box-shadow:none;}
+.map-btn:active{transform:scale(.96);}
+.map-ui .map-btn .tg-emoji{width:64px; height:64px; display:block;}
+/* календарь чуть меньше компаса */
+#openBookingFilter .tg-emoji{transform:scale(0.74); transform-origin:center center;}
+
+/* Anti-overscroll (не отдаём жесты «шторке» Telegram) */
+html, body, .tg-app, .map-wrap, #map{overscroll-behavior:none;}
+#map, .leaflet-container{touch-action:pan-x pan-y;}
+
+/* ====================== CLUSTERS & POPUPS ====================== */
+.camp-popup{min-width:280px; text-align:center;}
+.camp-popup .title{font-weight:800; font-size:20px; margin:4px 0 6px;}
+.camp-popup .cover{width:100%; height:120px; object-fit:cover; border-radius:10px; border:1px solid var(--border-color); margin-bottom:8px;}
+.camp-popup .price{color:var(--tg-hint); margin:6px 0 10px;}
+.camp-popup .button{font-size:14px; padding:9px 14px;}
+.camp-popup .button.ghost{border:1px solid var(--border-color);}
+
+.cl-marker{
+  border-radius:999px; background:rgba(10,132,255,.15);
+  border:1px solid rgba(10,132,255,.5); box-shadow:0 6px 18px rgba(0,0,0,.35);
+  display:flex; align-items:center; justify-content:center;
+}
+.cl-marker .cl-inner{color:#fff; font-weight:800; font-size:14px;}
+.cl-medium{width:52px!important; height:52px!important;}
+.cl-large{width:60px!important; height:60px!important;}
+
+.emoji-marker{display:flex; align-items:flex-end; justify-content:center;}
+.emoji-marker.std{width:36px; height:44px;}
+.emoji-marker.vip{width:72px; height:88px;}
+.emoji-marker.std .emoji-pin{font-size:22px; line-height:1; transform:translateY(-1px);}
+.emoji-marker.vip .emoji-pin{font-size:44px; line-height:1; transform:translateY(-2px);}
+
+/* ====================== MINI GALLERY ====================== */
+.camp-gal{position:relative; margin:8px 0 0; border:1px solid var(--border-color); border-radius:14px; overflow:hidden; background:rgba(255,255,255,.05);}
+.camp-gal .viewport{display:flex; transition:transform .25s ease; will-change:transform;}
+.camp-gal img{width:100%; height:200px; object-fit:cover; display:block;}
+.camp-gal .nav{
+  position:absolute; top:50%; transform:translateY(-50%);
+  width:40px; height:40px; border-radius:50%;
+  border:1px solid var(--border-color); background:var(--card-bg); color:var(--tg-text);
+  display:grid; place-items:center; cursor:pointer; font-weight:900; font-size:18px; opacity:.95;
+}
+.camp-gal .nav.prev{left:8px;}
+.camp-gal .nav.next{right:8px;}
+.camp-gal .nav.disabled{pointer-events:none; opacity:.4;}
+.camp-gal .nav:hover{box-shadow:0 6px 18px rgba(0,0,0,.35);}
+.popup-photo{width:100%; height:160px; object-fit:cover; border-radius:10px; display:block;}
+
+/* ====================== GENERIC BUTTONS (INSIDE POPUPS/MODALS) ====================== */
+.btn{display:inline-flex; align-items:center; justify-content:center; padding:10px 16px; border-radius:14px; font-weight:700; border:none; cursor:pointer; box-shadow:0 6px 18px rgba(0,0,0,.18);}
+.btn-primary{background:#2b7cff; color:#fff;}
+.btn-success{background:#26c281; color:#0c1410;}
+.btn-light{background:#ffffff; color:#0f1216;}
+.button.green{background:#22c55e; border-color:#22c55e; color:#fff;}
+.button.green:hover{background:#2ed868;}
+
+/* ====================== BOOKING FILTER (COMPACT 2×2) ====================== */
+/* оболочка фильтра внутри модалки — узкая внешняя рамка */
+.modal-card.booking-shell .booking-card{
+  background:rgba(17,19,23,.92);
+  color:#e5e7eb;
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:14px;
+  width:min(290px, 86vw);
+  padding:12px;
+  box-shadow:0 20px 60px rgba(0,0,0,.45);
+}
+.modal-card.booking-shell .booking-title{
+  font-weight:800; font-size:16px; margin:4px 2px 10px; text-align:center;
 }
 
-/* «тактильный» отклик */
-.map-btn:active{
-  transform: translateY(1px) scale(.98);
-  box-shadow: 0 6px 14px rgba(0,0,0,.12);
+/* сетка 2×2 одинаковых колонок */
+.modal-card.booking-shell .booking-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+.modal-card.booking-shell .bk-field{display:grid; gap:6px;}
+.modal-card.booking-shell .bk-field>span{color:#8a8f98; font-size:12px;}
+
+/* визуальные «кнопки» */
+.modal-card.booking-shell .bk-input{
+  height:44px; border:1px solid rgba(255,255,255,0.08); border-radius:12px;
+  background:#0f1216; color:#e5e7eb; padding:0 12px; display:flex; align-items:center;
 }
 
-/* аккуратный размер глифа */
-
-.map-btn svg{ width: 24px; height: 24px; display: block; }
-
-/* === map buttons: визуально как иконки в таббаре === */
-.map-btn { color: #cfd6df; }                 /* базовый цвет как у неактивных табов */
-.map-btn svg { width: 26px; height: 26px; }  /* размер вровень с таббаром */
-.map-btn:active { color: var(--blue); }      /* при тапе подсвечиваемся фирменным синим */
-
-/* Иконки на карте — те же пропорции, что в таббаре */
-.map-btn svg { width: 26px; height: 26px; display: block; }
-
-/* Цвет как у неактивных табов; на тап — фирменный синий */
-.map-btn { color: #cfd6df; }
-.map-btn:active { color: var(--blue); }
-
-/* Единые emoji-кнопки на карте (svg-эмоджи как картинки) */
-.map-btn .emoji-btn{
-  width: 26px;
-  height: 26px;
-  display: block;
-}
-
-/* === обновлённые кнопки карты (эмоджи без фона) === */
-
-/* убираем фон, рамку, тени */
-.map-btn {
-  position: absolute;
-  bottom: 18px;
-  border: none;
-  background: none;
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  width: auto;
-  height: auto;
-  padding: 0;
-  cursor: pointer;
-  transition: transform .12s ease;
-}
-.map-btn.left  { left: 18px; }
-.map-btn.right { right: 18px; }
-.map-btn:active { transform: scale(0.95); }
-
-/* Единые Twemoji-эмоджи в кнопках карты */
-.map-btn {
-  position: absolute;
-  bottom: 18px;
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  transition: transform .12s ease;
-}
-.map-btn.left  { left: 18px; }
-.map-btn.right { right: 18px; }
-.map-btn:active { transform: scale(.96); }
-
-/* === статичные Telegram-emoji на карте === */
-.map-btn {
-  position: absolute;
-  bottom: 18px;
-  border: none;
-  background: none;
-  box-shadow: none;
-  padding: 0;
-  cursor: pointer;
-  transition: transform .12s ease;
-}
-.map-btn.left  { left: 18px; }
-.map-btn.right { right: 18px; }
-
-/* полностью убираем hover-подложку в Windows */
-.map-btn:hover { background: none; box-shadow: none; }
-.map-btn:active { transform: scale(.96); }
-
-/* размер эмоджи ×2 (было ~34, делаем 68) */
-.map-btn .tg-emoji {
-  width: 68px;
-  height: 68px;
-  display: block;
-}
-
-/* ==== Tourist_03: выравнивание размеров кнопок на карте ==== */
-.map-ui .map-btn .tg-emoji{
-  width: 64px;
-  height: 64px;
-  display: block;
-  /* у разных SVG разный «визуальный вес», поэтому задан общий базовый размер */
-}
-
-/* календарь делаем ещё компактнее, чтобы ровно совпасть с гео-иконкой */
-#openBookingFilter .tg-emoji{
-  transform: scale(0.78);
-  transform-origin: center center;
+/* date — кладём нативный инпут поверх «кнопки»: он прозрачен и ловит тап */
+.modal-card.booking-shell .bk-date{position:relative;}
+/* Дата: кликаем по «кнопке» — мы сами открываем пикер из JS */
+.modal-card.booking-shell .bk-native{
+  position:absolute; inset:0;
+  opacity:0;
+  pointer-events:none;        /* <— важно: клики идут в .bk-input, а JS дергает showPicker() */
+  border:0; background:transparent;
+  width:100%; height:100%;
 }
 
 
-/* ==== Tourist_03: анти-свайпы к телеграм-«шторке» (жёсткий режим) ==== */
-html, body, .tg-app, .map-wrap, #map{
-  overscroll-behavior: none;   /* вообще не «прокидываем» жесты */
+/* селекты под тёмную тему + читабельные options */
+.modal-card.booking-shell .bk-select{
+  height:44px; border:1px solid rgba(255,255,255,0.08); border-radius:12px;
+  background:#0f1216; color:#e5e7eb; padding:0 10px; width:100%;
+}
+.modal-card.booking-shell .bk-select option{color:#0f1216; background:#ffffff;}
+
+/* нижние кнопки — в линию 1:1:1 */
+.modal-card.booking-shell .booking-actions{
+  display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:10px;
+}
+.modal-card.booking-shell .booking-actions .button{height:42px; border-radius:12px; min-width:0; padding:0 10px;}
+
+/* узкие экраны — не расползаемся */
+@media (max-width:360px){
+  .modal-card.booking-shell .booking-card{width:92vw;}
 }
 
-#map, .leaflet-container{
-  /* Разрешаем нормальные жесты для Leaflet и не даём «прокинуться» наверх за счёт overscroll */
-  touch-action: pan-x pan-y;
-}
-
-
-
+/* ====================== MISC ====================== */
+.loading-emoji{display:inline-block; animation:spinEmoji 1s linear infinite;}
+@keyframes spinEmoji{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
