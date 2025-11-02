@@ -58,34 +58,67 @@ if (isTG) {
 // Быстрый рендер HTML
 const h = (strings, ...vals) => strings.reduce((s, str, i) => s + str + (vals[i] ?? ''), '');
 
-// --- мини-лоадер для коротких операций (детали базы) ---
+// --- мини-лоадер для коротких операций (детали базы) — БЕЗ текста, только крупные эмодзи ---
+// Фишка: мы можем ПЕРЕХВАТИТЬ этот оверлей под модалку «Подробнее», не удаляя его (чтобы не мигала карта).
 let __miniLoader = null, __miniLoaderTimer = null;
-function showMiniLoader(text = 'Загрузка') {
-  hideMiniLoader();
+
+function showMiniLoader() {
+  // если уже есть — просто перезапустим анимацию эмодзи
+  if (__miniLoader) { startMiniEmojiLoop(); return; }
+
   __miniLoader = document.createElement('div');
-  __miniLoader.className = 'modal show';
+  __miniLoader.className = 'modal show';           // перекрывает всё
+  __miniLoader.id = 't03-mini-loader';
+
+  // полностью прозрачная карточка, по центру только крупное эмодзи
   __miniLoader.innerHTML = `
-    <div class="modal-card" style="text-align:center;padding:18px;min-width:220px">
-      <div style="font-weight:600;font-size:16px">
-        <span id="miniSpin">${text}</span> <span id="miniEmoji">🏖️</span>
+    <div class="modal-card"
+         style="background:transparent;border:none;box-shadow:none;padding:0;min-width:auto">
+      <div style="
+          display:flex;align-items:center;justify-content:center;
+          width:120px;height:120px;margin:auto;
+        ">
+        <span id="miniEmoji" style="font-size:64px;line-height:1;">🏖️</span>
       </div>
     </div>`;
   document.body.appendChild(__miniLoader);
+  startMiniEmojiLoop();
+}
 
+function startMiniEmojiLoop(){
+  if (__miniLoaderTimer) clearInterval(__miniLoaderTimer);
   const list = ['🏖️','⛺','🏕️','🏔️','🌊','🚣‍♀️','🗺️','🌞','🌲','🔥'];
   let i = 0;
-  __miniLoaderTimer = setInterval(()=>{
-    i = (i+1) % list.length;
+  __miniLoaderTimer = setInterval(() => {
+    i = (i + 1) % list.length;
     const el = __miniLoader?.querySelector('#miniEmoji');
     if (el) el.textContent = list[i];
   }, 500);
 }
+
+// Перехват: отдаём наружу готовый .modal, НЕ удаляя узел (чтобы не было просвета карты)
+function takeoverMiniLoaderAsModal(){
+  if (!__miniLoader) return null;
+  if (__miniLoaderTimer) clearInterval(__miniLoaderTimer);
+  __miniLoaderTimer = null;
+
+  // добавим плавное проявление для будущей модалки
+  __miniLoader.style.opacity = '0';
+  __miniLoader.style.transition = 'opacity .12s ease-out';
+  const el = __miniLoader;
+
+  // обнулим ссылку, но сам DOM-узел оставляем — его сразу наполнят контентом «Подробнее»
+  __miniLoader = null;
+  return el;
+}
+
 function hideMiniLoader() {
   if (__miniLoaderTimer) clearInterval(__miniLoaderTimer);
   __miniLoaderTimer = null;
   if (__miniLoader && __miniLoader.parentNode) __miniLoader.parentNode.removeChild(__miniLoader);
   __miniLoader = null;
 }
+
 
 
 // антидребезг для стрелок слайдера
@@ -680,31 +713,25 @@ async function loadCamps() {
     console.error('loadCamps error:', e);
   }
 }
-                                    // <-- закрываем function loadCamps
 
-
-// === Детали базы (модалка «Подробнее») ===
+// === Детали базы (модалка «Подробнее») — жёстко без «мигания» карты ===
 async function openDetails(campId){
-  showMiniLoader('Загрузка');
+  // 1) показываем эмодзи-лоадер
+  showMiniLoader();
 
   try {
-    // тянем базу и её фото полностью
+    // 2) тянем данные параллельно
     const [camp, photos] = await Promise.all([
       fetch(`/api/camps/${campId}`).then(r => r.json()),
       fetch(`/api/camps/${campId}/photos`).then(r => r.json()).catch(()=>[])
     ]);
-    hideMiniLoader();
 
-    // список картинок: галерея базы или главная
     const picUrls = (photos && photos.length)
       ? photos.map(p => p.url)
       : (camp.photo_main ? [camp.photo_main] : []);
 
-    // читаемое описание
     const descHtml = (camp.description || 'Описание пока отсутствует').replace(/\n/g,'<br>');
 
-    // основные параметры с единицами (если каких-то полей нет — покажем «—»)
-    // параметры базы с рамками
     const paramsHtml = [
       ['Озеро',                    camp.lake_name || '—'],
       ['Апартаментов',             camp.rooms_count ?? '—'],
@@ -718,10 +745,18 @@ async function openDetails(campId){
       <div class="param-card"><span>${k}</span><b style="color:#fff">${v}</b></div>
     `).join('');
 
+    // 3) НЕ удаляем лоадер — перехватываем его DOM и превращаем в модалку
+    let modal = takeoverMiniLoaderAsModal();
+    if (!modal) {
+      // на случай, если лоадер уже закрыт — создадим обычную модалку
+      modal = document.createElement('div');
+      modal.className = 'modal show';
+      modal.style.opacity = '0';
+      modal.style.transition = 'opacity .12s ease-out';
+      document.body.appendChild(modal);
+    }
 
-    // собираем модалку
-    const modal = document.createElement('div');
-    modal.className = 'modal show';
+    // наполняем контентом «Подробнее» поверх той же подложки (карта не видна ни на кадр)
     modal.innerHTML = `
       <div class="modal-card auth">
         <div class="title" style="text-align:center">${camp.name || 'База'}</div>
@@ -740,23 +775,29 @@ async function openDetails(campId){
         </div>
       </div>
     `;
-    document.body.appendChild(modal);
 
-    // инициализируем слайдер (без sliderId, всё внутри модалки)
+    // 4) инициализация слайдера
     const vp = modal.querySelector('.camp-gal .viewport');
     if (vp) {
       const imgs = vp.querySelectorAll('img');
       let i = 0;
       function go(k){ i=(k+imgs.length)%imgs.length; vp.style.transform = `translateX(${-i*100}%)`; }
       if (imgs.length > 1) {
-        modal.querySelector('.camp-gal .prev').onclick = ()=> go(i-1);
-        modal.querySelector('.camp-gal .next').onclick = ()=> go(i+1);
+        const prev = modal.querySelector('.camp-gal .prev');
+        const next = modal.querySelector('.camp-gal .next');
+        if (prev) prev.onclick = ()=> go(i-1);
+        if (next) next.onclick = ()=> go(i+1);
       }
       vp.style.width = `${imgs.length * 100}%`;
       imgs.forEach(img => img.style.width = `${100 / imgs.length}%`);
       go(0);
     }
+
+    // 5) мягко проявляем модалку (она уже перекрывает карту)
+    requestAnimationFrame(()=> { modal.style.opacity = '1'; });
+
   } catch (e) {
+    // на ошибке аккуратно закрываем лоадер
     hideMiniLoader();
     console.error(e);
     showModal(`
@@ -766,6 +807,8 @@ async function openDetails(campId){
       </div>`);
   }
 }
+
+
 
 // Глобальные обработчики, на которые ссылается HTML в балуне
 window.__showCampBrief = function(campId) {
