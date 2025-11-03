@@ -714,41 +714,19 @@ async function loadCamps() {
   }
 }
 
-// === Детали базы (модалка «Подробнее») — жёстко без «мигания» карты ===
+// === Детали базы (модалка «Подробнее») — стабильные параметры, галерея со стрелками/свайпом ===
 async function openDetails(campId){
-  // 1) показываем эмодзи-лоадер
   showMiniLoader();
-
   try {
-    // 2) тянем данные параллельно
     const [camp, photos] = await Promise.all([
       fetch(`/api/camps/${campId}`).then(r => r.json()),
       fetch(`/api/camps/${campId}/photos`).then(r => r.json()).catch(()=>[])
     ]);
-
-    const picUrls = (photos && photos.length)
-      ? photos.map(p => p.url)
-      : (camp.photo_main ? [camp.photo_main] : []);
-
+    const pics = (photos && photos.length) ? photos.map(p=>p.url) : (camp.photo_main ? [camp.photo_main] : []);
     const descHtml = (camp.description || 'Описание пока отсутствует').replace(/\n/g,'<br>');
 
-    const paramsHtml = [
-      ['Озеро',                    camp.lake_name || '—'],
-      ['Апартаментов',             camp.rooms_count ?? '—'],
-      ['BBQ общая',               `${camp.bbq_shared_count ?? 0} шт.`],
-      ['BBQ индивидуальная',      `${camp.bbq_count ?? 0} шт.`],
-      ['Баня',                    `${camp.bath_count ?? 0} шт.`],
-      ['Сауна',                   `${camp.sauna_count ?? 0} шт.`],
-      ['Бассейн общий',           `${camp.pools_shared_count ?? 0} шт.`],
-      ['Бассейн индивидуальный',  `${camp.pools_private_count ?? 0} шт.`],
-    ].map(([k,v]) => `
-      <div class="param-card"><span>${k}</span><b style="color:#fff">${v}</b></div>
-    `).join('');
-
-    // 3) НЕ удаляем лоадер — перехватываем его DOM и превращаем в модалку
     let modal = takeoverMiniLoaderAsModal();
     if (!modal) {
-      // на случай, если лоадер уже закрыт — создадим обычную модалку
       modal = document.createElement('div');
       modal.className = 'modal show';
       modal.style.opacity = '0';
@@ -756,49 +734,113 @@ async function openDetails(campId){
       document.body.appendChild(modal);
     }
 
-    // наполняем контентом «Подробнее» поверх той же подложки (карта не видна ни на кадр)
     modal.innerHTML = `
-      <div class="modal-card auth">
-        <div class="title" style="text-align:center">${camp.name || 'База'}</div>
-        <div style="margin-top:6px;color:#d1d5db;text-align:center;line-height:1.35">${descHtml}</div>
+      <div class="modal-card details">
+        <div class="details-title">${camp.name || 'База'}</div>
+        <div class="details-desc">${descHtml}</div>
 
-        <div class="camp-gal" style="margin-top:10px">
-          <div class="viewport">${picUrls.map(u=>`<img src="${u}">`).join('')}</div>
-          ${picUrls.length>1 ? '<div class="nav prev">‹</div><div class="nav next">›</div>' : ''}
+        <div class="details-body">
+          <div class="camp-gal">
+            <div class="viewport">${pics.map(u => `<img src="${u}" draggable="false">`).join('')}</div>
+            <div class="gal-arrow left"  id="galPrev">‹</div>
+            <div class="gal-arrow right" id="galNext">›</div>
+            <div class="gal-counter" id="galCounter">1/${Math.max(pics.length,1)} →</div>
+          </div>
+
+          <!-- Сетка 2×4: параметр + значение РЯДОМ, ячейки в два столбца -->
+          <div class="param-list grid2">
+            ${[
+              ['Озеро',                   camp.lake_name || '—'],
+              ['Апартаментов',            camp.rooms_count ?? '—'],
+              ['BBQ общая',              `${camp.bbq_shared_count ?? 0} шт.`],
+              ['BBQ личная',             `${camp.bbq_count ?? 0} шт.`],                // было «индивидуальная»
+              ['Баня',                   `${camp.bath_count ?? 0} шт.`],
+              ['Сауна',                  `${camp.sauna_count ?? 0} шт.`],
+              ['Бассейн общий',          `${camp.pools_shared_count ?? 0} шт.`],
+              ['Бассейн личный',         `${camp.pools_private_count ?? 0} шт.`]      // было «индивидуальный»
+            ].map(([k,v]) => `
+              <div class="param-item">
+                <div class="param-row"><div class="k">${k}</div><div class="v">${v}</div></div>
+              </div>
+            `).join('')}
+          </div>
+
         </div>
 
-        <div style="margin-top:10px">${paramsHtml}</div>
-
-        <div class="actions" style="margin-top:14px;display:flex;gap:10px;justify-content:center;">
-          <button class="button ghost" onclick="document.body.removeChild(this.closest('.modal'))">Назад</button>
+        <div class="actions" style="display:flex;gap:10px;justify-content:center;">
           <button class="button" style="background:#22c55e;border-color:#22c55e;color:#fff" onclick="openBookingFilterModal()">Забронировать</button>
+          <button class="button ghost" onclick="document.body.removeChild(this.closest('.modal'))">Назад</button>
         </div>
       </div>
     `;
 
-    // 4) инициализация слайдера
+    // ---- Мини-галерея (стрелки + свайп, без проскока) ----
     const vp = modal.querySelector('.camp-gal .viewport');
+    const imgs = vp ? vp.querySelectorAll('img') : [];
+    const btnPrev = modal.querySelector('#galPrev');
+    const btnNext = modal.querySelector('#galNext');
+    const counter = modal.querySelector('#galCounter');
+
+    // фикс ленты: ширина = N*100%, каждый кадр занимает 100% окна
+    const N = Math.max(imgs.length, 1);
     if (vp) {
-      const imgs = vp.querySelectorAll('img');
-      let i = 0;
-      function go(k){ i=(k+imgs.length)%imgs.length; vp.style.transform = `translateX(${-i*100}%)`; }
-      if (imgs.length > 1) {
-        const prev = modal.querySelector('.camp-gal .prev');
-        const next = modal.querySelector('.camp-gal .next');
-        if (prev) prev.onclick = ()=> go(i-1);
-        if (next) next.onclick = ()=> go(i+1);
-      }
-      vp.style.width = `${imgs.length * 100}%`;
-      imgs.forEach(img => img.style.width = `${100 / imgs.length}%`);
-      go(0);
+      vp.style.width = `${N * 100}%`;
+      imgs.forEach(img => { img.style.width = `${100 / N}%`; });
     }
 
-    // 5) мягко проявляем модалку (она уже перекрывает карту)
-    requestAnimationFrame(()=> { modal.style.opacity = '1'; });
+    let i = 0;
+    let locked = false;     // защита от «пролёта»
+    function updateUI(){
+      const left  = (i > 0)     ? '← ' : '';
+      const right = (i < N - 1) ? ' →' : '';
+      counter.textContent = `${left}${i+1}/${N}${right}`;
+      btnPrev.classList.toggle('disabled', i === 0);
+      btnNext.classList.toggle('disabled', i === N-1);
+    }
+    function go(to){
+      if (!vp || locked) return;
+      const clamped = Math.max(0, Math.min(N-1, to));
+      if (clamped === i) { updateUI(); return; }
+      locked = true;                      // пока идёт анимация — блокируем дальнейшие переходы
+      i = clamped;
+      vp.style.transform = `translateX(${-i*100}%)`;
+      // снимем блокировку по окончании CSS-перехода (fallback — таймер)
+      const unlock = ()=>{ locked = false; vp.removeEventListener('transitionend', unlock); updateUI(); };
+      vp.addEventListener('transitionend', unlock);
+      setTimeout(unlock, 350);
+    }
+    const throttledPrev = throttle(()=> go(i-1), 260);
+    const throttledNext = throttle(()=> go(i+1), 260);
+    if (btnPrev) btnPrev.onclick = throttledPrev;
+    if (btnNext) btnNext.onclick = throttledNext;
+
+    // свайпы
+    if (vp) {
+      let sx = 0, dx = 0, moving = false;
+      const THRESH = 40;
+      vp.addEventListener('touchstart', (e)=>{ if(!e.touches[0])return; sx = e.touches[0].clientX; dx=0; moving=true; }, {passive:true});
+      vp.addEventListener('touchmove',  (e)=>{ if(!moving||!e.touches[0])return; dx = e.touches[0].clientX - sx; }, {passive:true});
+      vp.addEventListener('touchend',   ()=>{
+        if (!moving) return; moving=false;
+        if (Math.abs(dx) > THRESH){
+          if (dx < 0) throttledNext(); else throttledPrev();
+        }
+      }, {passive:true});
+
+      // клик по изображению — открываем полноэкранную галерею
+      vp.addEventListener('click', ()=> openFullscreenGallery(pics, i));
+    }
+
+        updateUI();
+
+        // Всегда 2 колонки. Подгоняем размеры шрифтов/отступов под ширину карточки.
+        applyTwoColScale(modal);
+
+        requestAnimationFrame(()=> { modal.style.opacity = '1'; });
 
   } catch (e) {
-    // на ошибке аккуратно закрываем лоадер
     hideMiniLoader();
+
     console.error(e);
     showModal(`
       <div class="card">
@@ -808,6 +850,111 @@ async function openDetails(campId){
   }
 }
 
+// === Масштабирование «двухколоночной» сетки: всегда 2 колонки,
+// но шрифт и отступы автоматом подстраиваются под ширину карточки.
+function applyTwoColScale(root){
+  const card = root.querySelector('.modal-card.details');
+  if (!card) return;
+
+  // реальная ширина карточки (с учётом WebView/вставки в Telegram)
+  const w = card.clientWidth || 360;
+
+  // Базовые значения (как в :root)
+  const base = {
+    font: 13,    // px
+    gap:  8,     // px
+    px:   11,    // горизонтальные отступы
+    py:   5      // вертикальные отступы
+  };
+
+  // Считаем аккуратный коэффициент: 0.85 … 1.05 в зависимости от ширины
+  // 420px ~ «комфортная ширина», 300px — очень узко, 520px — просторно
+  const k = Math.max(0.85, Math.min(1.05, w / 420));
+
+  // Применяем «ручки» ТОЛЬКО для этой карточки (локальные CSS-переменные)
+  card.style.setProperty('--param-font', `${Math.round(base.font * k)}px`);
+  card.style.setProperty('--param-gap',  `${Math.round(base.gap  * k)}px`);
+  card.style.setProperty('--param-px',   `${Math.round(base.px   * k)}px`);
+  card.style.setProperty('--param-py',   `${Math.round(base.py   * k)}px`);
+
+  // Поддержка изменения размера/поворота экрана
+  const ro = new ResizeObserver(()=> applyTwoColScale(root));
+  ro.observe(card);
+  window.addEventListener('resize', ()=> applyTwoColScale(root), { passive:true });
+}
+
+
+// === Полноэкранная галерея (свайп + стрелки + кнопки «Забронировать / Назад») ===
+function openFullscreenGallery(pics, startIndex=0){
+  if (!Array.isArray(pics) || pics.length === 0) return;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'fs-modal';
+  wrap.innerHTML = `
+    <div class="fs-viewport">
+      <div class="fs-track">
+        ${pics.map(u => `<img src="${u}" draggable="false">`).join('')}
+      </div>
+    </div>
+    <div class="fs-ui">
+      <div class="fs-counter" id="fsCounter">${Math.min(startIndex+1,pics.length)}/${pics.length}</div>
+      <div class="fs-actions">
+        <button class="button" style="background:#22c55e;border-color:#22c55e;color:#fff" id="fsBook">Забронировать</button>
+        <button class="button ghost" id="fsBack">Назад</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(wrap);
+
+  const track = wrap.querySelector('.fs-track');
+  const imgs  = wrap.querySelectorAll('.fs-track img');
+  const cnt   = wrap.querySelector('#fsCounter');
+  let i = Math.max(0, Math.min(pics.length-1, startIndex));
+  let locked = false;
+
+  function update(){ cnt.textContent = `${i+1}/${pics.length}`; }
+  function go(to){
+    if (locked) return;
+    const n = pics.length;
+    i = Math.max(0, Math.min(n-1, to));
+    locked = true;
+    track.style.transform = `translateX(${-i*100}vw)`;
+    const unlock = ()=>{ locked = false; track.removeEventListener('transitionend', unlock); update(); };
+    track.addEventListener('transitionend', unlock);
+    setTimeout(unlock, 350);
+  }
+
+  // начальная ширина и позиция
+  track.style.width = `${pics.length * 100}vw`;
+  imgs.forEach(el => el.style.width = '100vw');
+  go(i);
+
+  // свайпы
+  let sx = 0, dx = 0, moving = false;
+  const THRESH = 50;
+  track.addEventListener('touchstart', (e)=>{ if(!e.touches[0])return; sx = e.touches[0].clientX; dx=0; moving=true; }, {passive:true});
+  track.addEventListener('touchmove',  (e)=>{ if(!moving||!e.touches[0])return; dx = e.touches[0].clientX - sx; }, {passive:true});
+  track.addEventListener('touchend',   ()=>{
+    if (!moving) return; moving=false;
+    if (Math.abs(dx) > THRESH){ if (dx < 0) go(i+1); else go(i-1); }
+  }, {passive:true});
+
+  // клики по половинам экрана (десктоп)
+  track.addEventListener('click', (e)=>{
+    const rect = track.getBoundingClientRect();
+    const leftHalf = (e.clientX - rect.left) < rect.width/2;
+    if (leftHalf) go(i-1); else go(i+1);
+  });
+
+  // кнопки
+  wrap.querySelector('#fsBook').onclick = ()=> { closeFullscreen(); openBookingFilterModal(); };
+  wrap.querySelector('#fsBack').onclick = closeFullscreen;
+
+  // закрытие по клику на тёмный фон за пределами трека
+  wrap.addEventListener('click', (e)=>{ if (e.target === wrap) closeFullscreen(); });
+
+  function closeFullscreen(){ if (wrap && wrap.parentNode) wrap.parentNode.removeChild(wrap); }
+}
 
 
 // Глобальные обработчики, на которые ссылается HTML в балуне

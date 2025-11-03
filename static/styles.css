@@ -1,4 +1,3 @@
-/* ====================== Tourist_03 — BASE THEME ====================== */
 :root{
   --tg-bg: var(--tg-theme-bg-color, #0d0d0d);
   --tg-text: var(--tg-theme-text-color, #fff);
@@ -11,10 +10,21 @@
   --border-color: rgba(255,255,255,0.08);
   --blue: var(--tg-link);
   --tabbar-offset: 12px;
+
+  /* ===== РУЧКИ ДЛЯ СЕТКИ ПАРАМЕТРОВ (меняешь ТОЛЬКО их) ===== */
+  --param-font: 13px;           /* размер текста */
+  --param-gap: 8px;             /* РАССТОЯНИЕ между названием и значением */
+  --param-px: 11px;             /* горизонтальные отступы строки */
+  --param-py: 5px;              /* вертикальные отступы строки */
+  --param-min-h: 32px;          /* минимальная высота строки */
+  --param-line: 1.2;            /* межстрочный в строке */
+  --param-value-weight: 600;    /* жирность чисел справа */
+  --param-value-min: 84px;      /* минимальная ширина правой колонки */
 }
 
 /* ====================== GLOBAL LAYOUT ====================== */
 html, body{
+
   height:100%;
   margin:0;
   background:var(--tg-bg);
@@ -80,11 +90,205 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 @keyframes fadeIn{from{opacity:0} to{opacity:1}}
 .modal-card{
   background:var(--card-bg); border:1px solid var(--border-color); border-radius:20px;
-  padding:20px; width:min(440px, 90vw); max-height:85vh; overflow:auto;
+  padding:20px;
+  width:min(440px, 92vw);              /* чуть уже не делаем — важен box-sizing */
+  max-height:85vh; overflow:auto;
   box-shadow:0 6px 25px rgba(0,0,0,.4);
   transform:scale(.97); animation:scaleIn .2s ease forwards;
+  box-sizing:border-box;               /* ← фикс: паддинги учитываются во width */
 }
 @keyframes scaleIn{to{transform:scale(1)}}
+
+/* Карточка «Подробнее»: всегда помещается в окно, кнопки видны без прокрутки */
+.modal-card.details{
+  width:min(520px, 92vw);              /* меньше, чтобы точно входило в окно */
+  max-height:92vh;
+  display:grid;
+  grid-template-rows: auto auto 1fr auto;
+  gap:10px;
+  padding:16px;
+  box-sizing:border-box;               /* ← без «вываливания» за края */
+}
+
+/* --- Details: применяем «ручки» из :root именно в карточке Подробнее --- */
+.modal-card.details .param-list{ font-size: var(--param-font); }
+
+.modal-card.details .param-row{
+  /* те же отступы/высота, но без сетки — просто рядом */
+  display:inline-flex;
+  flex-wrap:nowrap;
+  gap: var(--param-gap);
+  padding: var(--param-py) var(--param-px);
+  min-height: var(--param-min-h);
+  line-height: var(--param-line);
+}
+
+
+.modal-card.details .param-row .k{ font-size: var(--param-font); }
+.modal-card.details .param-row .v{
+  font-size: var(--param-font);
+  font-weight: var(--param-value-weight);
+  max-width:100%;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+
+
+.details-title{font-weight:800; font-size:20px; text-align:center;}
+.details-desc{color:#d1d5db; text-align:center; line-height:1.35;}
+
+/* область с фото и параметрами прокручивается, кнопки — всегда внизу */
+.details-body{overflow:auto; display:grid; gap:10px;}
+
+/* Параметры: стабильная «яблочная» сетка — не расползается ни на одной ОС */
+.param-list{
+  border:1px solid var(--border-color);
+  border-radius:12px;
+  overflow:hidden;
+  width:100%;
+  box-sizing:border-box;
+}
+
+/* --- Детали: сетка параметров 2×4 (две колонки) --- */
+.param-list.grid2{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  width:100%;
+  border:1px solid var(--border-color);
+  border-radius:12px;
+  overflow:hidden;
+  box-sizing:border-box;
+}
+
+/* каждая ячейка — свой бордер сверху; у левого столбца добавим вертикальный разделитель */
+.param-item{ border-top:1px solid var(--border-color); }
+.param-item:nth-child(-n+2){ border-top:none; }              /* у первой строки нет верхней границы */
+.param-item:nth-child(odd){ border-right:1px solid var(--border-color); } /* вертикальная линия между колонками */
+
+.param-list.grid2{
+  display:grid;
+  grid-template-columns: 1fr 1fr;  /* ← всегда две колонки */
+  width:100%;
+  border:1px solid var(--border-color);
+  border-radius:12px;
+  overflow:hidden;
+  box-sizing:border-box;
+}
+
+
+
+
+/* внутри ячейки — наш уже знакомый «параметр + значение рядом» */
+.param-item .param-row{
+  display:inline-flex;
+  align-items:center;
+  gap: var(--param-gap);
+  padding: var(--param-py) var(--param-px);
+  min-height: var(--param-min-h);
+  line-height: var(--param-line);
+  max-width:100%;
+}
+
+
+/* «Параметр + значение» стоят РЯДОМ, без растяжения на всю строку */
+.param-row{
+  display:inline-flex;           /* ← вместо грид-таблицы */
+  flex-wrap:nowrap;
+  align-items:center;
+  gap: var(--param-gap);         /* расстояние между названием и значением */
+  padding: var(--param-py) var(--param-px);
+  border-top:1px solid var(--border-color);
+  line-height: var(--param-line);
+  min-height: var(--param-min-h);
+  max-width:100%;                /* не вываливаться за карточку */
+}
+
+
+
+.param-row:first-child{border-top:none;}
+
+/* Левый столбец — чуть контрастнее и плотнее, лучше читается */
+.param-row .k{
+  color:#cfd6df;           /* было #9aa3af — повышаем контраст */
+  font-weight:600;         /* подчёркиваем подпись параметра */
+  letter-spacing:.1px;     /* микро-аптечка читабельности */
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  max-width:100%;
+}
+
+/* Значение — белым, чуть тяжелее (но не жирнее заголовков) */
+.param-row .v{
+  color:#ffffff;
+  font-weight:700;         /* было var(--param-value-weight); можно оставить 600–700 */
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  font-variant-numeric:tabular-nums;
+}
+
+
+
+
+/* На всякий случай — плавная прокрутка тела «Подробнее» на мобильных */
+.details-body{
+  overflow:auto;
+  display:grid;
+  gap:10px;
+  -webkit-overflow-scrolling:touch;
+}
+
+/* Фолбэк: если нет Grid — аккуратный Flex без расползания */
+@supports not (display: grid){
+  .param-row{display:flex;justify-content:space-between;gap:12px;}
+  .param-row .k{flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .param-row .v{flex:0 0 min(42%, 180px); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+}
+
+
+
+/* Галерея в карточке: стрелки + счётчик, без проскока */
+.camp-gal{
+  position:relative; margin:8px 0 0;
+  border:1px solid var(--border-color); border-radius:14px; overflow:hidden;
+  background:rgba(255,255,255,.05);
+}
+.camp-gal .viewport{display:flex; transition:transform .25s ease; will-change:transform;}
+.camp-gal img{width:100%; height:clamp(180px, 28vh, 260px); object-fit:cover; display:block; user-select:none;}
+.camp-gal .gal-counter{
+  position:absolute; left:50%; transform:translateX(-50%);
+  bottom:6px; font-size:12px; color:#fff;
+  background:rgba(0,0,0,.45); border-radius:999px; padding:4px 10px; pointer-events:none;
+}
+/* кнопки галереи */
+.gal-arrow{
+  position:absolute; top:50%; transform:translateY(-50%);
+  width:36px; height:36px; border-radius:50%;
+  border:1px solid var(--border-color);
+  background:rgba(17,19,23,.6); color:#fff; display:grid; place-items:center;
+  font-weight:900; font-size:18px; cursor:pointer; user-select:none;
+}
+.gal-arrow.left{ left:8px; }
+.gal-arrow.right{ right:8px; }
+.gal-arrow.disabled{ opacity:.35; pointer-events:none; }
+
+/* Полноэкранная галерея */
+.fs-modal{ position:fixed; inset:0; z-index:9999; display:grid; grid-template-rows: 1fr auto; background:rgba(0,0,0,.9); }
+.fs-viewport{ overflow:hidden; }
+.fs-track{ display:flex; transition:transform .25s ease; height:100%; }
+.fs-track img{ width:100vw; height:100vh; object-fit:contain; background:#000; user-select:none; }
+.fs-ui{
+  display:grid; gap:10px; padding:10px; grid-template-columns:1fr 1fr; align-items:center;
+  background:linear-gradient(0deg, rgba(0,0,0,.65), rgba(0,0,0,.1));
+}
+.fs-counter{ grid-column:1 / -1; justify-self:center; color:#fff; font-size:13px; opacity:.9; }
+.fs-actions .button{ width:100%; height:44px; border-radius:12px; }
+.fs-actions{ grid-column:1 / -1; display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+
+
 
 /* Узкая «оболочка» именно для фильтра — внешнюю прозрачную рамку ужимаем */
 .modal-card.booking-shell{
@@ -106,6 +310,11 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 .map-ui .map-btn .tg-emoji{width:64px; height:64px; display:block;}
 /* календарь чуть меньше компаса */
 #openBookingFilter .tg-emoji{transform:scale(0.74); transform-origin:center center;}
+/* уменьшили геолокацию */
+#geoBtn .tg-emoji {
+  transform:scale(0.83);
+  transform-origin:center center;
+}
 
 /* Anti-overscroll (не отдаём жесты «шторке» Telegram) */
 html, body, .tg-app, .map-wrap, #map{overscroll-behavior:none;}
@@ -217,3 +426,4 @@ html, body, .tg-app, .map-wrap, #map{overscroll-behavior:none;}
 /* ====================== MISC ====================== */
 .loading-emoji{display:inline-block; animation:spinEmoji 1s linear infinite;}
 @keyframes spinEmoji{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+
