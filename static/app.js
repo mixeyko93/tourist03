@@ -131,19 +131,35 @@ const throttle = (fn, ms=220) => {
   };
 };
 
-// === СБОРКА БАЛУНА ДЛЯ БАЗЫ (ЗАМЕНА КОНТЕНТА) ===
+// === СБОРКА БАЛУНА ДЛЯ БАЗЫ (с загрузочным эмоджи вместо фото до onload) ===
 function buildCampPopup(camp){
-  // фото для бaлуна — главная фото базы
-  const img = camp.photo_main ? `<img class="popup-photo" src="${camp.photo_main}" alt="">` : '';
+  const hasPhoto = !!camp.photo_main;
   const priceText = (camp.min_price && Number(camp.min_price) > 0)
       ? `Стоимость от ${camp.min_price}₽ за человека`
       : 'Стоимость уточняйте';
 
   return `
     <div style="min-width:260px;max-width:320px">
-      <div style="font-weight:800;font-size:22px;text-align:center;margin:0 0 8px">${camp.name||''}</div>
-      ${img}
-      <div style="text-align:center;margin:10px 0 12px;color:#6b7280">${priceText}</div>
+      <div style="font-weight:800;font-size:22px;text-align:center;margin:0 0 8px">
+        ${camp.name||''}
+      </div>
+
+      <!-- Крышка с эмоджи-плейсхолдером; фото проявится, когда загрузится -->
+      <div class="popup-cover">
+        <div class="popup-emoji">🏖️</div>
+        ${hasPhoto
+          ? `<img class="popup-photo"
+                  src="${camp.photo_main}"
+                  alt=""
+                  onload="window.__popupCoverLoaded(this)"
+                  onerror="window.__popupCoverError(this)">`
+          : ``}
+      </div>
+
+      <div class="price" style="text-align:center;margin:10px 0 12px;color:#6b7280">
+        ${priceText}
+      </div>
+
       <div style="display:flex;gap:10px;justify-content:center">
         <button class="btn btn-primary" onclick="openDetails(${camp.id})">Подробнее</button>
         <button class="btn btn-success" onclick="openBookingFilterModal()">Забронировать</button>
@@ -151,6 +167,37 @@ function buildCampPopup(camp){
     </div>
   `;
 }
+
+// === Эмоджи-анимация в балуне ===
+function __startPopupEmojiLoop(root){
+  const el = root && root.querySelector && root.querySelector('.popup-emoji');
+  if (!el) return;
+  const list = ['🏖️','⛺','🏕️','🏔️','🌊','🚣‍♀️','🗺️','🌞','🌲','🔥'];
+  let i = 0;
+  // если уже бегает — не запускаем второй раз
+  if (el.__tmr) return;
+  el.__tmr = setInterval(()=>{ i=(i+1)%list.length; el.textContent=list[i]; }, 500);
+}
+function __stopPopupEmojiLoop(root){
+  const el = root && root.querySelector && root.querySelector('.popup-emoji');
+  if (el && el.__tmr){ clearInterval(el.__tmr); el.__tmr = null; }
+}
+
+// вызывается из onload у <img>
+window.__popupCoverLoaded = function(img){
+  const cover = img.closest('.popup-cover');
+  if (!cover) return;
+  cover.classList.add('loaded');      // прячем эмоджи, показываем фото
+  __stopPopupEmojiLoop(cover);
+};
+// если фото не загрузилось — оставляем эмоджи
+window.__popupCoverError = function(img){
+  const cover = img.closest('.popup-cover');
+  if (!cover) return;
+  img.remove();                       // чтобы не оставалась пустая «битая» картинка
+  __startPopupEmojiLoop(cover);
+};
+
 
 // ↓ Делаем функцию, которую вызывает Leaflet при открытии балуна
 function popupHtmlForCamp(camp){
@@ -444,13 +491,27 @@ const topbar = document.getElementById('topbar');
 map.on('popupopen', (e) => {
   try {
     const cont = e && e.popup && e.popup._container ? e.popup._container : null;
-    const h = cont ? cont.offsetHeight : 260;  // приблизительная высота балуна
+
+    // 1) центрирование с учётом высоты балуна
+    const h = cont ? cont.offsetHeight : 260;
     const latlng = e.popup.getLatLng();
     const px = map.project(latlng);
-    px.y -= (h / 2);                            // сдвиг на половину высоты балуна
-    map.panTo(map.unproject(px), { animate: true, duration: 0.35 });
+px.y -= (h / 2);
+map.panTo(map.unproject(px), { animate: true, duration: 0.25 }); // короче анимация = меньше «дёргания»
+
+    // 2) запускаем перебор эмоджи для только что открытого балуна
+    if (cont) __startPopupEmojiLoop(cont);
   } catch(_) {}
 });
+
+// Чистим таймер, когда балун закрыли
+map.on('popupclose', (e) => {
+  try {
+    const cont = e && e.popup && e.popup._container ? e.popup._container : null;
+    if (cont) __stopPopupEmojiLoop(cont);
+  } catch(_) {}
+});
+
 
 
 // ==== AUTH: простая модель на токенах ====
@@ -487,11 +548,16 @@ function showModal(html){ modalCard.innerHTML = html; modal.style.display = 'gri
 function closeModal(){
   const modal = document.getElementById('modal');
   const card  = document.getElementById('modalCard');
-  if (modal) modal.style.display = 'none';
-  if (card) {
-    card.innerHTML = '';
-    card.classList.remove('booking-shell');  // снимаем «узкую» оболочку
+if (modal) modal.style.display = 'none';
+if (card) {
+  // снимаем ResizeObserver, если он был повешен
+  if (card.__ro && typeof card.__ro.disconnect === 'function') {
+    try { card.__ro.disconnect(); } catch(_) {}
+    card.__ro = null;
   }
+  card.innerHTML = '';
+  card.classList.remove('booking-shell');  // снимаем «узкую» оболочку
+ }
 }
 
 modal.addEventListener('click', (e)=>{ if (e.target === modal) closeModal(); });
@@ -850,38 +916,44 @@ async function openDetails(campId){
   }
 }
 
-// === Масштабирование «двухколоночной» сетки: всегда 2 колонки,
-// но шрифт и отступы автоматом подстраиваются под ширину карточки.
+// === Масштабирование «двухколоночной» сетки БЕЗ утечек обработчиков ===
 function applyTwoColScale(root){
   const card = root.querySelector('.modal-card.details');
   if (!card) return;
 
-  // реальная ширина карточки (с учётом WebView/вставки в Telegram)
-  const w = card.clientWidth || 360;
+  const run = () => {
+    const w = card.clientWidth || 360;
+    const k = Math.max(0.85, Math.min(1.05, w / 420)); // 0.85…1.05
 
-  // Базовые значения (как в :root)
-  const base = {
-    font: 13,    // px
-    gap:  8,     // px
-    px:   11,    // горизонтальные отступы
-    py:   5      // вертикальные отступы
+    card.style.setProperty('--param-font', `${Math.round(13 * k)}px`);
+    card.style.setProperty('--param-gap',  `${Math.round(8  * k)}px`);
+    card.style.setProperty('--param-px',   `${Math.round(11 * k)}px`);
+    card.style.setProperty('--param-py',   `${Math.round(5  * k)}px`);
   };
 
-  // Считаем аккуратный коэффициент: 0.85 … 1.05 в зависимости от ширины
-  // 420px ~ «комфортная ширина», 300px — очень узко, 520px — просторно
-  const k = Math.max(0.85, Math.min(1.05, w / 420));
+  // первый запуск
+  run();
 
-  // Применяем «ручки» ТОЛЬКО для этой карточки (локальные CSS-переменные)
-  card.style.setProperty('--param-font', `${Math.round(base.font * k)}px`);
-  card.style.setProperty('--param-gap',  `${Math.round(base.gap  * k)}px`);
-  card.style.setProperty('--param-px',   `${Math.round(base.px   * k)}px`);
-  card.style.setProperty('--param-py',   `${Math.round(base.py   * k)}px`);
-
-  // Поддержка изменения размера/поворота экрана
-  const ro = new ResizeObserver(()=> applyTwoColScale(root));
-  ro.observe(card);
-  window.addEventListener('resize', ()=> applyTwoColScale(root), { passive:true });
+  // ВАЖНО: один ResizeObserver на карточку
+  if (!card.__ro){
+    card.__ro = new ResizeObserver(run);
+    card.__ro.observe(card);
+  }
 }
+
+// ЕДИНЫЙ глобальный resize: дергаем масштабирование только если открыта карточка «Подробнее»
+(function attachGlobalScaleOnResize(){
+  let raf = 0;
+  window.addEventListener('resize', () => {
+    if (raf) cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(() => {
+      const modal = document.querySelector('.modal.show');
+      if (!modal) return;
+      const details = modal.querySelector('.modal-card.details');
+      if (details) applyTwoColScale(modal);
+    });
+  }, { passive: true });
+})();
 
 
 // === Полноэкранная галерея (свайп + стрелки + кнопки «Забронировать / Назад») ===

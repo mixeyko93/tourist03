@@ -1,20 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
 
-  <!-- тёмно-серый круглый фон -->
-  <circle cx="32" cy="32" r="28" fill="#1A1A1A"/>
+  <!-- фон-круг как у иконки карты -->
+  <circle cx="32" cy="32" r="28" fill="#0E1621"/>
 
   <!-- гео-метка -->
-  <g fill="none" stroke="#3B82F6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+  <g fill="none" stroke="#7EB6FF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+
     <!-- контур -->
-    <path d="M32 14
-             C25 14 20 19 20 26
-             C20 36 32 50 32 50
-             C32 50 44 36 44 26
-             C44 19 39 14 32 14 Z"/>
+    <path d="M32 16
+             C24 16 18 22 18 30
+             C18 39 32 52 32 52
+             C32 52 46 39 46 30
+             C46 22 40 16 32 16 Z"/>
 
     <!-- внутренняя точка (тоньше) -->
-    <circle cx="32" cy="26" r="4" stroke-width="2"/>
+    <circle cx="32" cy="30" r="4" stroke-width="2"/>
   </g>
 
 </svg>
