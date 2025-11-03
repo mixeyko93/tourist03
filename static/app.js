@@ -119,8 +119,6 @@ function hideMiniLoader() {
   __miniLoader = null;
 }
 
-
-
 // антидребезг для стрелок слайдера
 const throttle = (fn, ms=220) => {
   let t = 0;
@@ -130,6 +128,22 @@ const throttle = (fn, ms=220) => {
     t = now; fn(...args);
   };
 };
+
+// Универсальный тактильный отклик (Telegram Haptic + fallback vibrate)
+function hapticPulse(style='light', vib=15){
+  try {
+    if (isTG && Telegram.WebApp && Telegram.WebApp.HapticFeedback) {
+      const HF = Telegram.WebApp.HapticFeedback;
+      if (style === 'selection') { HF.selectionChanged(); return; }
+      // light | medium | heavy | rigid | soft
+      HF.impactOccurred(style);
+      return;
+    }
+  } catch(_) {}
+  // fallback для обычных браузеров/андроида
+  try { if (navigator.vibrate) navigator.vibrate(vib); } catch(_) {}
+}
+
 
 // === СБОРКА БАЛУНА ДЛЯ БАЗЫ (с загрузочным эмоджи вместо фото до onload) ===
 function buildCampPopup(camp){
@@ -898,8 +912,9 @@ function go(to){
 
     const throttledPrev = throttle(()=> go(i-1), 260);
     const throttledNext = throttle(()=> go(i+1), 260);
-    if (btnPrev) btnPrev.onclick = throttledPrev;
-    if (btnNext) btnNext.onclick = throttledNext;
+    if (btnPrev) btnPrev.onclick = () => { hapticPulse('light', 12); throttledPrev(); };
+    if (btnNext) btnNext.onclick = () => { hapticPulse('light', 12); throttledNext(); };
+
 
     // свайпы
     if (vp) {
@@ -1062,8 +1077,9 @@ function openFullscreenGallery(pics, startIndex=0){
     slideGo(i + 1);
   }, 260);
 
-  if (fsPrev) fsPrev.onclick = fsThPrev;
-  if (fsNext) fsNext.onclick = fsThNext;
+if (fsPrev) fsPrev.onclick = () => { hapticPulse('light', 12); fsThPrev(); };
+if (fsNext) fsNext.onclick = () => { hapticPulse('light', 12); fsThNext(); };
+
 
   // Клавиатура (desktop)
   document.addEventListener('keydown', fsKeyHandler);
@@ -1206,9 +1222,9 @@ function openFullscreenGallery(pics, startIndex=0){
   }, {passive:true});
 
   // Кнопки
-  wrap.querySelector('#fsBook').onclick = ()=> { closeFullscreen(); openBookingFilterModal(); };
-  wrap.querySelector('#fsBack').onclick = closeFullscreen;
-  wrap.addEventListener('click', (e)=>{ if (e.target === wrap) closeFullscreen(); });
+    wrap.querySelector('#fsBook').onclick = ()=> { hapticPulse('soft', 14); closeFullscreen(); openBookingFilterModal(); };
+    wrap.querySelector('#fsBack').onclick  = ()=> { hapticPulse('selection', 10); closeFullscreen(); };
+    wrap.addEventListener('click', (e)=>{ if (e.target === wrap) closeFullscreen(); });
 
   function closeFullscreen(){
     document.removeEventListener('keydown', fsKeyHandler);
@@ -1300,6 +1316,10 @@ function initTabs(){
     tab.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
+
+      // тактильный «тычок» на выборе вкладки
+      hapticPulse('selection', 12);
+
       const targetId = tab.getAttribute('data-target');
 
       // активная кнопка
@@ -1319,6 +1339,7 @@ function initTabs(){
     });
   });
 }
+
 
 
 // === Booking Filter (2×2): кликабельные даты, запоминание значений, применение на карту ===
@@ -1432,20 +1453,22 @@ function openBookingFilterModal() {
 function initGeoButton() {
   const btn = document.getElementById('geoBtn');
   if (!btn) return;
-  btn.addEventListener('click', () => {
-    if (!navigator.geolocation) return alert('Геолокация недоступна');
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const { latitude, longitude } = pos.coords;
-        if (typeof map !== 'undefined') {
-          map.flyTo([latitude, longitude], Math.max(map.getZoom(), 12));
-          L.circleMarker([latitude, longitude], { radius: 6 }).addTo(map);
-        }
-      },
-      () => alert('Не удалось получить геолокацию'),
-      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
-    );
-  });
+btn.addEventListener('click', () => {
+  hapticPulse('soft', 14);
+  if (!navigator.geolocation) return alert('Геолокация недоступна');
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      const { latitude, longitude } = pos.coords;
+      if (typeof map !== 'undefined') {
+        map.flyTo([latitude, longitude], Math.max(map.getZoom(), 12));
+        L.circleMarker([latitude, longitude], { radius: 6 }).addTo(map);
+      }
+    },
+    () => alert('Не удалось получить геолокацию'),
+    { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+  );
+});
+
 }
 
 // --- кнопка открытия фильтра ---
@@ -1453,7 +1476,7 @@ function initBookingFilterButton() {
   const ids = ['openBookingFilter','toggleFilters']; // поддерживаем оба варианта id
   ids.forEach(id => {
     const btn = document.getElementById(id);
-    if (btn) btn.addEventListener('click', openBookingFilterModal);
+if (btn) btn.addEventListener('click', () => { hapticPulse('selection', 10); openBookingFilterModal(); });
   });
 }
 
