@@ -257,33 +257,78 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   background:rgba(255,255,255,.05);
 }
 .camp-gal .viewport{display:flex; transition:transform .25s ease; will-change:transform;}
-.camp-gal img{width:100%; height:clamp(180px, 28vh, 260px); object-fit:cover; display:block; user-select:none;}
+.camp-gal img{
+  width:100%;
+  height:clamp(200px, 32vh, 280px);
+  object-fit:cover; display:block; user-select:none;
+  opacity:0; transition:opacity .18s ease;
+}
+.camp-gal img[src]{ opacity:1; }
+
 .camp-gal .gal-counter{
   position:absolute; left:50%; transform:translateX(-50%);
   bottom:6px; font-size:12px; color:#fff;
   background:rgba(0,0,0,.45); border-radius:999px; padding:4px 10px; pointer-events:none;
 }
-/* кнопки галереи */
+/* кнопки галереи — выше контраста, больше тень, крупнее иконка */
 .gal-arrow{
   position:absolute; top:50%; transform:translateY(-50%);
-  width:36px; height:36px; border-radius:50%;
-  border:1px solid var(--border-color);
-  background:rgba(17,19,23,.6); color:#fff; display:grid; place-items:center;
-  font-weight:900; font-size:18px; cursor:pointer; user-select:none;
+  width:44px; height:44px; border-radius:999px;
+  border:1px solid rgba(255,255,255,.22);
+  background:rgba(0,0,0,.55);
+  color:#fff; display:grid; place-items:center;
+  font-weight:900; font-size:22px; cursor:pointer; user-select:none;
+  box-shadow:0 8px 24px rgba(0,0,0,.45), inset 0 0 0 1px rgba(0,0,0,.25);
+  backdrop-filter: blur(4px);
 }
-.gal-arrow.left{ left:8px; }
-.gal-arrow.right{ right:8px; }
-.gal-arrow.disabled{ opacity:.35; pointer-events:none; }
+.gal-arrow.left{ left:10px; }
+.gal-arrow.right{ right:10px; }
+.gal-arrow:hover{ background:rgba(0,0,0,.7); }
+.gal-arrow.disabled{ opacity:.28; pointer-events:none; }
+
 
 /* Полноэкранная галерея */
 .fs-modal{ position:fixed; inset:0; z-index:9999; display:grid; grid-template-rows: 1fr auto; background:rgba(0,0,0,.9); }
 .fs-viewport{ overflow:hidden; }
+
+/* Стрелки в полноэкранной галерее */
+.fs-arrow{
+  position:fixed; top:50%; transform:translateY(-50%);
+  width:56px; height:56px; border-radius:999px;
+  border:1px solid rgba(255,255,255,.22);
+  background:rgba(0,0,0,.55); color:#fff;
+  display:grid; place-items:center;
+  font-weight:900; font-size:26px; cursor:pointer; user-select:none;
+  z-index:10000;
+  box-shadow:0 10px 28px rgba(0,0,0,.5), inset 0 0 0 1px rgba(0,0,0,.25);
+  backdrop-filter: blur(4px);
+}
+.fs-arrow.left{ left:12px; }
+.fs-arrow.right{ right:12px; }
+.fs-arrow:active{ transform:translateY(-50%) scale(.97); }
+
+
 .fs-track{ display:flex; transition:transform .25s ease; height:100%; }
-.fs-track img{ width:100vw; height:100vh; object-fit:contain; background:#000; user-select:none; }
+/* Слайды в полноэкранке: позволяем жесты, убираем выделение и даём GPU-ускорение трансформаций */
+.fs-track img{
+  width:100vw;
+  height:100vh;
+  object-fit:contain;
+  background:#000;
+  user-select:none;
+  touch-action:none;          /* нужно для pinch/панорамирования на iOS */
+  will-change:transform;      /* плавнее масштаб и перетаскивание */
+  transition:transform .05s linear; /* лёгкое сглаживание при пане; зум делаем без анимации */
+}
+
 .fs-ui{
-  display:grid; gap:10px; padding:10px; grid-template-columns:1fr 1fr; align-items:center;
+  display:grid; gap:10px;
+  /* добавили нижний отступ с учётом «подбородка» iPhone */
+  padding:10px 10px calc(env(safe-area-inset-bottom) + 18px);
+  grid-template-columns:1fr 1fr; align-items:center;
   background:linear-gradient(0deg, rgba(0,0,0,.65), rgba(0,0,0,.1));
 }
+
 .fs-counter{ grid-column:1 / -1; justify-self:center; color:#fff; font-size:13px; opacity:.9; }
 .fs-actions .button{ width:100%; height:44px; border-radius:12px; }
 .fs-actions{ grid-column:1 / -1; display:grid; grid-template-columns:1fr 1fr; gap:10px; }
@@ -343,21 +388,6 @@ html, body, .tg-app, .map-wrap, #map{overscroll-behavior:none;}
 .emoji-marker.std .emoji-pin{font-size:22px; line-height:1; transform:translateY(-1px);}
 .emoji-marker.vip .emoji-pin{font-size:44px; line-height:1; transform:translateY(-2px);}
 
-/* ====================== MINI GALLERY ====================== */
-.camp-gal{position:relative; margin:8px 0 0; border:1px solid var(--border-color); border-radius:14px; overflow:hidden; background:rgba(255,255,255,.05);}
-.camp-gal .viewport{display:flex; transition:transform .25s ease; will-change:transform;}
-.camp-gal img{width:100%; height:200px; object-fit:cover; display:block;}
-.camp-gal .nav{
-  position:absolute; top:50%; transform:translateY(-50%);
-  width:40px; height:40px; border-radius:50%;
-  border:1px solid var(--border-color); background:var(--card-bg); color:var(--tg-text);
-  display:grid; place-items:center; cursor:pointer; font-weight:900; font-size:18px; opacity:.95;
-}
-.camp-gal .nav.prev{left:8px;}
-.camp-gal .nav.next{right:8px;}
-.camp-gal .nav.disabled{pointer-events:none; opacity:.4;}
-.camp-gal .nav:hover{box-shadow:0 6px 18px rgba(0,0,0,.35);}
-.popup-photo{width:100%; height:160px; object-fit:cover; border-radius:10px; display:block;}
 
 /* === Крышка в балуне: эмоджи до загрузки фото === */
 .popup-cover{

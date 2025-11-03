@@ -149,10 +149,14 @@ function buildCampPopup(camp){
         <div class="popup-emoji">🏖️</div>
         ${hasPhoto
           ? `<img class="popup-photo"
-                  src="${camp.photo_main}"
-                  alt=""
-                  onload="window.__popupCoverLoaded(this)"
-                  onerror="window.__popupCoverError(this)">`
+     src="${camp.photo_main}"
+     alt=""
+     loading="eager"
+     decoding="sync"
+     fetchpriority="high"
+     referrerpolicy="no-referrer"
+     onload="window.__popupCoverLoaded(this)"
+     onerror="window.__popupCoverError(this)">`
           : ``}
       </div>
 
@@ -807,7 +811,18 @@ async function openDetails(campId){
 
         <div class="details-body">
           <div class="camp-gal">
-            <div class="viewport">${pics.map(u => `<img src="${u}" draggable="false">`).join('')}</div>
+            <div class="viewport">${
+              pics.map(u => `
+                <img src="${u}"
+                     alt=""
+                     draggable="false"
+                     loading="eager"
+                     decoding="sync"
+                     fetchpriority="high"
+                     referrerpolicy="no-referrer">
+              `).join('')
+            }</div>
+
             <div class="gal-arrow left"  id="galPrev">‹</div>
             <div class="gal-arrow right" id="galNext">›</div>
             <div class="gal-counter" id="galCounter">1/${Math.max(pics.length,1)} →</div>
@@ -863,18 +878,24 @@ async function openDetails(campId){
       btnPrev.classList.toggle('disabled', i === 0);
       btnNext.classList.toggle('disabled', i === N-1);
     }
-    function go(to){
-      if (!vp || locked) return;
-      const clamped = Math.max(0, Math.min(N-1, to));
-      if (clamped === i) { updateUI(); return; }
-      locked = true;                      // пока идёт анимация — блокируем дальнейшие переходы
-      i = clamped;
-      vp.style.transform = `translateX(${-i*100}%)`;
-      // снимем блокировку по окончании CSS-перехода (fallback — таймер)
-      const unlock = ()=>{ locked = false; vp.removeEventListener('transitionend', unlock); updateUI(); };
-      vp.addEventListener('transitionend', unlock);
-      setTimeout(unlock, 350);
-    }
+function go(to){
+  if (!vp || locked) return;
+  const clamped = Math.max(0, Math.min(N-1, to));
+  if (clamped === i) { updateUI(); return; }
+  locked = true;                      // пока идёт анимация — блокируем дальнейшие переходы
+  i = clamped;
+
+  // ВАЖНО: трек шириной N*100%, каждый кадр = 100/N%.
+  // Сдвигаем на долю кадра, а не на 100% всего трека.
+  const step = 100 / N;
+  vp.style.transform = `translateX(${-i * step}%)`;
+
+  // снимем блокировку по окончании CSS-перехода (fallback — таймер)
+  const unlock = ()=>{ locked = false; vp.removeEventListener('transitionend', unlock); updateUI(); };
+  vp.addEventListener('transitionend', unlock);
+  setTimeout(unlock, 350);
+}
+
     const throttledPrev = throttle(()=> go(i-1), 260);
     const throttledNext = throttle(()=> go(i+1), 260);
     if (btnPrev) btnPrev.onclick = throttledPrev;
@@ -956,7 +977,7 @@ function applyTwoColScale(root){
 })();
 
 
-// === Полноэкранная галерея (свайп + стрелки + кнопки «Забронировать / Назад») ===
+// === Полноэкранная галерея (свайп + стрелки + зум + пан + кнопки) ===
 function openFullscreenGallery(pics, startIndex=0){
   if (!Array.isArray(pics) || pics.length === 0) return;
 
@@ -965,9 +986,22 @@ function openFullscreenGallery(pics, startIndex=0){
   wrap.innerHTML = `
     <div class="fs-viewport">
       <div class="fs-track">
-        ${pics.map(u => `<img src="${u}" draggable="false">`).join('')}
+        ${pics.map(u => `
+          <img src="${u}"
+               alt=""
+               draggable="false"
+               loading="eager"
+               decoding="sync"
+               fetchpriority="high"
+               referrerpolicy="no-referrer">
+        `).join('')}
       </div>
     </div>
+
+    <!-- Стрелки поверх фото -->
+    <div class="fs-arrow left"  id="fsPrev">‹</div>
+    <div class="fs-arrow right" id="fsNext">›</div>
+
     <div class="fs-ui">
       <div class="fs-counter" id="fsCounter">${Math.min(startIndex+1,pics.length)}/${pics.length}</div>
       <div class="fs-actions">
@@ -979,54 +1013,209 @@ function openFullscreenGallery(pics, startIndex=0){
   document.body.appendChild(wrap);
 
   const track = wrap.querySelector('.fs-track');
-  const imgs  = wrap.querySelectorAll('.fs-track img');
+  const imgs  = [...wrap.querySelectorAll('.fs-track img')];
   const cnt   = wrap.querySelector('#fsCounter');
+  const fsPrev = wrap.querySelector('#fsPrev');
+  const fsNext = wrap.querySelector('#fsNext');
+
+  // позиции слайдов
   let i = Math.max(0, Math.min(pics.length-1, startIndex));
   let locked = false;
 
-  function update(){ cnt.textContent = `${i+1}/${pics.length}`; }
-  function go(to){
+  // ЗУМ/ПАН состояние ПО-СЛАЙДНО
+  const Z_MIN = 1;
+  const Z_MAX = 3;
+  const zoom = imgs.map(()=>1);          // текущий масштаб
+  const panX = imgs.map(()=>0);          // смещение по X в px
+  const panY = imgs.map(()=>0);          // смещение по Y в px
+
+  function updateCounter(){ cnt.textContent = `${i+1}/${pics.length}`; }
+
+  function slideGo(to){
     if (locked) return;
     const n = pics.length;
-    i = Math.max(0, Math.min(n-1, to));
+    const dest = Math.max(0, Math.min(n-1, to));
+    if (dest === i) return;
+
     locked = true;
-    track.style.transform = `translateX(${-i*100}vw)`;
-    const unlock = ()=>{ locked = false; track.removeEventListener('transitionend', unlock); update(); };
+    track.style.transform = `translateX(${-dest*100}vw)`;
+    const unlock = ()=>{ locked = false; track.removeEventListener('transitionend', unlock); updateCounter(); };
     track.addEventListener('transitionend', unlock);
     setTimeout(unlock, 350);
+
+    i = dest;
   }
 
-  // начальная ширина и позиция
+  // Начальная ширина и позиция
   track.style.width = `${pics.length * 100}vw`;
   imgs.forEach(el => el.style.width = '100vw');
-  go(i);
+  slideGo(i); // выставим позицию и счётчик
+  updateCounter();
 
-  // свайпы
-  let sx = 0, dx = 0, moving = false;
-  const THRESH = 50;
-  track.addEventListener('touchstart', (e)=>{ if(!e.touches[0])return; sx = e.touches[0].clientX; dx=0; moving=true; }, {passive:true});
-  track.addEventListener('touchmove',  (e)=>{ if(!moving||!e.touches[0])return; dx = e.touches[0].clientX - sx; }, {passive:true});
-  track.addEventListener('touchend',   ()=>{
-    if (!moving) return; moving=false;
-    if (Math.abs(dx) > THRESH){ if (dx < 0) go(i+1); else go(i-1); }
-  }, {passive:true});
+  // Антидребезг для стрелок
+  const fsThPrev = throttle(() => {
+    if (zoom[i] !== 1) return; // при увеличении не перелистываем
+    slideGo(i - 1);
+  }, 260);
+  const fsThNext = throttle(() => {
+    if (zoom[i] !== 1) return;
+    slideGo(i + 1);
+  }, 260);
 
-  // клики по половинам экрана (десктоп)
-  track.addEventListener('click', (e)=>{
-    const rect = track.getBoundingClientRect();
-    const leftHalf = (e.clientX - rect.left) < rect.width/2;
-    if (leftHalf) go(i-1); else go(i+1);
+  if (fsPrev) fsPrev.onclick = fsThPrev;
+  if (fsNext) fsNext.onclick = fsThNext;
+
+  // Клавиатура (desktop)
+  document.addEventListener('keydown', fsKeyHandler);
+  function fsKeyHandler(e){
+    if (e.key === 'ArrowLeft')  fsThPrev();
+    if (e.key === 'ArrowRight') fsThNext();
+  }
+
+  // ====== ЗУМ/ПАН на активном слайде ======
+  function applyZoomPan(k){
+    const img = imgs[k];
+    img.style.transition = 'transform .03s linear'; // чуть сгладим пан
+    img.style.transform  = `translate(${panX[k]}px, ${panY[k]}px) scale(${zoom[k]})`;
+  }
+  function clampPanToBounds(k){
+    const z = zoom[k];
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    // при object-fit:contain используем размер вьюпорта
+    const maxX = (vw * (z - 1)) / 2;
+    const maxY = (vh * (z - 1)) / 2;
+    panX[k] = Math.max(-maxX, Math.min(maxX, panX[k]));
+    panY[k] = Math.max(-maxY, Math.min(maxY, panY[k]));
+  }
+  function resetZoomIfSmall(k){
+    if (zoom[k] <= 1.01){
+      zoom[k] = 1; panX[k] = 0; panY[k] = 0;
+    }
+  }
+
+  // Обработчики жестов — ВЕШАЕМ НА КАЖДУЮ КАРТИНКУ
+  imgs.forEach((img, idx) => {
+    let t1x=0, t1y=0, t2x=0, t2y=0;
+    let startDist=0, startZoom=1;
+    let lastX=0, lastY=0;
+    let isPinching=false, isPanning=false;
+    let lastTapTime=0;
+
+    // Touch Start
+    img.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2){
+        // Pinch start
+        isPinching = true; isPanning = false;
+        const a = e.touches[0], b = e.touches[1];
+        t1x=a.clientX; t1y=a.clientY; t2x=b.clientX; t2y=b.clientY;
+        startDist = Math.hypot(t2x - t1x, t2y - t1y);
+        startZoom = zoom[idx];
+      } else if (e.touches.length === 1){
+        // Pan start (только если уже увеличено)
+        isPinching = false;
+        if (zoom[idx] > 1){
+          isPanning = true;
+          lastX = e.touches[0].clientX;
+          lastY = e.touches[0].clientY;
+        } else {
+          isPanning = false;
+        }
+      }
+    }, { passive: true });
+
+    // Touch Move
+    img.addEventListener('touchmove', (e) => {
+      if (isPinching && e.touches.length === 2){
+        const a = e.touches[0], b = e.touches[1];
+        const dist = Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
+        let z = startZoom * (dist / (startDist || 1));
+        z = Math.max(Z_MIN, Math.min(Z_MAX, z));
+        zoom[idx] = z;
+        clampPanToBounds(idx);
+        applyZoomPan(idx);
+      } else if (isPanning && e.touches.length === 1){
+        const cx = e.touches[0].clientX;
+        const cy = e.touches[0].clientY;
+        panX[idx] += (cx - lastX);
+        panY[idx] += (cy - lastY);
+        lastX = cx; lastY = cy;
+        clampPanToBounds(idx);
+        applyZoomPan(idx);
+      }
+    }, { passive: true });
+
+    // Touch End
+    img.addEventListener('touchend', (e) => {
+      // Сброс флагов
+      if (e.touches.length === 0){ isPinching = false; isPanning = false; }
+      clampPanToBounds(idx);
+      resetZoomIfSmall(idx);
+      applyZoomPan(idx);
+
+      // Двойной тап — зум/откат
+      const now = Date.now();
+      if (now - lastTapTime < 300 && e.changedTouches && e.changedTouches.length === 1){
+        if (zoom[idx] === 1){
+          zoom[idx] = 2.2; panX[idx]=0; panY[idx]=0;
+        } else {
+          zoom[idx] = 1; panX[idx]=0; panY[idx]=0;
+        }
+        applyZoomPan(idx);
+      }
+      lastTapTime = now;
+    }, { passive: true });
+
+    // Колесо мыши — zoom на десктопе
+    img.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      let z = zoom[idx] + (e.deltaY < 0 ? 0.15 : -0.15);
+      z = Math.max(Z_MIN, Math.min(Z_MAX, z));
+      zoom[idx] = z;
+      clampPanToBounds(idx);
+      applyZoomPan(idx);
+    }, { passive: false });
+
+    // Клик мышью — переход между слайдами только если не увеличено
+    img.addEventListener('click', (e) => {
+      if (zoom[idx] !== 1) return;
+      const rect = track.getBoundingClientRect();
+      const leftHalf = (e.clientX - rect.left) < rect.width/2;
+      if (leftHalf) fsThPrev(); else fsThNext();
+    });
   });
 
-  // кнопки
+  // Свайпы по треку (перелистывание) — ТОЛЬКО когда текущий слайд не увеличен
+  let sx = 0, dx = 0, swiping = false;
+  const THRESH = 50;
+  track.addEventListener('touchstart', (e)=> {
+    if (zoom[i] !== 1) return;              // при зуме перелистывание выключено
+    if (!e.touches[0]) return;
+    swiping = true; sx = e.touches[0].clientX; dx = 0;
+  }, {passive:true});
+  track.addEventListener('touchmove', (e)=> {
+    if (!swiping || !e.touches[0]) return;
+    dx = e.touches[0].clientX - sx;
+  }, {passive:true});
+  track.addEventListener('touchend', ()=> {
+    if (!swiping) return; swiping = false;
+    if (zoom[i] !== 1) return;              // на всякий случай
+    if (Math.abs(dx) > THRESH){
+      if (dx < 0) fsThNext(); else fsThPrev();
+    }
+  }, {passive:true});
+
+  // Кнопки
   wrap.querySelector('#fsBook').onclick = ()=> { closeFullscreen(); openBookingFilterModal(); };
   wrap.querySelector('#fsBack').onclick = closeFullscreen;
-
-  // закрытие по клику на тёмный фон за пределами трека
   wrap.addEventListener('click', (e)=>{ if (e.target === wrap) closeFullscreen(); });
 
-  function closeFullscreen(){ if (wrap && wrap.parentNode) wrap.parentNode.removeChild(wrap); }
+  function closeFullscreen(){
+    document.removeEventListener('keydown', fsKeyHandler);
+    if (wrap && wrap.parentNode) wrap.parentNode.removeChild(wrap);
+  }
 }
+
 
 
 // Глобальные обработчики, на которые ссылается HTML в балуне
