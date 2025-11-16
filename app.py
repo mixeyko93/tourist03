@@ -1,9 +1,15 @@
 import os
 import json
-import sqlite3
+import psycopg2
+from psycopg2 import errors
+from psycopg2.extras import RealDictCursor
 from pathlib import Path
 from datetime import datetime
 import re
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 from fastapi import FastAPI, Request, HTTPException   # ← добавили HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
@@ -33,19 +39,75 @@ TEMPLATES  = BASE_DIR  # html лежат в корне
 UPLOAD_DIR = os.path.join(STATIC_DIR, "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-DB_DIR = Path(BASE_DIR) / "db"
-DB_DIR.mkdir(exist_ok=True)
-CAMPS_DB = DB_DIR / "camps.db"
-USERS_DB = DB_DIR / "users.db"
+PG_HOST = os.getenv("PG_HOST", "localhost")
+PG_PORT = int(os.getenv("PG_PORT", "5432"))
+PG_DB   = os.getenv("PG_DB", "tourist03")
+PG_USER = os.getenv("PG_USER", "postgres")
+PG_PASSWORD = os.getenv("PG_PASSWORD", "postgres")
 
-# Если старая БД лежала в корне, переносим её в ./db/
-old_camps = Path(BASE_DIR) / "camps.db"
-if old_camps.exists() and not CAMPS_DB.exists():
-    CAMPS_DB.write_bytes(old_camps.read_bytes())
+def _pg_connect(schema: str):
+    # Ensure values passed to psycopg2 are proper Python strings.
+    # On some Windows setups environment variables may contain bytes
+    # or be decoded with a different encoding which causes
+    # psycopg2 to raise UnicodeDecodeError during connection.
+    def _safe_str(val):
+        if isinstance(val, bytes):
+            try:
+                return val.decode("utf-8")
+            except Exception:
+                return val.decode("utf-8", errors="replace")
+        if val is None:
+            return None
+        return str(val)
+
+    kwargs = dict(
+        host=_safe_str(PG_HOST),
+        port=PG_PORT,
+        dbname=_safe_str(PG_DB),
+        user=_safe_str(PG_USER),
+        password=_safe_str(PG_PASSWORD),
+        # Request server to use UTF-8 for client messages to avoid
+        # UnicodeDecodeError when server returns localized (e.g. CP1251) text.
+        options='-c client_encoding=UTF8',
+        cursor_factory=RealDictCursor,
+    )
+
     try:
-        old_camps.unlink()
+        conn = psycopg2.connect(**kwargs)
+    except UnicodeDecodeError as e:
+        # Raise a clearer error with the problematic parameter values
+        msg = (
+            "UnicodeDecodeError while connecting to Postgres. "
+            "Sanitized connection parameters (repr):\n"
+            f"host={repr(kwargs.get('host'))}, dbname={repr(kwargs.get('dbname'))}, "
+            f"user={repr(kwargs.get('user'))}, password={repr(kwargs.get('password'))}\n"
+            f"Original error: {e!r}"
+        )
+        raise RuntimeError(msg) from e
     except Exception:
-        pass
+        # Re-raise other exceptions but include connection parameters for easier debugging.
+        raise
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute('SET search_path TO %s', (schema,))
+    except errors.InvalidSchemaName:
+        conn.rollback()
+    return conn
+
+
+def _conn_camps():
+    # данные по базам отдыха → схема catalog
+    return _pg_connect('catalog')
+
+
+def _conn_users():
+    return _pg_connect("auth")
+
+
+def _conn_crm():
+    return _pg_connect("crm")
+
 
 # === Подключение FastAPI ===
 app = FastAPI(title="Tourist_03 Admin")
@@ -68,295 +130,187 @@ SELECT id, name, lat, lng, min_price, emoji,
        bbq_count, bbq_shared_count, bath_count, sauna_count,
        pools_private_count, pools_shared_count,
        description
-FROM camps
+FROM catalog.camps
 """
 
 
 ROOM_SELECT = """
 SELECT id, camp_id, name, room_type, floors, floor, beds_single, beds_double, wc_count, bath_type,
        has_ac, has_bbq, has_kitchen, capacity, price, photo_main, photos_json,
-       desc, price_adult, price_child, discount_pct, discount_from_nights,
+       description AS desc, price_adult, price_child, discount_pct, discount_from_nights,
        wc_type, bbq_type, kitchen_type, gazebo_type, terrace_type, balcony_type, pool_type
-FROM rooms
+FROM catalog.rooms
 """
 
 
-# === Утилиты БД ===
-def _conn_camps() -> sqlite3.Connection:
-    # timeout даёт до 5 секунд на ожидание блокировки; WAL лучше работает с конкурентными записями
-    conn = sqlite3.connect(str(CAMPS_DB), timeout=5, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    try:
-        conn.execute("PRAGMA journal_mode=WAL;")
-        conn.execute("PRAGMA synchronous=NORMAL;")
-        conn.execute("PRAGMA busy_timeout=5000;")
-    except Exception:
-        pass
-    return conn
-
-def _conn_users() -> sqlite3.Connection:
-    conn = sqlite3.connect(str(USERS_DB), timeout=5, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    try:
-        conn.execute("PRAGMA journal_mode=WAL;")
-        conn.execute("PRAGMA synchronous=NORMAL;")
-        conn.execute("PRAGMA busy_timeout=5000;")
-    except Exception:
-        pass
-    return conn
-
-
-# --- мягкая миграция схемы: добавляет недостающие столбцы и таблицы ---
-def ensure_schema():
-    conn = _conn_camps()
-    cur = conn.cursor()
-
-    # camps: добавим описание + счётчики и настройки, если их ещё нет
-    cur.execute("PRAGMA table_info(camps)")
-    cols = {row[1] for row in cur.fetchall()}
-
-    def add_camp_col(name: str, ddl: str, default_literal: str | None = None):
-        if name in cols:
-            return
-        # собираем ALTER с литеральным DEFAULT, без плейсхолдеров
-        if default_literal is None:
-            sql = f"ALTER TABLE camps ADD COLUMN {name} {ddl}"
-        else:
-            sql = f"ALTER TABLE camps ADD COLUMN {name} {ddl} DEFAULT {default_literal}"
-        cur.execute(sql)
-
-    # строковые DEFAULT оборачиваем в одинарные кавычки, числа — как есть
-    add_camp_col("description",         "TEXT",    "''")
-    add_camp_col("emoji",               "TEXT",    "'🏕️'")
-    add_camp_col("emoji_size",          "TEXT",    "'standard'")
-    add_camp_col("bbq_count",           "INTEGER", "0")
-    add_camp_col("bbq_shared_count",    "INTEGER", "0")
-    add_camp_col("bath_count",          "INTEGER", "0")
-    add_camp_col("sauna_count",         "INTEGER", "0")
-    add_camp_col("pools_private_count", "INTEGER", "0")
-    add_camp_col("pools_shared_count",  "INTEGER", "0")
-    add_camp_col("beds_count",          "INTEGER", "0")
-    add_camp_col("min_price",           "INTEGER", "0")
-
-    # фото комнат (если ещё нет)
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS room_photos(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            camp_id INTEGER NOT NULL,
-            room_id INTEGER NOT NULL,   -- индекс апартамента (0..N-1)
-            url TEXT NOT NULL,
-            cover INTEGER DEFAULT 0,
-            sort INTEGER DEFAULT 0
-        )
-    """)
-
-    # rooms: недостающие колонки
-    cur.execute("PRAGMA table_info(rooms)")
-    rcols = {row[1] for row in cur.fetchall()}
-
-    def add_room_col(name: str, ddl: str, default_literal: str | None = None):
-        if name in rcols:
-            return
-        if default_literal is None:
-            sql = f"ALTER TABLE rooms ADD COLUMN {name} {ddl}"
-        else:
-            sql = f"ALTER TABLE rooms ADD COLUMN {name} {ddl} DEFAULT {default_literal}"
-        cur.execute(sql)
-
-    add_room_col("room_type", "TEXT")
-    add_room_col("floors", "INTEGER", "1")
-    add_room_col("floor", "INTEGER", "1")
-    add_room_col("beds_single", "INTEGER", "0")
-    add_room_col("beds_double", "INTEGER", "0")
-    add_room_col("bath_type", "TEXT")
-    add_room_col("wc_type", "TEXT")
-    add_room_col("bbq_type", "TEXT")
-    add_room_col("kitchen_type", "TEXT")
-    add_room_col("gazebo_type", "TEXT")
-    add_room_col("terrace_type", "TEXT")
-    add_room_col("pool_type", "TEXT")
-    add_room_col("balcony_type", "TEXT")
-    add_room_col("has_ac", "INTEGER", "0")
-    add_room_col("price_adult", "INTEGER", "0")
-    add_room_col("price_child", "INTEGER", "0")
-    add_room_col("discount_pct", "INTEGER", "0")
-    add_room_col("discount_from_nights", "INTEGER", "0")
-    add_room_col("photos_json", "TEXT")
-
-    conn.commit()
-    conn.close()
-
 
 def init_camps_db():
-    """Создаём таблицы (если их нет) и выполняем мягкие миграции."""
+    """Создает схему catalog и таблицы каталога."""
     conn = _conn_camps()
     cur = conn.cursor()
+    try:
+        cur.execute('CREATE SCHEMA IF NOT EXISTS catalog;')
+        cur.execute('SET search_path TO catalog;')
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS catalog.camps (
+                id SERIAL PRIMARY KEY,
+                name TEXT,
+                lat DOUBLE PRECISION,
+                lng DOUBLE PRECISION,
+                min_price INTEGER,
+                emoji TEXT,
+                lake_name TEXT,
+                photo_main TEXT,
+                status TEXT,
+                owner TEXT,
+                manager TEXT,
+                admin_phones TEXT,
+                rooms_count INTEGER,
+                beds_count INTEGER,
+                address TEXT,
+                phone TEXT,
+                site_url TEXT,
+                emoji_size TEXT,
+                bbq_count INTEGER,
+                bbq_shared_count INTEGER,
+                bath_count INTEGER,
+                sauna_count INTEGER,
+                pools_private_count INTEGER,
+                pools_shared_count INTEGER,
+                description TEXT
+            )
+            """
+        )
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS catalog.rooms (
+                id SERIAL PRIMARY KEY,
+                camp_id INTEGER,
+                name TEXT,
+                room_type TEXT,
+                floors INTEGER,
+                floor INTEGER,
+                beds_single INTEGER,
+                beds_double INTEGER,
+                wc_count INTEGER,
+                bath_type TEXT,
+                has_ac INTEGER,
+                has_bbq INTEGER,
+                has_kitchen INTEGER,
+                capacity INTEGER,
+                price INTEGER,
+                photo_main TEXT,
+                photos_json TEXT,
+                description TEXT,
+                price_adult INTEGER,
+                price_child INTEGER,
+                discount_pct INTEGER,
+                discount_from_nights INTEGER,
+                wc_type TEXT,
+                bbq_type TEXT,
+                kitchen_type TEXT,
+                gazebo_type TEXT,
+                terrace_type TEXT,
+                balcony_type TEXT,
+                pool_type TEXT
+            )
+            """
+        )
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS catalog.camp_photos (
+                id SERIAL PRIMARY KEY,
+                camp_id INTEGER,
+                url TEXT,
+                sort INTEGER,
+                cover INTEGER
+            )
+            """
+        )
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS catalog.room_photos (
+                id SERIAL PRIMARY KEY,
+                camp_id INTEGER NOT NULL,
+                room_id INTEGER NOT NULL,
+                url TEXT NOT NULL,
+                cover INTEGER DEFAULT 0,
+                sort INTEGER DEFAULT 0
+            )
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
-    # camps
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS camps (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT,
-        lat REAL, lng REAL,
-        min_price INTEGER,
-        emoji TEXT,
-        lake_name TEXT,
-        photo_main TEXT,
-        status TEXT,
-        owner TEXT,
-        manager TEXT,
-        admin_phones TEXT,
-        rooms_count INTEGER,
-        beds_count INTEGER,
-        address TEXT,
-        phone TEXT,
-        site_url TEXT,
-        emoji_size TEXT,
-        bbq_count INTEGER,
-        bbq_shared_count INTEGER,
-        bath_count INTEGER,
-        sauna_count INTEGER,
-        pools_private_count INTEGER,
-        pools_shared_count INTEGER
-    )
-    """)
-
-    # rooms
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS rooms (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        camp_id INTEGER,
-        name TEXT,
-        room_type TEXT,
-        floors INTEGER,
-        floor INTEGER,
-        beds_single INTEGER,
-        beds_double INTEGER,
-        wc_count INTEGER,
-        bath_type TEXT,
-        has_ac INTEGER,
-        has_bbq INTEGER,
-        has_kitchen INTEGER,
-        capacity INTEGER,
-        price INTEGER,
-        photo_main TEXT,
-        photos_json TEXT,
-        desc TEXT,
-        price_adult INTEGER,
-        price_child INTEGER,
-        discount_pct INTEGER,
-        discount_from_nights INTEGER,
-        wc_type TEXT,
-        bbq_type TEXT,
-        kitchen_type TEXT,
-        gazebo_type TEXT,
-        terrace_type TEXT,
-        balcony_type TEXT,
-        pool_type TEXT
-    )
-    """)
-
-    # camp_photos
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS camp_photos (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        camp_id INTEGER,
-        url TEXT,
-        sort INTEGER,
-        cover INTEGER
-    )
-    """)
-
-    # --- rooms: мягкие миграции (ALTER COLUMN IF NOT EXISTS) ---
-    rooms_alter = [
-        ("room_type", "TEXT"),
-        ("floors", "INTEGER DEFAULT 1"),
-        ("floor", "INTEGER DEFAULT 1"),  # этаж
-        ("beds_single", "INTEGER DEFAULT 0"),
-        ("beds_double", "INTEGER DEFAULT 0"),
-        ("wc_count", "INTEGER DEFAULT 0"),
-        ("bath_type", "TEXT"),
-        ("has_ac", "INTEGER DEFAULT 0"),
-        ("has_bbq", "INTEGER DEFAULT 0"),
-        ("has_kitchen", "INTEGER DEFAULT 0"),
-        ("capacity", "INTEGER"),
-        ("price", "INTEGER"),
-        ("photo_main", "TEXT"),
-        ("photos_json", "TEXT"),
-        ("desc", "TEXT"),
-        ("price_adult", "INTEGER"),
-        ("price_child", "INTEGER"),
-        ("discount_pct", "INTEGER"),
-        ("discount_from_nights", "INTEGER"),
-        ("wc_type", "TEXT"),
-        ("bbq_type", "TEXT"),
-        ("kitchen_type", "TEXT"),
-        ("gazebo_type", "TEXT"),
-        ("terrace_type", "TEXT"),
-        ("balcony_type", "TEXT"),
-        ("pool_type", "TEXT"),
-    ]
-    # Для каждой колонки пробуем добавить, если её нет
-    existing_cols = set()
-    for r in cur.execute("PRAGMA table_info(rooms)").fetchall():
-        existing_cols.add(r["name"])
-    for col, ddl in rooms_alter:
-        if col not in existing_cols:
-            cur.execute(f"ALTER TABLE rooms ADD COLUMN {col} {ddl}")
-
-    # camps: мягкие миграции под новые агрегаты
-    camps_alter = [
-        ("min_price", "INTEGER"),
-        ("emoji", "TEXT"),
-        ("lake_name", "TEXT"),
-        ("photo_main", "TEXT"),
-        ("status", "TEXT"),
-        ("owner", "TEXT"),
-        ("manager", "TEXT"),
-        ("admin_phones", "TEXT"),
-        ("rooms_count", "INTEGER"),
-        ("beds_count", "INTEGER"),
-        ("address", "TEXT"),
-        ("phone", "TEXT"),
-        ("site_url", "TEXT"),
-        ("emoji_size", "TEXT"),
-        ("bbq_count", "INTEGER"),
-        ("bbq_shared_count", "INTEGER"),
-        ("bath_count", "INTEGER"),
-        ("sauna_count", "INTEGER"),
-        ("pools_private_count", "INTEGER"),
-        ("pools_shared_count", "INTEGER"),
-    ]
-    existing_cols_camps = set()
-    for r in cur.execute("PRAGMA table_info(camps)").fetchall():
-        existing_cols_camps.add(r["name"])
-    for col, ddl in camps_alter:
-        if col not in existing_cols_camps:
-            cur.execute(f"ALTER TABLE camps ADD COLUMN {col} {ddl}")
-
-    conn.commit()
-    conn.close()
 
 
 def init_users_db():
     conn = _conn_users()
     cur = conn.cursor()
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS users(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT,
-        phone TEXT,
-        role TEXT
-    )
-    """)
-    conn.commit()
-    conn.close()
+    try:
+        cur.execute('CREATE SCHEMA IF NOT EXISTS auth;')
+        cur.execute('SET search_path TO auth;')
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS auth.users (
+                id SERIAL PRIMARY KEY,
+                name TEXT,
+                phone TEXT,
+                role TEXT
+            )
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
-# Инициализация БД при старте
+
+def init_crm_db():
+    conn = _conn_crm()
+    cur = conn.cursor()
+    try:
+        cur.execute('CREATE SCHEMA IF NOT EXISTS crm;')
+        cur.execute('SET search_path TO crm;')
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS crm.bookings (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER,
+                camp_id INTEGER,
+                room_id INTEGER,
+                check_in DATE,
+                check_out DATE,
+                guests_count INTEGER,
+                status TEXT,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            )
+            """
+        )
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS crm.admins (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER,
+                camp_id INTEGER,
+                role TEXT,
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            )
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+
+# Ensure database schemas exist on startup
 init_camps_db()
 init_users_db()
-ensure_schema()
+init_crm_db()
 
 
 # === Простые страницы ===
@@ -373,12 +327,19 @@ def admin_base_page():
     return FileResponse(os.path.join(BASE_DIR, "admin-base.html"))
 
 
+@app.get("/admincamps", response_class=HTMLResponse)
+def admin_camps_page():
+    """CRM-интерфейс для администраторов баз."""
+    return FileResponse(os.path.join(BASE_DIR, "admin-camps.html"))
+
+
 # === API: Пользователи (минимально, фронт опрашивает /api/users) ===
 @app.get("/api/users")
 def api_users_list():
     conn = _conn_users()
     cur = conn.cursor()
-    rows = cur.execute("SELECT id, name, phone, role FROM users ORDER BY id").fetchall()
+    cur.execute("SELECT id, name, phone, role FROM auth.users ORDER BY id")
+    rows = cur.fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
@@ -386,16 +347,20 @@ def api_users_list():
 # === API: Базы отдыха ===
 @app.get("/api/camps")
 def api_camps_list():
-    conn = _conn_camps(); cur = conn.cursor()
-    rows = cur.execute(CAMP_SELECT_ALL + " ORDER BY id").fetchall()
+    conn = _conn_camps()
+    cur = conn.cursor()
+    cur.execute(CAMP_SELECT_ALL + " ORDER BY id")
+    rows = cur.fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
 
 @app.get("/api/camps/{camp_id}")
 def api_camp_one(camp_id: int):
-    conn = _conn_camps(); cur = conn.cursor()
-    row = cur.execute(CAMP_SELECT_ALL + " WHERE id=?", (camp_id,)).fetchone()
+    conn = _conn_camps()
+    cur = conn.cursor()
+    cur.execute(CAMP_SELECT_ALL + " WHERE id=%s", (camp_id,))
+    row = cur.fetchone()
     conn.close()
     if not row:
         return JSONResponse({"detail": "not found"}, status_code=404)
@@ -404,16 +369,23 @@ def api_camp_one(camp_id: int):
 
 @app.get("/api/camps/{camp_id}/photos")
 def api_camp_photos(camp_id: int):
-    conn = _conn_camps(); cur = conn.cursor()
-    rows = cur.execute("SELECT id, url, sort, cover FROM camp_photos WHERE camp_id=? ORDER BY sort, id", (camp_id,)).fetchall()
+    conn = _conn_camps()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id, url, sort, cover FROM catalog.camp_photos WHERE camp_id=%s ORDER BY sort, id",
+        (camp_id,),
+    )
+    rows = cur.fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
 
 @app.get("/api/rooms")
 def api_rooms_list(camp_id: int):
-    conn = _conn_camps(); cur = conn.cursor()
-    rows = cur.execute(ROOM_SELECT + " WHERE camp_id=? ORDER BY id", (camp_id,)).fetchall()
+    conn = _conn_camps()
+    cur = conn.cursor()
+    cur.execute(ROOM_SELECT + " WHERE camp_id=%s ORDER BY id", (camp_id,))
+    rows = cur.fetchall()
     conn.close()
     # фронту удобно отдавать photos как массив
     out = []
@@ -425,6 +397,60 @@ def api_rooms_list(camp_id: int):
             d["photos"] = []
         out.append(d)
     return out
+
+
+@app.get("/api/admin/camps")
+def api_admin_camps():
+    """CRM: список баз отдыха."""
+    conn = _conn_camps()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT id, name, address, description, status
+        FROM catalog.camps
+        ORDER BY id
+        """
+    )
+    rows = cur.fetchall()
+    conn.close()
+    result = []
+    for row in rows:
+        status_value = (row.get("status") or "").strip().lower()
+        result.append(
+            {
+                "id": row.get("id"),
+                "name": row.get("name") or "",
+                "region": row.get("address") or "Не указано",
+                "description": row.get("description") or "",
+                "is_active": status_value in ("", "active", "активна", "активный"),
+            }
+        )
+    return result
+
+
+@app.get("/api/admin/bookings")
+def api_admin_bookings():
+    """CRM: список бронирований."""
+    conn = _conn_crm()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT
+            b.id,
+            b.camp_id,
+            c.name AS camp_name,
+            b.check_in,
+            b.check_out,
+            b.guests_count,
+            b.status
+        FROM crm.bookings b
+        LEFT JOIN catalog.camps c ON c.id = b.camp_id
+        ORDER BY b.created_at DESC, b.id DESC
+        """
+    )
+    rows = cur.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
 
 
 def _normalize_move(url: str, camp_id: int, room_db_id: int | None = None, camp_name: str | None = None, room_name: str | None = None) -> str:
@@ -547,13 +573,14 @@ async def _upsert_camp(camp_id: int | None, data: dict):
     # 3) camps: INSERT / UPDATE
     if camp_id is None:
         cur.execute("""
-            INSERT INTO camps(
+            INSERT INTO catalog.camps(
                 name, lake_name, address, lat, lng, status,
                 emoji, emoji_size, description,
                 owner, manager, admin_phones, site_url,
                 min_price, bbq_count, bbq_shared_count, bath_count, sauna_count,
                 pools_private_count, pools_shared_count, beds_count
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            RETURNING id
         """, (
             name, lake, addr, lat, lng, status,
             emoji, emoji_size, description,
@@ -561,16 +588,16 @@ async def _upsert_camp(camp_id: int | None, data: dict):
             min_price, bbq_count, bbq_shared_count, bath_count, sauna_count,
             pools_private_count, pools_shared_count, beds_count
         ))
-        camp_id = cur.lastrowid
+        camp_id = cur.fetchone()["id"]
     else:
         cur.execute("""
-            UPDATE camps SET
-                name=?, lake_name=?, address=?, lat=?, lng=?, status=?,
-                emoji=?, emoji_size=?, description=?,
-                owner=?, manager=?, admin_phones=?, site_url=?,
-                min_price=?, bbq_count=?, bbq_shared_count=?, bath_count=?, sauna_count=?,
-                pools_private_count=?, pools_shared_count=?, beds_count=?
-            WHERE id=?
+            UPDATE catalog.camps SET
+                name=%s, lake_name=%s, address=%s, lat=%s, lng=%s, status=%s,
+                emoji=%s, emoji_size=%s, description=%s,
+                owner=%s, manager=%s, admin_phones=%s, site_url=%s,
+                min_price=%s, bbq_count=%s, bbq_shared_count=%s, bath_count=%s, sauna_count=%s,
+                pools_private_count=%s, pools_shared_count=%s, beds_count=%s
+            WHERE id=%s
         """, (
             name, lake, addr, lat, lng, status,
             emoji, emoji_size, description,
@@ -582,7 +609,7 @@ async def _upsert_camp(camp_id: int | None, data: dict):
 
     # 4) фото базы — сначала чистим, потом вставляем, заодно переносим из temp в конечную папку
     photos = data.get("photos") or []
-    cur.execute("DELETE FROM camp_photos WHERE camp_id=?", (camp_id,))
+    cur.execute("DELETE FROM catalog.camp_photos WHERE camp_id=%s", (camp_id,))
 
     cover_url = None
     first_url = None
@@ -595,12 +622,12 @@ async def _upsert_camp(camp_id: int | None, data: dict):
         if cover and cover_url is None:
             cover_url = url
         cur.execute(
-            "INSERT INTO camp_photos(camp_id,url,sort,cover) VALUES(?,?,?,?)",
+            "INSERT INTO catalog.camp_photos(camp_id,url,sort,cover) VALUES(%s,%s,%s,%s)",
             (camp_id, url, sort, cover)
         )
 
     # пишем главную фотку прямо в camps — для карты/балунов
-    cur.execute("UPDATE camps SET photo_main=? WHERE id=?", (cover_url or first_url, camp_id))
+    cur.execute("UPDATE catalog.camps SET photo_main=%s WHERE id=%s", (cover_url or first_url, camp_id))
 
     # 5) апартаменты + их фото  — БЕЗ тотального удаления, со стабильными id
     # Список id, которые пришли с фронта (существующие комнаты)
@@ -613,13 +640,20 @@ async def _upsert_camp(camp_id: int | None, data: dict):
                 pass
 
     # Удалим из БД только те комнаты, которых нет в payload (пользователь удалил строку)
-    cur.execute("SELECT id FROM rooms WHERE camp_id=?", (camp_id,))
+    cur.execute("SELECT id FROM catalog.rooms WHERE camp_id=%s", (camp_id,))
     existing_ids = {row["id"] for row in cur.fetchall()}
     to_delete = [rid for rid in existing_ids if rid not in set(incoming_ids)]
     if to_delete:
-        qmarks = ",".join("?" for _ in to_delete)
-        cur.execute(f"DELETE FROM rooms WHERE camp_id=? AND id IN ({qmarks})", (camp_id, *to_delete))
-        cur.execute(f"DELETE FROM room_photos WHERE camp_id=? AND room_id IN ({qmarks})", (camp_id, *to_delete))
+        placeholders = ",".join(["%s"] * len(to_delete))
+        params = tuple([camp_id, *to_delete])
+        cur.execute(
+            f"DELETE FROM catalog.rooms WHERE camp_id=%s AND id IN ({placeholders})",
+            params,
+        )
+        cur.execute(
+            f"DELETE FROM catalog.room_photos WHERE camp_id=%s AND room_id IN ({placeholders})",
+            params,
+        )
 
     # Обновим/вставим комнаты из payload
     for idx, r in enumerate(rooms_payload):
@@ -638,12 +672,12 @@ async def _upsert_camp(camp_id: int | None, data: dict):
         if room_id:
             # UPDATE; если такой id вдруг отсутствует — вставим с явным id
             cur.execute("""
-                UPDATE rooms SET
-                    camp_id=?, name=?, room_type=?, floors=?, floor=?,
-                    beds_single=?, beds_double=?, bath_type=?, wc_type=?,
-                    bbq_type=?, kitchen_type=?, gazebo_type=?, terrace_type=?, pool_type=?, balcony_type=?, has_ac=?,
-                    capacity=?, price_adult=?, price_child=?, price=?, discount_pct=?, discount_from_nights=?, desc=?
-                WHERE id=?
+                UPDATE catalog.rooms SET
+                    camp_id=%s, name=%s, room_type=%s, floors=%s, floor=%s,
+                    beds_single=%s, beds_double=%s, bath_type=%s, wc_type=%s,
+                    bbq_type=%s, kitchen_type=%s, gazebo_type=%s, terrace_type=%s, pool_type=%s, balcony_type=%s, has_ac=%s,
+                    capacity=%s, price_adult=%s, price_child=%s, price=%s, discount_pct=%s, discount_from_nights=%s, description=%s
+                WHERE id=%s
             """, (
                 camp_id,
                 (r.get("name") or "").strip(),
@@ -667,19 +701,19 @@ async def _upsert_camp(camp_id: int | None, data: dict):
                 _i(r.get("price")),
                 _i(r.get("discount_pct")),
                 _i(r.get("discount_from_nights")),
-                (r.get("desc") or "").strip(),
+                (r.get("description") or r.get("desc") or "").strip(),
                 int(room_id)
             ))
             if cur.rowcount == 0:
                 # строки не было — вставим с фиксированным id
                 # строки не было — вставим с фиксированным id
                 cur.execute("""
-                    INSERT INTO rooms(
+                    INSERT INTO catalog.rooms(
                         id, camp_id, name, room_type, floors, floor,
                         beds_single, beds_double, bath_type, wc_type,
                         bbq_type, kitchen_type, gazebo_type, terrace_type, pool_type, balcony_type, has_ac,
-                        capacity, price_adult, price_child, price, discount_pct, discount_from_nights, desc, photo_main, photos_json
-                    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                        capacity, price_adult, price_child, price, discount_pct, discount_from_nights, description, photo_main, photos_json
+                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 """, (
                     int(room_id), camp_id,
                     (r.get("name") or "").strip(),
@@ -699,7 +733,7 @@ async def _upsert_camp(camp_id: int | None, data: dict):
                     capacity,
                     _i(r.get("price_adult")), _i(r.get("price_child")), _i(r.get("price")),
                     _i(r.get("discount_pct")), _i(r.get("discount_from_nights")),
-                    (r.get("desc") or "").strip(),
+                    (r.get("description") or r.get("desc") or "").strip(),
                     None, "[]"
                 ))
 
@@ -708,12 +742,13 @@ async def _upsert_camp(camp_id: int | None, data: dict):
             # Вставляем новую комнату
             # Вставляем новую комнату
             cur.execute("""
-                INSERT INTO rooms(
+                INSERT INTO catalog.rooms(
                     camp_id, name, room_type, floors, floor,
                     beds_single, beds_double, bath_type, wc_type,
                     bbq_type, kitchen_type, gazebo_type, terrace_type, pool_type, balcony_type, has_ac,
-                    capacity, price_adult, price_child, price, discount_pct, discount_from_nights, desc, photo_main, photos_json
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    capacity, price_adult, price_child, price, discount_pct, discount_from_nights, description, photo_main, photos_json
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                RETURNING id
             """, (
                 camp_id,
                 (r.get("name") or "").strip(),
@@ -733,17 +768,19 @@ async def _upsert_camp(camp_id: int | None, data: dict):
                 capacity,
                 _i(r.get("price_adult")), _i(r.get("price_child")), _i(r.get("price")),
                 _i(r.get("discount_pct")), _i(r.get("discount_from_nights")),
-                (r.get("desc") or "").strip(),
+                (r.get("description") or r.get("desc") or "").strip(),
                 None, "[]"
             ))
-
-            room_db_id = cur.lastrowid
+            room_db_id = cur.fetchone()["id"]
 
         # Фото: перенос из temp + обложка + photos_json
         room_photos = (r.get("photos") or [])[:5]
         urls = []
         cover_url = None
-        cur.execute("DELETE FROM room_photos WHERE camp_id=? AND room_id=?", (camp_id, room_db_id))
+        cur.execute(
+            "DELETE FROM catalog.room_photos WHERE camp_id=%s AND room_id=%s",
+            (camp_id, room_db_id),
+        )
         for s, ph in enumerate(room_photos):
             if isinstance(ph, dict):
                 u = ph.get("url") or ""
@@ -756,7 +793,7 @@ async def _upsert_camp(camp_id: int | None, data: dict):
             if cov and cover_url is None:
                 cover_url = u
             cur.execute(
-                "INSERT INTO room_photos(camp_id,room_id,url,cover,sort) VALUES(?,?,?,?,?)",
+                "INSERT INTO catalog.room_photos(camp_id,room_id,url,cover,sort) VALUES(%s,%s,%s,%s,%s)",
                 (camp_id, room_db_id, u, cov, s)
             )
 
@@ -765,7 +802,7 @@ async def _upsert_camp(camp_id: int | None, data: dict):
 
         # обновим главную картинку + JSON для удобной подгрузки
         cur.execute(
-            "UPDATE rooms SET photo_main=?, photos_json=? WHERE id=?",
+            "UPDATE catalog.rooms SET photo_main=%s, photos_json=%s WHERE id=%s",
             (cover_url, json.dumps(urls, ensure_ascii=False), room_db_id)
         )
 
