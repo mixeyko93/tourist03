@@ -1,20 +1,30 @@
 import os
 import json
+import logging
 import psycopg2
 from psycopg2 import errors
 from psycopg2.extras import RealDictCursor
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, date
 import re
+import secrets
 from dotenv import load_dotenv
+from typing import List
 
 # Load environment variables from .env file
 load_dotenv()
 
-from fastapi import FastAPI, Request, HTTPException   # ← добавили HTTPException
+logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
+logger = logging.getLogger("tourist03.superadmin")
+
+from fastapi import FastAPI, Request, HTTPException, Depends, status
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
+from passlib.context import CryptContext
+from pydantic import BaseModel, EmailStr
 
 # === Утилиты для имён папок (транслит) ===
 def _slug_latin(s: str) -> str:
@@ -38,12 +48,18 @@ STATIC_DIR = os.path.join(BASE_DIR, "static")
 TEMPLATES  = BASE_DIR  # html лежат в корне
 UPLOAD_DIR = os.path.join(STATIC_DIR, "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+templates = Jinja2Templates(directory=TEMPLATES)
+pwd_context = CryptContext(
+    schemes=["pbkdf2_sha256"],
+    deprecated="auto",
+)
 
 PG_HOST = os.getenv("PG_HOST", "localhost")
 PG_PORT = int(os.getenv("PG_PORT", "5432"))
 PG_DB   = os.getenv("PG_DB", "tourist03")
 PG_USER = os.getenv("PG_USER", "postgres")
 PG_PASSWORD = os.getenv("PG_PASSWORD", "postgres")
+SUPERADMIN_API_KEY = os.getenv("SUPERADMIN_API_KEY")
 
 def _pg_connect(schema: str):
     # Ensure values passed to psycopg2 are proper Python strings.
@@ -108,6 +124,100 @@ def _conn_users():
 def _conn_crm():
     return _pg_connect("crm")
 
+def hash_password(password: str) -> str:
+    # bcrypt backend only supports passwords up to 72 bytes.
+    # Ensure we don't pass longer byte sequences to the backend which cause ValueError.
+    if password is None:
+        password = ""
+    try:
+        # Truncate to 72 bytes in UTF-8 encoding (safe fallback)
+        b = str(password).encode('utf-8', errors='ignore')
+        if len(b) > 72:
+            b = b[:72]
+            # decode back to str for passlib
+            password = b.decode('utf-8', errors='ignore')
+        return pwd_context.hash(password)
+    except Exception:
+        import logging
+        logging.exception('Error hashing password')
+        # raise a generic exception to be handled by caller
+        raise
+
+
+def verify_password(password: str, hashed: str) -> bool:
+    try:
+        return pwd_context.verify(password, hashed)
+    except Exception:
+        return False
+
+
+class AdminLoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class AdminMeResponse(BaseModel):
+    id: int
+    email: EmailStr
+    display_name: str
+
+
+class SuperAdminCreateAccountRequest(BaseModel):
+    email: EmailStr
+    password: str
+    display_name: str
+    camp_ids: List[int]
+
+
+def get_current_admin(request: Request):
+    admin_id = request.session.get("admin_id")
+    if not admin_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Не авторизован")
+    conn = _conn_crm()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT id, email, display_name
+        FROM auth.camp_admin_accounts
+        WHERE id = %s AND is_active = TRUE
+        """,
+        (admin_id,),
+    )
+    row = cur.fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Не авторизован")
+    return {"id": row["id"], "email": row["email"], "display_name": row["display_name"]}
+
+
+def _get_admin_camp_ids(admin_id: int) -> list[int]:
+    conn = _conn_crm()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT camp_id FROM crm.camp_admin_links WHERE admin_id = %s",
+        (admin_id,),
+    )
+    camp_ids = [row["camp_id"] for row in cur.fetchall()]
+    conn.close()
+    return camp_ids
+
+
+def get_superadmin(request: Request):
+    """
+    Простая проверка прав суперадмина.
+    Если в сессии уже выставлен флаг superadmin (например, через внешний логин), пропускаем запрос.
+    При наличии SUPERADMIN_API_KEY дополнительно проверяем заголовок, чтобы при необходимости ограничить доступ.
+    """
+    if request.session.get("superadmin") is True:
+        return True
+    if not SUPERADMIN_API_KEY:
+        return True
+    header_token = request.headers.get("x-superadmin-key") or request.headers.get("x-superadmin-token")
+    if header_token == SUPERADMIN_API_KEY:
+        return True
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Нет доступа")
+
+
 
 # === Подключение FastAPI ===
 app = FastAPI(title="Tourist_03 Admin")
@@ -117,6 +227,12 @@ app.add_middleware(
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
+)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.getenv("SESSION_SECRET_KEY", secrets.token_hex(32)),
+    session_cookie="t03_admin_session",
+    max_age=60 * 60 * 24 * 7,
 )
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -272,21 +388,46 @@ def init_crm_db():
     conn = _conn_crm()
     cur = conn.cursor()
     try:
+        cur.execute('CREATE SCHEMA IF NOT EXISTS auth;')
         cur.execute('CREATE SCHEMA IF NOT EXISTS crm;')
         cur.execute('SET search_path TO crm;')
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS auth.camp_admin_accounts (
+                id SERIAL PRIMARY KEY,
+                email TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                display_name TEXT NOT NULL,
+                is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+            """
+        )
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS crm.camp_admin_links (
+                id SERIAL PRIMARY KEY,
+                admin_id INTEGER NOT NULL,
+                camp_id INTEGER NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+            """
+        )
         cur.execute(
             """
             CREATE TABLE IF NOT EXISTS crm.bookings (
                 id SERIAL PRIMARY KEY,
                 user_id INTEGER,
-                camp_id INTEGER,
+                camp_id INTEGER NOT NULL,
                 room_id INTEGER,
-                check_in DATE,
-                check_out DATE,
-                guests_count INTEGER,
-                status TEXT,
-                created_at TIMESTAMPTZ DEFAULT NOW(),
-                updated_at TIMESTAMPTZ DEFAULT NOW()
+                check_in DATE NOT NULL,
+                check_out DATE NOT NULL,
+                guests_count INTEGER NOT NULL,
+                status TEXT NOT NULL,
+                source TEXT NOT NULL DEFAULT 'crm',
+                comment TEXT,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
             """
         )
@@ -307,10 +448,38 @@ def init_crm_db():
 
 
 
+
+
+def create_test_admin(email: str, password: str, display_name: str = "Тестовый админ"):
+    """Создание тестового управляющего (используется для отладки)."""
+    if not email or not password:
+        return
+    conn = _conn_crm()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO auth.camp_admin_accounts (email, password_hash, display_name)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (email) DO NOTHING
+        """,
+        (email.lower().strip(), hash_password(password), (display_name or "Тестовый админ").strip()),
+    )
+    conn.commit()
+    conn.close()
+
 # Ensure database schemas exist on startup
 init_camps_db()
 init_users_db()
 init_crm_db()
+
+TEST_ADMIN_EMAIL = os.getenv("TEST_ADMIN_EMAIL")
+TEST_ADMIN_PASSWORD = os.getenv("TEST_ADMIN_PASSWORD")
+if TEST_ADMIN_EMAIL and TEST_ADMIN_PASSWORD:
+    create_test_admin(
+        TEST_ADMIN_EMAIL,
+        TEST_ADMIN_PASSWORD,
+        os.getenv("TEST_ADMIN_DISPLAY_NAME", "Тестовый админ"),
+    )
 
 
 # === Простые страницы ===
@@ -328,9 +497,9 @@ def admin_base_page():
 
 
 @app.get("/admincamps", response_class=HTMLResponse)
-def admin_camps_page():
+def admin_camps_page(request: Request):
     """CRM-интерфейс для администраторов баз."""
-    return FileResponse(os.path.join(BASE_DIR, "admin-camps.html"))
+    return templates.TemplateResponse("admin-camps.html", {"request": request})
 
 
 # === API: Пользователи (минимально, фронт опрашивает /api/users) ===
@@ -342,6 +511,190 @@ def api_users_list():
     rows = cur.fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+@app.get("/api/superadmin/camps", dependencies=[Depends(get_superadmin)])
+def superadmin_list_camps():
+    """
+    Упрощенный список баз отдыха для суперадминки.
+    """
+    conn = _conn_camps()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT id, name, address, lake_name, status
+        FROM catalog.camps
+        ORDER BY id
+        """
+    )
+    rows = cur.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def _create_camp_admin_account(payload: SuperAdminCreateAccountRequest):
+    email = payload.email.lower().strip()
+    display_name = (payload.display_name or "").strip() or email
+    password_raw = (payload.password or "").strip()
+    if not password_raw:
+        raise HTTPException(status_code=400, detail="Пароль не может быть пустым")
+
+    logger.info("Запрос на создание учётки управляющего: email=%s, camps=%s", email, payload.camp_ids)
+    conn = _conn_crm()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """
+            SELECT id
+            FROM auth.camp_admin_accounts
+            WHERE email = %s
+            """,
+            (email,),
+        )
+        existing = cur.fetchone()
+        if existing:
+            logger.warning("Попытка создать дубликат учётки для email=%s", email)
+            raise HTTPException(status_code=400, detail="Учётная запись с таким логином уже существует")
+
+        password_hash = hash_password(password_raw)
+        cur.execute(
+            """
+            INSERT INTO auth.camp_admin_accounts (email, password_hash, display_name)
+            VALUES (%s, %s, %s)
+            RETURNING id
+            """,
+            (email, password_hash, display_name),
+        )
+        row = cur.fetchone()
+        admin_id = row["id"]
+
+        linked: set[int] = set()
+        for camp_id in payload.camp_ids:
+            try:
+                cid = int(camp_id)
+            except (ValueError, TypeError):
+                continue
+            if cid in linked:
+                continue
+            linked.add(cid)
+            cur.execute(
+                """
+                INSERT INTO crm.camp_admin_links (admin_id, camp_id)
+                VALUES (%s, %s)
+                """,
+                (admin_id, cid),
+            )
+
+        conn.commit()
+        logger.info("Учётка управляющего создана: id=%s, email=%s", admin_id, email)
+        return {"status": "ok", "admin_id": admin_id}
+    except HTTPException:
+        conn.rollback()
+        logger.exception("Ошибка валидации при создании учётки email=%s", email)
+        raise
+    except Exception:
+        conn.rollback()
+        logger.exception("Техническая ошибка при создании учётки email=%s", email)
+        raise
+    finally:
+        conn.close()
+
+
+@app.get("/api/superadmin/accounts", dependencies=[Depends(get_superadmin)])
+def superadmin_list_accounts():
+    """
+    Список всех управляющих и привязанных к ним баз.
+    """
+    conn = _conn_crm()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT
+            a.id,
+            a.email,
+            a.display_name,
+            a.is_active,
+            a.created_at,
+            COALESCE(
+                json_agg(
+                    json_build_object(
+                        'camp_id', l.camp_id,
+                        'camp_name', c.name
+                    )
+                    ORDER BY c.name
+                ) FILTER (WHERE l.camp_id IS NOT NULL),
+                '[]'::json
+            ) AS camps
+        FROM auth.camp_admin_accounts AS a
+        LEFT JOIN crm.camp_admin_links AS l ON l.admin_id = a.id
+        LEFT JOIN catalog.camps AS c ON c.id = l.camp_id
+        GROUP BY a.id
+        ORDER BY a.created_at DESC, a.id DESC
+        """
+    )
+    rows = cur.fetchall()
+    conn.close()
+    accounts = []
+    for row in rows:
+        raw_camps = row.get("camps")
+        camps_data = []
+        if isinstance(raw_camps, str):
+            try:
+                camps_data = json.loads(raw_camps)
+            except Exception:
+                camps_data = []
+        elif isinstance(raw_camps, list):
+            camps_data = raw_camps
+        accounts.append(
+            {
+                "id": row["id"],
+                "email": row["email"],
+                "display_name": row["display_name"],
+                "is_active": row["is_active"],
+                "created_at": row["created_at"],
+                "camps": camps_data,
+            }
+        )
+    return accounts
+
+
+@app.get("/api/admincamps/accounts", dependencies=[Depends(get_superadmin)])
+def superadmin_list_accounts_legacy():
+    """
+    Совместимость для клиентов, использующих admincamps-префикс.
+    """
+    return superadmin_list_accounts()
+
+
+@app.post("/api/superadmin/accounts", dependencies=[Depends(get_superadmin)])
+def superadmin_create_account(payload: SuperAdminCreateAccountRequest):
+    """
+    Создание учетной записи управляющего и привязка ее к выбранным базам отдыха.
+    """
+    return _create_camp_admin_account(payload)
+
+
+@app.post("/api/admincamps/accounts", dependencies=[Depends(get_superadmin)])
+def superadmin_create_account_legacy(payload: SuperAdminCreateAccountRequest):
+    """
+    Совместимость с фронтами, которые ожидают другой путь.
+    """
+    return _create_camp_admin_account(payload)
+
+
+@app.post("/api/admincamps/account", dependencies=[Depends(get_superadmin)])
+def superadmin_create_account_legacy_single(payload: SuperAdminCreateAccountRequest):
+    return _create_camp_admin_account(payload)
+
+
+@app.post("/api/admin/accounts", dependencies=[Depends(get_superadmin)])
+def superadmin_create_account_admin_prefix(payload: SuperAdminCreateAccountRequest):
+    return _create_camp_admin_account(payload)
+
+
+@app.post("/api/admin/account", dependencies=[Depends(get_superadmin)])
+def superadmin_create_account_admin_single(payload: SuperAdminCreateAccountRequest):
+    return _create_camp_admin_account(payload)
 
 
 # === API: Базы отдыха ===
@@ -399,24 +752,63 @@ def api_rooms_list(camp_id: int):
     return out
 
 
-@app.get("/api/admin/camps")
-def api_admin_camps():
-    """CRM: список баз отдыха."""
+@app.post("/api/admin/login")
+def admin_login(req: AdminLoginRequest, request: Request):
+    """Авторизация управляющего."""
+    conn = _conn_crm()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT id, email, password_hash, display_name, is_active
+        FROM auth.camp_admin_accounts
+        WHERE email = %s
+        """,
+        (req.email.lower().strip(),),
+    )
+    row = cur.fetchone()
+    conn.close()
+    if not row or not row["is_active"] or not verify_password(req.password, row["password_hash"]):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неверный логин или пароль")
+    request.session["admin_id"] = row["id"]
+    return {"status": "ok"}
+
+
+@app.post("/api/admin/logout")
+def admin_logout(request: Request):
+    """Выход из CRM."""
+    request.session.clear()
+    return {"status": "ok"}
+
+
+@app.get("/api/admin/me", response_model=AdminMeResponse)
+def admin_me(admin: dict = Depends(get_current_admin)):
+    """Текущий управляющий."""
+    return admin
+
+
+@app.get("/api/admin/my-camps")
+def api_admin_my_camps(admin: dict = Depends(get_current_admin)):
+    """Возвращает базы отдыха, закреплённые за управляющим."""
+    camp_ids = _get_admin_camp_ids(admin["id"])
+    if not camp_ids:
+        return []
     conn = _conn_camps()
     cur = conn.cursor()
     cur.execute(
         """
         SELECT id, name, address, description, status
         FROM catalog.camps
-        ORDER BY id
-        """
+        WHERE id = ANY(%s)
+        ORDER BY name
+        """,
+        (camp_ids,),
     )
     rows = cur.fetchall()
     conn.close()
-    result = []
+    response = []
     for row in rows:
         status_value = (row.get("status") or "").strip().lower()
-        result.append(
+        response.append(
             {
                 "id": row.get("id"),
                 "name": row.get("name") or "",
@@ -425,28 +817,103 @@ def api_admin_camps():
                 "is_active": status_value in ("", "active", "активна", "активный"),
             }
         )
-    return result
+    return response
 
 
 @app.get("/api/admin/bookings")
-def api_admin_bookings():
-    """CRM: список бронирований."""
+def api_admin_bookings(
+    camp_id: int | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    admin: dict = Depends(get_current_admin),
+):
+    """Бронирования управляющего с учётом доступных баз."""
+    camp_ids = _get_admin_camp_ids(admin["id"])
+    if not camp_ids:
+        return []
+    conditions = []
+    params: list = []
+    if camp_id:
+        if camp_id not in camp_ids:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа к выбранной базе")
+        conditions.append("b.camp_id = %s")
+        params.append(camp_id)
+    else:
+        conditions.append("b.camp_id = ANY(%s)")
+        params.append(camp_ids)
+    if date_from:
+        conditions.append("b.check_in >= %s")
+        params.append(date_from)
+    if date_to:
+        conditions.append("b.check_out <= %s")
+        params.append(date_to)
+    where_clause = " AND ".join(conditions)
     conn = _conn_crm()
     cur = conn.cursor()
     cur.execute(
-        """
+        f"""
         SELECT
             b.id,
             b.camp_id,
             c.name AS camp_name,
+            b.room_id,
+            r.name AS room_name,
             b.check_in,
             b.check_out,
             b.guests_count,
-            b.status
+            b.status,
+            b.source
         FROM crm.bookings b
         LEFT JOIN catalog.camps c ON c.id = b.camp_id
-        ORDER BY b.created_at DESC, b.id DESC
-        """
+        LEFT JOIN catalog.rooms r ON r.id = b.room_id
+        WHERE {where_clause}
+        ORDER BY b.check_in DESC, b.id DESC
+        """,
+        tuple(params),
+    )
+    rows = cur.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+@app.get("/api/admin/calendar")
+def api_admin_calendar(
+    camp_id: int | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    admin: dict = Depends(get_current_admin),
+):
+    """Упрощённый календарь бронирований."""
+    camp_ids = _get_admin_camp_ids(admin["id"])
+    if not camp_ids:
+        return []
+    conditions = []
+    params: list = []
+    if camp_id:
+        if camp_id not in camp_ids:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа к выбранной базе")
+        conditions.append("camp_id = %s")
+        params.append(camp_id)
+    else:
+        conditions.append("camp_id = ANY(%s)")
+        params.append(camp_ids)
+    if date_from:
+        conditions.append("check_in >= %s")
+        params.append(date_from)
+    if date_to:
+        conditions.append("check_out <= %s")
+        params.append(date_to)
+    where_clause = " AND ".join(conditions)
+    conn = _conn_crm()
+    cur = conn.cursor()
+    cur.execute(
+        f"""
+        SELECT camp_id, room_id, check_in, check_out, status
+        FROM crm.bookings
+        WHERE {where_clause}
+        ORDER BY check_in
+        """,
+        tuple(params),
     )
     rows = cur.fetchall()
     conn.close()

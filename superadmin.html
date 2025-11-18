@@ -23,6 +23,29 @@
     button.primary{background:var(--blue);border-color:var(--blue);color:#fff;cursor:pointer}
     button.danger{background:#fff;border-color:var(--red);color:var(--red);cursor:pointer}
     .muted{color:#8a8f98;font-size:12px}
+    .hidden{display:none!important}
+
+    .accounts-header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+    .accounts-list{margin-top:16px;padding:16px;border:1px solid #2a2f3a;border-radius:14px;background:rgba(15,18,22,.6);overflow:auto}
+    .accounts-table{width:100%;border-collapse:collapse;font-size:14px}
+    .accounts-table th{font-weight:600;text-align:left;padding:10px;border-bottom:1px solid #2a2f3a;color:#8a8f98}
+    .accounts-table td{padding:10px;border-bottom:1px solid #1f242e}
+    .accounts-table tbody tr:hover{background-color:rgba(255,255,255,0.04)}
+    .accounts-camps{display:flex;flex-direction:column;gap:4px}
+    .accounts-hint{margin-top:6px;color:#8a8f98;font-size:13px}
+    .accounts-modal{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.65);z-index:4000;padding:16px}
+    .accounts-modal-card{width:100%;max-width:520px;background:#151821;border:1px solid #262a34;border-radius:18px;padding:24px;box-shadow:0 30px 90px rgba(0,0,0,.65);color:#f2f4f7;max-height:90vh;overflow:auto}
+    .accounts-modal-card h2{margin:0 0 12px}
+    .accounts-modal-card label{display:block;font-weight:600;margin-top:12px}
+    .accounts-modal-card input{width:100%;margin-top:6px}
+    .accounts-modal-card input[type=checkbox]{width:auto;margin-top:0}
+    #ca-camps-list{margin-top:10px;max-height:220px;overflow:auto;border:1px solid #2a2f3a;border-radius:12px;padding:8px;display:grid;gap:6px;background:#0f1216}
+    .ca-camp-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid transparent;transition:border-color .15s ease}
+    .ca-camp-item:hover{border-color:#2a2f3a}
+    .ca-camp-item span{font-size:13px;color:#c9d1d9}
+    .ca-camp-name{font-weight:600;color:#f2f4f7;font-size:14px}
+    .ca-camp-meta{font-size:12px;color:#8a8f98;margin-top:2px}
+    .text-error{color:#f87171;font-size:13px}
 
     /* Тумблер темы */
     .switch { position: relative; display: inline-block; width: 48px; height: 26px; }
@@ -495,12 +518,51 @@ html[data-theme="dark"] .nav-emoji:hover{ background:#141821; }
     </div>
   </section>
 
-  <section id="sec_accounts" style="display:none">
+    <section id="sec_accounts" style="display:none">
     <div class="card">
-      <h3>Учётные записи</h3>
-      <div class="muted">Раздел в разработке.</div>
+      <div class="accounts-header">
+        <div>
+          <h3>Учётные записи управляющих</h3>
+          <div class="muted">Создавайте учётные записи для CRM и привязывайте к ним базы отдыха.</div>
+        </div>
+        <button type="button" class="button primary" id="btn-open-create-account">Создать учётную запись</button>
+      </div>
+      <div id="accounts-list" class="accounts-list"></div>
+    </div>
+
+    <div id="create-account-modal" class="accounts-modal hidden">
+      <div class="accounts-modal-card">
+        <h2>Создать учётную запись</h2>
+
+        <label>Логин (email)
+          <input type="email" id="ca-email" placeholder="name@example.com">
+        </label>
+
+        <label>Пароль
+          <input type="password" id="ca-password" placeholder="••••••••">
+        </label>
+
+        <label>Имя управляющего
+          <input type="text" id="ca-display-name" placeholder="Имя, отображаемое в CRM">
+        </label>
+
+        <div class="accounts-hint">
+          <div>Базы отдыха, доступные этой учётке:</div>
+          <div id="ca-camps-list">
+            <div class="muted">Список баз загружается...</div>
+          </div>
+        </div>
+
+        <div id="ca-error" class="text-error hidden"></div>
+
+        <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px">
+          <button type="button" class="button" id="ca-btn-cancel">Отмена</button>
+          <button type="button" class="button primary" id="ca-btn-save">Создать</button>
+        </div>
+      </div>
     </div>
   </section>
+
 </div>
 
 <section id="sec_archive" style="display:none">
@@ -526,6 +588,23 @@ const tabs = {
   accounts: ['tab_accounts','sec_accounts'],
   archive:  ['tab_archive','sec_archive'],
 };
+const ACCOUNT_CREATE_ENDPOINTS = [
+  '/api/superadmin/accounts',
+  '/api/admincamps/accounts',
+  '/api/admin/accounts',
+  '/api/admincamps/account',
+  '/api/admin/account',
+];
+const ACCOUNT_LIST_ENDPOINTS = [
+  '/api/superadmin/accounts',
+  '/api/admincamps/accounts',
+];
+
+let _accountsSectionReady = false;
+let _accountsCampsLoaded = false;
+let _accountsCampsLoading = false;
+let _accountsListLoaded = false;
+let _accountsListLoading = false;
 
 for (const k in tabs) {
   const [btn, sec] = tabs[k];
@@ -553,6 +632,7 @@ for (const k in tabs) {
 
     if (k === 'users') loadUsers();
     if (k === 'archive') loadArchive();
+    if (k === 'accounts') initAccountsSection();
 
   };
 }
@@ -674,6 +754,288 @@ async function loadUsers(){
     tr.innerHTML=`<td>${u.id}</td><td>${u.name}</td><td>${u.phone}</td><td>${u.email||''}</td><td>${u.created_at}</td>`;
     tb.appendChild(tr);
   });
+}
+
+function initAccountsSection(){
+  if (_accountsSectionReady){
+    loadAdminAccounts();
+    return;
+  }
+  const btnOpen = document.getElementById('btn-open-create-account');
+  const modal = document.getElementById('create-account-modal');
+  const btnCancel = document.getElementById('ca-btn-cancel');
+  const btnSave = document.getElementById('ca-btn-save');
+  if (!btnOpen || !modal || !btnCancel || !btnSave) return;
+
+  btnOpen.addEventListener('click', () => {
+    openCreateAccountModal();
+  });
+  btnCancel.addEventListener('click', () => closeCreateAccountModal());
+  btnSave.addEventListener('click', () => submitCreateAccountForm());
+  modal.addEventListener('click', (ev) => {
+    if (ev.target === modal) closeCreateAccountModal();
+  });
+
+  _accountsSectionReady = true;
+  loadCampsForAccounts();
+  loadAdminAccounts();
+}
+
+function openCreateAccountModal(){
+  const modal = document.getElementById('create-account-modal');
+  if (!modal) return;
+  resetCreateAccountForm();
+  modal.classList.remove('hidden');
+  const email = document.getElementById('ca-email');
+  if (email) email.focus();
+}
+
+function closeCreateAccountModal(){
+  const modal = document.getElementById('create-account-modal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  resetCreateAccountForm();
+}
+
+function resetCreateAccountForm(){
+  const fields = ['ca-email','ca-password','ca-display-name'];
+  fields.forEach(id=>{
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.querySelectorAll('#ca-camps-list input[type=checkbox]').forEach(cb=> cb.checked = false);
+  setCreateAccountError('');
+}
+
+function setCreateAccountError(message){
+  const box = document.getElementById('ca-error');
+  if (!box) return;
+  if (!message){
+    box.textContent = '';
+    box.classList.add('hidden');
+  } else {
+    box.textContent = message;
+    box.classList.remove('hidden');
+  }
+}
+
+async function fetchCampsForAccounts(){
+  try{
+    return await api('/api/superadmin/camps');
+  }catch(e){
+    const msg = (e && e.message ? e.message : '').toLowerCase();
+    if (msg.includes('not found')){
+      // старый бекенд без отдельного эндпоинта — используем общий список
+      const fallback = await api('/api/camps');
+      return fallback.map(c => ({
+        id: c.id,
+        name: c.name,
+        address: c.address || c.region || c.lake_name || '',
+        lake_name: c.lake_name || '',
+      }));
+    }
+    throw e;
+  }
+}
+
+async function loadCampsForAccounts(){
+  if (_accountsCampsLoading || _accountsCampsLoaded) return;
+  const listEl = document.getElementById('ca-camps-list');
+  if (!listEl) return;
+  _accountsCampsLoading = true;
+  listEl.innerHTML = '<div class="muted">Загружаем список баз...</div>';
+  try{
+    const camps = await fetchCampsForAccounts();
+    if (!Array.isArray(camps) || !camps.length){
+      listEl.innerHTML = '<div class="muted">Базы отдыха пока не найдены.</div>';
+    } else {
+      listEl.innerHTML = '';
+      camps.forEach(camp=>{
+        const label = document.createElement('label');
+        label.className = 'ca-camp-item';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.value = camp.id;
+
+        const textWrap = document.createElement('div');
+        const title = document.createElement('div');
+        title.className = 'ca-camp-name';
+        title.textContent = camp.name || `База #${camp.id}`;
+        textWrap.appendChild(title);
+
+        const metaText = camp.address || camp.region || camp.lake_name || '';
+        if (metaText){
+          const meta = document.createElement('div');
+          meta.className = 'ca-camp-meta';
+          meta.textContent = metaText;
+          textWrap.appendChild(meta);
+        }
+
+        label.appendChild(checkbox);
+        label.appendChild(textWrap);
+        listEl.appendChild(label);
+      });
+    }
+    _accountsCampsLoaded = true;
+  }catch(e){
+    listEl.innerHTML = `<div class="muted" style="color:#f87171">Не удалось загрузить базы: ${e?.message || 'ошибка'}</div>`;
+  }finally{
+    _accountsCampsLoading = false;
+  }
+}
+
+async function fetchAccountsList(){
+  let lastError = null;
+  for (const url of ACCOUNT_LIST_ENDPOINTS){
+    const res = await httpJson(url);
+    if (res.ok){
+      return res.data || [];
+    }
+    lastError = res;
+    if (![404,405].includes(res.status)) break;
+  }
+  throw new Error(lastError?.error || 'Не удалось загрузить данные');
+}
+
+async function loadAdminAccounts(force=false){
+  if (_accountsListLoading) return;
+  if (_accountsListLoaded && !force) return;
+  const box = document.getElementById('accounts-list');
+  if (!box) return;
+  _accountsListLoading = true;
+  box.innerHTML = '<div class="muted">Загружаем учётные записи...</div>';
+  try{
+    const accounts = await fetchAccountsList();
+    if (!accounts.length){
+      box.innerHTML = '<div class="muted">Учётные записи ещё не созданы.</div>';
+    } else {
+      box.innerHTML = '';
+      box.appendChild(renderAccountsTable(accounts));
+    }
+    _accountsListLoaded = true;
+  }catch(e){
+    box.innerHTML = `<div class="text-error">Не удалось загрузить учётные записи: ${e.message || 'ошибка'}</div>`;
+  }finally{
+    _accountsListLoading = false;
+  }
+}
+
+function renderAccountsTable(accounts){
+  const table = document.createElement('table');
+  table.className = 'accounts-table';
+  table.innerHTML = `
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Логин</th>
+        <th>Имя</th>
+        <th>Базы отдыха</th>
+        <th>Статус</th>
+        <th>Создана</th>
+      </tr>
+    </thead>
+  `;
+  const tbody = document.createElement('tbody');
+  accounts.forEach(acc => {
+    const camps = Array.isArray(acc.camps) && acc.camps.length
+      ? acc.camps.map(c => `<span>${c.camp_name || `База #${c.camp_id}`}</span>`).join('')
+      : '<span class="muted">Не привязаны</span>';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>#${acc.id}</td>
+      <td>${acc.email}</td>
+      <td>${acc.display_name || ''}</td>
+      <td><div class="accounts-camps">${camps}</div></td>
+      <td style="color:${acc.is_active ? '#22c55e' : '#f87171'}">${acc.is_active ? 'Активна' : 'Выключена'}</td>
+      <td>${formatDateTime(acc.created_at)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  return table;
+}
+
+async function submitCreateAccountForm(){
+  const email = (document.getElementById('ca-email')?.value || '').trim();
+  const password = document.getElementById('ca-password')?.value || '';
+  const displayName = (document.getElementById('ca-display-name')?.value || '').trim();
+  const checkedCamps = Array.from(document.querySelectorAll('#ca-camps-list input[type=checkbox]:checked'))
+    .map(el => Number(el.value));
+
+  if (!email || !password || !displayName){
+    setCreateAccountError('Заполните email, пароль и имя управляющего.');
+    return;
+  }
+
+  setCreateAccountError('');
+  const btnSave = document.getElementById('ca-btn-save');
+  if (btnSave) btnSave.disabled = true;
+  try{
+    const payload = {
+      email,
+      password,
+      display_name: displayName,
+      camp_ids: checkedCamps,
+    };
+    const result = await postAccountWithFallback(payload);
+    if (!result.ok){
+      throw new Error(result.error || 'Не удалось создать учётную запись');
+    }
+    closeCreateAccountModal();
+    appAlert('Учётная запись создана');
+    loadAdminAccounts(true);
+  }catch(e){
+    setCreateAccountError(e.message || 'Произошла ошибка при создании учётной записи');
+  }finally{
+    if (btnSave) btnSave.disabled = false;
+  }
+}
+
+async function postAccountWithFallback(payload){
+  let lastError = { ok: false, error: 'Не удалось создать учётную запись' };
+  for (const url of ACCOUNT_CREATE_ENDPOINTS){
+    const res = await httpJson(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok){
+      return res;
+    }
+    lastError = res;
+    if (![404,405].includes(res.status)) break;
+  }
+  return lastError;
+}
+
+async function httpJson(url, options = {}){
+  try{
+    const response = await fetch(url, options);
+    if (response.ok){
+      const data = await response.json().catch(()=>null);
+      return { ok: true, status: response.status, data };
+    }
+    let detail = response.statusText || 'Ошибка';
+    try{
+      const data = await response.json();
+      detail = data?.detail || detail;
+    }catch(_){}
+    return { ok: false, status: response.status, error: detail };
+  }catch(e){
+    return { ok: false, status: 0, error: e.message || 'Ошибка сети' };
+  }
+}
+
+function formatDateTime(value){
+  if (!value) return '';
+  try{
+    const dt = new Date(value);
+    if (Number.isNaN(dt.getTime())) return value;
+    return dt.toLocaleString('ru-RU', { dateStyle: 'short', timeStyle: 'short' });
+  }catch(_){
+    return value;
+  }
 }
 
 /* === Общие helpers формы === */

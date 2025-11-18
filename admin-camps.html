@@ -8,44 +8,100 @@
   <style>
     body.crm-body {
       margin: 0;
-      font-family: "Segoe UI", sans-serif;
-      background-color: #0f1116;
-      color: #f4f7ff;
+      background: #0c0f17;
+      color: #f5f7ff;
+      font-family: "Segoe UI", "Inter", sans-serif;
     }
-    .crm-layout {
-      display: flex;
+    .hidden { display: none !important; }
+    .crm-login-view {
       min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(ellipse at top, rgba(54,67,128,0.5), transparent),
+                  radial-gradient(ellipse at bottom, rgba(0,0,0,0.8), #04050a);
+    }
+    .crm-login-card {
+      width: 100%;
+      max-width: 380px;
+      padding: 32px;
+      border-radius: 20px;
+      background: rgba(21, 26, 42, 0.95);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+      display: flex;
       flex-direction: column;
+      gap: 16px;
+    }
+    .crm-login-card h1 {
+      margin: 0;
+      font-size: 22px;
+      text-align: center;
+    }
+    .crm-input {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: #111425;
+      color: inherit;
+      font-size: 15px;
+    }
+    .crm-btn-primary {
+      width: 100%;
+      border: none;
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 15px;
+      cursor: pointer;
+      background: linear-gradient(120deg, #2a6dff, #5340ff);
+      color: #fff;
+      transition: opacity 0.2s ease;
+    }
+    .crm-btn-primary:hover { opacity: 0.9; }
+    .crm-error {
+      color: #ff8c8c;
+      min-height: 18px;
+      text-align: center;
+      font-size: 14px;
+    }
+    .crm-app {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: #090c14;
     }
     .crm-header {
       display: flex;
-      align-items: center;
       justify-content: space-between;
-      padding: 16px 32px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-      background: #141826;
+      align-items: center;
+      padding: 18px 32px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      background: #12172a;
     }
-    .crm-header__title {
-      font-size: 20px;
-      font-weight: 600;
-      letter-spacing: 0.5px;
-    }
+    .crm-header__title { font-size: 20px; font-weight: 600; }
     .crm-header__user {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 12px;
       font-size: 14px;
-      opacity: 0.85;
     }
-    .crm-main {
+    .crm-logout-btn {
+      border: 1px solid rgba(255,255,255,0.3);
+      background: transparent;
+      color: inherit;
+      border-radius: 8px;
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+    .crm-app-grid {
       flex: 1;
       display: flex;
       overflow: hidden;
     }
     .crm-sidebar {
-      width: 220px;
-      background: #141826;
-      border-right: 1px solid rgba(255, 255, 255, 0.08);
+      width: 230px;
+      background: #101426;
+      border-right: 1px solid rgba(255,255,255,0.08);
       padding: 24px 16px;
       display: flex;
       flex-direction: column;
@@ -54,190 +110,213 @@
     .crm-nav-btn {
       padding: 12px 16px;
       border-radius: 10px;
-      background: transparent;
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      border: 1px solid transparent;
+      background: rgba(255,255,255,0.03);
       color: inherit;
-      font-size: 15px;
       text-align: left;
       cursor: pointer;
+      font-size: 14px;
       transition: all 0.2s ease;
     }
-    .crm-nav-btn:hover {
-      border-color: rgba(255, 255, 255, 0.4);
-    }
     .crm-nav-btn.active {
-      background: linear-gradient(120deg, #1f2440, #2a3157);
-      border-color: transparent;
+      background: linear-gradient(120deg, #1f2945, #26335a);
+      border-color: rgba(255,255,255,0.15);
     }
-    .crm-content-area {
+    .crm-content {
       flex: 1;
-      padding: 24px 32px;
+      padding: 28px 36px;
       overflow-y: auto;
-      background: #0f1116;
+      background: #090c14;
     }
-    .crm-view {
+    .crm-panel {
       display: none;
       flex-direction: column;
-      gap: 16px;
+      gap: 20px;
     }
-    .crm-view.active {
-      display: flex;
-    }
-    .crm-section-title {
-      font-size: 22px;
+    .crm-panel.active { display: flex; }
+    .crm-panel h2 {
       margin: 0;
+      font-size: 24px;
     }
-    .crm-filters {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-    .crm-input,
-    .crm-select {
-      background: #151927;
-      border: 1px solid rgba(255, 255, 255, 0.12);
+    .crm-select,
+    .crm-text-field {
+      padding: 10px 12px;
       border-radius: 8px;
-      padding: 10px 14px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: #111427;
       color: inherit;
       font-size: 14px;
-      min-width: 180px;
     }
-    .crm-table {
-      width: 100%;
-      border-collapse: collapse;
-      border-radius: 12px;
-      overflow: hidden;
-      background: #151927;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+    .crm-summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
     }
-    .crm-table thead {
-      background: rgba(255, 255, 255, 0.04);
+    .crm-summary-card {
+      padding: 16px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+    .crm-summary-card h3 {
+      margin: 0 0 8px;
+      font-size: 14px;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
-      font-size: 12px;
+      opacity: 0.7;
     }
-    .crm-table th,
-    .crm-table td {
-      padding: 12px 16px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-      text-align: left;
-    }
-    .crm-table tbody tr:hover {
-      background: rgba(255, 255, 255, 0.02);
+    .crm-summary-card strong {
+      font-size: 28px;
     }
     .crm-table-wrapper {
-      overflow: auto;
       border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.08);
     }
-    .crm-pill {
-      padding: 4px 10px;
-      border-radius: 30px;
-      font-size: 12px;
+    table.crm-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #101426;
+    }
+    table.crm-table th,
+    table.crm-table td {
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      font-size: 14px;
+    }
+    table.crm-table thead {
+      background: rgba(255,255,255,0.04);
       text-transform: uppercase;
+      font-size: 12px;
+      letter-spacing: 0.05em;
     }
-    .crm-pill--green {
-      background: rgba(0, 191, 166, 0.15);
-      color: #31ffb1;
+    .crm-note {
+      color: rgba(255,255,255,0.7);
+      font-size: 14px;
     }
-    .crm-pill--gray {
-      background: rgba(255, 255, 255, 0.08);
-      color: #d0d1da;
+    .crm-calendar-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
     }
-    .crm-btn-muted {
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      background: transparent;
-      color: inherit;
-      border-radius: 8px;
-      padding: 8px 12px;
-      cursor: pointer;
-      font-size: 13px;
-      transition: border-color 0.2s;
-    }
-    .crm-btn-muted:hover {
-      border-color: rgba(255, 255, 255, 0.45);
-    }
-    .crm-table-note {
-      text-align: center;
-      padding: 24px;
-      color: rgba(255, 255, 255, 0.7);
+    .crm-calendar-item {
+      border-radius: 10px;
+      padding: 12px 14px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.02);
     }
   </style>
   <script src="/static/admin-camps.js" defer></script>
 </head>
 <body class="crm-body">
-  <div class="crm-layout">
+  <div id="crm-login-view" class="crm-login-view">
+    <form id="crm-login-form" class="crm-login-card">
+      <h1>CRM для управляющих базами отдыха</h1>
+      <input type="email" name="email" placeholder="Email" class="crm-input" required>
+      <input type="password" name="password" placeholder="Пароль" class="crm-input" required>
+      <button type="submit" class="crm-btn-primary">Войти</button>
+      <div id="crm-login-error" class="crm-error"></div>
+    </form>
+  </div>
+
+  <div id="crm-app-view" class="crm-app hidden">
     <header class="crm-header">
       <div class="crm-header__title">Турист_03 CRM</div>
       <div class="crm-header__user">
-        <span>Администратор</span>
+        <span id="crm-admin-name">Администратор</span>
+        <button id="crm-logout-btn" class="crm-logout-btn">Выйти</button>
       </div>
     </header>
-
-    <div class="crm-main">
+    <div class="crm-app-grid">
       <aside class="crm-sidebar">
-        <button class="crm-nav-btn active" data-crm-view="camps">Базы</button>
-        <button class="crm-nav-btn" data-crm-view="bookings">Бронирования</button>
-        <button class="crm-nav-btn" data-crm-view="services">Услуги</button>
-        <button class="crm-nav-btn" data-crm-view="settings">Настройки</button>
+        <button class="crm-nav-btn active" data-crm-target="dashboard">Сводка</button>
+        <button class="crm-nav-btn" data-crm-target="calendar">Календарь</button>
+        <button class="crm-nav-btn" data-crm-target="bookings">Брони</button>
+        <button class="crm-nav-btn" data-crm-target="rooms">Номера и цены</button>
+        <button class="crm-nav-btn" data-crm-target="guests">Гости</button>
+        <button class="crm-nav-btn" data-crm-target="services">Услуги</button>
+        <button class="crm-nav-btn" data-crm-target="settings">Настройки</button>
       </aside>
+      <section class="crm-content">
+        <section class="crm-panel active" data-crm-panel="dashboard">
+          <h2>Сводка по базе</h2>
+          <div>
+            <label for="crm-dashboard-camp-select">Выберите базу</label><br>
+            <select id="crm-dashboard-camp-select" class="crm-select crm-camp-select"></select>
+          </div>
+          <p id="crm-dashboard-note" class="crm-note hidden">Вы ещё не привязаны ни к одной базе.</p>
+          <div class="crm-summary">
+            <div class="crm-summary-card">
+              <h3>Брони сегодня</h3>
+              <strong id="crm-stat-bookings">0</strong>
+            </div>
+            <div class="crm-summary-card">
+              <h3>Заселения сегодня</h3>
+              <strong id="crm-stat-arrivals">0</strong>
+            </div>
+            <div class="crm-summary-card">
+              <h3>Свободных номеров</h3>
+              <strong id="crm-stat-free">—</strong>
+            </div>
+          </div>
+        </section>
 
-      <section class="crm-content-area">
-        <div class="crm-view active" data-crm-panel="camps">
-          <h1 class="crm-section-title">Базы отдыха</h1>
-          <div class="crm-filters">
-            <input type="text" class="crm-input" placeholder="Поиск по названию" disabled>
-            <select class="crm-select" disabled>
-              <option>Регион (скоро)</option>
-            </select>
+        <section class="crm-panel" data-crm-panel="calendar">
+          <h2>Календарь</h2>
+          <div class="crm-calendar-list" id="crm-calendar-list">
+            <div class="crm-note">Загрузка...</div>
+          </div>
+        </section>
+
+        <section class="crm-panel" data-crm-panel="bookings">
+          <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;">
+            <h2 style="margin:0;">Брони</h2>
+            <button id="crm-create-booking-btn" class="crm-btn-primary" style="width:auto;padding:10px 18px;">Создать бронь</button>
+          </div>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
+            <select id="crm-bookings-camp-select" class="crm-select crm-camp-select"></select>
+            <input type="date" id="crm-bookings-from" class="crm-text-field">
+            <input type="date" id="crm-bookings-to" class="crm-text-field">
+            <button id="crm-bookings-filter" class="crm-logout-btn">Фильтровать</button>
           </div>
           <div class="crm-table-wrapper">
-            <table class="crm-table" id="crm-camps-table">
+            <table class="crm-table">
               <thead>
                 <tr>
-                  <th>ID</th>
-                  <th>Название</th>
-                  <th>Регион</th>
-                  <th>Активна</th>
-                  <th>Действия</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr><td colspan="5" class="crm-table-note">Загрузка...</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div class="crm-view" data-crm-panel="bookings">
-          <h1 class="crm-section-title">Бронирования</h1>
-          <div class="crm-table-wrapper">
-            <table class="crm-table" id="crm-bookings-table">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>База</th>
                   <th>Заезд</th>
                   <th>Выезд</th>
                   <th>Гости</th>
+                  <th>Номер</th>
                   <th>Статус</th>
+                  <th>Источник</th>
                 </tr>
               </thead>
-              <tbody>
-                <tr><td colspan="6" class="crm-table-note">Загрузка...</td></tr>
+              <tbody id="crm-bookings-body">
+                <tr><td colspan="6" class="crm-note">Загрузка...</td></tr>
               </tbody>
             </table>
           </div>
-        </div>
+        </section>
 
-        <div class="crm-view" data-crm-panel="services">
-          <h1 class="crm-section-title">Услуги</h1>
-          <p>Раздел в разработке.</p>
-        </div>
+        <section class="crm-panel" data-crm-panel="rooms">
+          <h2>Номера и цены</h2>
+          <p class="crm-note">Раздел в разработке.</p>
+        </section>
 
-        <div class="crm-view" data-crm-panel="settings">
-          <h1 class="crm-section-title">Настройки</h1>
-          <p>Раздел в разработке.</p>
-        </div>
+        <section class="crm-panel" data-crm-panel="guests">
+          <h2>Гости</h2>
+          <p class="crm-note">Раздел в разработке.</p>
+        </section>
+
+        <section class="crm-panel" data-crm-panel="services">
+          <h2>Услуги</h2>
+          <p class="crm-note">Раздел в разработке.</p>
+        </section>
+
+        <section class="crm-panel" data-crm-panel="settings">
+          <h2>Настройки</h2>
+          <p class="crm-note">Раздел в разработке.</p>
+        </section>
       </section>
     </div>
   </div>
