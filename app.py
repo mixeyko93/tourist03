@@ -9,7 +9,7 @@ from datetime import datetime, date
 import re
 import secrets
 from dotenv import load_dotenv
-from typing import List
+from typing import List, Optional
 
 # Load environment variables from .env file
 load_dotenv()
@@ -491,11 +491,6 @@ def index():
 def superadmin_page():
     return FileResponse(os.path.join(BASE_DIR, "superadmin.html"))
 
-@app.get("/admin-base", response_class=HTMLResponse)
-def admin_base_page():
-    return FileResponse(os.path.join(BASE_DIR, "admin-base.html"))
-
-
 @app.get("/admincamps", response_class=HTMLResponse)
 def admin_camps_page(request: Request):
     """CRM-интерфейс для администраторов баз."""
@@ -822,9 +817,9 @@ def api_admin_my_camps(admin: dict = Depends(get_current_admin)):
 
 @app.get("/api/admin/bookings")
 def api_admin_bookings(
-    camp_id: int | None = None,
-    date_from: date | None = None,
-    date_to: date | None = None,
+    camp_id: Optional[int] = None,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
     admin: dict = Depends(get_current_admin),
 ):
     """Бронирования управляющего с учётом доступных баз."""
@@ -878,9 +873,9 @@ def api_admin_bookings(
 
 @app.get("/api/admin/calendar")
 def api_admin_calendar(
-    camp_id: int | None = None,
-    date_from: date | None = None,
-    date_to: date | None = None,
+    camp_id: Optional[int] = None,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
     admin: dict = Depends(get_current_admin),
 ):
     """Упрощённый календарь бронирований."""
@@ -920,7 +915,7 @@ def api_admin_calendar(
     return [dict(row) for row in rows]
 
 
-def _normalize_move(url: str, camp_id: int, room_db_id: int | None = None, camp_name: str | None = None, room_name: str | None = None) -> str:
+def _normalize_move(url: str, camp_id: int, room_db_id: Optional[int] = None, camp_name: Optional[str] = None, room_name: Optional[str] = None) -> str:
     """
     Переносим файл из временной папки в:
       база:  /static/uploads/{camp_id}_{camp-name-latin}/
@@ -998,7 +993,7 @@ async def api_camps_upsert(camp_id: int, req: Request):
     data = await req.json()
     return await _upsert_camp(camp_id, data)
 
-async def _upsert_camp(camp_id: int | None, data: dict):
+async def _upsert_camp(camp_id: Optional[int], data: dict):
     conn = _conn_camps()
     cur  = conn.cursor()
 
