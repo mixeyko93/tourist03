@@ -37,9 +37,49 @@
     .accounts-modal-card{width:100%;max-width:520px;background:#151821;border:1px solid #262a34;border-radius:18px;padding:24px;box-shadow:0 30px 90px rgba(0,0,0,.65);color:#f2f4f7;max-height:90vh;overflow:auto}
     .accounts-modal-card h2{margin:0 0 12px}
     .accounts-modal-card label{display:block;font-weight:600;margin-top:12px}
-    .accounts-modal-card input{width:100%;margin-top:6px}
-    .accounts-modal-card input[type=checkbox]{width:auto;margin-top:0}
-    #ca-camps-list{margin-top:10px;max-height:220px;overflow:auto;border:1px solid #2a2f3a;border-radius:12px;padding:8px;display:grid;gap:6px;background:#0f1216}
+	    .accounts-modal-card input{width:100%;margin-top:6px}
+	    .accounts-modal-card input[type=checkbox]{width:auto;margin-top:0}
+	    #users_tbl tbody tr{cursor:pointer}
+	    #users_tbl tbody tr:hover{background-color:rgba(255,255,255,0.04)}
+	    #users_tbl thead th{position:relative}
+	    .th-wrap{display:flex;align-items:center;justify-content:space-between;gap:10px}
+	    .th-filter{
+	      display:inline-flex;align-items:center;justify-content:center;
+	      min-width:26px;height:22px;padding:0 8px;
+	      border-radius:10px;border:1px solid #2a2f3a;
+	      background:rgba(255,255,255,0.02);
+	      color:inherit;cursor:pointer;font-size:12px;line-height:1;
+	      transition:transform .06s ease, background .12s ease, border-color .12s ease;
+	    }
+	    .th-filter:hover{background:rgba(255,255,255,0.06)}
+	    .th-filter:active{transform:scale(.98)}
+	    .th-filter.active{border-color:var(--blue);color:var(--blue)}
+	    .btn-soft{background:#141821;border-color:#2a2f3a;color:#e6eaf0;cursor:pointer}
+	    .btn-soft:hover{background:rgba(255,255,255,0.06)}
+	    .table-filter-pop{
+	      position:fixed;z-index:6000;
+	      width:min(320px, 92vw);
+	      border:1px solid #2a2f3a;border-radius:14px;
+	      background:#0f1216;color:#f2f4f7;
+	      box-shadow:0 30px 90px rgba(0,0,0,.65);
+	      padding:12px;
+	    }
+	    .table-filter-pop .t{font-weight:800;margin:0 0 8px}
+	    .table-filter-pop .muted{margin:0 0 8px}
+	    .table-filter-pop input{width:100%;box-sizing:border-box;max-width:100%}
+	    .table-filter-pop .actions{display:flex;gap:10px;justify-content:end;margin-top:10px;flex-wrap:wrap}
+	    .table-filter-pop .actions button{min-width:120px}
+	    .userhist-modal-card{max-width:980px}
+	    .userhist-grid{display:grid;gap:10px}
+	    .userhist-kv{display:grid;grid-template-columns:160px 1fr;gap:10px;padding:10px 12px;border:1px solid #2a2f3a;border-radius:12px;background:#0f1216}
+	    .userhist-kv .k{color:#8a8f98}
+    .userhist-section-title{font-weight:700;margin:14px 0 8px}
+    .userhist-table{width:100%;border-collapse:collapse;font-size:13px}
+    .userhist-table th{font-weight:600;text-align:left;padding:10px;border-bottom:1px solid #2a2f3a;color:#8a8f98}
+    .userhist-table td{padding:10px;border-bottom:1px solid #1f242e}
+    .userhist-close{display:flex;justify-content:end}
+    .userhist-close button{min-width:120px}
+	    #ca-camps-list, #ea-camps-list{margin-top:10px;max-height:220px;overflow:auto;border:1px solid #2a2f3a;border-radius:12px;padding:8px;display:grid;gap:6px;background:#0f1216}
     .ca-camp-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid transparent;transition:border-color .15s ease}
     .ca-camp-item:hover{border-color:#2a2f3a}
     .ca-camp-item span{font-size:13px;color:#c9d1d9}
@@ -287,6 +327,19 @@ input[type=number]{ -moz-appearance:textfield }
   width:24px; height:24px; border-radius:8px; border:1px solid #2a2f3a;
   background:#141821; color:#e6eaf0; cursor:pointer; font-size:12px;
 }
+/* новые стили для room-photo-thumb */
+.room-photo-thumb {
+  position:relative; width:96px; height:72px; border:1px solid #2a2f3a;
+  border-radius:10px; overflow:hidden; background:#0f1216;
+}
+.room-photo-thumb img { width:100%; height:100%; object-fit:cover; display:block; }
+.room-photo-thumb.is-cover { border-color:#ffc107; border-width:2px; }
+.room-photo-actions { position:absolute; left:4px; right:4px; bottom:4px; display:flex; gap:4px; }
+.btn-photo {
+  height:24px; width:24px; padding:0; border-radius:8px; border:1px solid #2a2f3a;
+  background:#141821; color:#e6eaf0; cursor:pointer; font-size:12px;
+}
+.btn-photo:hover { background:#1b2330; }
 /* кнопка загрузки */
 .room-upload { margin-top:6px; display:inline-flex; gap:8px; align-items:center; }
 
@@ -422,6 +475,16 @@ html[data-theme="dark"] .nav-emoji:hover{ background:#141821; }
   <input id="cf_site" class="cf-input" placeholder="https://пример.рф">
 </div>
 
+<!-- Тип жилья (как показывать пользователю кнопку выбора) -->
+<div class="cf-field" style="grid-column:1/4">
+  <label for="cf_housing_type">Тип жилья</label>
+  <select id="cf_housing_type" class="cf-input">
+    <option value="apartments">Апартаменты</option>
+    <option value="houses">Дома</option>
+    <option value="rooms">Номера</option>
+  </select>
+</div>
+
 <!-- строка 4а -->
 <div class="cf-field" style="grid-column:1/4">
   <label for="cf_rooms">Количество апартаментов</label>
@@ -516,6 +579,12 @@ html[data-theme="dark"] .nav-emoji:hover{ background:#141821; }
       <h3>Пользователи</h3>
       <table id="users_tbl"><thead><tr><th>ID</th><th>Имя</th><th>Телефон</th><th>Email</th><th>Создан</th></tr></thead><tbody></tbody></table>
     </div>
+
+    <div id="user-history-modal" class="accounts-modal hidden">
+      <div class="accounts-modal-card userhist-modal-card">
+        <div id="user-history-content"></div>
+      </div>
+    </div>
   </section>
 
     <section id="sec_accounts" style="display:none">
@@ -561,6 +630,44 @@ html[data-theme="dark"] .nav-emoji:hover{ background:#141821; }
         </div>
       </div>
     </div>
+
+    <div id="edit-account-modal" class="accounts-modal hidden">
+      <div class="accounts-modal-card">
+        <h2>Редактировать учётную запись</h2>
+        <div class="muted" id="ea-meta"></div>
+
+        <label>Логин (email)
+          <input type="email" id="ea-email" placeholder="name@example.com">
+        </label>
+
+        <label>Новый пароль (необязательно)
+          <input type="password" id="ea-password" placeholder="Оставьте пустым, чтобы не менять">
+        </label>
+
+        <label>Имя управляющего
+          <input type="text" id="ea-display-name" placeholder="Имя, отображаемое в CRM">
+        </label>
+
+        <label style="display:flex;align-items:center;gap:10px;margin-top:14px">
+          <input type="checkbox" id="ea-is-active" checked>
+          <span>Учётная запись активна</span>
+        </label>
+
+        <div class="accounts-hint">
+          <div>Базы отдыха, доступные этой учётке:</div>
+          <div id="ea-camps-list">
+            <div class="muted">Список баз загружается...</div>
+          </div>
+        </div>
+
+        <div id="ea-error" class="text-error hidden"></div>
+
+        <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px">
+          <button type="button" class="button" id="ea-btn-cancel">Отмена</button>
+          <button type="button" class="button primary" id="ea-btn-save">Сохранить</button>
+        </div>
+      </div>
+    </div>
   </section>
 
 </div>
@@ -595,16 +702,24 @@ const ACCOUNT_CREATE_ENDPOINTS = [
   '/api/admincamps/account',
   '/api/admin/account',
 ];
-const ACCOUNT_LIST_ENDPOINTS = [
-  '/api/superadmin/accounts',
-  '/api/admincamps/accounts',
-];
+	const ACCOUNT_LIST_ENDPOINTS = [
+	  '/api/superadmin/accounts',
+	  '/api/admincamps/accounts',
+	];
+	const ACCOUNT_UPDATE_ENDPOINTS = [
+	  '/api/superadmin/accounts',
+	  '/api/admincamps/accounts',
+	  '/api/admin/accounts',
+	];
 
-let _accountsSectionReady = false;
-let _accountsCampsLoaded = false;
-let _accountsCampsLoading = false;
-let _accountsListLoaded = false;
-let _accountsListLoading = false;
+	let _accountsSectionReady = false;
+	let _accountsCampsLoaded = false;
+	let _accountsCampsLoading = false;
+	let _accountsListLoaded = false;
+	let _accountsListLoading = false;
+	let _accountsCampsCache = [];
+	let _accountsListCache = [];
+	let _editAccountDraft = null;
 
 for (const k in tabs) {
   const [btn, sec] = tabs[k];
@@ -745,41 +860,351 @@ async function deleteCamp(id){
 
 
 /* === Пользователи === */
-async function loadUsers(){
-  const list = await api('/api/users');
-  const tb=document.querySelector('#users_tbl tbody');
-  tb.innerHTML='';
-  list.forEach(u=>{
+function formatPhoneRu(phone){
+  const raw = String(phone || '');
+  const digits = raw.replace(/\D/g,'');
+  if (!digits) return '';
+  let d = digits;
+  if (d.length === 11 && d.startsWith('8')) d = '7' + d.slice(1);
+  if (d.length === 11 && d.startsWith('7')) {
+    return `+7 ${d.slice(1,4)} ${d.slice(4,7)} ${d.slice(7,9)} ${d.slice(9,11)}`;
+  }
+  return raw;
+}
+function formatDateTime(v){
+  if (!v) return '';
+  const dt = new Date(v);
+  if (Number.isNaN(dt.getTime())) return String(v);
+  const pad = (n)=>String(n).padStart(2,'0');
+  return `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())} ${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+}
+
+let _usersAll = [];
+let _userFilters = { id:'', name:'', phone:'', email:'', created_at:'' };
+let _usersFilterReady = false;
+let _filterPop = null;
+
+function ensureUsersFilterUI(){
+  if (_usersFilterReady) return;
+  const tbl = document.getElementById('users_tbl');
+  if (!tbl) return;
+  const ths = tbl.querySelectorAll('thead th');
+  const cols = [
+    { key:'id',         label:'ID'      },
+    { key:'name',       label:'Имя'     },
+    { key:'phone',      label:'Телефон' },
+    { key:'email',      label:'Email'   },
+    { key:'created_at', label:'Создан'  },
+  ];
+  ths.forEach((th, idx)=>{
+    const col = cols[idx];
+    if (!col) return;
+    const label = (th.textContent || col.label || '').trim() || col.label;
+    th.textContent = '';
+    const wrap = document.createElement('div');
+    wrap.className = 'th-wrap';
+    const span = document.createElement('span');
+    span.textContent = label;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'th-filter';
+    btn.dataset.col = col.key;
+    btn.title = 'Фильтр';
+    btn.textContent = '⏷';
+    btn.addEventListener('click', (ev)=>{
+      ev.preventDefault();
+      ev.stopPropagation();
+      openUsersFilterPopover(btn, col.key, label);
+    });
+    wrap.appendChild(span);
+    wrap.appendChild(btn);
+    th.appendChild(wrap);
+  });
+
+  document.addEventListener('click', ()=> closeUsersFilterPopover());
+  document.addEventListener('keydown', (ev)=>{ if (ev.key === 'Escape') closeUsersFilterPopover(); });
+  _usersFilterReady = true;
+  updateUsersFilterIndicators();
+}
+
+function getUserField(u, colKey){
+  if (!u) return '';
+  if (colKey === 'id') return String(u.id ?? '');
+  if (colKey === 'name') return String(u.name ?? '');
+  if (colKey === 'phone') return formatPhoneRu(u.phone || '');
+  if (colKey === 'email') return String(u.email || '');
+  if (colKey === 'created_at') return formatDateTime(u.created_at || '');
+  return '';
+}
+
+function applyUsersFilters(list){
+  const active = Object.entries(_userFilters).filter(([,v])=> String(v||'').trim() !== '');
+  if (!active.length) return list;
+  return (list || []).filter(u=>{
+    for (const [k, v] of active){
+      const needle = String(v || '').toLowerCase();
+      const hay = String(getUserField(u, k) || '').toLowerCase();
+      if (!hay.includes(needle)) return false;
+    }
+    return true;
+  });
+}
+
+function renderUsersTable(){
+  const tb = document.querySelector('#users_tbl tbody');
+  if (!tb) return;
+  tb.innerHTML = '';
+  const filtered = applyUsersFilters(_usersAll);
+  filtered.forEach(u=>{
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td>${u.id}</td><td>${u.name}</td><td>${u.phone}</td><td>${u.email||''}</td><td>${u.created_at}</td>`;
+    tr.innerHTML=`<td>${u.id}</td><td>${u.name || ''}</td><td>${formatPhoneRu(u.phone || '')}</td><td>${u.email||''}</td><td>${formatDateTime(u.created_at) || ''}</td>`;
+    tr.addEventListener('click', ()=> loadUserHistory(u.id));
     tb.appendChild(tr);
   });
+  updateUsersFilterIndicators();
 }
 
-function initAccountsSection(){
-  if (_accountsSectionReady){
-    loadAdminAccounts();
-    return;
+function updateUsersFilterIndicators(){
+  const tbl = document.getElementById('users_tbl');
+  if (!tbl) return;
+  tbl.querySelectorAll('.th-filter').forEach(btn=>{
+    const key = btn.dataset.col;
+    const active = String(_userFilters[key] || '').trim() !== '';
+    btn.classList.toggle('active', active);
+  });
+}
+
+function ensureFilterPop(){
+  if (_filterPop) return _filterPop;
+  const div = document.createElement('div');
+  div.className = 'table-filter-pop hidden';
+  div.addEventListener('click', (ev)=> ev.stopPropagation());
+  document.body.appendChild(div);
+  _filterPop = div;
+  return div;
+}
+
+function openUsersFilterPopover(anchorBtn, colKey, colLabel){
+  const pop = ensureFilterPop();
+  pop.innerHTML = `
+    <div class="t">Фильтр: ${colLabel}</div>
+    <div class="muted">Показывать строки, где поле содержит текст.</div>
+    <input id="tf_value" placeholder="Введите текст для поиска…">
+    <div class="actions">
+      <button class="btn-soft" id="tf_clear">Очистить</button>
+      <button class="primary" id="tf_apply">Применить</button>
+    </div>
+    <div class="actions" style="justify-content:start">
+      <button class="btn-soft" id="tf_clear_all">Сбросить все фильтры</button>
+    </div>
+  `;
+
+  const current = String(_userFilters[colKey] || '');
+  const input = pop.querySelector('#tf_value');
+  if (input) input.value = current;
+
+  pop.classList.remove('hidden');
+  const rect = anchorBtn.getBoundingClientRect();
+  const vw = window.innerWidth || document.documentElement.clientWidth;
+  const vh = window.innerHeight || document.documentElement.clientHeight;
+  let left = Math.min(vw - pop.offsetWidth - 10, Math.max(10, rect.left));
+  let top = rect.bottom + 8;
+  if (top + pop.offsetHeight + 10 > vh) top = Math.max(10, rect.top - pop.offsetHeight - 8);
+  pop.style.left = left + 'px';
+  pop.style.top = top + 'px';
+
+  if (input) {
+    input.focus();
+    input.select();
+    input.onkeydown = (ev)=>{
+      if (ev.key === 'Enter') { ev.preventDefault(); closeUsersFilterPopover(); }
+    };
+    input.oninput = ()=>{
+      _userFilters[colKey] = String(input.value || '').trim();
+      renderUsersTable();
+    };
   }
-  const btnOpen = document.getElementById('btn-open-create-account');
-  const modal = document.getElementById('create-account-modal');
-  const btnCancel = document.getElementById('ca-btn-cancel');
-  const btnSave = document.getElementById('ca-btn-save');
-  if (!btnOpen || !modal || !btnCancel || !btnSave) return;
 
-  btnOpen.addEventListener('click', () => {
-    openCreateAccountModal();
+  pop.querySelector('#tf_apply')?.addEventListener('click', ()=>{
+    closeUsersFilterPopover();
   });
-  btnCancel.addEventListener('click', () => closeCreateAccountModal());
-  btnSave.addEventListener('click', () => submitCreateAccountForm());
-  modal.addEventListener('click', (ev) => {
-    if (ev.target === modal) closeCreateAccountModal();
+  pop.querySelector('#tf_clear')?.addEventListener('click', ()=>{
+    _userFilters[colKey] = '';
+    if (input) input.value = '';
+    closeUsersFilterPopover();
+    renderUsersTable();
   });
-
-  _accountsSectionReady = true;
-  loadCampsForAccounts();
-  loadAdminAccounts();
+  pop.querySelector('#tf_clear_all')?.addEventListener('click', ()=>{
+    _userFilters = { id:'', name:'', phone:'', email:'', created_at:'' };
+    closeUsersFilterPopover();
+    renderUsersTable();
+  });
 }
+
+function closeUsersFilterPopover(){
+  if (!_filterPop) return;
+  _filterPop.classList.add('hidden');
+}
+
+function openUserHistoryModal(html){
+  const modal = document.getElementById('user-history-modal');
+  const content = document.getElementById('user-history-content');
+  if (!modal || !content) return;
+  content.innerHTML = html;
+  modal.classList.remove('hidden');
+  modal.onclick = (ev)=>{ if (ev.target === modal) closeUserHistoryModal(); };
+  const btn = content.querySelector('#userhist_close');
+  if (btn) btn.onclick = closeUserHistoryModal;
+}
+function closeUserHistoryModal(){
+  const modal = document.getElementById('user-history-modal');
+  const content = document.getElementById('user-history-content');
+  if (modal) modal.classList.add('hidden');
+  if (content) content.innerHTML = '';
+}
+
+async function loadUserHistory(userId){
+  try{
+    const data = await api(`/api/superadmin/users/${userId}/history`);
+    const u = data.user || {};
+    const phone = formatPhoneRu(u.phone || '');
+    const email = u.email || '';
+    const created = formatDateTime(u.created_at);
+    const flags = [
+      u.phone_verified ? 'телефон подтверждён' : 'телефон не подтверждён',
+      (u.email ? (u.email_verified ? 'email подтверждён' : 'email не подтверждён') : 'email не указан')
+    ].join(', ');
+
+    const bookings = Array.isArray(data.bookings) ? data.bookings : [];
+    const events = Array.isArray(data.events) ? data.events : [];
+
+    const bookingsRows = bookings.length ? bookings.map(b=>{
+      const period = `${b.check_in || ''} → ${b.check_out || ''}`;
+      const camp = b.camp_name ? `${b.camp_name} (#${b.camp_id})` : `#${b.camp_id}`;
+      const room = b.room_name ? `${b.room_name} (#${b.room_id})` : (b.room_id ? `#${b.room_id}` : '');
+      return `
+        <tr>
+          <td>#${b.id}</td>
+          <td>${camp}</td>
+          <td>${room}</td>
+          <td>${period}</td>
+          <td>${b.guests_count ?? ''}</td>
+          <td>${b.status ?? ''}</td>
+          <td>${formatDateTime(b.created_at)}</td>
+        </tr>`;
+    }).join('') : `<tr><td colspan="7" class="muted">Нет бронирований.</td></tr>`;
+
+    const eventsRows = events.length ? events.map(e=>{
+      let payload = '';
+      try {
+        let data = e.payload;
+        if (typeof data === 'string') {
+          try { data = JSON.parse(data); } catch(_) {}
+        }
+        if (!data || typeof data !== 'object') {
+          payload = '';
+        } else {
+          // Форматируем объект в читаемый вид
+          const parts = [];
+          if (data.name) parts.push(`Имя: ${data.name}`);
+          if (data.phone) parts.push(`Телефон: ${data.phone}`);
+          if (data.email) parts.push(`Email: ${data.email}`);
+          if (data.accept_terms !== undefined) parts.push(`Согласие: ${data.accept_terms ? 'да' : 'нет'}`);
+          if (data.terms_version) parts.push(`Версия условий: ${data.terms_version}`);
+          payload = parts.join(', ');
+        }
+      } catch(_) {
+        payload = String(e.payload || '');
+      }
+      return `
+        <tr>
+          <td>${formatDateTime(e.created_at)}</td>
+          <td>${e.event_type || ''}</td>
+          <td style="word-break:break-word">${payload || '—'}</td>
+        </tr>`;
+    }).join('') : `<tr><td colspan="3" class="muted">Пока нет событий (логируется регистрация/вход/верификации).</td></tr>`;
+
+    openUserHistoryModal(`
+      <div class="userhist-grid">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <div style="font-weight:800;font-size:18px">Пользователь #${u.id} — ${u.name || ''}</div>
+          <div class="userhist-close"><button class="primary" id="userhist_close">Закрыть</button></div>
+        </div>
+
+        <div class="userhist-kv">
+          <div class="k">Телефон</div><div>${phone}</div>
+          <div class="k">Email</div><div>${email || '<span class="muted">—</span>'}</div>
+          <div class="k">Создан</div><div>${created || '<span class="muted">—</span>'}</div>
+          <div class="k">Статус</div><div>${flags}</div>
+        </div>
+
+        <div class="userhist-section-title">Бронирования</div>
+        <div style="border:1px solid #2a2f3a;border-radius:14px;overflow:auto;background:rgba(15,18,22,.6)">
+          <table class="userhist-table">
+            <thead><tr><th>ID</th><th>База</th><th>Номер</th><th>Даты</th><th>Гостей</th><th>Статус</th><th>Создано</th></tr></thead>
+            <tbody>${bookingsRows}</tbody>
+          </table>
+        </div>
+
+        <div class="userhist-section-title">Оплаты</div>
+        <div class="muted">Пока нет источника данных по оплатам в проекте (готово место под интеграцию).</div>
+
+        <div class="userhist-section-title">События</div>
+        <div style="border:1px solid #2a2f3a;border-radius:14px;overflow:auto;background:rgba(15,18,22,.6)">
+          <table class="userhist-table">
+            <thead><tr><th>Время</th><th>Событие</th><th>Данные</th></tr></thead>
+            <tbody>${eventsRows}</tbody>
+          </table>
+        </div>
+      </div>
+    `);
+  }catch(e){
+    console.error('loadUserHistory error', e);
+    appAlert('Не удалось загрузить историю пользователя');
+  }
+}
+
+async function loadUsers(){
+  const list = await api('/api/users');
+  _usersAll = Array.isArray(list) ? list : [];
+  ensureUsersFilterUI();
+  renderUsersTable();
+}
+
+	function initAccountsSection(){
+	  if (_accountsSectionReady){
+	    loadAdminAccounts();
+	    return;
+	  }
+	  const btnOpen = document.getElementById('btn-open-create-account');
+	  const modal = document.getElementById('create-account-modal');
+	  const btnCancel = document.getElementById('ca-btn-cancel');
+	  const btnSave = document.getElementById('ca-btn-save');
+	  const editModal = document.getElementById('edit-account-modal');
+	  const editCancel = document.getElementById('ea-btn-cancel');
+	  const editSave = document.getElementById('ea-btn-save');
+	  if (!btnOpen || !modal || !btnCancel || !btnSave) return;
+	  if (!editModal || !editCancel || !editSave) return;
+
+	  btnOpen.addEventListener('click', () => {
+	    openCreateAccountModal();
+	  });
+	  btnCancel.addEventListener('click', () => closeCreateAccountModal());
+	  btnSave.addEventListener('click', () => submitCreateAccountForm());
+	  modal.addEventListener('click', (ev) => {
+	    if (ev.target === modal) closeCreateAccountModal();
+	  });
+
+	  editCancel.addEventListener('click', () => closeEditAccountModal());
+	  editSave.addEventListener('click', () => submitEditAccountForm());
+	  editModal.addEventListener('click', (ev) => {
+	    if (ev.target === editModal) closeEditAccountModal();
+	  });
+
+	  _accountsSectionReady = true;
+	  loadCampsForAccounts();
+	  loadAdminAccounts();
+	}
 
 function openCreateAccountModal(){
   const modal = document.getElementById('create-account-modal');
@@ -807,17 +1232,85 @@ function resetCreateAccountForm(){
   setCreateAccountError('');
 }
 
-function setCreateAccountError(message){
-  const box = document.getElementById('ca-error');
-  if (!box) return;
-  if (!message){
-    box.textContent = '';
-    box.classList.add('hidden');
-  } else {
-    box.textContent = message;
-    box.classList.remove('hidden');
-  }
-}
+	function setCreateAccountError(message){
+	  const box = document.getElementById('ca-error');
+	  if (!box) return;
+	  if (!message){
+	    box.textContent = '';
+	    box.classList.add('hidden');
+	  } else {
+	    box.textContent = message;
+	    box.classList.remove('hidden');
+	  }
+	}
+
+	function openEditAccountModal(acc){
+	  if (!acc || !acc.id) return;
+	  const modal = document.getElementById('edit-account-modal');
+	  if (!modal) return;
+	  _editAccountDraft = {
+	    id: acc.id,
+	    email: acc.email || '',
+	    display_name: acc.display_name || '',
+	    is_active: !!acc.is_active,
+	    camp_ids: (Array.isArray(acc.camps) ? acc.camps.map(c => Number(c.camp_id)).filter(Boolean) : []),
+	  };
+
+	  document.getElementById('ea-meta').textContent = `ID: #${acc.id}`;
+	  document.getElementById('ea-email').value = _editAccountDraft.email;
+	  document.getElementById('ea-password').value = '';
+	  document.getElementById('ea-display-name').value = _editAccountDraft.display_name;
+	  document.getElementById('ea-is-active').checked = _editAccountDraft.is_active;
+	  setEditAccountError('');
+
+	  // лагеря: если ещё не загружены — покажем заглушку и загрузим
+	  const selected = new Set(_editAccountDraft.camp_ids || []);
+	  if (_accountsCampsLoaded){
+	    renderAccountsCampsCheckboxes('ea-camps-list', selected);
+	  } else {
+	    const listEl = document.getElementById('ea-camps-list');
+	    if (listEl) listEl.innerHTML = '<div class="muted">Загружаем список баз...</div>';
+	    loadCampsForAccounts();
+	  }
+
+	  modal.classList.remove('hidden');
+	  document.getElementById('ea-email')?.focus();
+	}
+
+	function closeEditAccountModal(){
+	  const modal = document.getElementById('edit-account-modal');
+	  if (!modal) return;
+	  modal.classList.add('hidden');
+	  resetEditAccountForm();
+	}
+
+	function resetEditAccountForm(){
+	  _editAccountDraft = null;
+	  const fields = ['ea-email','ea-password','ea-display-name'];
+	  fields.forEach(id=>{
+	    const el = document.getElementById(id);
+	    if (el) el.value = '';
+	  });
+	  const meta = document.getElementById('ea-meta');
+	  if (meta) meta.textContent = '';
+	  const isActive = document.getElementById('ea-is-active');
+	  if (isActive) isActive.checked = true;
+	  setEditAccountError('');
+	  const listEl = document.getElementById('ea-camps-list');
+	  if (listEl) listEl.innerHTML = '<div class="muted">Список баз загружается...</div>';
+	}
+
+	function setEditAccountError(message){
+	  const box = document.getElementById('ea-error');
+	  if (!box) return;
+	  if (!message){
+	    box.textContent = '';
+	    box.classList.add('hidden');
+	  } else {
+	    box.textContent = message;
+	    box.classList.remove('hidden');
+	  }
+	}
 
 async function fetchCampsForAccounts(){
   try{
@@ -838,52 +1331,65 @@ async function fetchCampsForAccounts(){
   }
 }
 
-async function loadCampsForAccounts(){
-  if (_accountsCampsLoading || _accountsCampsLoaded) return;
-  const listEl = document.getElementById('ca-camps-list');
-  if (!listEl) return;
-  _accountsCampsLoading = true;
-  listEl.innerHTML = '<div class="muted">Загружаем список баз...</div>';
-  try{
-    const camps = await fetchCampsForAccounts();
-    if (!Array.isArray(camps) || !camps.length){
-      listEl.innerHTML = '<div class="muted">Базы отдыха пока не найдены.</div>';
-    } else {
-      listEl.innerHTML = '';
-      camps.forEach(camp=>{
-        const label = document.createElement('label');
-        label.className = 'ca-camp-item';
+	async function loadCampsForAccounts(){
+	  if (_accountsCampsLoading || _accountsCampsLoaded) return;
+	  const listEl = document.getElementById('ca-camps-list');
+	  if (!listEl) return;
+	  _accountsCampsLoading = true;
+	  listEl.innerHTML = '<div class="muted">Загружаем список баз...</div>';
+	  try{
+	    const camps = await fetchCampsForAccounts();
+	    _accountsCampsCache = Array.isArray(camps) ? camps : [];
+	    renderAccountsCampsCheckboxes('ca-camps-list', new Set());
+	    if (_editAccountDraft?.id){
+	      renderAccountsCampsCheckboxes('ea-camps-list', new Set(_editAccountDraft.camp_ids || []));
+	    }
+	    _accountsCampsLoaded = true;
+	  }catch(e){
+	    listEl.innerHTML = `<div class="muted" style="color:#f87171">Не удалось загрузить базы: ${e?.message || 'ошибка'}</div>`;
+	  }finally{
+	    _accountsCampsLoading = false;
+	  }
+	}
 
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.value = camp.id;
+	function renderAccountsCampsCheckboxes(containerId, selectedIds){
+	  const listEl = document.getElementById(containerId);
+	  if (!listEl) return;
+	  const selected = selectedIds instanceof Set ? selectedIds : new Set(selectedIds || []);
+	  const camps = Array.isArray(_accountsCampsCache) ? _accountsCampsCache : [];
+	  if (!camps.length){
+	    listEl.innerHTML = '<div class="muted">Базы отдыха пока не найдены.</div>';
+	    return;
+	  }
+	  listEl.innerHTML = '';
+	  camps.forEach(camp=>{
+	    const label = document.createElement('label');
+	    label.className = 'ca-camp-item';
 
-        const textWrap = document.createElement('div');
-        const title = document.createElement('div');
-        title.className = 'ca-camp-name';
-        title.textContent = camp.name || `База #${camp.id}`;
-        textWrap.appendChild(title);
+	    const checkbox = document.createElement('input');
+	    checkbox.type = 'checkbox';
+	    checkbox.value = camp.id;
+	    checkbox.checked = selected.has(Number(camp.id));
 
-        const metaText = camp.address || camp.region || camp.lake_name || '';
-        if (metaText){
-          const meta = document.createElement('div');
-          meta.className = 'ca-camp-meta';
-          meta.textContent = metaText;
-          textWrap.appendChild(meta);
-        }
+	    const textWrap = document.createElement('div');
+	    const title = document.createElement('div');
+	    title.className = 'ca-camp-name';
+	    title.textContent = camp.name || `База #${camp.id}`;
+	    textWrap.appendChild(title);
 
-        label.appendChild(checkbox);
-        label.appendChild(textWrap);
-        listEl.appendChild(label);
-      });
-    }
-    _accountsCampsLoaded = true;
-  }catch(e){
-    listEl.innerHTML = `<div class="muted" style="color:#f87171">Не удалось загрузить базы: ${e?.message || 'ошибка'}</div>`;
-  }finally{
-    _accountsCampsLoading = false;
-  }
-}
+	    const metaText = camp.address || camp.region || camp.lake_name || '';
+	    if (metaText){
+	      const meta = document.createElement('div');
+	      meta.className = 'ca-camp-meta';
+	      meta.textContent = metaText;
+	      textWrap.appendChild(meta);
+	    }
+
+	    label.appendChild(checkbox);
+	    label.appendChild(textWrap);
+	    listEl.appendChild(label);
+	  });
+	}
 
 async function fetchAccountsList(){
   let lastError = null;
@@ -898,116 +1404,190 @@ async function fetchAccountsList(){
   throw new Error(lastError?.error || 'Не удалось загрузить данные');
 }
 
-async function loadAdminAccounts(force=false){
-  if (_accountsListLoading) return;
-  if (_accountsListLoaded && !force) return;
-  const box = document.getElementById('accounts-list');
+	async function loadAdminAccounts(force=false){
+	  if (_accountsListLoading) return;
+	  if (_accountsListLoaded && !force) return;
+	  const box = document.getElementById('accounts-list');
   if (!box) return;
   _accountsListLoading = true;
   box.innerHTML = '<div class="muted">Загружаем учётные записи...</div>';
-  try{
-    const accounts = await fetchAccountsList();
-    if (!accounts.length){
-      box.innerHTML = '<div class="muted">Учётные записи ещё не созданы.</div>';
-    } else {
-      box.innerHTML = '';
-      box.appendChild(renderAccountsTable(accounts));
-    }
-    _accountsListLoaded = true;
-  }catch(e){
-    box.innerHTML = `<div class="text-error">Не удалось загрузить учётные записи: ${e.message || 'ошибка'}</div>`;
-  }finally{
+	  try{
+	    const accounts = await fetchAccountsList();
+	    _accountsListCache = Array.isArray(accounts) ? accounts : [];
+	    if (!accounts.length){
+	      box.innerHTML = '<div class="muted">Учётные записи ещё не созданы.</div>';
+	    } else {
+	      box.innerHTML = '';
+	      box.appendChild(renderAccountsTable(_accountsListCache));
+	    }
+	    _accountsListLoaded = true;
+	  }catch(e){
+	    box.innerHTML = `<div class="text-error">Не удалось загрузить учётные записи: ${e.message || 'ошибка'}</div>`;
+	  }finally{
     _accountsListLoading = false;
   }
 }
 
-function renderAccountsTable(accounts){
-  const table = document.createElement('table');
-  table.className = 'accounts-table';
-  table.innerHTML = `
-    <thead>
-      <tr>
-        <th>ID</th>
-        <th>Логин</th>
-        <th>Имя</th>
-        <th>Базы отдыха</th>
-        <th>Статус</th>
-        <th>Создана</th>
-      </tr>
-    </thead>
-  `;
-  const tbody = document.createElement('tbody');
-  accounts.forEach(acc => {
-    const camps = Array.isArray(acc.camps) && acc.camps.length
-      ? acc.camps.map(c => `<span>${c.camp_name || `База #${c.camp_id}`}</span>`).join('')
-      : '<span class="muted">Не привязаны</span>';
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>#${acc.id}</td>
-      <td>${acc.email}</td>
-      <td>${acc.display_name || ''}</td>
-      <td><div class="accounts-camps">${camps}</div></td>
-      <td style="color:${acc.is_active ? '#22c55e' : '#f87171'}">${acc.is_active ? 'Активна' : 'Выключена'}</td>
-      <td>${formatDateTime(acc.created_at)}</td>
-    `;
-    tbody.appendChild(tr);
-  });
-  table.appendChild(tbody);
-  return table;
-}
+	function renderAccountsTable(accounts){
+	  const table = document.createElement('table');
+	  table.className = 'accounts-table';
+	  table.innerHTML = `
+	    <thead>
+	      <tr>
+	        <th>ID</th>
+	        <th>Логин</th>
+	        <th>Имя</th>
+	        <th>Базы отдыха</th>
+	        <th>Статус</th>
+	        <th>Создана</th>
+	        <th></th>
+	      </tr>
+	    </thead>
+	  `;
+	  const tbody = document.createElement('tbody');
+	  accounts.forEach(acc => {
+	    const camps = Array.isArray(acc.camps) && acc.camps.length
+	      ? acc.camps.map(c => `<span>${c.camp_name || `База #${c.camp_id}`}</span>`).join('')
+	      : '<span class="muted">Не привязаны</span>';
+	    const tr = document.createElement('tr');
+	    tr.innerHTML = `
+	      <td>#${acc.id}</td>
+	      <td>${acc.email}</td>
+	      <td>${acc.display_name || ''}</td>
+	      <td><div class="accounts-camps">${camps}</div></td>
+	      <td style="color:${acc.is_active ? '#22c55e' : '#f87171'}">${acc.is_active ? 'Активна' : 'Выключена'}</td>
+	      <td>${formatDateTime(acc.created_at)}</td>
+	      <td style="white-space:nowrap">
+	        <button type="button" class="button btn-soft" data-action="edit">Редактировать</button>
+	      </td>
+	    `;
+	    tr.querySelector('[data-action="edit"]')?.addEventListener('click', (e) => {
+	      e.preventDefault();
+	      e.stopPropagation();
+	      openEditAccountModal(acc);
+	    });
+	    tbody.appendChild(tr);
+	  });
+	  table.appendChild(tbody);
+	  return table;
+	}
 
-async function submitCreateAccountForm(){
-  const email = (document.getElementById('ca-email')?.value || '').trim();
-  const password = document.getElementById('ca-password')?.value || '';
-  const displayName = (document.getElementById('ca-display-name')?.value || '').trim();
-  const checkedCamps = Array.from(document.querySelectorAll('#ca-camps-list input[type=checkbox]:checked'))
-    .map(el => Number(el.value));
+	async function submitCreateAccountForm(){
+	  const email = (document.getElementById('ca-email')?.value || '').trim();
+	  const password = document.getElementById('ca-password')?.value || '';
+	  const displayName = (document.getElementById('ca-display-name')?.value || '').trim();
+	  const checkedCamps = Array.from(document.querySelectorAll('#ca-camps-list input[type=checkbox]:checked'))
+	    .map(el => Number(el.value));
 
-  if (!email || !password || !displayName){
-    setCreateAccountError('Заполните email, пароль и имя управляющего.');
-    return;
-  }
+	  if (!email || !password || !displayName){
+	    setCreateAccountError('Заполните email, пароль и имя управляющего.');
+	    return;
+	  }
 
-  setCreateAccountError('');
-  const btnSave = document.getElementById('ca-btn-save');
-  if (btnSave) btnSave.disabled = true;
-  try{
-    const payload = {
-      email,
-      password,
-      display_name: displayName,
-      camp_ids: checkedCamps,
-    };
-    const result = await postAccountWithFallback(payload);
-    if (!result.ok){
-      throw new Error(result.error || 'Не удалось создать учётную запись');
-    }
-    closeCreateAccountModal();
-    appAlert('Учётная запись создана');
-    loadAdminAccounts(true);
-  }catch(e){
-    setCreateAccountError(e.message || 'Произошла ошибка при создании учётной записи');
-  }finally{
-    if (btnSave) btnSave.disabled = false;
-  }
-}
+	  setCreateAccountError('');
+	  const btnSave = document.getElementById('ca-btn-save');
+	  if (btnSave) btnSave.disabled = true;
+	  try{
+	    const payload = {
+	      email,
+	      password,
+	      display_name: displayName,
+	      camp_ids: checkedCamps,
+	    };
+	    const result = await postAccountWithFallback(payload);
+	    if (!result.ok){
+	      throw new Error(result.error || 'Не удалось создать учётную запись');
+	    }
+	    closeCreateAccountModal();
+	    appAlert('Учётная запись создана');
+	    loadAdminAccounts(true);
+	  }catch(e){
+	    setCreateAccountError(e.message || 'Произошла ошибка при создании учётной записи');
+	  }finally{
+	    if (btnSave) btnSave.disabled = false;
+	  }
+	}
 
-async function postAccountWithFallback(payload){
-  let lastError = { ok: false, error: 'Не удалось создать учётную запись' };
-  for (const url of ACCOUNT_CREATE_ENDPOINTS){
-    const res = await httpJson(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    if (res.ok){
-      return res;
-    }
-    lastError = res;
-    if (![404,405].includes(res.status)) break;
-  }
-  return lastError;
-}
+	async function submitEditAccountForm(){
+	  if (!_editAccountDraft?.id){
+	    setEditAccountError('Не выбрана учётная запись для редактирования.');
+	    return;
+	  }
+
+	  const accountId = Number(_editAccountDraft.id);
+	  const email = (document.getElementById('ea-email')?.value || '').trim();
+	  const password = document.getElementById('ea-password')?.value || '';
+	  const displayName = (document.getElementById('ea-display-name')?.value || '').trim();
+	  const isActive = !!document.getElementById('ea-is-active')?.checked;
+	  const checkedCamps = Array.from(document.querySelectorAll('#ea-camps-list input[type=checkbox]:checked'))
+	    .map(el => Number(el.value));
+
+	  if (!email || !displayName){
+	    setEditAccountError('Заполните email и имя управляющего.');
+	    return;
+	  }
+
+	  setEditAccountError('');
+	  const btnSave = document.getElementById('ea-btn-save');
+	  if (btnSave) btnSave.disabled = true;
+	  try{
+	    const payload = {
+	      email,
+	      password: password ? password : null, // пустой -> не меняем
+	      display_name: displayName,
+	      is_active: isActive,
+	      camp_ids: checkedCamps,
+	    };
+
+	    const result = await patchAccountWithFallback(accountId, payload);
+	    if (!result.ok){
+	      throw new Error(result.error || 'Не удалось сохранить изменения');
+	    }
+
+	    closeEditAccountModal();
+	    appAlert('Изменения сохранены');
+	    loadAdminAccounts(true);
+	  }catch(e){
+	    setEditAccountError(e.message || 'Произошла ошибка при сохранении');
+	  }finally{
+	    if (btnSave) btnSave.disabled = false;
+	  }
+	}
+
+	async function postAccountWithFallback(payload){
+	  let lastError = { ok: false, error: 'Не удалось создать учётную запись' };
+	  for (const url of ACCOUNT_CREATE_ENDPOINTS){
+	    const res = await httpJson(url, {
+	      method: 'POST',
+	      headers: { 'Content-Type': 'application/json' },
+	      body: JSON.stringify(payload),
+	    });
+	    if (res.ok){
+	      return res;
+	    }
+	    lastError = res;
+	    if (![404,405].includes(res.status)) break;
+	  }
+	  return lastError;
+	}
+
+	async function patchAccountWithFallback(accountId, payload){
+	  let lastError = { ok: false, error: 'Не удалось обновить учётную запись' };
+	  for (const baseUrl of ACCOUNT_UPDATE_ENDPOINTS){
+	    const url = `${baseUrl}/${accountId}`;
+	    const res = await httpJson(url, {
+	      method: 'PATCH',
+	      headers: { 'Content-Type': 'application/json' },
+	      body: JSON.stringify(payload),
+	    });
+	    if (res.ok){
+	      return res;
+	    }
+	    lastError = res;
+	    if (![404,405].includes(res.status)) break;
+	  }
+	  return lastError;
+	}
 
 async function httpJson(url, options = {}){
   try{
@@ -1223,9 +1803,30 @@ function renderRoomGallery(idx){
     </div>
   `).join('');
 }
-function roomSetCover(idx,i){ const a=_roomPhotos[idx]||[]; a.forEach((p,k)=>p.cover=(k===i)); renderRoomGallery(idx); _cfDirty = true; }
-function roomMovePhoto(idx,i,d){ const a=_roomPhotos[idx]||[]; const j=i+d; if(j<0||j>=a.length)return; [a[i],a[j]]=[a[j],a[i]]; renderRoomGallery(idx); _cfDirty = true; }
-function roomRemovePhoto(idx,i){ const a=_roomPhotos[idx]||[]; a.splice(i,1); if(a.length && !a.some(p=>p.cover)) a[0].cover=true; renderRoomGallery(idx); _cfDirty = true; }
+function roomSetCover(idx,i){ 
+  const a=_roomPhotos[idx]||[]; 
+  a.forEach((p,k)=>p.cover=(k===i)); 
+  const row = document.querySelector(`.room-row[data-idx="${idx}"]`);
+  if (row) renderRoomPhotos(row, a);
+  _cfDirty = true; 
+}
+function roomMovePhoto(idx,i,d){ 
+  const a=_roomPhotos[idx]||[]; 
+  const j=i+d; 
+  if(j<0||j>=a.length)return; 
+  [a[i],a[j]]=[a[j],a[i]]; 
+  const row = document.querySelector(`.room-row[data-idx="${idx}"]`);
+  if (row) renderRoomPhotos(row, a);
+  _cfDirty = true; 
+}
+function roomRemovePhoto(idx,i){ 
+  const a=_roomPhotos[idx]||[]; 
+  a.splice(i,1); 
+  if(a.length && !a.some(p=>p.cover)) a[0].cover=true; 
+  const row = document.querySelector(`.room-row[data-idx="${idx}"]`);
+  if (row) renderRoomPhotos(row, a);
+  _cfDirty = true; 
+}
 
 photoPick.onclick = ()=> photoFile.click();
 photoFile.onchange = async ()=>{
@@ -1453,7 +2054,11 @@ function renderRoomsEditor(count, prefetched = []) {
     }
 
     // восстановить мини-галерею
-    renderRoomGallery(i);
+    // renderRoomGallery(i);  // старая функция — не используем
+    
+    // отрисовать фото апартаментов
+    const row = root.querySelector(`.room-row[data-idx="${i}"]`);
+    if (row) renderRoomPhotos(row, _roomPhotos[i] || []);
 
     // пересчёты
     const rowSel = `.room-row[data-idx="${i}"]`;
@@ -1472,7 +2077,11 @@ function renderRoomsEditor(count, prefetched = []) {
       const idx = document.querySelectorAll('#cf_rooms_editor .room-row').length;
       root.insertAdjacentHTML('beforeend', roomRowTemplate(idx, {}));
       _roomPhotos[idx] = [];
-      renderRoomGallery(idx);
+      // renderRoomGallery(idx);  // старая функция — не используем
+      
+      // отрисовать фото апартаментов
+      const newRow = root.querySelector(`.room-row[data-idx="${idx}"]`);
+      if (newRow) renderRoomPhotos(newRow, _roomPhotos[idx] || []);
 
       const rowSel = `.room-row[data-idx="${idx}"]`;
       document.querySelectorAll(`${rowSel} .r_beds1, ${rowSel} .r_beds2`).forEach(inp =>
@@ -1553,7 +2162,10 @@ function collectRoomsPayload() {
       discount_from_nights: num('.r_disc_from', 0) ?? 0,
 
       // мини-галерея апартаментов: берём из _roomPhotos[индекс]
-      photos: (_roomPhotos[idx] || []).map(x => ({ url: x.url, cover: !!x.cover }))
+      photos: (_roomPhotos[idx] || []).map(x => ({
+        url: (typeof x === 'string' ? x : x?.url),
+        cover: !!(typeof x === 'object' && x ? x.cover : false),
+      })).filter(p => (p.url || '').trim() !== '')
     };
   });
 }
@@ -1627,6 +2239,9 @@ async function showCampForm(mode='add', data={}) {
   document.getElementById('cf_lake').value = D.lake_name || '';
   document.getElementById('cf_addr').value = D.address || '';
   document.getElementById('cf_coords').value = (D.lat && D.lng) ? `${D.lat}, ${D.lng}` : '';
+  const ht = (D.housing_type || '').toString().trim() || 'apartments';
+  const htSel = document.getElementById('cf_housing_type');
+  if (htSel) htSel.value = ['apartments','houses','rooms'].includes(ht) ? ht : 'apartments';
 
   const ow = unpackPerson(D.owner);
   document.getElementById('cf_owner_name').value  = ow.name || '';
@@ -1675,6 +2290,16 @@ for (const r of rooms) {
   if (!Array.isArray(r.photos)) {
     try { r.photos = r.photos_json ? JSON.parse(r.photos_json) : (r.photo_main ? [r.photo_main] : []); }
     catch { r.photos = r.photo_main ? [r.photo_main] : []; }
+  }
+  
+  // убедимся, что фото имеют правильную структуру {url, cover}
+  if (Array.isArray(r.photos)) {
+    r.photos = r.photos.map((p, idx) => {
+      if (typeof p === 'string') {
+        return { url: p, cover: idx === 0 };
+      }
+      return { url: p.url || p, cover: !!p.cover || idx === 0 };
+    });
   }
 }
 
@@ -1742,15 +2367,16 @@ const bbqSharedManual = parseInt(document.getElementById('cf_bbq_shared').value|
 const poolSharedManual = parseInt(document.getElementById('cf_pool_shared').value||'0',10) || 0;
 
 
-const payload = {
-  status: getStatus(),
-  emoji_size: getEmojiSize(),
+	const payload = {
+	  status: getStatus(),
+	  emoji_size: getEmojiSize(),
 
-  name: document.getElementById('cf_name').value.trim(),
-  lake_name: document.getElementById('cf_lake').value.trim() || null,
-  ...readCoords(), // lat, lng
-  address: document.getElementById('cf_addr').value.trim() || null,
-  site_url: document.getElementById('cf_site').value.trim() || null,
+	  name: document.getElementById('cf_name').value.trim(),
+	  lake_name: document.getElementById('cf_lake').value.trim() || null,
+	  housing_type: (document.getElementById('cf_housing_type')?.value || 'apartments'),
+	  ...readCoords(), // lat, lng
+	  address: document.getElementById('cf_addr').value.trim() || null,
+	  site_url: document.getElementById('cf_site').value.trim() || null,
 
   // владельцы / телефоны — уже упакованы в "ФИО, телефон"
   owner:   packPerson(

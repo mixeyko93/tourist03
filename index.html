@@ -56,23 +56,28 @@
 
     <!-- Вкладка: Личный кабинет -->
     <section id="tab-account" class="tab-content" style="display:none;">
-      <h1 class="page-title">Личный кабинет</h1>
+      <h1 class="page-title" id="accountTitle">Личный кабинет</h1>
 
-      <!-- Блок гостя (покажется, когда не авторизован) -->
-      <div class="card" id="accountGuest">
-        <p class="muted">Для входа в личный кабинет и бронирования необходимо авторизоваться.</p>
-        <div class="row gap">
-          <button class="button primary" id="btnLoginOpen">Вход</button>
-          <button class="button ghost"   id="btnRegisterOpen">Регистрация</button>
+      <div class="account-shell">
+        <!-- Блок гостя (покажется, когда не авторизован) -->
+        <div class="card account-card" id="accountGuest">
+          <p class="muted">Для входа в личный кабинет и бронирования необходимо авторизоваться.</p>
+          <div class="account-actions">
+            <button class="button primary" id="btnLoginOpen">Вход</button>
+            <button class="button ghost"   id="btnRegisterOpen">Регистрация</button>
+          </div>
         </div>
-      </div>
 
-      <!-- Блок пользователя (скрыт по умолчанию; отрисует app.js) -->
-      <div class="card" id="accountUser" style="display:none;">
-        <div class="muted" id="helloLine">Здравствуйте!</div>
-        <div style="margin-top:8px;">
-          <div><b id="profileName"></b></div>
-          <div class="muted" id="profilePhone"></div>
+        <!-- Блок пользователя (скрыт по умолчанию; отрисует app.js) -->
+        <div class="card account-card" id="accountUser" style="display:none; visibility:hidden;">
+        </div>
+
+        <div class="card account-card" id="accountActions" style="display:none;">
+          <div class="account-actions stack">
+            <button class="button ghost" id="btnAccountActive">Активные бронирования</button>
+            <button class="button ghost" id="btnAccountHistory">История бронирований</button>
+            <button class="button ghost" id="btnAccountProfile">Личные данные</button>
+          </div>
         </div>
       </div>
     </section>

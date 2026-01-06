@@ -48,6 +48,7 @@ html, body{
   backdrop-filter:blur(8px);
   box-shadow:0 8px 22px rgba(0,0,0,.25);
   transition:background .2s ease, transform .2s ease;
+  box-sizing:border-box;
 }
 .card:hover{background:rgba(255,255,255,0.08);}
 
@@ -61,6 +62,163 @@ html, body{
 .button.ghost{background:transparent; color:var(--tg-text); border:1px solid var(--border-color);}
 
 .row.gap{display:flex; gap:10px; flex-wrap:wrap;}
+
+/* ====================== ACCOUNT ====================== */
+#tab-account{
+  display:flex;
+  flex-direction:column;
+  height:100%;
+  overflow:auto;
+  padding-bottom:calc(110px + var(--tabbar-offset));
+}
+.account-shell{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:16px;
+  padding:0 18px 18px;
+}
+.account-card{
+  width:100%;
+  max-width:420px;
+  margin:0;
+  text-align:center;
+}
+.account-card .muted{ text-align:center; }
+.account-actions{
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:12px;
+  width:100%;
+  margin-top:6px;
+}
+.account-actions .button{ width:100%; padding:10px 12px; }
+.account-actions.stack{ grid-template-columns:1fr; }
+.account-actions.stack .button{ height:44px; border-radius:14px; }
+
+@media (max-width: 360px){
+  .account-actions{ grid-template-columns:1fr; }
+}
+
+/* ====================== AUTH MODAL ====================== */
+.auth-card{
+  display:grid;
+  gap:14px;
+}
+.auth-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+.auth-title{font-size:20px; font-weight:800;}
+.auth-step{
+  font-size:12px;
+  color:var(--tg-hint);
+  border:1px solid var(--border-color);
+  border-radius:999px;
+  padding:4px 8px;
+  background:rgba(255,255,255,0.05);
+}
+.auth-subtitle{
+  color:#e0e0e0;
+  line-height:1.4;
+}
+.auth-fields{
+  display:grid;
+  gap:10px;
+}
+.auth-field{
+  display:grid;
+  gap:6px;
+  font-size:12px;
+  color:#fff;
+}
+.auth-field input{
+  width:100%;
+  box-sizing:border-box;
+  background:rgba(255,255,255,0.08);
+  border:1px solid var(--border-color);
+  border-radius:12px;
+  padding:10px 12px;
+  color:var(--tg-text);
+  font-size:15px;
+  outline:none;
+}
+.auth-field input::placeholder{ color:rgba(255,255,255,0.4); }
+.auth-field input:focus{
+  border-color:rgba(42,157,244,0.6);
+  box-shadow:0 0 0 3px rgba(42,157,244,0.18);
+}
+.auth-actions{
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:10px;
+}
+.auth-actions .button{ width:100%; }
+.auth-error{
+  background:rgba(255,80,80,0.14);
+  border:1px solid rgba(255,80,80,0.35);
+  color:#ffb3b3;
+  padding:8px 10px;
+  border-radius:10px;
+  font-size:13px;
+}
+.auth-note{
+  color:#b0b0b0;
+  font-size:12px;
+  text-align:center;
+}
+.auth-terms{
+  display:flex;
+  gap:10px;
+  align-items:flex-start;
+  margin-top:4px;
+  text-align:left;
+}
+.auth-terms input[type="checkbox"]{
+  margin-top:3px;
+  width:18px;
+  height:18px;
+  accent-color: var(--tg-button);
+}
+.auth-terms .auth-terms-text{
+  color:#e0e0e0;
+  font-size:13px;
+  line-height:1.35;
+}
+.auth-terms .auth-terms-link{
+  color:var(--tg-link);
+  text-decoration:underline;
+  cursor:pointer;
+}
+
+.booking-item{
+  padding:12px;
+  border-radius:14px;
+  border:1px solid var(--border-color);
+  background:rgba(255,255,255,0.03);
+  cursor:pointer;
+  transition:background .12s ease, transform .06s ease;
+}
+.booking-item:hover{ background:rgba(255,255,255,0.06); }
+.booking-item:active{ transform:scale(.99); }
+
+.kv{
+  display:grid;
+  grid-template-columns:120px 1fr;
+  gap:8px 10px;
+  padding:12px;
+  border-radius:14px;
+  border:1px solid var(--border-color);
+  background:rgba(255,255,255,0.03);
+}
+.kv-k{
+  color:var(--tg-hint);
+  font-size:12px;
+}
 
 /* ====================== TABBAR ====================== */
 .tabbar{
@@ -270,38 +428,39 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   bottom:6px; font-size:12px; color:#fff;
   background:rgba(0,0,0,.45); border-radius:999px; padding:4px 10px; pointer-events:none;
 }
-/* Телеграм-стиль стрелок перелистывания (мини-галерея) */
+/* Стрелки перелистывания (мини-галерея) - компактный стиль */
 .gal-arrow{
   position:absolute; top:50%; transform:translateY(-50%);
-  width:44px; height:44px; border-radius:999px;
-  display:grid; place-items:center;
-  font-weight:900; font-size:22px; user-select:none; cursor:pointer;
-
-  /* визуал */
-  background:rgba(0,0,0,0.55);
+  width:32px; height:32px; border-radius:8px;
+  display:flex; align-items:center; justify-content:center;
+  font-weight:900; font-size:0; line-height:1; user-select:none; cursor:pointer;
+  background:rgba(0,0,0,0.4);
   color:#fff;
-  border:1px solid rgba(255,255,255,0.22);
-  box-shadow:
-    0 8px 24px rgba(0,0,0,0.45),
-    inset 0 0 0 1px rgba(0,0,0,0.25);
-  backdrop-filter:blur(4px);
-  transition:transform .08s ease, filter .08s ease, box-shadow .12s ease;
+  border:1px solid rgba(255,255,255,0.15);
+  backdrop-filter:blur(3px);
+  transition:all .12s ease;
 }
-.gal-arrow.left{ left:10px; }
-.gal-arrow.right{ right:10px; }
+.gal-arrow.left{ left:8px; }
+.gal-arrow.right{ right:8px; }
+.gal-arrow::before{
+  content:"";
+  width:8px; height:8px;
+  border-top:1.5px solid #fff;
+  border-right:1.5px solid #fff;
+  transform:translate(-50%, -50%) rotate(-135deg);
+  position:absolute; top:50%; left:50%;
+}
+.gal-arrow.right::before{ transform:translate(-50%, -50%) rotate(45deg); }
 .gal-arrow:hover{
-  filter:brightness(1.06);
+  background:rgba(0,0,0,0.55);
+  border-color:rgba(255,255,255,0.25);
 }
 .gal-arrow:active{
-  transform:translateY(-50%) scale(.97);
-  /* лёгкий «акцент» под телеграм: светлая кайма в духе акцента */
-  box-shadow:
-    0 8px 24px rgba(0,0,0,0.45),
-    0 0 0 2px rgba(59,130,246,0.35),
-    inset 0 0 0 1px rgba(0,0,0,0.25);
+  transform:translateY(-50%) scale(.92);
+  background:rgba(0,0,0,0.6);
 }
 .gal-arrow.disabled{
-  opacity:.28; pointer-events:none;
+  opacity:.2; pointer-events:none;
 }
 
 
@@ -310,27 +469,36 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 .fs-modal{ position:fixed; inset:0; z-index:9999; display:grid; grid-template-rows: 1fr auto; background:rgba(0,0,0,.9); }
 .fs-viewport{ overflow:hidden; }
 
-/* Стрелки в полноэкранной галерее */
+/* Стрелки в полноэкранной галерее - компактный стиль */
 .fs-arrow{
   position:fixed; top:50%; transform:translateY(-50%);
-  width:56px; height:56px; border-radius:999px;
-  border:1px solid rgba(255,255,255,.22);
-  background:rgba(0,0,0,.55); color:#fff;
-  display:grid; place-items:center;
-  font-weight:900; font-size:26px; cursor:pointer; user-select:none;
+  width:44px; height:44px; border-radius:10px;
+  border:1px solid rgba(255,255,255,0.15);
+  background:rgba(0,0,0,0.45); color:#fff;
+  display:flex; align-items:center; justify-content:center;
+  font-weight:900; font-size:0; line-height:1; cursor:pointer; user-select:none;
   z-index:10000;
-  box-shadow:0 10px 28px rgba(0,0,0,.5), inset 0 0 0 1px rgba(0,0,0,.25);
-  backdrop-filter: blur(4px);
+  backdrop-filter:blur(3px);
+  transition:all .12s ease;
 }
-.fs-arrow.left{ left:12px; }
-.fs-arrow.right{ right:12px; }
-/* Акцент в стиле Телеграма при нажатии */
+.fs-arrow.left{ left:16px; }
+.fs-arrow.right{ right:16px; }
+.fs-arrow::before{
+  content:"";
+  width:9px; height:9px;
+  border-top:1.5px solid #fff;
+  border-right:1.5px solid #fff;
+  transform:translate(-50%, -50%) rotate(-135deg);
+  position:absolute; top:50%; left:50%;
+}
+.fs-arrow.right::before{ transform:translate(-50%, -50%) rotate(45deg); }
+.fs-arrow:hover{
+  background:rgba(0,0,0,0.6);
+  border-color:rgba(255,255,255,0.25);
+}
 .fs-arrow:active{
-  transform:translateY(-50%) scale(.97);
-  box-shadow:
-    0 10px 28px rgba(0,0,0,0.5),
-    0 0 0 2px rgba(59,130,246,0.35),
-    inset 0 0 0 1px rgba(0,0,0,0.25);
+  transform:translateY(-50%) scale(.92);
+  background:rgba(0,0,0,0.7);
 }
 
 
@@ -402,6 +570,7 @@ html, body, .tg-app, .map-wrap, #map{overscroll-behavior:none;}
 
 /* === Leaflet popup close button (телеграм-стиль): красный квадрат с белым «×» === */
 .leaflet-popup.camp-popup .leaflet-popup-close-button{
+  display:none;                       /* скрываем кнопку закрытия */
   position:absolute;
   top:8px; right:8px;
   width:26px; height:26px;
@@ -475,7 +644,7 @@ html, body, .tg-app, .map-wrap, #map{overscroll-behavior:none;}
 }
 .btn-primary{background:#2b7cff; color:#fff;}
 /* Телеграм-контраст для зелёной: всегда белый текст */
-.btn-success{background:#26c281; color:#fff;}
+.btn-success{background:#22c55e; color:#fff;}
 .btn-light{background:#ffffff; color:#0f1216;}
 .button.green{background:#22c55e; border-color:#22c55e; color:#fff;}
 .button.green:hover{background:#2ed868;}
@@ -505,17 +674,19 @@ html, body, .tg-app, .map-wrap, #map{overscroll-behavior:none;}
 .modal-card.booking-shell .bk-input{
   height:44px; border:1px solid rgba(255,255,255,0.08); border-radius:12px;
   background:#0f1216; color:#e5e7eb; padding:0 12px; display:flex; align-items:center;
+  font-size:17px; font-weight:700; cursor:pointer;
 }
 
-/* date — кладём нативный инпут поверх «кнопки»: он прозрачен и ловит тап */
+/* date — кладём нативный инпут поверх «кнопки» */
 .modal-card.booking-shell .bk-date{position:relative;}
-/* Дата: кликаем по «кнопке» — мы сами открываем пикер из JS */
+/* Дата: нативный input занимает всю площадь и полностью кликабелен */
 .modal-card.booking-shell .bk-native{
   position:absolute; inset:0;
   opacity:0;
-  pointer-events:none;        /* <— важно: клики идут в .bk-input, а JS дергает showPicker() */
+  pointer-events:auto;        /* <— разрешаем клики на input */
   border:0; background:transparent;
   width:100%; height:100%;
+  cursor:pointer;
 }
 
 
@@ -523,21 +694,286 @@ html, body, .tg-app, .map-wrap, #map{overscroll-behavior:none;}
 .modal-card.booking-shell .bk-select{
   height:44px; border:1px solid rgba(255,255,255,0.08); border-radius:12px;
   background:#0f1216; color:#e5e7eb; padding:0 10px; width:100%;
+  font-size:17px; font-weight:700; line-height:1.2;
 }
 .modal-card.booking-shell .bk-select option{color:#0f1216; background:#ffffff;}
+
+/* подсказка над сеткой */
+.modal-card.booking-shell .booking-hint{
+  font-size:13px; color:#8a8f98; margin:8px 2px 12px; line-height:1.4;
+}
+
+/* чекбокс для split-room */
+.modal-card.booking-shell .bk-checkbox-wrapper{
+  display:flex; gap:10px; align-items:center; padding:10px 0; cursor:pointer;
+  font-size:14px;
+}
+.modal-card.booking-shell .bk-checkbox{
+  appearance:none; -webkit-appearance:none; -moz-appearance:none;
+  width:20px; height:20px; min-width:20px; flex-shrink:0;
+  border:2px solid rgba(255,255,255,0.12); border-radius:6px;
+  background:#0f1216;
+  cursor:pointer;
+  transition:all 0.2s ease;
+  position:relative;
+}
+.modal-card.booking-shell .bk-checkbox:hover{
+  border-color:rgba(255,255,255,0.2);
+}
+.modal-card.booking-shell .bk-checkbox:checked{
+  background:#1a7dff; border-color:#1a7dff;
+}
+.modal-card.booking-shell .bk-checkbox:checked::after{
+  content:'✓';
+  position:absolute; inset:0;
+  display:flex; align-items:center; justify-content:center;
+  color:#ffffff; font-size:14px; font-weight:700; line-height:1;
+}
 
 /* нижние кнопки — в линию 1:1:1 */
 .modal-card.booking-shell .booking-actions{
   display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:10px;
 }
-.modal-card.booking-shell .booking-actions .button{height:42px; border-radius:12px; min-width:0; padding:0 10px;}
+.modal-card.booking-shell .booking-actions .button{height:42px; border-radius:12px; min-width:0; padding:0 8px; font-size:12px;}
 
 /* узкие экраны — не расползаемся */
 @media (max-width:360px){
   .modal-card.booking-shell .booking-card{width:92vw;}
 }
 
+/* ====================== ACCOMMODATIONS LIST (BOOKING FLOW) ====================== */
+.accom-card{display:grid; gap:12px;}
+.accom-head{display:grid; gap:4px; text-align:center;}
+.accom-title{font-weight:800; font-size:16px; color:#fff;}
+.accom-sub{color:#d1d5db; font-size:13px; line-height:1.25;}
+.accom-hint{
+  color:#e5e7eb;
+  font-size:13px;
+  line-height:1.35;
+  padding:10px 12px;
+  border:1px solid #ef4444; /* red border to highlight */
+  border-radius:12px;
+  background:rgba(255,255,255,0.03);
+  text-align:center; /* center caption inside red frame */
+}
+.accom-list{display:grid; gap:10px;}
+.accom-item{
+  display:grid;
+  grid-template-columns: 64px 1fr auto;
+  gap:12px;
+  align-items:center;
+  width:100%;
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:14px;
+  background:rgba(255,255,255,0.03);
+  padding:10px;
+  cursor:pointer;
+  color:#e5e7eb;
+  text-align:left;
+}
+.accom-item:hover{background:rgba(255,255,255,0.05);}
+.accom-thumb{
+  width:64px;
+  height:52px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.08);
+  object-fit:cover;
+  background:rgba(255,255,255,0.02);
+}
+.accom-thumb.ph{display:block;}
+.accom-main{min-width:0; display:grid; gap:2px;}
+.accom-name{font-weight:800; font-size:14px; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.accom-meta{color:#d1d5db; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.accom-price{font-weight:800; font-size:13px; color:#fff; white-space:nowrap;}
+.accom-actions{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap:10px;
+}
+.accom-actions .button{height:42px; border-radius:12px; min-width:0;}
+
+/* ====================== GUEST ALLOCATION (MANUAL SPLIT) ====================== */
+.alloc-card{display:grid; gap:12px;}
+.alloc-hint{min-height:18px; font-size:13px; line-height:1.35;}
+.alloc-list{display:grid; gap:10px;}
+.alloc-item{
+  display:grid;
+  grid-template-columns: 74px 1fr 32px;
+  gap:10px;
+  align-items:stretch;
+  width:100%;
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:14px;
+  background:rgba(255,255,255,0.03);
+  padding:10px;
+  box-sizing:border-box;
+}
+.alloc-thumb{
+  width:74px;
+  height:64px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.08);
+  object-fit:cover;
+  background:rgba(255,255,255,0.02);
+}
+.alloc-thumb.ph{display:block;}
+.alloc-main{min-width:0; display:grid; gap:6px;}
+.alloc-name{font-weight:800; font-size:14px; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.alloc-meta{font-size:12px; line-height:1.25; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.alloc-controls{display:grid; grid-template-columns: 1fr 1fr; gap:10px;}
+.alloc-control{display:grid; gap:4px;}
+.alloc-step{display:grid; grid-template-columns: 34px 1fr 34px; gap:6px; align-items:center;}
+.alloc-btn{
+  height:38px;
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,0.10);
+  background:#0f1216;
+  color:#e5e7eb;
+  font-weight:900;
+  cursor:pointer;
+}
+.alloc-input{
+  height:38px;
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,0.10);
+  background:#0f1216;
+  color:#e5e7eb;
+  font-weight:800;
+  text-align:center;
+  width:100%;
+  box-sizing:border-box;
+}
+.alloc-remove{
+  border:none;
+  background:transparent;
+  color:#9aa3af;
+  font-weight:900;
+  cursor:pointer;
+  border-radius:10px;
+}
+.alloc-remove:hover{color:#e5e7eb; background:rgba(255,255,255,0.04);}
+.alloc-add{
+  display:grid;
+  grid-template-columns: 1fr auto;
+  gap:10px;
+}
+.alloc-select{
+  height:42px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.10);
+  background:#0f1216;
+  color:#e5e7eb;
+  padding:0 10px;
+  font-weight:700;
+  min-width:0;
+}
+.alloc-summary{
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:12px;
+  background:rgba(255,255,255,0.03);
+  padding:10px 12px;
+  display:grid;
+  gap:6px;
+}
+.alloc-row{display:flex; justify-content:space-between; gap:10px; align-items:center;}
+.alloc-val{font-weight:900; color:#fff; white-space:nowrap;}
+.alloc-actions{display:grid; grid-template-columns:1fr; gap:10px;}
+.alloc-actions .button{height:42px; border-radius:12px; min-width:0; width:100%;}
+
+/* price block inside details */
+.alloc-price-card{
+  border:1px solid rgba(255,255,255,0.12);
+  border-radius:10px;
+  background:rgba(255,255,255,0.06);
+  padding:10px 12px;
+  display:flex;
+  gap:12px;
+  flex-wrap:wrap;
+  align-items:center;
+  font-size:12px;
+  width:min(340px, 100%);
+  margin:0 auto;
+  box-sizing:border-box;
+  max-width:100%;
+  overflow:hidden; /* страховка от выезда на iOS */
+}
+.alloc-price-card .muted{color:#d1d5db;}
+.alloc-price-card span.muted{
+  flex:1 1 160px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  min-width:0;
+}
+.alloc-price-card b{
+  font-weight:800;
+  font-size:13px;
+  color:#22c55e;
+  white-space:nowrap;
+  font-variant-numeric:tabular-nums;
+}
+.alloc-price-head{display:none;} /* hidden */
+.alloc-price-rows{display:flex; gap:12px; flex-wrap:wrap; align-items:center; width:100%;}
+.accom-actions .button:only-child{grid-column:1/-1;}
+
+@media (max-width: 380px){
+  /* На айфонах/узких экранах — цены в две строки, без выезда за рамки */
+  .alloc-price-card span.muted{flex:1 1 100%;}
+}
+
+/* ====================== ROOM DETAILS: COMPACT PARAMS ====================== */
+.room-params-compact{
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:12px;
+  background:rgba(255,255,255,0.03);
+  padding:6px 8px;
+  display:grid;
+  gap:4px;
+}
+.room-param-line{
+  display:flex;
+  align-items:baseline;
+  justify-content:center;
+  gap:6px;
+  flex-wrap:wrap;
+  line-height:1.1;
+}
+.room-param-k{color:#cfd6df; font-size:14px; font-weight:800;}
+.room-param-sep{color:rgba(255,255,255,0.22); font-weight:500;}
+.room-param-v{color:#fff; font-size:14px; font-weight:900;}
+.room-toggle-all{width:100%; height:38px; border-radius:12px;}
+.room-toggle-all.button.ghost{
+  border:2px solid #2a9df4;
+  color:#e5e7eb;
+}
+.room-toggle-all.button.ghost:hover{background:rgba(42,157,244,0.08);}
+
+/* Gallery in room cards: do not crop */
+.camp-gal.room-gal img{
+  object-fit:contain;
+  background:rgba(0,0,0,0.22);
+  height:clamp(160px, 24vh, 220px);
+}
+
+/* All params modal list */
+.allparams-list{
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:12px;
+  background:rgba(255,255,255,0.03);
+  overflow:hidden;
+}
+.allparams-row{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  padding:10px 12px;
+  border-top:1px solid rgba(255,255,255,0.06);
+}
+.allparams-row:first-child{border-top:none;}
+.allparams-k{color:#cfd6df; font-weight:700; font-size:13px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.allparams-v{color:#fff; font-weight:800; font-size:13px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:right;}
+
 /* ====================== MISC ====================== */
 .loading-emoji{display:inline-block; animation:spinEmoji 1s linear infinite;}
 @keyframes spinEmoji{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
-
