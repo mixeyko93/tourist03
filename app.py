@@ -2252,6 +2252,145 @@ def api_rooms_all():
     return out
 
 
+@app.get("/api/rooms/{room_id}/busy-ranges")
+def api_room_busy_ranges(
+    room_id: int,
+    date_from: Optional[date] = Query(None, alias="from"),
+    date_to: Optional[date] = Query(None, alias="to"),
+):
+    """Возвращает занятые диапазоны дат по комнате (для календаря на фронте)."""
+    today = date.today()
+    if date_from is None:
+        date_from = today.replace(day=1)
+    if date_to is None:
+        # покрываем будущие бронирования, чтобы календарь мог листать вперёд
+        date_to = date(today.year + 2, 12, 31)
+    if date_to <= date_from:
+        raise HTTPException(status_code=400, detail="Некорректный диапазон дат")
+
+    blocked_statuses = ("rejected", "cancelled_by_user", "cancelled")
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT check_in, check_out, status
+            FROM crm.bookings
+            WHERE room_id=%s
+              AND (status IS NULL OR lower(status) NOT IN %s)
+              AND check_in < %s
+              AND check_out > %s
+            ORDER BY check_in ASC
+            """,
+            (room_id, blocked_statuses, date_to, date_from),
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+
+    out = []
+    for r in rows:
+        ci = r.get("check_in")
+        co = r.get("check_out")
+        if not ci or not co:
+            continue
+        out.append(
+            {
+                "from": ci.isoformat() if hasattr(ci, "isoformat") else str(ci),
+                "to": co.isoformat() if hasattr(co, "isoformat") else str(co),
+                "status": (r.get("status") or "pending"),
+            }
+        )
+    return {"ok": True, "room_id": room_id, "ranges": out}
+
+
+@app.get("/api/camps/{camp_id}/rooms-busy")
+def api_camp_rooms_busy(
+    camp_id: int,
+    date_from: Optional[date] = Query(None, alias="from"),
+    date_to: Optional[date] = Query(None, alias="to"),
+):
+    """Список комнат базы + занятые диапазоны (для календаря фильтра на фронте)."""
+    today = date.today()
+    if date_from is None:
+        date_from = today.replace(day=1)
+    if date_to is None:
+        date_to = date(today.year + 2, 12, 31)
+    if date_to <= date_from:
+        raise HTTPException(status_code=400, detail="Некорректный диапазон дат")
+
+    with _db_conn("catalog") as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT id FROM catalog.camps WHERE id=%s", (camp_id,))
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="not found")
+        cur.execute(
+            """
+	            SELECT
+	              id,
+	              camp_id,
+	              name,
+	              room_type,
+	              capacity,
+	              beds_single,
+	              beds_double
+	            FROM catalog.rooms
+	            WHERE camp_id=%s
+	            ORDER BY id
+	            """,
+	            (camp_id,),
+	        )
+        rooms = [dict(r) for r in cur.fetchall()]
+
+    blocked_statuses = ("rejected", "cancelled_by_user", "cancelled")
+    busy_by_room: dict[int, list[dict]] = {}
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT room_id, check_in, check_out, status
+            FROM crm.bookings
+            WHERE camp_id=%s
+              AND room_id IS NOT NULL
+              AND (status IS NULL OR lower(status) NOT IN %s)
+              AND check_in < %s
+              AND check_out > %s
+            ORDER BY check_in ASC
+            """,
+            (camp_id, blocked_statuses, date_to, date_from),
+        )
+        for r in cur.fetchall():
+            rid = r.get("room_id")
+            if rid is None:
+                continue
+            try:
+                rid_i = int(rid)
+            except Exception:
+                continue
+            ci = r.get("check_in")
+            co = r.get("check_out")
+            if not ci or not co:
+                continue
+            busy_by_room.setdefault(rid_i, []).append(
+                {
+                    "from": ci.isoformat() if hasattr(ci, "isoformat") else str(ci),
+                    "to": co.isoformat() if hasattr(co, "isoformat") else str(co),
+                    "status": (r.get("status") or "pending"),
+                }
+            )
+
+    out_rooms = []
+    for rm in rooms:
+        rid = int(rm.get("id") or 0)
+        rm["busy"] = busy_by_room.get(rid, [])
+        out_rooms.append(rm)
+
+    return {
+        "ok": True,
+        "camp_id": camp_id,
+        "from": date_from.isoformat(),
+        "to": date_to.isoformat(),
+        "rooms": out_rooms,
+    }
+
+
 @app.post("/api/admin/login")
 def admin_login(req: AdminLoginRequest, request: Request):
     """Авторизация управляющего."""
