@@ -802,10 +802,14 @@ def create_test_admin(email: str, password: str, display_name: str = "Тесто
         )
         conn.commit()
 
-# Ensure database schemas exist on startup
-init_camps_db()
-init_users_db()
-init_crm_db()
+# Ensure database schemas exist on startup (can be disabled in production)
+DB_INIT = os.getenv("DB_INIT", "1").strip().lower() not in ("0", "false", "no", "off")
+if DB_INIT:
+    init_camps_db()
+    init_users_db()
+    init_crm_db()
+else:
+    logger.info("DB_INIT=0 — skipping init_*_db() on startup")
 
 TEST_ADMIN_EMAIL = os.getenv("TEST_ADMIN_EMAIL")
 TEST_ADMIN_PASSWORD = os.getenv("TEST_ADMIN_PASSWORD")

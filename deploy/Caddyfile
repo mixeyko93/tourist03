@@ -1,0 +1,31 @@
+{
+  # Email можно указать, чтобы Let’s Encrypt присылал уведомления (не обязательно).
+  # email you@example.com
+}
+
+{$DOMAIN_ROOT}, www.{$DOMAIN_ROOT} {
+  reverse_proxy app:8000
+}
+
+{$DOMAIN_SUPERADMIN} {
+  basicauth {
+    {$ADMIN_USER} {$ADMIN_PASS_HASH}
+  }
+
+  @root path /
+  rewrite @root /superadmin
+
+  reverse_proxy app:8000
+}
+
+{$DOMAIN_CRM} {
+  basicauth {
+    {$ADMIN_USER} {$ADMIN_PASS_HASH}
+  }
+
+  @root path /
+  rewrite @root /admincamps
+
+  reverse_proxy app:8000
+}
+

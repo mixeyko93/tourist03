@@ -1258,3 +1258,246 @@ html, body, .tg-app, .map-wrap, #map{overscroll-behavior:none;}
 .alloc-remove-btn:hover{
   background:rgba(239,68,68,0.1);
 }
+
+/* ====================== WELCOME MODAL ====================== */
+.welcome-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 2000;
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(100px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.welcome-content {
+  background: var(--tg-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 24px 24px 0 0;
+  padding: 28px 20px;
+  width: 100%;
+  max-width: 500px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.4);
+  animation: contentSlideUp 0.4s ease-out;
+}
+
+@keyframes contentSlideUp {
+  from {
+    transform: translateY(50px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.welcome-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.welcome-icon {
+  font-size: 56px;
+  display: block;
+  margin-bottom: 12px;
+  animation: bounce 0.6s ease-out;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.welcome-header h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #2a9df4, #42a5f5);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.welcome-body {
+  margin-bottom: 28px;
+}
+
+.welcome-body > p {
+  margin: 0 0 18px;
+  font-size: 14px;
+  color: var(--tg-hint);
+  text-align: center;
+}
+
+.welcome-features {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.welcome-features li {
+  font-size: 14px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.welcome-features li:hover {
+  background: rgba(42, 157, 244, 0.1);
+  border-color: var(--tg-link);
+  transform: translateX(2px);
+}
+
+.welcome-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.welcome-actions .button {
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 15px;
+  font-weight: 700;
+  border-radius: 12px;
+}
+
+/* ====================== MAP UI BUTTONS ====================== */
+.map-ui {
+  position: absolute;
+  bottom: calc(100px + 12px);
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 0 12px;
+  pointer-events: none;
+  z-index: 100;
+}
+
+.map-btn {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  border: none;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+  position: relative;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.map-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: scale(1.05);
+}
+
+.map-btn:active {
+  transform: scale(0.95);
+}
+
+.map-btn.left {
+  margin-right: auto;
+}
+
+.map-btn.right {
+  margin-left: auto;
+}
+
+/* Группировка кнопок справа */
+.map-btn.right {
+  margin-left: 6px;
+}
+
+.map-btn.right:first-of-type {
+  margin-left: auto;
+}
+
+.faq-btn,
+.share-btn {
+  font-size: 20px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.map-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: #f4333b;
+  color: white;
+  border-radius: 50%;
+  min-width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  border: 2px solid var(--tg-bg);
+}
+
+.draft.cart-btn {
+  background: rgba(42, 157, 244, 0.15);
+  border-color: var(--tg-link);
+}
+
+.draft.cart-btn:hover {
+  background: rgba(42, 157, 244, 0.25);
+}
+
+/* ====================== FAQ SECTION ====================== */
+.faq-section {
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.faq-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.faq-q {
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 6px;
+  color: var(--tg-text);
+}
+
+.faq-a {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--tg-hint);
+}

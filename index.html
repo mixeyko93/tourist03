@@ -31,6 +31,29 @@
 <body>
   <div class="tg-app">
 
+<!-- Приветствие при первом открытии -->
+<div id="welcomeModal" class="welcome-modal" style="display:none;">
+  <div class="welcome-content">
+    <div class="welcome-header">
+      <div class="welcome-icon">⛺️</div>
+      <h1>Добро пожаловать в Турист_03!</h1>
+    </div>
+    <div class="welcome-body">
+      <p>Найдите идеальный кемпинг для вашего отдыха</p>
+      <ul class="welcome-features">
+        <li>🗺️ Исследуйте карту лагерей</li>
+        <li>📅 Забронируйте даты в один клик</li>
+        <li>⭐ Смотрите отзывы и фото</li>
+        <li>🏕️ Выбирайте комфортные номера</li>
+      </ul>
+    </div>
+    <div class="welcome-actions">
+      <button class="button primary" id="welcomeStart">Начать</button>
+      <button class="button ghost" id="welcomeMore">Подробнее</button>
+    </div>
+  </div>
+</div>
+
 <section id="tab-map" class="tab-content">
   <div class="map-wrap">
     <div id="map"></div>
@@ -53,6 +76,15 @@
 <button class="map-btn right" id="geoBtn" title="Моё местоположение" aria-label="Моё местоположение">
   <!-- было: /static/emoji/tg_compass.svg -->
   <img src="/static/emoji/compass.svg" alt="" class="tg-emoji">
+</button>
+
+<!-- Быстрые ссылки -->
+<button class="map-btn right faq-btn" id="faqBtn" title="FAQ и помощь" aria-label="FAQ и помощь">
+  <span class="faq-icon">❓</span>
+</button>
+
+<button class="map-btn right share-btn" id="shareBtn" title="Поделиться" aria-label="Поделиться приложением">
+  <span class="share-icon">📤</span>
 </button>
 
 </div>
