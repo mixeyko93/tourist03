@@ -443,6 +443,26 @@ async function openBookingFilterWithAuth(campId) {
     return;
   }
   
+  const isReadyFilter = (flt) => {
+    if (!flt || typeof flt !== 'object') return false;
+    if (!flt.from || !flt.to) return false;
+    const from = new Date(flt.from);
+    const to = new Date(flt.to);
+    if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime())) return false;
+    if (to <= from) return false;
+    const adults = Math.max(0, Number(flt.adults) || 0);
+    const kids = Math.max(0, Number(flt.kids) || 0);
+    if (adults + kids <= 0) return false;
+    if (kids > 0 && adults < 1) return false;
+    return true;
+  };
+
+  // Если фильтр уже настроен — сразу открываем список типов (без показа фильтра)
+  if (Number.isFinite(resolvedCampId) && isReadyFilter(window.__bookingFilter)) {
+    await openCampAccommodations(resolvedCampId);
+    return;
+  }
+
   // Если авторизован — открываем фильтр в режиме бронирования
   const camp = Number.isFinite(resolvedCampId) ? await getCampQuick(resolvedCampId) : null;
   const ht = normalizeHousingType(camp?.housing_type);
@@ -786,20 +806,174 @@ function formatPhoneRu(phone){
 const modal = document.getElementById('modal');
 const modalCard = document.getElementById('modalCard');
 function showModal(html){ modalCard.innerHTML = html; modal.style.display = 'grid'; }
+
+const BOOKING_DRAFT_KEY = 'bookingDraft:v1';
+window.__bookingDraft = null;
+window.__suppressDraftToastOnce = false;
+
+function escapeHtml(str){
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function loadBookingDraft(){
+  try {
+    const raw = localStorage.getItem(BOOKING_DRAFT_KEY);
+    if (!raw) { window.__bookingDraft = null; return null; }
+    const d = JSON.parse(raw);
+    if (!d || typeof d !== 'object') { window.__bookingDraft = null; return null; }
+    window.__bookingDraft = d;
+    return d;
+  } catch (_) {
+    window.__bookingDraft = null;
+    return null;
+  }
+}
+
+function saveBookingDraft(draft){
+  if (!draft || typeof draft !== 'object') return;
+  try {
+    window.__bookingDraft = draft;
+    localStorage.setItem(BOOKING_DRAFT_KEY, JSON.stringify(draft));
+    updateBookingDraftUi();
+  } catch (_) {}
+}
+
+function clearBookingDraft(){
+  try { localStorage.removeItem(BOOKING_DRAFT_KEY); } catch (_) {}
+  window.__bookingDraft = null;
+  updateBookingDraftUi();
+}
+
+function updateBookingDraftUi(){
+  const btn = document.getElementById('openBookingDraft');
+  const badge = document.getElementById('bookingDraftBadge');
+  if (!btn) return;
+  const d = window.__bookingDraft || loadBookingDraft();
+  const has = !!d && Number.isFinite(Number(d.campId));
+  btn.style.display = has ? '' : 'none';
+  if (has && badge) {
+    const n = Array.isArray(d.items) ? d.items.length : 1;
+    badge.textContent = String(Math.max(1, n));
+    badge.style.display = '';
+  } else if (badge) {
+    badge.style.display = 'none';
+  }
+}
+
+function showSnackbar({ message, actionText, onAction, timeoutMs = 4500 } = {}){
+  const text = String(message || '').trim();
+  if (!text) return;
+
+  const prev = document.getElementById('snackbar');
+  if (prev) prev.remove();
+
+  const el = document.createElement('div');
+  el.id = 'snackbar';
+  el.className = 'snackbar';
+  el.innerHTML = `
+    <div class="snackbar-text">${escapeHtml(text)}</div>
+    ${actionText ? `<button type="button" class="snackbar-action">${escapeHtml(actionText)}</button>` : ''}
+  `;
+  document.body.appendChild(el);
+
+  let closed = false;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    el.classList.add('hide');
+    setTimeout(() => el.remove(), 220);
+  };
+
+  const actionBtn = el.querySelector('.snackbar-action');
+  if (actionBtn && typeof onAction === 'function') {
+    actionBtn.addEventListener('click', (e) => {
+      try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+      close();
+      try { onAction(); } catch (_) {}
+    });
+  }
+
+  el.addEventListener('click', close);
+  if (timeoutMs > 0) setTimeout(close, timeoutMs);
+}
+
+async function openBookingDraft(){
+  const d = window.__bookingDraft || loadBookingDraft();
+  if (!d) return;
+  const cid = Number(d.campId);
+  if (!Number.isFinite(cid)) return;
+
+  try { setTabById('tab-map'); } catch (_) {}
+
+  let camp = null;
+  try { camp = await getCampQuick(cid); } catch (_) {}
+  if (!camp) camp = { id: cid, name: d.campName || 'База' };
+
+  let roomsAll = [];
+  try {
+    const data = await fetch(`/api/rooms?camp_id=${cid}`).then(r => r.ok ? r.json() : []);
+    roomsAll = Array.isArray(data) ? data : [];
+  } catch (_) {}
+
+  const byId = new Map(roomsAll.map(r => [Number(r?.id), r]).filter(([id]) => Number.isFinite(id)));
+  const picked = [];
+  const initialItems = [];
+
+  const items = Array.isArray(d.items) ? d.items : [];
+  for (const it of items) {
+    const rid = Number(it?.room_id);
+    if (!Number.isFinite(rid)) continue;
+    const room = byId.get(rid);
+    if (!room) continue;
+    picked.push(room);
+    initialItems.push({
+      room,
+      adults: Math.max(0, Number(it?.adults) || 0),
+      kids: Math.max(0, Number(it?.kids) || 0),
+    });
+  }
+
+  if (!picked.length) {
+    clearBookingDraft();
+    showSnackbar({ message: 'Черновик устарел и был удалён.' });
+    return;
+  }
+
+  openBookingConfirmationModal({
+    camp,
+    campId: cid,
+    rooms: picked,
+    filter: d.filter || window.__bookingFilter || {},
+    initialItems,
+  });
+}
+
 function closeModal(){
   const modal = document.getElementById('modal');
   const card  = document.getElementById('modalCard');
+  const view = card?.dataset?.view || '';
+  const shouldDraftToast = view === 'booking-confirmation' && !!(window.__bookingDraft || loadBookingDraft()) && !window.__suppressDraftToastOnce;
 	if (modal) modal.style.display = 'none';
 	if (card) {
-	  // снимаем ResizeObserver, если он был повешен
-	  if (card.__ro && typeof card.__ro.disconnect === 'function') {
-	    try { card.__ro.disconnect(); } catch(_) {}
-	    card.__ro = null;
-	  }
-	  card.innerHTML = '';
-	  card.classList.remove('booking-shell');  // снимаем «узкую» оболочку
-	  card.classList.remove('details');       // снимаем «детали», если открывали карточку номера
-	 }
+		  // снимаем ResizeObserver, если он был повешен
+		  if (card.__ro && typeof card.__ro.disconnect === 'function') {
+		    try { card.__ro.disconnect(); } catch(_) {}
+		    card.__ro = null;
+		  }
+		  try { delete card.dataset.view; } catch(_) {}
+		  card.innerHTML = '';
+		  card.classList.remove('booking-shell');  // снимаем «узкую» оболочку
+		  card.classList.remove('details');       // снимаем «детали», если открывали карточку номера
+		 }
+  if (shouldDraftToast) {
+    showSnackbar({ message: 'Черновик бронирования сохранён', actionText: 'Продолжить', onAction: openBookingDraft });
+  }
+  window.__suppressDraftToastOnce = false;
 }
 
 modal.addEventListener('click', (e)=>{ if (e.target === modal) closeModal(); });
@@ -3466,7 +3640,7 @@ function openRoomDetailsViewOnly(room, camp) {
 }
 
 // Окно подтверждения бронирования с распределением гостей и итоговой суммой
-function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack }) {
+function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack, initialItems }) {
   const cid = Number(campId);
   const f = filter || window.__bookingFilter || {};
   const selectedRooms = Array.isArray(rooms) ? rooms : [];
@@ -3474,7 +3648,35 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack }) {
   const choiceWord = housingLabelGenPluralWord(camp?.housing_type);
   
   // Автоматически распределяем гостей по выбранным апартаментам
-  const items = autoDistributeGuests(selectedRooms, f);
+  const items = (() => {
+    const src = Array.isArray(initialItems) ? initialItems : null;
+    if (!src || src.length === 0) return autoDistributeGuests(selectedRooms, f);
+    const normalized = [];
+    for (const it of src) {
+      const room = it?.room;
+      const rid = Number(room?.id);
+      if (!Number.isFinite(rid)) continue;
+      const cap = roomCapacity(room);
+      let adults = Math.max(0, Number(it?.adults) || 0);
+      let kids = Math.max(0, Number(it?.kids) || 0);
+      if (kids > 0 && adults < 1) adults = 1;
+      if (Number.isFinite(cap) && cap > 0) {
+        const sum = adults + kids;
+        if (sum > cap) {
+          const over = sum - cap;
+          const reduceKids = Math.min(kids, over);
+          kids -= reduceKids;
+          adults = Math.max(0, adults - Math.max(0, over - reduceKids));
+          if (kids > 0 && adults < 1) {
+            kids = 0;
+            adults = Math.min(adults || 0, cap);
+          }
+        }
+      }
+      normalized.push({ room, adults, kids });
+    }
+    return normalized.length ? normalized : autoDistributeGuests(selectedRooms, f);
+  })();
   
   // Загружаем все доступные апартаменты для добавления
   let availableRooms = [];
@@ -3502,7 +3704,7 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack }) {
 
       <div class="alloc-summary" id="confirmSummary"></div>
       
-      <button class="button ghost" id="confirmAutoPick" style="width:100%;margin-top:12px;display:none">Подбор ${choiceWord} для вас</button>
+      <button class="button ghost alloc-autopick" id="confirmAutoPick" style="width:100%;margin-top:12px;display:none">Подбор ${choiceWord} для вас</button>
 
       <div class="alloc-actions">
         <button class="button ghost" id="confirmBack">Назад</button>
@@ -3510,6 +3712,7 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack }) {
       </div>
     </div>
   `);
+  try { document.getElementById('modalCard').dataset.view = 'booking-confirmation'; } catch (_) {}
 
   const listEl = document.getElementById('confirmList');
   const hintEl = document.getElementById('confirmHint');
@@ -3517,6 +3720,83 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack }) {
   const submitBtn = document.getElementById('confirmSubmit');
   const addRoomBtn = document.getElementById('confirmAddRoom');
   const autoPickBtn = document.getElementById('confirmAutoPick');
+
+  function persistDraft(){
+    const payload = {
+      v: 1,
+      campId: cid,
+      campName: camp?.name || '',
+      filter: {
+        from: f.from || null,
+        to: f.to || null,
+        adults: Number(f.adults) || 0,
+        kids: Number(f.kids) || 0,
+        allowSplitRooms: !!f.allowSplitRooms,
+        total: Number(f.total) || undefined,
+      },
+      items: items
+        .map(it => ({
+          room_id: Number(it?.room?.id),
+          adults: Number(it?.adults) || 0,
+          kids: Number(it?.kids) || 0,
+        }))
+        .filter(it => Number.isFinite(it.room_id)),
+      updatedAt: Date.now(),
+    };
+    saveBookingDraft(payload);
+  }
+
+  // Автодозаполнение: после добавления апартамента размещаем оставшихся гостей,
+  // не меняя уже выставленные значения в существующих карточках.
+  function autoFillRemainingGuests(){
+    const needAdults = Math.max(0, Number(f.adults) || 0);
+    const needKids = Math.max(0, Number(f.kids) || 0);
+    let remAdults = Math.max(0, needAdults - items.reduce((s, it) => s + (Number(it?.adults) || 0), 0));
+    let remKids = Math.max(0, needKids - items.reduce((s, it) => s + (Number(it?.kids) || 0), 0));
+    if (remAdults === 0 && remKids === 0) return;
+
+    for (let idx = items.length - 1; idx >= 0; idx--) {
+      const it = items[idx];
+      const room = it?.room;
+      const cap = roomCapacity(room);
+      if (!Number.isFinite(cap) || cap <= 0) continue;
+
+      const curA = Math.max(0, Number(it.adults) || 0);
+      const curK = Math.max(0, Number(it.kids) || 0);
+      it.adults = curA;
+      it.kids = curK;
+
+      let free = cap - (curA + curK);
+      if (free <= 0) continue;
+
+      // Если хотим добавить детей в пустой апартамент — сначала добавляем 1 взрослого
+      if (remKids > 0 && it.adults === 0 && it.kids === 0) {
+        if (remAdults > 0 && free > 0) {
+          it.adults += 1;
+          remAdults -= 1;
+          free -= 1;
+        }
+      }
+
+      // Добавляем детей (только если уже есть взрослый в этом апартаменте)
+      if (remKids > 0 && it.adults > 0 && free > 0) {
+        const addKids = Math.min(remKids, free);
+        it.kids += addKids;
+        remKids -= addKids;
+        free -= addKids;
+      }
+
+      // Добавляем взрослых
+      if (remAdults > 0 && free > 0) {
+        const addAdults = Math.min(remAdults, free);
+        it.adults += addAdults;
+        remAdults -= addAdults;
+        free -= addAdults;
+      }
+
+      if (remAdults === 0 && remKids === 0) break;
+    }
+  }
 
   // Функция открытия выбора гостей (центр, стилистика фильтра + ограничения)
   function openGuestPicker(idx) {
@@ -3699,7 +3979,7 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack }) {
 	    });
 	  }
 
-	  function updateSummary() {
+  function updateSummary() {
 	    const v = validateAllocation(items, f);
 	    const totalGuests = (Number(f.adults) || 0) + (Number(f.kids) || 0);
 	    const allocatedGuests = v.sumAdults + v.sumKids;
@@ -3725,36 +4005,62 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack }) {
 	      const kidsTxt = (n) => `${n} ${plural(n, 'ребёнок', 'детей', 'детей')}`;
 	      const kidsGenTxt = (n) => `${n} ${plural(n, 'ребёнка', 'детей', 'детей')}`;
 	      
-	      const suggestions = (() => {
+	      const suggestionVariants = (() => {
 	        if (!availableRooms || !availableRooms.length || remainTotal <= 0) return [];
-	        const groups = new Map();
-	        for (const r of availableRooms) {
-	          const cap = roomCapacity(r);
-	          if (!Number.isFinite(cap) || cap <= 0) continue;
-	          const label = `${r.room_type || 'Дом'} (${r.class || r.name || 'Стандарт'})`;
-	          const price = roomPriceFrom(r) || 0;
-	          const cur = groups.get(label);
-	          if (!cur) groups.set(label, { label, cap, price });
-	          else {
-	            cur.cap = Math.max(cur.cap, cap);
-	            if (price > 0) cur.price = cur.price > 0 ? Math.min(cur.price, price) : price;
+	        const selectedIds = new Set(items.map(it => Number(it?.room?.id)).filter(Number.isFinite));
+	        const pool = availableRooms
+	          .filter(r => Number.isFinite(Number(r?.id)) && !selectedIds.has(Number(r.id)))
+	          .filter(r => (roomCapacity(r) || 0) > 0);
+	        if (!pool.length) return [];
+
+	        const groupName = (r) => String(r?.class || r?.name || r?.room_type || 'Вариант').trim() || 'Вариант';
+	        const allocationText = (rooms) => {
+	          const by = new Map();
+	          for (const r of rooms || []) {
+	            const name = groupName(r);
+	            by.set(name, (by.get(name) || 0) + 1);
 	          }
+	          return Array.from(by.entries())
+	            .map(([name, cnt]) => `${cnt}× «${name}»`)
+	            .join(' + ');
+	        };
+	        const score = (rooms) => {
+	          const cnt = (rooms || []).length;
+	          const cap = (rooms || []).reduce((s, r) => s + (roomCapacity(r) || 0), 0);
+	          const over = Math.max(0, cap - remainTotal);
+	          const price = (rooms || []).reduce((s, r) => s + (roomPriceFrom(r) || 0), 0);
+	          return { cnt, over, price };
+	        };
+
+	        const best = findBestAllocation(pool, remainTotal);
+	        if (!best || !best.length) return [];
+	        const bestText = allocationText(best);
+	        const bestKey = best.map(r => Number(r?.id)).filter(Number.isFinite).sort((a,b)=>a-b).join(',');
+
+	        let altBest = null;
+	        let altKey = '';
+	        for (const r of best) {
+	          const rid = Number(r?.id);
+	          if (!Number.isFinite(rid)) continue;
+	          const alt = findBestAllocation(pool.filter(x => Number(x?.id) !== rid), remainTotal);
+	          if (!alt || !alt.length) continue;
+	          const key = alt.map(x => Number(x?.id)).filter(Number.isFinite).sort((a,b)=>a-b).join(',');
+	          if (!key || key === bestKey) continue;
+	          if (!altBest) { altBest = alt; altKey = key; continue; }
+	          const a = score(alt);
+	          const b = score(altBest);
+	          if (a.cnt !== b.cnt) { if (a.cnt < b.cnt) { altBest = alt; altKey = key; } continue; }
+	          if (a.over !== b.over) { if (a.over < b.over) { altBest = alt; altKey = key; } continue; }
+	          if (a.price !== b.price) { if (a.price < b.price) { altBest = alt; altKey = key; } continue; }
 	        }
-	        const arr = Array.from(groups.values());
-	        arr.sort((a, b) => {
-	          const aUnder = a.cap < remainTotal ? (remainTotal - a.cap) : 0;
-	          const bUnder = b.cap < remainTotal ? (remainTotal - b.cap) : 0;
-	          const aOver = a.cap >= remainTotal ? (a.cap - remainTotal) : 9999;
-	          const bOver = b.cap >= remainTotal ? (b.cap - remainTotal) : 9999;
-	          if (aUnder !== bUnder) return aUnder - bUnder;
-	          if (aOver !== bOver) return aOver - bOver;
-	          const ap = a.price || 0;
-	          const bp = b.price || 0;
-	          if ((ap > 0) !== (bp > 0)) return ap > 0 ? -1 : 1;
-	          if (ap !== bp) return ap - bp;
-	          return a.cap - b.cap;
-	        });
-	        return arr.slice(0, 3).map(x => x.label);
+
+	        const out = [];
+	        if (bestText) out.push(bestText);
+	        if (altBest && altKey && altKey !== bestKey) {
+	          const altText = allocationText(altBest);
+	          if (altText && altText !== bestText) out.push(altText);
+	        }
+	        return out;
 	      })();
 	      
 	      const itemErrors = [];
@@ -3772,23 +4078,29 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack }) {
 	      } else if (itemErrors.length) {
 	        hintEl.classList.add('err');
 	        hintEl.innerHTML = itemErrors.join('<br>');
-	      } else if (allocatedGuests < totalGuests) {
-	        hintEl.classList.add('warn');
-	        const placedParts = [];
-	        if (v.sumAdults > 0) placedParts.push(adultsTxt(v.sumAdults));
-	        if (v.sumKids > 0) placedParts.push(kidsTxt(v.sumKids));
+		      } else if (allocatedGuests < totalGuests) {
+		        hintEl.classList.add('warn');
+		        const placedParts = [];
+		        if (v.sumAdults > 0) placedParts.push(adultsTxt(v.sumAdults));
+		        if (v.sumKids > 0) placedParts.push(kidsTxt(v.sumKids));
 	        const remainParts = [];
 	        if (remainAdults > 0) remainParts.push(adultsGenTxt(remainAdults));
 	        if (remainKids > 0) remainParts.push(kidsGenTxt(remainKids));
-	        let text = `${typeName}: размещено ${placedParts.length ? placedParts.join(', ') : '0 гостей'}. `;
-	        text += `Для размещения ещё ${remainParts.length ? remainParts.join(' и ') : '0 гостей'} вам нужно добавить ${choiceWord}`;
-	        if (suggestions.length) text += `: ${suggestions.join(', ')}.`;
-	        else text += '.';
-	        hintEl.textContent = text;
-	      } else {
-	        hintEl.classList.add('ok');
-	        hintEl.textContent = 'Всё готово к бронированию!';
-	      }
+		        let text = `${typeName}: размещено ${placedParts.length ? placedParts.join(', ') : '0 гостей'}. `;
+		        text += `Для размещения ещё ${remainParts.length ? remainParts.join(' и ') : '0 гостей'} вам нужно добавить ${choiceWord}`;
+		        if (suggestionVariants.length) {
+		          text += `: ${suggestionVariants[0]}`;
+		          if (suggestionVariants[1]) text += ` или ${suggestionVariants[1]}`;
+		          text += '.';
+		          text += ` Нажмите «Подбор ${choiceWord} для вас».`;
+		        } else {
+		          text += '.';
+		        }
+		        hintEl.textContent = text;
+		      } else {
+		        hintEl.classList.add('ok');
+		        hintEl.textContent = 'Всё готово к бронированию!';
+		      }
 	    }
 	    
 	    if (summaryEl) {
@@ -3806,13 +4118,23 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack }) {
 	    }
     if (submitBtn) submitBtn.disabled = !v.ok || allocatedGuests !== totalGuests;
     updateAutoPickButton();
+    persistDraft();
   }
   
-  // Загружаем все апартаменты базы для выбора
+	  // Загружаем доступные апартаменты базы для выбранных дат (чтобы подсказки/добавление были корректны)
 	  (async () => {
 	    try {
-	      const data = await fetch(`/api/rooms?camp_id=${cid}`).then(r => r.json());
-	      availableRooms = Array.isArray(data) ? data : [];
+	      let rooms = [];
+	      if (f.from && f.to) {
+	        const q = new URLSearchParams({ from: f.from, to: f.to });
+	        const resp = await fetch(`/api/camps/${cid}/available-rooms?${q.toString()}`).then(r => r.ok ? r.json() : null);
+	        const all = Array.isArray(resp?.rooms) ? resp.rooms : [];
+	        rooms = all.filter(r => r && r.available);
+	      } else {
+	        const data = await fetch(`/api/rooms?camp_id=${cid}`).then(r => r.ok ? r.json() : []);
+	        rooms = Array.isArray(data) ? data : [];
+	      }
+	      availableRooms = rooms;
 	      updateSummary();
 	    } catch (e) {
 	      console.error('Не удалось загрузить апартаменты:', e);
@@ -3894,6 +4216,7 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack }) {
 	          autoPickActive = false;
 	          autoPickIndex = 0;
 	          items.push({ room, adults: 0, kids: 0 });
+	          autoFillRemainingGuests();
 	          sheet.remove();
 	          render();
 	          updateSummary();
@@ -4053,6 +4376,8 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack }) {
       submitBtn.disabled = true;
       submitBtn.textContent = 'Отправляем...';
       const ids = await createBookingsFromAllocation(cid, f, items);
+      window.__suppressDraftToastOnce = true;
+      clearBookingDraft();
       closeModal();
       
       // Показываем развёрнутое уведомление об успехе
@@ -4287,10 +4612,13 @@ function findBestAllocation(rooms, total){
   if (!items.length) return null;
 
   // 0-1 DP by sum, minimizing room count then overcap then price
+  // Важно: храним prev как ссылку на объект состояния (а не индекс суммы),
+  // иначе при 1D DP backtracking может "прыгать" на перезаписанные состояния
+  // и ошибочно дублировать один и тот же номер.
   const maxCap = Math.max(...items.map(roomCapacity));
   const maxSum = Math.min(need + maxCap * 2, 200); // cap to keep dp small
   const dp = Array(maxSum + 1).fill(null);
-  dp[0] = { cnt: 0, price: 0, prev: -1, idx: -1 };
+  dp[0] = { cnt: 0, price: 0, prev: null, idx: -1 };
 
   for (let i = 0; i < items.length; i++) {
     const cap = roomCapacity(items[i]);
@@ -4299,7 +4627,7 @@ function findBestAllocation(rooms, total){
       const cur = dp[s];
       if (!cur) continue;
       const ns = Math.min(maxSum, s + cap);
-      const cand = { cnt: cur.cnt + 1, price: cur.price + price, prev: s, idx: i };
+      const cand = { cnt: cur.cnt + 1, price: cur.price + price, prev: cur, idx: i };
       const best = dp[ns];
       if (!best) {
         dp[ns] = cand;
@@ -4323,14 +4651,22 @@ function findBestAllocation(rooms, total){
   if (!best) return null;
 
   const picked = [];
-  let s = bestSum;
-  while (s > 0) {
-    const st = dp[s];
-    if (!st || st.idx < 0) break;
+  let st = best;
+  while (st && st.idx >= 0) {
     picked.push(items[st.idx]);
-    s = st.prev;
+    st = st.prev;
   }
-  return picked.reverse();
+  // На всякий случай: защита от дубликатов в сборке текста/вариантов.
+  const seen = new Set();
+  const out = [];
+  for (const r of picked.reverse()) {
+    const id = Number(r?.id);
+    const key = Number.isFinite(id) ? `id:${id}` : `ref:${String(r?.name||'')}:${String(r?.room_type||'')}:${String(r?.capacity||'')}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(r);
+  }
+  return out;
 }
 
 // === Глобальный стек для навигации (для правильного возврата из фильтра) ===
@@ -5277,10 +5613,14 @@ window.addEventListener('DOMContentLoaded', () => {
   initBookingFilterButton();
   setFilterButtonActive(!!window.__bookingFilter);
   initGeoButton();
+  loadBookingDraft();
+  updateBookingDraftUi();
     setTabById('tab-map');
     loadCamps().then(()=> restoreMapView());  // <-- после загрузки маркеров сразу fitBounds
   setTimeout(()=> typeof map!=='undefined' && map.invalidateSize(), 80);
   document.getElementById('openBookingFilter').onclick = openBookingFilterModal;
+  const draftBtn = document.getElementById('openBookingDraft');
+  if (draftBtn) draftBtn.onclick = openBookingDraft;
   try { renderAccount(); } catch(_) {}
   try {
     (async ()=>{

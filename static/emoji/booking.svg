@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="32" cy="32" r="32" fill="#0E1621"/>
+
+  <g fill="none" stroke="#7EB6FF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <!-- лист/карточка -->
+    <rect x="18" y="16" width="28" height="36" rx="6"/>
+    <!-- «переплёт» -->
+    <line x1="24" y1="16" x2="24" y2="52"/>
+    <!-- чек/галочка -->
+    <path d="M30 38l4 4 10-12"/>
+    <!-- строки -->
+    <line x1="30" y1="24" x2="42" y2="24"/>
+    <line x1="30" y1="30" x2="42" y2="30"/>
+  </g>
+</svg>

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg width="64" height="64" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .shop-line { fill: none; stroke: #7EB6FF; stroke-miterlimit: 10; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+
+  <!-- фон-круг -->
+  <circle cx="12" cy="12" r="10" fill="#0E1621"/>
+
+  <!-- корзина из оригинального файла, масштабированная и центрирована -->
+  <g transform="translate(12, 12) scale(0.5) translate(-12, -12)">
+    <polyline class="shop-line" points="7.21 15.82 22.48 12.96 22.48 4.36 4.15 4.36" stroke-width="1.91"/>
+    <path class="shop-line" d="M.52,1.5H3.39L7.2,15.82,5.54,18.31a1.48,1.48,0,0,0-.24.82h0a1.46,1.46,0,0,0,1.46,1.46h11.9" stroke-width="1.91"/>
+    <circle class="shop-line" cx="18.66" cy="21.55" r="0.95" stroke-width="1.91"/>
+    <circle class="shop-line" cx="9.11" cy="21.55" r="0.95" stroke-width="1.91"/>
+  </g>
+</svg>
