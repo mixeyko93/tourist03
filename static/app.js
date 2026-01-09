@@ -14,6 +14,8 @@
 
   // Просим Telegram показывать системное подтверждение при попытке закрыть
   try { tg.enableClosingConfirmation(); } catch (_) {}
+          // Подавляем показ тоста "Черновик сохранён" при техническом закрытии
+          window.__suppressDraftToastOnce = true;
 
   // Подстраховка: если высота «схлопнулась», снова расширяем
   try {
@@ -420,11 +422,8 @@ async function openBookingFilterWithAuth(campId) {
   if (Number.isFinite(resolvedCampId)) window.__currentCampId = resolvedCampId;
   // Проверка авторизации
   if (!getAuth() || !getAuth().token) {
-    // Закрываем все открытые модальные окна перед показом сообщения об авторизации
-    const openModals = document.querySelectorAll('.modal.show');
-    openModals.forEach(m => m.remove());
-    
-    showModal(`
+    // НЕ закрываем предыдущие окна - просто показываем авторизацию поверх
+    showAuthModal(`
       <div class="auth-card" style="text-align:center">
         <div class="auth-head" style="justify-content:center">
           <div class="auth-title">Необходима авторизация</div>
@@ -437,7 +436,11 @@ async function openBookingFilterWithAuth(campId) {
         <button class="button ghost" id="authCancel" style="width:100%">Отмена</button>
       </div>
     `);
-    document.getElementById('authCancel').onclick = closeModal;
+    document.getElementById('authCancel').onclick = () => {
+      closeModal();
+      // Восстанавливаем карточку базы отдыха
+      openDetails(resolvedCampId);
+    };
     document.getElementById('authRegister').onclick = ()=> { closeModal(); openRegister(); };
     document.getElementById('authLogin').onclick = ()=> { closeModal(); openLogin(); };
     return;
@@ -805,7 +808,17 @@ function formatPhoneRu(phone){
 // === showModal / closeModal и формы регистрации/входа (как были) ===
 const modal = document.getElementById('modal');
 const modalCard = document.getElementById('modalCard');
-function showModal(html){ modalCard.innerHTML = html; modal.style.display = 'grid'; }
+function showModal(html){
+  try { delete modalCard.dataset.view; } catch (_) {}
+  try { modal.classList.remove('auth-modal'); } catch (_) {}
+  modalCard.innerHTML = html;
+  modal.style.display = 'grid';
+}
+function showAuthModal(html){ 
+  modalCard.innerHTML = html; 
+  modal.style.display = 'grid'; 
+  modal.classList.add('auth-modal');
+}
 
 const BOOKING_DRAFT_KEY = 'bookingDraft:v1';
 window.__bookingDraft = null;
@@ -940,7 +953,7 @@ async function openBookingDraft(){
 
   if (!picked.length) {
     clearBookingDraft();
-    showSnackbar({ message: 'Черновик устарел и был удалён.' });
+    showSnackbar({ message: 'Черновик устарел и был удалён.', timeoutMs: 1800 });
     return;
   }
 
@@ -958,7 +971,10 @@ function closeModal(){
   const card  = document.getElementById('modalCard');
   const view = card?.dataset?.view || '';
   const shouldDraftToast = view === 'booking-confirmation' && !!(window.__bookingDraft || loadBookingDraft()) && !window.__suppressDraftToastOnce;
-	if (modal) modal.style.display = 'none';
+	if (modal) {
+    modal.style.display = 'none';
+    modal.classList.remove('auth-modal');
+  }
 	if (card) {
 		  // снимаем ResizeObserver, если он был повешен
 		  if (card.__ro && typeof card.__ro.disconnect === 'function') {
@@ -971,7 +987,7 @@ function closeModal(){
 		  card.classList.remove('details');       // снимаем «детали», если открывали карточку номера
 		 }
   if (shouldDraftToast) {
-    showSnackbar({ message: 'Черновик бронирования сохранён', actionText: 'Продолжить', onAction: openBookingDraft });
+    showSnackbar({ message: 'Черновик бронирования сохранён', actionText: 'Продолжить', onAction: openBookingDraft, timeoutMs: 1800 });
   }
   window.__suppressDraftToastOnce = false;
 }
@@ -3702,7 +3718,7 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack, ini
       
       <button class="button ghost" id="confirmAddRoom" style="width:100%">+ Добавить ${addWord}</button>
 
-      <div class="alloc-summary" id="confirmSummary"></div>
+	      <div class="alloc-summary" id="confirmSummary" style="display:none"></div>
       
       <button class="button ghost alloc-autopick" id="confirmAutoPick" style="width:100%;margin-top:12px;display:none">Подбор ${choiceWord} для вас</button>
 
@@ -3720,6 +3736,11 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack, ini
   const submitBtn = document.getElementById('confirmSubmit');
   const addRoomBtn = document.getElementById('confirmAddRoom');
   const autoPickBtn = document.getElementById('confirmAutoPick');
+
+  if (summaryEl) {
+    summaryEl.innerHTML = '';
+    summaryEl.style.display = 'none';
+  }
 
   function persistDraft(){
     const payload = {
@@ -4104,16 +4125,18 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack, ini
 	    }
 	    
 	    if (summaryEl) {
-	      // Показываем сумму только если распределение валидно И все размещены
-	      if (v.ok && allocatedGuests === totalGuests && v.totalPrice != null) {
+	      const canShowSummary = items.length > 0 && v.ok && allocatedGuests === totalGuests && v.totalPrice != null;
+	      if (canShowSummary) {
 	        const priceText = formatPriceRub(v.totalPrice);
 	        summaryEl.innerHTML = `
 	          <div class="alloc-row"><div class="muted">Взрослые</div><div class="alloc-val">${v.sumAdults}</div></div>
 	          <div class="alloc-row"><div class="muted">Дети</div><div class="alloc-val">${v.sumKids}</div></div>
 	          <div class="alloc-row" style="font-weight:600;font-size:16px"><div>Итого</div><div class="alloc-val">${priceText}</div></div>
 	        `;
+	        summaryEl.style.display = '';
 	      } else {
 	        summaryEl.innerHTML = '';
+	        summaryEl.style.display = 'none';
 	      }
 	    }
     if (submitBtn) submitBtn.disabled = !v.ok || allocatedGuests !== totalGuests;
@@ -4143,90 +4166,151 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack, ini
   
   // Кнопка добавления апартамента
   if (addRoomBtn) {
-    addRoomBtn.onclick = () => {
+    addRoomBtn.onclick = async () => {
       if (!availableRooms.length) {
         alert('Апартаменты не загружены. Попробуйте еще раз.');
         return;
       }
 
-      const totalGuests = (Number(f.adults) || 0) + (Number(f.kids) || 0);
-      const allocatedGuests = items.reduce((sum, it) => sum + (it.adults || 0) + (it.kids || 0), 0);
-      const remaining = totalGuests - allocatedGuests;
+      // Используем стандартное окно выбора апартаментов, как при нажатии "Апартаменты" в меню Подробнее
+      // Но при выборе апартамента добавляем его в корзину вместо открытия деталей
+      
+      const campData = camp || await getCampQuick(cid);
+      if (!campData) return;
 
-      const sheet = document.createElement('div');
-      sheet.className = 'modal show';
-
-	      sheet.innerHTML = `
-	        <div class="modal-card" style="width:92vw;max-width:440px;margin:0 auto;border-radius:18px;max-height:80vh;overflow-y:auto;padding:18px">
-	          <div style="font-size:18px;font-weight:700;margin-bottom:12px;text-align:center">Добавить ${addWord}</div>
-	          ${remaining > 0 ? `
-	            <div style="font-size:13px;color:#f59e0b;margin-bottom:16px;text-align:center;line-height:1.4">
-	              Нужно разместить ещё ${remaining} ${remaining === 1 ? 'гостя' : remaining < 5 ? 'гостей' : 'гостей'}
-	            </div>
-          ` : ''}
-
-          <div class="accom-list" id="addRoomList"></div>
-
-          <button class="button ghost" id="addRoomCancel" style="width:100%;margin-top:16px">Отмена</button>
+      // Показываем окно со списком апартаментов (как в openCampAccommodations)
+      const ht = normalizeHousingType(campData.housing_type);
+      
+      showModal(`
+        <div class="accom-card">
+          <div class="accom-head">
+            <div class="accom-title">${campData.name || 'База'} • Добавить ${addWord}</div>
+            <div class="accom-sub">Выберите вариант для добавления в бронирование</div>
+          </div>
+          <div class="accom-list" id="addRoomListStd"></div>
+          <div class="accom-actions">
+            <button class="button ghost" id="addRoomBackStd">Отмена</button>
+          </div>
         </div>
-      `;
+      `);
 
-      document.body.appendChild(sheet);
+      const listEl = document.getElementById('addRoomListStd');
+      const backBtn = document.getElementById('addRoomBackStd');
+      
+      if (backBtn) {
+        backBtn.onclick = closeModal;
+      }
 
-	      const addRoomListEl = sheet.querySelector('#addRoomList');
-	      const cancelBtn = sheet.querySelector('#addRoomCancel');
+      if (!listEl) return;
 
-	      const selectedIds = new Set(items.map(it => Number(it?.room?.id)).filter(Number.isFinite));
-	      const listRooms = availableRooms.filter(r => {
-	        const id = Number(r?.id);
-	        if (!Number.isFinite(id)) return false;
-	        return !selectedIds.has(id);
-	      });
+      const selectedIds = new Set(items.map(it => Number(it?.room?.id)).filter(Number.isFinite));
+      const unusedRooms = availableRooms.filter(r => !selectedIds.has(Number(r?.id)));
 
-	      addRoomListEl.innerHTML = listRooms.map((r, idx) => {
-	        const cap = roomCapacity(r);
-	        const photos = Array.isArray(r.photos) ? r.photos : [];
-	        const cover = photos.find(p => p && p.cover) || photos[0];
-	        const thumb = cover?.url
-	          ? `<img class="accom-thumb" src="${cover.url}" alt="">`
-          : `<div class="accom-thumb ph"></div>`;
-        const price = r.price || r.price_adult || 0;
-        const priceText = price > 0 ? `${price.toLocaleString('ru-RU')} ₽` : '—';
-        return `
-	          <button class="accom-item" data-idx="${idx}" style="display:grid;grid-template-columns:64px 1fr auto;gap:12px;align-items:center;text-align:left;padding:10px;border-radius:14px;cursor:pointer">
-	            ${thumb}
-	            <div class="accom-main">
-	              <div class="accom-name">${r.name || r.room_type || 'Апартамент'}</div>
-	              <div class="accom-meta">до ${cap} гостей</div>
-	            </div>
-	            <div class="accom-price">${priceText}</div>
-	          </button>
+      if (unusedRooms.length === 0) {
+        listEl.innerHTML = '<div class="muted">Все варианты уже добавлены</div>';
+        return;
+      }
+
+      // Группируем по типам как в стандартном окне
+      const groups = new Map();
+      for (const r of unusedRooms) {
+        const key = `${r.room_type || 'Дом'}::${r.class || r.name || 'Стандарт'}`;
+        if (!groups.has(key)) {
+          groups.set(key, { ...r, count: 1, minPrice: r.price || r.price_adult || 0, rooms: [r] });
+        } else {
+          const g = groups.get(key);
+          g.count++;
+          g.rooms.push(r);
+          const rPrice = r.price || r.price_adult || 0;
+          if (rPrice && (!g.minPrice || rPrice < g.minPrice)) g.minPrice = rPrice;
+        }
+      }
+
+      listEl.innerHTML = '';
+      for (const [key, g] of groups) {
+        const cap = roomCapacity(g);
+        const photos = Array.isArray(g.photos) ? g.photos : [];
+        const coverPhoto = photos.find(p => p.cover) || photos[0];
+        const thumbUrl = coverPhoto?.url || '/static/uploads/temp/placeholder.jpg';
+
+        const item = document.createElement('button');
+        item.className = 'accom-item';
+        item.dataset.key = key;
+        
+        item.innerHTML = `
+          <img class="accom-thumb" src="${thumbUrl}" alt="">
+          <div class="accom-main">
+            <div class="accom-name">${g.class || g.name || 'Без названия'}</div>
+            <div class="accom-meta">до ${cap || '?'} гостей • доступно: ${g.count}</div>
+          </div>
+          <div class="accom-price">от ${(g.minPrice && g.minPrice > 0) ? g.minPrice.toLocaleString('ru-RU') : '—'}&nbsp;₽</div>
         `;
-      }).join('');
+        
+        item.onclick = () => {
+          // Если только один вариант - открываем карточку
+          if (g.rooms.length === 1) {
+            const room = g.rooms[0];
+            openRoomDetailsFromCart(room, campData, { rooms: g.rooms });
+          } else {
+            // Если несколько вариантов - показываем их список
+            showModal(`
+              <div class="accom-card">
+                <div class="accom-head">
+                  <div class="accom-title">${campData.name || 'База'} • ${g.class || g.name || 'Апартаменты'}</div>
+                  <div class="accom-sub">Выберите конкретный вариант</div>
+                </div>
+                <div class="accom-list" id="addRoomVariants"></div>
+                <div class="accom-actions">
+                  <button class="button ghost" id="addRoomBackVariants">Назад</button>
+                </div>
+              </div>
+            `);
 
-	      if (!listRooms.length) {
-	        addRoomListEl.innerHTML = '<div class="muted" style="text-align:center;padding:10px">Все варианты уже добавлены</div>';
-	      }
+            const variantsEl = document.getElementById('addRoomVariants');
+            const backVariantsBtn = document.getElementById('addRoomBackVariants');
 
-	      addRoomListEl.querySelectorAll('.accom-item').forEach((btn) => {
-	        btn.onclick = () => {
-	          const idx = Number(btn.getAttribute('data-idx'));
-	          const room = listRooms[idx];
-	          if (!room) return;
-	          autoPickActive = false;
-	          autoPickIndex = 0;
-	          items.push({ room, adults: 0, kids: 0 });
-	          autoFillRemainingGuests();
-	          sheet.remove();
-	          render();
-	          updateSummary();
-	        };
-	      });
+            if (backVariantsBtn) {
+              backVariantsBtn.onclick = () => {
+                closeModal();
+                // Восстанавливаем предыдущее окно
+                addRoomBtn.onclick();
+              };
+            }
 
-      cancelBtn.onclick = () => sheet.remove();
-      sheet.addEventListener('click', (e) => {
-        if (e.target === sheet) sheet.remove();
-      });
+            if (variantsEl) {
+              variantsEl.innerHTML = g.rooms.map(room => {
+                const photos = Array.isArray(room.photos) ? room.photos : [];
+                const cover = photos.find(p => p.cover) || photos[0];
+                const thumbUrl = cover?.url || '/static/uploads/temp/placeholder.jpg';
+                const price = room.price || room.price_adult || 0;
+                const priceText = price > 0 ? `${price.toLocaleString('ru-RU')} ₽` : '—';
+                
+                return `
+                  <button class="accom-item" data-room-id="${room.id}" style="display:grid;grid-template-columns:64px 1fr auto;gap:12px;align-items:center;text-align:left">
+                    <img class="accom-thumb" src="${thumbUrl}" alt="" style="width:64px;height:64px;border-radius:10px;object-fit:cover">
+                    <div class="accom-main">
+                      <div class="accom-name">${room.name || 'Апартамент'}</div>
+                      <div class="accom-meta">до ${roomCapacity(room)} гостей</div>
+                    </div>
+                    <div class="accom-price">${priceText}</div>
+                  </button>
+                `;
+              }).join('');
+
+              variantsEl.querySelectorAll('.accom-item').forEach(btn => {
+                btn.onclick = () => {
+                  const roomId = Number(btn.getAttribute('data-room-id'));
+                  const room = g.rooms.find(r => Number(r.id) === roomId);
+                  if (!room) return;
+                  openRoomDetailsFromCart(room, campData, { rooms: g.rooms });
+                };
+              });
+            }
+          }
+        };
+        
+        listEl.appendChild(item);
+      }
     };
   }
   
@@ -4432,7 +4516,7 @@ function openAllocationModal({ camp, campId, roomsAvailable, selectedRooms, filt
         <button class="button ghost" id="allocAddBtn">Добавить</button>
       </div>
 
-      <div class="alloc-summary" id="allocSummary"></div>
+	      <div class="alloc-summary" id="allocSummary" style="display:none"></div>
 
       <div class="alloc-actions">
         <button class="button ghost" id="allocBack">Назад</button>
@@ -4441,10 +4525,24 @@ function openAllocationModal({ camp, campId, roomsAvailable, selectedRooms, filt
     </div>
   `);
 
-  const listEl = document.getElementById('allocList');
-  const hintEl = document.getElementById('allocHint');
-  const summaryEl = document.getElementById('allocSummary');
-  const submitBtn = document.getElementById('allocSubmit');
+	  const listEl = document.getElementById('allocList');
+	  const hintEl = document.getElementById('allocHint');
+	  const summaryEl = document.getElementById('allocSummary');
+	  const submitBtn = document.getElementById('allocSubmit');
+
+	  if (summaryEl) {
+	    summaryEl.innerHTML = '';
+	    summaryEl.style.display = 'none';
+	  }
+
+  // Сохраняем контекст в глобальную переменную для доступа из openRoomDetailsFromCart
+  window.__allocationModalContext = {
+    items,
+    camp,
+    campId: cid,
+    availableRooms: available,
+    filter: f,
+  };
 
   function render(){
     if (!listEl) return;
@@ -4536,16 +4634,27 @@ function openAllocationModal({ camp, campId, roomsAvailable, selectedRooms, filt
       });
       hintEl.textContent = [...v.errors, ...extra].filter(Boolean).join('. ');
     }
-    if (summaryEl) {
-      const priceText = (v.totalPrice == null) ? '—' : formatPriceRub(v.totalPrice);
-      summaryEl.innerHTML = `
-        <div class="alloc-row"><div class="muted">Взрослые</div><div class="alloc-val">${v.sumAdults}</div></div>
-        <div class="alloc-row"><div class="muted">Дети</div><div class="alloc-val">${v.sumKids}</div></div>
-        <div class="alloc-row"><div class="muted">Итого</div><div class="alloc-val">${priceText}</div></div>
-      `;
-    }
+	    if (summaryEl) {
+	      const canShowSummary = items.length > 0 && v.totalPrice != null;
+	      if (canShowSummary) {
+	        const priceText = formatPriceRub(v.totalPrice);
+	        summaryEl.innerHTML = `
+	          <div class="alloc-row"><div class="muted">Взрослые</div><div class="alloc-val">${v.sumAdults}</div></div>
+	          <div class="alloc-row"><div class="muted">Дети</div><div class="alloc-val">${v.sumKids}</div></div>
+	          <div class="alloc-row"><div class="muted">Итого</div><div class="alloc-val">${priceText}</div></div>
+	        `;
+	        summaryEl.style.display = '';
+	      } else {
+	        summaryEl.innerHTML = '';
+	        summaryEl.style.display = 'none';
+	      }
+	    }
     if (submitBtn) submitBtn.disabled = !v.ok;
   }
+
+  // Обновляем глобальный контекст с функциями
+  window.__allocationModalContext.render = render;
+  window.__allocationModalContext.updateSummary = updateSummary;
 
   const addSel = document.getElementById('allocAddSelect');
   const addBtn = document.getElementById('allocAddBtn');
@@ -4727,7 +4836,32 @@ function openRoomsList(campId, typeName, rooms, camp) {
   if (bookBtn) {
     bookBtn.onclick = async (e) => {
       try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
-      if (!requireAuth()) return;
+      
+      // Проверка авторизации - показываем выбор Вход/Регистрация
+      if (!getAuth() || !getAuth().token) {
+        // НЕ закрываем предыдущие окна - просто показываем авторизацию поверх
+        showAuthModal(`
+          <div class="auth-card" style="text-align:center">
+            <div class="auth-head" style="justify-content:center">
+              <div class="auth-title">Необходима авторизация</div>
+            </div>
+            <div class="auth-subtitle" style="color:#fff;margin:12px 0 16px;line-height:1.5;font-size:15px">Для бронирования необходимо авторизоваться в приложении.</div>
+            <div class="auth-actions" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+              <button class="button primary" id="authLogin" style="background:#2a9df4;border-color:#2a9df4">Вход</button>
+              <button class="button primary" id="authRegister" style="background:#22c55e;border-color:#22c55e">Регистрация</button>
+            </div>
+            <button class="button ghost" id="authCancel" style="width:100%">Отмена</button>
+          </div>
+        `);
+        document.getElementById('authCancel').onclick = () => {
+          closeModal();
+          // Восстанавливаем окно списка апартаментов
+          openRoomsList(cid, typeName, rooms, camp);
+        };
+        document.getElementById('authRegister').onclick = ()=> { closeModal(); openRegister(); };
+        document.getElementById('authLogin').onclick = ()=> { closeModal(); openLogin(); };
+        return;
+      }
 
       const openAlloc = () => {
         const f = window.__bookingFilter || {};
@@ -4810,6 +4944,47 @@ function openRoomsList(campId, typeName, rooms, camp) {
 }
 
 // === Показ детальной карточки апартамента (как карточка базы) ===
+function openRoomDetailsFromCart(room, camp, context) {
+  // Открывает карточку апартамента и при нажатии "Добавить в корзину" добавляет его в корзину
+  
+  openRoomDetails(room, camp, context);
+  
+  // Переопределяем обработчик кнопки "Выбрать" для добавления в корзину
+  setTimeout(() => {
+    const selectBtn = document.getElementById('roomDetailBookBtn');
+    if (selectBtn) {
+      selectBtn.textContent = 'Добавить в корзину';
+      selectBtn.onclick = () => {
+        // Добавляем комнату в корзину (из контекста openAllocationModal)
+        const ctx = window.__allocationModalContext;
+        if (ctx && Array.isArray(ctx.items)) {
+          ctx.items.push({ room, adults: 0, kids: 0 });
+          if (typeof ctx.render === 'function') {
+            ctx.render();
+          }
+          if (typeof ctx.updateSummary === 'function') {
+            ctx.updateSummary();
+          }
+        }
+        // Закрываем карточку и сразу открываем корзину, чтобы пользователь её увидел
+        closeModal();
+        const ctx2 = window.__allocationModalContext;
+        if (ctx2) {
+          setTimeout(() => {
+            openAllocationModal({
+              camp: ctx2.camp,
+              campId: ctx2.campId,
+              roomsAvailable: ctx2.availableRooms,
+              selectedRooms: ctx2.items,
+              filter: ctx2.filter,
+            });
+          }, 0);
+        }
+      };
+    }
+  }, 0);
+}
+
 function openRoomDetails(room, camp, context) {
   const photos = Array.isArray(room.photos) ? room.photos : [];
   const pics = photos.map(p => p.url);
@@ -4954,9 +5129,33 @@ function openRoomDetails(room, camp, context) {
   // Сохраняем в стек для возврата из фильтра
   pushNavStack({ type: 'roomDetails', room, camp, context: context || null });
 
-  // Обработчик кнопки "Выбрать" — сразу переход к окну подтверждения
+  // Обработчик кнопки "Выбрать" — проверяем авторизацию и показываем выбор Вход/Регистрация
   document.getElementById('roomDetailBookBtn').onclick = async () => {
-    if (!requireAuth()) return;
+    // Проверка авторизации
+    if (!getAuth() || !getAuth().token) {
+      // НЕ закрываем предыдущие окна - просто показываем авторизацию поверх
+      showAuthModal(`
+        <div class="auth-card" style="text-align:center">
+          <div class="auth-head" style="justify-content:center">
+            <div class="auth-title">Необходима авторизация</div>
+          </div>
+          <div class="auth-subtitle" style="color:#fff;margin:12px 0 16px;line-height:1.5;font-size:15px">Для бронирования апартамента необходимо авторизоваться в приложении.</div>
+          <div class="auth-actions" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+            <button class="button primary" id="authLogin" style="background:#2a9df4;border-color:#2a9df4">Вход</button>
+            <button class="button primary" id="authRegister" style="background:#22c55e;border-color:#22c55e">Регистрация</button>
+          </div>
+          <button class="button ghost" id="authCancel" style="width:100%">Отмена</button>
+        </div>
+      `);
+      document.getElementById('authCancel').onclick = () => {
+        closeModal();
+        // Восстанавливаем окно Подробнее
+        openRoomDetails(room, camp, context);
+      };
+      document.getElementById('authRegister').onclick = ()=> { closeModal(); openRegister(); };
+      document.getElementById('authLogin').onclick = ()=> { closeModal(); openLogin(); };
+      return;
+    }
     
     const campData = camp || await getCampQuick(camp.id);
     
@@ -5243,15 +5442,13 @@ async function openCampHousing(campId){
     return;
   }
   
-  // Если фильтр настроен, требуем авторизацию для бронирования
-  if (!requireAuth()) return;
+  // Если фильтр настроен, показываем доступные варианты
   await openCampAccommodations(cid);
 }
 
 async function openCampAccommodations(campId){
   const cid = Number(campId);
   if (!Number.isFinite(cid)) return;
-  if (!requireAuth()) return;
   window.__currentCampId = cid;
   // закрываем любые старые .modal.show, чтобы не было «слоёв»
   try { document.querySelectorAll('.modal.show').forEach(m => m.remove()); } catch(_) {}
