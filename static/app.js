@@ -1222,6 +1222,11 @@ function renderBookingMultiTabs({ mountId, activeCampId, onSwitch } = {}){
     let longPressTimer = null;
     let isLongPress = false;
     
+    // Prevent text selection on long press
+    btn.style.userSelect = 'none';
+    btn.style.webkitUserSelect = 'none';
+    btn.style.webkitTouchCallout = 'none';
+    
     const startLongPress = (e) => {
       isLongPress = false;
       longPressTimer = setTimeout(async () => {
@@ -1263,7 +1268,10 @@ function renderBookingMultiTabs({ mountId, activeCampId, onSwitch } = {}){
       }
     };
     
-    btn.addEventListener('touchstart', startLongPress, { passive: true });
+    btn.addEventListener('touchstart', (e) => {
+      e.preventDefault(); // Prevent text selection
+      startLongPress(e);
+    }, { passive: false });
     btn.addEventListener('touchend', cancelLongPress);
     btn.addEventListener('touchcancel', cancelLongPress);
     btn.addEventListener('mousedown', startLongPress);
@@ -5483,17 +5491,16 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack, ini
         const isSingleActive = !!(autoPickActive && autoPickSnapshot && autoPickSnapshotIsSingle);
         const hasRooms = Array.isArray(availableRooms) && availableRooms.length > 0;
         const totalGuestsPositive = totalGuests > 0;
-        if (!hasRooms || !totalGuestsPositive) {
+        const isFilterReady = !!(f.from && f.to && totalGuestsPositive);
+        
+        // Показываем кнопку если фильтр готов и есть комнаты
+        if (!hasRooms || !isFilterReady) {
           autoPickBtn.style.display = 'none';
           return;
         }
 	    
-	    // Показываем кнопку если есть недораспределённые гости,
-	    // или если включён подбор с 1 вариантом (нужна кнопка «Отменить подбор»).
-        const needMoreGuests = allocatedGuests < totalGuests && hasRooms;
-        const showCancelSingle = isSingleActive;
-        // Разрешаем показать кнопку также когда варианты уже посчитаны (для циклического подбора)
-        const shouldShow = showCancelSingle || needMoreGuests || (autoPickVariants && autoPickVariants.length > 0);
+	    // Кнопка подбора показывается всегда когда есть апартаменты и фильтр готов
+        const shouldShow = true;
         if (shouldShow) {
           autoPickBtn.style.display = '';
 	      
