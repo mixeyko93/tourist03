@@ -715,24 +715,13 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 }
 
 .multi-tabs{
-  display:flex;
-  flex-wrap:nowrap;
+  display:grid;
+  grid-template-columns:repeat(3, minmax(0, 1fr));
   gap:8px;
-  justify-content:flex-start;
+  justify-content:center;
   margin-bottom:12px;
-  overflow-x:auto;
-  overflow-y:hidden;
-  scrollbar-width:none;
-  -ms-overflow-style:none;
-  padding:2px 4px 6px;
   min-height:58px;
-  scroll-behavior:auto;
-  overscroll-behavior-x:contain;
-  -webkit-overflow-scrolling:touch;
-  touch-action:pan-x;
 }
-.multi-tabs::-webkit-scrollbar{display:none;}
-.multi-tabs.is-scrolling .multi-tab{transition:none;}
 .multi-tab{
   display:flex;
   flex-direction:column;
@@ -744,10 +733,6 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   border:1px solid var(--border-color);
   background:transparent;
   color:var(--tg-text);
-  width:130px;
-  min-width:130px;
-  max-width:130px;
-  flex-shrink:0;
   cursor:pointer;
   box-sizing:border-box;
   /* Prevent text selection on long press */
@@ -756,7 +741,6 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   -webkit-touch-callout:none;
   /* Smooth border transition */
   transition:border-color 0.15s ease, box-shadow 0.15s ease;
-  touch-action:manipulation;
 }
 .multi-tab.active{
   border-color:var(--tg-button);

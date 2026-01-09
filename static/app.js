@@ -1086,14 +1086,26 @@ function upsertBookingMultiCart({ campId, campName, lakeName, filter, items }){
     items: Array.isArray(items) ? items : [],
     updatedAt: now,
   };
-  if (idx >= 0) carts[idx] = { ...carts[idx], ...next };
-  else carts.unshift(next);
+  // ВАЖНО: порядок вкладок должен быть стабильным (без «скачков»).
+  // Поэтому НЕ сортируем по updatedAt и не двигаем вкладку при обновлении.
+  if (idx >= 0) {
+    carts[idx] = { ...carts[idx], ...next };
+  } else {
+    carts.push(next);
+  }
 
-  // ограничиваем до 6 корзин (2 ряда кнопок)
-  carts.sort((a, b) => (Number(b.updatedAt) || 0) - (Number(a.updatedAt) || 0));
-  const limited = carts.slice(0, 6);
+  // Ограничиваем до 6 корзин: если внезапно стало больше — удаляем самую старую по updatedAt.
+  while (carts.length > 6) {
+    let oldestIdx = 0;
+    let oldestAt = Number(carts[0]?.updatedAt) || 0;
+    for (let i = 1; i < carts.length; i++) {
+      const at = Number(carts[i]?.updatedAt) || 0;
+      if (at < oldestAt) { oldestAt = at; oldestIdx = i; }
+    }
+    carts.splice(oldestIdx, 1);
+  }
 
-  const out = { v: 1, activeCampId: cid, carts: limited };
+  const out = { v: 1, activeCampId: cid, carts };
   saveBookingMultiDraft(out);
   syncActiveSingleDraftFromMulti();
   updateBookingDraftUi();
@@ -1201,58 +1213,7 @@ function renderBookingMultiTabs({ mountId, activeCampId, onSwitch } = {}){
     el.style.display = 'none';
     return;
   }
-  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const activeId = Number(activeCampId);
-
-  const prefersReducedMotion = (() => {
-    try { return !!window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; }
-  })();
-  const animateScrollLeft = (scroller, targetLeft, durationMs = 220) => {
-    if (!scroller) return;
-    const maxLeft = Math.max(0, (scroller.scrollWidth || 0) - (scroller.clientWidth || 0));
-    const to = clamp(Number(targetLeft) || 0, 0, maxLeft);
-
-    try { if (scroller.__scrollAnim && typeof scroller.__scrollAnim.cancel === 'function') scroller.__scrollAnim.cancel(); } catch (_) {}
-    if (prefersReducedMotion || durationMs <= 0) {
-      scroller.scrollLeft = to;
-      return;
-    }
-
-    const from = scroller.scrollLeft || 0;
-    const start = performance.now();
-    const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
-    let raf = 0;
-    let cancelled = false;
-
-    const tick = (now) => {
-      if (cancelled) return;
-      const t = clamp((now - start) / durationMs, 0, 1);
-      const v = from + (to - from) * easeOutCubic(t);
-      scroller.scrollLeft = v;
-      if (t < 1) raf = requestAnimationFrame(tick);
-      else {
-        try { scroller.classList.remove('is-scrolling'); } catch (_) {}
-      }
-    };
-
-    try { scroller.classList.add('is-scrolling'); } catch (_) {}
-    raf = requestAnimationFrame(tick);
-    scroller.__scrollAnim = {
-      cancel: () => {
-        cancelled = true;
-        try { cancelAnimationFrame(raf); } catch (_) {}
-        try { scroller.classList.remove('is-scrolling'); } catch (_) {}
-      }
-    };
-  };
-  const scrollTabToCenter = (scroller, tabEl) => {
-    if (!scroller || !tabEl) return;
-    const tabLeft = tabEl.offsetLeft;
-    const tabW = tabEl.offsetWidth || 0;
-    const viewW = scroller.clientWidth || 0;
-    const target = tabLeft + tabW / 2 - viewW / 2;
-    animateScrollLeft(scroller, target, 220);
-  };
 
   el.style.display = '';
   el.innerHTML = carts.map(c => {
@@ -1268,33 +1229,6 @@ function renderBookingMultiTabs({ mountId, activeCampId, onSwitch } = {}){
       </button>
     `;
   }).join('');
-
-  // Restore previous scroll position to avoid horizontal jumps on rerender
-  try {
-    const savedLeft = Number(window.__bookingMultiTabsScrollLeft);
-    if (Number.isFinite(savedLeft)) {
-      const maxLeft = Math.max(0, (el.scrollWidth || 0) - (el.clientWidth || 0));
-      el.scrollLeft = clamp(savedLeft, 0, maxLeft);
-    }
-  } catch (_) {}
-
-  // Persist scrollLeft during user scroll (so switching carts doesn't reset scroll)
-  try {
-    if (!el.__scrollPersistBound) {
-      el.__scrollPersistBound = true;
-      el.addEventListener('scroll', () => {
-        try { window.__bookingMultiTabsScrollLeft = el.scrollLeft || 0; } catch (_) {}
-      }, { passive: true });
-    }
-  } catch (_) {}
-
-  // Center active tab after layout
-  try {
-    requestAnimationFrame(() => {
-      const activeBtn = el.querySelector('.multi-tab.active');
-      if (activeBtn) scrollTabToCenter(el, activeBtn);
-    });
-  } catch (_) {}
 
   el.querySelectorAll('.multi-tab').forEach((btn) => {
     const cid = Number(btn.getAttribute('data-camp-id'));
@@ -1341,7 +1275,6 @@ function renderBookingMultiTabs({ mountId, activeCampId, onSwitch } = {}){
 
     const handleTap = () => {
       if (cid === activeId) return;
-      try { window.__bookingMultiTabsScrollLeft = el.scrollLeft || 0; } catch (_) {}
       try { setActiveBookingMultiCart(cid); } catch (_) {}
       if (typeof onSwitch === 'function') { onSwitch(cid); return; }
       try {
