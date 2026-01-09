@@ -98,6 +98,18 @@ html, body{
 }
 .card:hover{background:var(--card-bg-hover);}
 
+/* Scroll performance mode: temporarily remove expensive effects while scrolling */
+.is-scrolling .card,
+.is-scrolling .modal,
+.is-scrolling .modal-card,
+.is-scrolling .snackbar,
+.is-scrolling .map-load-error-card{
+  backdrop-filter:none !important;
+}
+.is-scrolling .card{box-shadow:0 4px 12px rgba(0,0,0,.18) !important;}
+.is-scrolling .modal{background:rgba(10,12,16,.82) !important;}
+.is-scrolling .snackbar{box-shadow:0 8px 18px rgba(0,0,0,0.35) !important;}
+
 .button{
   display:inline-flex; align-items:center; justify-content:center;
   padding:10px 18px; border-radius:14px; border:none; cursor:pointer; font-weight:700;
@@ -1278,6 +1290,16 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   background:rgba(255,255,255,0.03);
   padding:10px;
   box-sizing:border-box;
+}
+
+/* Large lists: let Chromium skip offscreen rendering for smoother scroll */
+@supports (content-visibility: auto){
+  .accom-item,
+  .alloc-item,
+  .card{
+    content-visibility:auto;
+    contain-intrinsic-size: 160px 1px;
+  }
 }
 .alloc-thumb{
   width:74px;

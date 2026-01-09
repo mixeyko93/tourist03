@@ -1348,6 +1348,32 @@ function showSnackbar({ message, actionText, onAction, timeoutMs = 4500 } = {}){
   if (timeoutMs > 0) setTimeout(close, timeoutMs);
 }
 
+function initScrollPerformanceMode(){
+  // During active scroll, disable expensive visual effects (blur/shadows) via CSS.
+  // This improves perceived smoothness on low-end Android and iOS WebView/Safari.
+  const root = document.documentElement;
+  let timer = 0;
+  let active = false;
+
+  const setActive = () => {
+    if (!active) {
+      active = true;
+      try { root.classList.add('is-scrolling'); } catch (_) {}
+    }
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => {
+      active = false;
+      try { root.classList.remove('is-scrolling'); } catch (_) {}
+    }, 140);
+  };
+
+  // Capture scroll events from nested scroll containers (scroll doesn't bubble but can be captured)
+  try { document.addEventListener('scroll', setActive, { capture: true, passive: true }); } catch (_) {}
+  try { document.addEventListener('wheel', setActive, { capture: true, passive: true }); } catch (_) {}
+  // Touchmove gives earlier signal on mobile (do NOT preventDefault)
+  try { document.addEventListener('touchmove', setActive, { capture: true, passive: true }); } catch (_) {}
+}
+
 async function openBookingDraft(opts = {}){
   try { syncActiveSingleDraftFromMulti(); } catch (_) {}
   let d = window.__bookingDraft || loadBookingDraft();
@@ -7007,6 +7033,7 @@ window.addEventListener('DOMContentLoaded', () => {
   initBookingFilterButton();
   setFilterButtonActive(!!window.__bookingFilter);
   initGeoButton();
+  initScrollPerformanceMode();
   loadBookingDraft();
   updateBookingDraftUi();
     setTabById('tab-map');
