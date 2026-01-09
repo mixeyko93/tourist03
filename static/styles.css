@@ -688,6 +688,83 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   box-shadow:none;
 }
 
+.multi-tabs{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  justify-content:center;
+  margin-bottom:12px;
+}
+.multi-tab{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  justify-content:center;
+  gap:2px;
+  padding:8px 10px;
+  border-radius:14px;
+  border:1px solid var(--border-color);
+  background:transparent;
+  color:var(--tg-text);
+  max-width:170px;
+  min-width:120px;
+  cursor:pointer;
+}
+.multi-tab.active{
+  border-color:var(--tg-button);
+  box-shadow:0 0 0 2px rgba(48, 158, 248, .25);
+}
+.multi-tab-title{
+  font-weight:800;
+  font-size:14px;
+  line-height:1.15;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  width:100%;
+}
+.multi-tab-sub{
+  font-size:12px;
+  color:var(--tg-hint);
+  line-height:1.15;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  width:100%;
+}
+
+.compare-list{margin-top:12px;}
+.compare-camp{padding:14px;}
+.compare-camp-title{font-weight:800;font-size:18px;line-height:1.2;}
+.compare-camp-sub{margin-top:6px;}
+.compare-variants{display:flex;flex-direction:column;gap:10px;margin-top:10px;}
+.compare-variant{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:10px 12px;
+  border-radius:14px;
+  border:1px solid var(--border-color);
+  background:rgba(255,255,255,0.03);
+}
+.compare-variant-main{flex:1;min-width:0;}
+.compare-variant-text{
+  font-weight:700;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.compare-variant-price{
+  margin-top:4px;
+  font-weight:800;
+}
+.button.primary.compare-add{
+  padding:10px 14px;
+  border-radius:12px;
+  white-space:nowrap;
+}
+
 /* ====================== SNACKBAR ====================== */
 .snackbar{
   position:fixed;
