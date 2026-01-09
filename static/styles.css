@@ -69,7 +69,6 @@
 
 /* ====================== GLOBAL LAYOUT ====================== */
 html, body{
-
   height:100%;
   margin:0;
   background:var(--tg-bg);
@@ -77,8 +76,10 @@ html, body{
   font-family:system-ui,-apple-system,Roboto,sans-serif;
   overscroll-behavior:none;
   overflow:hidden;
+  overflow-x:hidden;
   touch-action:manipulation;
 }
+*{box-sizing:border-box;}
 .tg-app{position:fixed; inset:0; display:flex; flex-direction:column; overflow:hidden;}
 .page-title{font-size:24px; font-weight:800; margin:18px 18px 14px; text-align:center !important;}
 .muted{color:var(--tg-hint); margin:0 0 12px; line-height:1.5;}
@@ -318,10 +319,13 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   border:1px solid var(--modal-border); border-radius:20px;
   padding:20px;
   width:min(440px, 92vw);              /* чуть уже не делаем — важен box-sizing */
-  max-height:85vh; overflow:auto;
+  max-height:85vh; 
+  overflow-y:auto;
+  overflow-x:hidden;
   box-shadow:0 6px 25px rgba(0,0,0,.4);
   transform:scale(.97); animation:scaleIn .2s ease forwards;
   box-sizing:border-box;               /* ← фикс: паддинги учитываются во width */
+  -webkit-overflow-scrolling:touch;
 }
 @keyframes scaleIn{to{transform:scale(1)}}
 
@@ -607,6 +611,29 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 .map-wrap{position:relative; height:calc(100vh - 110px); margin:16px; border-radius:16px; overflow:hidden;}
 #map{position:absolute; inset:0; z-index:0;}
 .map-ui{position:absolute; inset:0; pointer-events:none; z-index:500;}
+.map-load-error{
+  position:absolute;
+  inset:0;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding:18px;
+  background:rgba(0,0,0,0.18);
+  backdrop-filter:blur(2px);
+  z-index:450;
+}
+.map-load-error-card{
+  width:min(520px, 92vw);
+  border-radius:18px;
+  padding:16px 16px 14px;
+  background:rgba(17,19,23,.88);
+  border:1px solid rgba(255,255,255,0.14);
+  box-shadow:0 10px 28px rgba(0,0,0,0.45);
+  text-align:center;
+}
+.map-load-error-title{font-weight:900;font-size:18px;}
+.map-load-error-text{margin-top:8px;color:var(--tg-hint);line-height:1.35;}
+.map-load-error-btn{margin-top:12px;width:100%;}
 .map-btn{
   pointer-events:auto; position:absolute; bottom:18px; border:none; background:none; box-shadow:none;
   padding:0; cursor:pointer; transition:transform .12s ease;
@@ -690,11 +717,18 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 
 .multi-tabs{
   display:flex;
-  flex-wrap:wrap;
+  flex-wrap:nowrap;
   gap:8px;
-  justify-content:center;
+  justify-content:flex-start;
   margin-bottom:12px;
+  overflow-x:auto;
+  overflow-y:hidden;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+  -ms-overflow-style:none;
+  padding-bottom:4px;
 }
+.multi-tabs::-webkit-scrollbar{display:none;}
 .multi-tab{
   display:flex;
   flex-direction:column;
@@ -707,7 +741,8 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   background:transparent;
   color:var(--tg-text);
   max-width:170px;
-  min-width:120px;
+  min-width:100px;
+  flex-shrink:0;
   cursor:pointer;
 }
 .multi-tab.active{
@@ -764,6 +799,11 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   border-radius:12px;
   white-space:nowrap;
 }
+.button.ghost.compare-toggle{white-space:nowrap;}
+.button.ghost.compare-toggle.compare-remove{
+  border-color:#ef4444;
+  color:#ef4444;
+}
 
 /* ====================== SNACKBAR ====================== */
 .snackbar{
@@ -815,6 +855,7 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 
 /* Anti-overscroll (не отдаём жесты «шторке» Telegram) */
 html, body, .tg-app, .map-wrap, #map{overscroll-behavior:none;}
+html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !important;}
 #map, .leaflet-container{touch-action:pan-x pan-y;}
 
 /* ====================== CLUSTERS & POPUPS ====================== */
@@ -1196,7 +1237,7 @@ html, body, .tg-app, .map-wrap, #map{overscroll-behavior:none;}
 .accom-actions .button{height:42px; border-radius:12px; min-width:0;}
 
 /* ====================== GUEST ALLOCATION (MANUAL SPLIT) ====================== */
-.alloc-card{display:grid; gap:12px;}
+.alloc-card{display:grid; gap:12px; overflow-x:hidden; max-width:100%;}
 .alloc-hint{min-height:18px; font-size:13px; line-height:1.35; text-align:center;}
 .alloc-hint.ok{color:#22c55e;}
 .alloc-hint.warn{color:#f59e0b;}
@@ -1215,7 +1256,7 @@ html, body, .tg-app, .map-wrap, #map{overscroll-behavior:none;}
 }
 .alloc-hint .hint-link:hover{opacity:0.9;}
 .alloc-hint .hint-link:active{opacity:0.8;}
-.alloc-list{display:grid; gap:10px;}
+.alloc-list{display:grid; gap:10px; overflow-x:hidden; max-width:100%;}
 .alloc-item{
   display:grid;
   grid-template-columns: 74px 1fr 32px;
