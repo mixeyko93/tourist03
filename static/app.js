@@ -131,6 +131,19 @@ const throttle = (fn, ms=220) => {
   };
 };
 
+// Безопасное подтверждение: работает и там, где window.confirm недоступен (например, VS Code Simple Browser)
+function safeConfirm(message){
+  try {
+    if (typeof confirm === 'function') return !!confirm(message);
+  } catch(_) {}
+  try {
+    const usp = new URLSearchParams(location.search || '');
+    if (usp.has('vscodeBrowserReqId')) return true; // автоподтверждение в Simple Browser
+  } catch(_) {}
+  // дефолт: считаем подтверждённым, чтобы не блокировать критические действия
+  return true;
+}
+
 // Универсальный тактильный отклик (Telegram Haptic + fallback vibrate)
 function hapticPulse(style='light', vib=15){
   try {
@@ -420,29 +433,16 @@ function openBookingFilter(){ openBookingFilterModal(); }
 async function openBookingFilterWithAuth(campId) {
   const resolvedCampId = (campId != null) ? Number(campId) : Number(window.__currentCampId);
   if (Number.isFinite(resolvedCampId)) window.__currentCampId = resolvedCampId;
-  // Проверка авторизации
+
+  // Вход в сценарий «Забронировать» — требуем авторизацию (но корзину можно наполнять без неё).
   if (!getAuth() || !getAuth().token) {
-    // НЕ закрываем предыдущие окна - просто показываем авторизацию поверх
-    showAuthModal(`
-      <div class="auth-card" style="text-align:center">
-        <div class="auth-head" style="justify-content:center">
-          <div class="auth-title">Необходима авторизация</div>
-        </div>
-        <div class="auth-subtitle" style="color:#fff;margin:12px 0 16px;line-height:1.5;font-size:15px">Для бронирования базы отдыха необходимо авторизоваться в приложении.</div>
-        <div class="auth-actions" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-          <button class="button primary" id="authLogin" style="background:#2a9df4;border-color:#2a9df4">Вход</button>
-          <button class="button primary" id="authRegister" style="background:#22c55e;border-color:#22c55e">Регистрация</button>
-        </div>
-        <button class="button ghost" id="authCancel" style="width:100%">Отмена</button>
-      </div>
-    `);
-    document.getElementById('authCancel').onclick = () => {
-      closeModal();
-      // Восстанавливаем карточку базы отдыха
-      openDetails(resolvedCampId);
-    };
-    document.getElementById('authRegister').onclick = ()=> { closeModal(); openRegister(); };
-    document.getElementById('authLogin').onclick = ()=> { closeModal(); openLogin(); };
+    window.__postAuthAction = () => { openBookingFilterWithAuth(resolvedCampId); };
+    showAuthChoiceModal({
+      subtitle: 'Для бронирования базы отдыха необходимо авторизоваться в приложении.',
+      onCancel: () => {},
+      onLogin: () => { openLogin(); },
+      onRegister: () => { openRegister(); },
+    });
     return;
   }
   
@@ -762,10 +762,42 @@ function setAuth(p){
   localStorage.setItem(AUTH_KEY, JSON.stringify(p));
   if (p && p.token) cloudSetToken(p.token);
 }
+window.__postAuthAction = null;
+function runPostAuthAction(){
+  const fn = window.__postAuthAction;
+  if (typeof fn !== 'function') return;
+  window.__postAuthAction = null;
+  try { fn(); } catch (e) { console.error('postAuthAction error:', e); }
+}
 function clearAuth(){
   localStorage.removeItem(AUTH_KEY);
   cloudRemoveToken();
 }
+
+// Одноразовый выход по флагу в URL: ?forceLogout=1
+(function forceLogoutFromQuery(){
+  try {
+    const usp = new URLSearchParams(location.search || '');
+    if (usp.get('forceLogout') === '1') {
+      const cur = getAuth();
+      if (cur && cur.token) {
+        try {
+          fetch('/api/auth/logout', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${cur.token}` }
+          }).catch(()=>{});
+        } catch (_) {}
+      }
+      clearAuth();
+      // убираем параметр из адресной строки, чтобы не зациклиться
+      try {
+        const url = new URL(location.href);
+        url.searchParams.delete('forceLogout');
+        history.replaceState(null, '', url.toString());
+      } catch(_) {}
+    }
+  } catch(_) {}
+})();
 
 function renderAccount(){
   const profile = getAuth();
@@ -818,6 +850,42 @@ function showAuthModal(html){
   modalCard.innerHTML = html; 
   modal.style.display = 'grid'; 
   modal.classList.add('auth-modal');
+}
+
+function showAuthChoiceModal({ title = 'Необходима авторизация', subtitle = '', onCancel, onLogin, onRegister } = {}){
+  const prev = document.getElementById('authChoiceModal');
+  if (prev) prev.remove();
+  const wrap = document.createElement('div');
+  wrap.id = 'authChoiceModal';
+  wrap.className = 'modal show';
+  wrap.style.zIndex = '9999';
+  wrap.innerHTML = `
+    <div class="modal-card auth">
+      <div class="auth-card" style="text-align:center">
+        <div class="auth-head" style="justify-content:center">
+          <div class="auth-title">${escapeHtml(title)}</div>
+        </div>
+        ${subtitle ? `<div class="auth-subtitle" style="color:#fff;margin:12px 0 16px;line-height:1.5;font-size:15px">${escapeHtml(subtitle)}</div>` : ''}
+        <div class="auth-actions" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+          <button class="button primary" id="authChoiceLogin" style="background:#2a9df4;border-color:#2a9df4">Вход</button>
+          <button class="button primary" id="authChoiceRegister" style="background:#22c55e;border-color:#22c55e">Регистрация</button>
+        </div>
+        <button class="button ghost" id="authChoiceCancel" style="width:100%">Отмена</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(wrap);
+
+  const close = () => { try { wrap.remove(); } catch (_) {} };
+  const cancel = () => { close(); try { if (typeof onCancel === 'function') onCancel(); } catch (_) {} };
+  wrap.addEventListener('click', (e) => { if (e.target === wrap) cancel(); });
+  const btnCancel = wrap.querySelector('#authChoiceCancel');
+  const btnLogin = wrap.querySelector('#authChoiceLogin');
+  const btnRegister = wrap.querySelector('#authChoiceRegister');
+  if (btnCancel) btnCancel.onclick = cancel;
+  if (btnLogin) btnLogin.onclick = () => { close(); try { if (typeof onLogin === 'function') onLogin(); } catch (_) {} };
+  if (btnRegister) btnRegister.onclick = () => { close(); try { if (typeof onRegister === 'function') onRegister(); } catch (_) {} };
+  return { close, cancel };
 }
 
 const BOOKING_DRAFT_KEY = 'bookingDraft:v1';
@@ -1224,12 +1292,13 @@ function showRegisterVerifyPhone(phone, email){
       return;
     }
     const data = await vres.json().catch(()=>({}));
-    if (data && data.token && data.user) {
-      setAuth({ token: data.token, user: data.user });
-      closeModal();
-      renderAccount();
-      return;
-    }
+  if (data && data.token && data.user) {
+    setAuth({ token: data.token, user: data.user });
+    closeModal();
+    renderAccount();
+    runPostAuthAction();
+    return;
+  }
     if (!email) {
       showAuthError('Регистрация завершена, но не удалось получить профиль. Попробуйте войти.');
       return;
@@ -1274,12 +1343,13 @@ function showRegisterVerifyEmail(phone, email){
       return;
     }
     const data = await res.json().catch(()=>({}));
-    if (data && data.token && data.user) {
-      setAuth({ token: data.token, user: data.user });
-      closeModal();
-      renderAccount();
-      return;
-    }
+  if (data && data.token && data.user) {
+    setAuth({ token: data.token, user: data.user });
+    closeModal();
+    renderAccount();
+    runPostAuthAction();
+    return;
+  }
     showAuthError('Не удалось завершить регистрацию. Попробуйте ещё раз.');
   };
   document.getElementById('v_email_ok').onclick = async () => {
@@ -1295,12 +1365,13 @@ function showRegisterVerifyEmail(phone, email){
       return;
     }
     const data = await vres.json().catch(()=>({}));
-    if (data && data.token && data.user) {
-      setAuth({ token: data.token, user: data.user });
-      closeModal();
-      renderAccount();
-      return;
-    }
+  if (data && data.token && data.user) {
+    setAuth({ token: data.token, user: data.user });
+    closeModal();
+    renderAccount();
+    runPostAuthAction();
+    return;
+  }
     showAuthError('Не удалось завершить регистрацию. Попробуйте ещё раз или нажмите «Пропустить».');
   };
 }
@@ -1390,6 +1461,7 @@ function showLoginVerify(phone){
     setAuth({ token: data.token, user: data.user });
     closeModal();
     renderAccount();
+    runPostAuthAction();
   };
 }
 
@@ -1577,7 +1649,7 @@ async function openBookingDetail(bookingId, mode){
   const btnPay = document.getElementById('bk_det_pay');
   if (btnEdit) btnEdit.onclick = ()=> openBookingEdit(item, mode);
   if (btnCancel) btnCancel.onclick = async ()=>{
-    if (!confirm('Отменить бронь?')) return;
+    if (!safeConfirm('Отменить бронь?')) return;
     try {
       await authFetchJson(`/api/auth/bookings/${item.id}/cancel`, { method:'POST' });
       await openAccountBookings(mode);
@@ -1696,7 +1768,7 @@ async function openAccountProfile(){
   document.getElementById('pf_back').onclick = () => closeModal();
 
   document.getElementById('pf_logout_btn').onclick = async ()=>{
-    if (!confirm('Вы уверены, что хотите выйти из аккаунта?')) return;
+    if (!safeConfirm('Вы уверены, что хотите выйти из аккаунта?')) return;
     try { await authFetchJson('/api/auth/logout', { method:'POST' }); } catch(_) {}
     clearAuth(); closeModal(); renderAccount();
   };
@@ -4453,9 +4525,18 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack, ini
   };
 
   document.getElementById('confirmSubmit').onclick = async () => {
-    if (!requireAuth()) return;
     const v = validateAllocation(items, f);
     if (!v.ok) { updateSummary(); return; }
+    if (!getAuth() || !getAuth().token) {
+      window.__postAuthAction = () => { try { openBookingDraft(); } catch (_) {} };
+      showAuthChoiceModal({
+        subtitle: 'Для отправки заявки на бронирование необходимо авторизоваться.',
+        onCancel: () => {},
+        onLogin: () => { openLogin(); },
+        onRegister: () => { openRegister(); },
+      });
+      return;
+    }
     try {
       submitBtn.disabled = true;
       submitBtn.textContent = 'Отправляем...';
@@ -4677,9 +4758,17 @@ function openAllocationModal({ camp, campId, roomsAvailable, selectedRooms, filt
   };
 
   document.getElementById('allocSubmit').onclick = async () => {
-    if (!requireAuth()) return;
     const v = validateAllocation(items, f);
     if (!v.ok) { updateSummary(); return; }
+    if (!getAuth() || !getAuth().token) {
+      showAuthChoiceModal({
+        subtitle: 'Для отправки заявки на бронирование необходимо авторизоваться.',
+        onCancel: () => {},
+        onLogin: () => { openLogin(); },
+        onRegister: () => { openRegister(); },
+      });
+      return;
+    }
     try {
       document.getElementById('allocSubmit').disabled = true;
       const ids = await createBookingsFromAllocation(cid, f, items);
@@ -4833,40 +4922,14 @@ function openRoomsList(campId, typeName, rooms, camp) {
   }
 
   const bookBtn = document.getElementById('roomsListBook');
-  if (bookBtn) {
-    bookBtn.onclick = async (e) => {
-      try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
-      
-      // Проверка авторизации - показываем выбор Вход/Регистрация
-      if (!getAuth() || !getAuth().token) {
-        // НЕ закрываем предыдущие окна - просто показываем авторизацию поверх
-        showAuthModal(`
-          <div class="auth-card" style="text-align:center">
-            <div class="auth-head" style="justify-content:center">
-              <div class="auth-title">Необходима авторизация</div>
-            </div>
-            <div class="auth-subtitle" style="color:#fff;margin:12px 0 16px;line-height:1.5;font-size:15px">Для бронирования необходимо авторизоваться в приложении.</div>
-            <div class="auth-actions" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-              <button class="button primary" id="authLogin" style="background:#2a9df4;border-color:#2a9df4">Вход</button>
-              <button class="button primary" id="authRegister" style="background:#22c55e;border-color:#22c55e">Регистрация</button>
-            </div>
-            <button class="button ghost" id="authCancel" style="width:100%">Отмена</button>
-          </div>
-        `);
-        document.getElementById('authCancel').onclick = () => {
-          closeModal();
-          // Восстанавливаем окно списка апартаментов
-          openRoomsList(cid, typeName, rooms, camp);
-        };
-        document.getElementById('authRegister').onclick = ()=> { closeModal(); openRegister(); };
-        document.getElementById('authLogin').onclick = ()=> { closeModal(); openLogin(); };
-        return;
-      }
-
-      const openAlloc = () => {
-        const f = window.__bookingFilter || {};
-        const total = Number(f.total) || (Number(f.adults)||0) + (Number(f.kids)||0);
-        let selectedRooms = [];
+      if (bookBtn) {
+        bookBtn.onclick = async (e) => {
+          try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+          
+          const openAlloc = () => {
+            const f = window.__bookingFilter || {};
+            const total = Number(f.total) || (Number(f.adults)||0) + (Number(f.kids)||0);
+            let selectedRooms = [];
         if (rooms.length === 0) return;
         if (total > 0) {
           if (f.allowSplitRooms) {
@@ -5131,32 +5194,6 @@ function openRoomDetails(room, camp, context) {
 
   // Обработчик кнопки "Выбрать" — проверяем авторизацию и показываем выбор Вход/Регистрация
   document.getElementById('roomDetailBookBtn').onclick = async () => {
-    // Проверка авторизации
-    if (!getAuth() || !getAuth().token) {
-      // НЕ закрываем предыдущие окна - просто показываем авторизацию поверх
-      showAuthModal(`
-        <div class="auth-card" style="text-align:center">
-          <div class="auth-head" style="justify-content:center">
-            <div class="auth-title">Необходима авторизация</div>
-          </div>
-          <div class="auth-subtitle" style="color:#fff;margin:12px 0 16px;line-height:1.5;font-size:15px">Для бронирования апартамента необходимо авторизоваться в приложении.</div>
-          <div class="auth-actions" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-            <button class="button primary" id="authLogin" style="background:#2a9df4;border-color:#2a9df4">Вход</button>
-            <button class="button primary" id="authRegister" style="background:#22c55e;border-color:#22c55e">Регистрация</button>
-          </div>
-          <button class="button ghost" id="authCancel" style="width:100%">Отмена</button>
-        </div>
-      `);
-      document.getElementById('authCancel').onclick = () => {
-        closeModal();
-        // Восстанавливаем окно Подробнее
-        openRoomDetails(room, camp, context);
-      };
-      document.getElementById('authRegister').onclick = ()=> { closeModal(); openRegister(); };
-      document.getElementById('authLogin').onclick = ()=> { closeModal(); openLogin(); };
-      return;
-    }
-    
     const campData = camp || await getCampQuick(camp.id);
     
     // Используем текущий фильтр или создаём базовый с 2 взрослыми
@@ -5332,9 +5369,7 @@ async function openCampHousing(campId){
 
     document.getElementById('accomBack').onclick = ()=> { closeModal(); openDetails(cid); };
     document.getElementById('accomBooking').onclick = async ()=> {
-      // Проверяем авторизацию только при попытке забронировать
-      if (!requireAuth()) return;
-      
+      // Фильтр дат и гостей доступен без авторизации (для просмотра доступности).
       const camp = await getCampQuick(cid);
       const ht = normalizeHousingType(camp?.housing_type);
 	      openBookingFilterModal({
@@ -5720,7 +5755,6 @@ function openRoomCategory(camp, group, filter){
 
   document.getElementById('rgBack').onclick = ()=> openCampAccommodations(Number(camp?.id || window.__currentCampId));
   document.getElementById('rgChoose').onclick = async ()=>{
-    if (!requireAuth()) return;
     const cid = Number(camp?.id || window.__currentCampId);
     const f = filter || window.__bookingFilter || {};
     const total = Number(f.total) || (Number(f.adults)||0) + (Number(f.kids)||0);
