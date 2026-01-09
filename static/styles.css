@@ -1,15 +1,38 @@
 :root{
-  --tg-bg: var(--tg-theme-bg-color, #0d0d0d);
-  --tg-text: var(--tg-theme-text-color, #fff);
-  --tg-hint: var(--tg-theme-hint-color, #9aa3ad);
-  --tg-link: var(--tg-theme-link-color, #2a9df4);
-  --tg-button: var(--tg-theme-button-color, #2a9df4);
-  --tg-button-text: var(--tg-theme-button-text-color, #fff);
+  /* Telegram colors (device/theme dependent) */
+  --tg-native-bg: var(--tg-theme-bg-color, #0d0d0d);
+  --tg-native-text: var(--tg-theme-text-color, #ffffff);
+  --tg-native-hint: var(--tg-theme-hint-color, #9aa3ad);
+  --tg-native-link: var(--tg-theme-link-color, #2a9df4);
+  --tg-native-button: var(--tg-theme-button-color, #2a9df4);
+  --tg-native-button-text: var(--tg-theme-button-text-color, #ffffff);
+
+  /*
+    App theme tokens.
+    Важно: НЕ привязываем базовые цвета интерфейса к tg-native-*,
+    иначе при светлой системной теме в Telegram получаем чёрный текст на тёмном фоне.
+  */
+  --tg-bg: #0d0d0d;
+  --tg-text: #f3f4f6;
+  --tg-hint: #9aa3ad;
+  --tg-link: #2a9df4;
+  --tg-button: #2a9df4;
+  --tg-button-text: #ffffff;
 
   --card-bg: rgba(255,255,255,0.05);
-  --border-color: rgba(255,255,255,0.08);
+  --card-bg-hover: rgba(255,255,255,0.08);
+  --border-color: rgba(255,255,255,0.10);
   --blue: var(--tg-link);
   --tabbar-offset: 12px;
+
+  --modal-overlay: rgba(0,0,0,0.62);
+  --modal-bg: rgba(17,19,23,.92);
+  --modal-border: rgba(255,255,255,0.10);
+
+  --field-bg: rgba(255,255,255,0.08);
+  --field-placeholder: rgba(255,255,255,0.40);
+  --field-focus-border: rgba(42,157,244,0.6);
+  --field-focus-shadow: rgba(42,157,244,0.18);
 
   /* ===== РУЧКИ ДЛЯ СЕТКИ ПАРАМЕТРОВ (меняешь ТОЛЬКО их) ===== */
   --param-font: 13px;           /* размер текста */
@@ -20,6 +43,28 @@
   --param-line: 1.2;            /* межстрочный в строке */
   --param-value-weight: 600;    /* жирность чисел справа */
   --param-value-min: 84px;      /* минимальная ширина правой колонки */
+}
+
+:root[data-theme="light"]{
+  --tg-bg: #f6f7f9;
+  --tg-text: #0f172a;
+  --tg-hint: #475569;
+  --tg-link: #1a7dff;
+  --tg-button: #1a7dff;
+  --tg-button-text: #ffffff;
+
+  --card-bg: rgba(0,0,0,0.03);
+  --card-bg-hover: rgba(0,0,0,0.05);
+  --border-color: rgba(0,0,0,0.12);
+
+  --modal-overlay: rgba(0,0,0,0.45);
+  --modal-bg: rgba(255,255,255,.96);
+  --modal-border: rgba(0,0,0,0.10);
+
+  --field-bg: rgba(0,0,0,0.04);
+  --field-placeholder: rgba(15,23,42,0.45);
+  --field-focus-border: rgba(26,125,255,0.65);
+  --field-focus-shadow: rgba(26,125,255,0.18);
 }
 
 /* ====================== GLOBAL LAYOUT ====================== */
@@ -50,7 +95,7 @@ html, body{
   transition:background .2s ease, transform .2s ease;
   box-sizing:border-box;
 }
-.card:hover{background:rgba(255,255,255,0.08);}
+.card:hover{background:var(--card-bg-hover);}
 
 .button{
   display:inline-flex; align-items:center; justify-content:center;
@@ -132,7 +177,7 @@ html, body{
   background:rgba(255,255,255,0.05);
 }
 .auth-subtitle{
-  color:#e0e0e0;
+  color:var(--tg-hint);
   line-height:1.4;
 }
 .auth-fields{
@@ -143,32 +188,32 @@ html, body{
   display:grid;
   gap:6px;
   font-size:12px;
-  color:#fff;
+  color:var(--tg-hint);
 }
 .auth-field input{
   width:100%;
   box-sizing:border-box;
-  background:rgba(255,255,255,0.08);
+  background:var(--field-bg);
   border:1px solid var(--border-color);
   border-radius:12px;
   padding:10px 12px;
-  color:#fff;
-  caret-color:#fff;
-  -webkit-text-fill-color:#fff; /* iOS/Safari ensures white text in inputs */
+  color:var(--tg-text);
+  caret-color:var(--tg-text);
+  -webkit-text-fill-color:var(--tg-text); /* iOS/Safari ensures correct text in inputs */
   font-size:15px;
   outline:none;
 }
 .auth-field input:-webkit-autofill,
 .auth-field input:-webkit-autofill:hover,
 .auth-field input:-webkit-autofill:focus{
-  -webkit-text-fill-color:#fff;
-  caret-color:#fff;
+  -webkit-text-fill-color:var(--tg-text);
+  caret-color:var(--tg-text);
   transition: background-color 9999s ease-in-out 0s;
 }
-.auth-field input::placeholder{ color:rgba(255,255,255,0.4); }
+.auth-field input::placeholder{ color:var(--field-placeholder); }
 .auth-field input:focus{
-  border-color:rgba(42,157,244,0.6);
-  box-shadow:0 0 0 3px rgba(42,157,244,0.18);
+  border-color:var(--field-focus-border);
+  box-shadow:0 0 0 3px var(--field-focus-shadow);
 }
 .auth-actions{
   display:grid;
@@ -203,7 +248,7 @@ html, body{
   accent-color: var(--tg-button);
 }
 .auth-terms .auth-terms-text{
-  color:#e0e0e0;
+  color:var(--tg-hint);
   font-size:13px;
   line-height:1.35;
 }
@@ -249,7 +294,7 @@ html, body{
   display:flex; gap:8px; align-items:stretch;
   z-index:1000;
 }
-.tabbar .tab{flex:1 1 0; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; color:#cfd6df;}
+.tabbar .tab{flex:1 1 0; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; color:var(--tg-hint);}
 .tabbar .tab .icon{width:28px; height:28px; display:flex; align-items:center; justify-content:center;}
 .tabbar .tab .icon svg, .tabbar .tab .icon img{width:28px; height:28px; display:block;}
 .tabbar .tab .label{font-size:12px; white-space:nowrap; opacity:.85; text-align:center;}
@@ -259,16 +304,16 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 /* ====================== MODAL ====================== */
 .modal{
   display:none; position:fixed; inset:0;
-  backdrop-filter:blur(12px); background:rgba(0,0,0,0.62);
+  backdrop-filter:blur(12px); background:var(--modal-overlay);
   z-index:50; align-items:center; justify-content:center;
 }
 .modal.show{display:grid; animation:fadeIn .15s ease;}
 .modal.auth-modal{z-index:999 !important;}
 @keyframes fadeIn{from{opacity:0} to{opacity:1}}
 .modal-card{
-  background:rgba(17,19,23,.92);
+  background:var(--modal-bg);
   backdrop-filter:saturate(1.2) blur(10px);
-  border:1px solid rgba(255,255,255,0.10); border-radius:20px;
+  border:1px solid var(--modal-border); border-radius:20px;
   padding:20px;
   width:min(440px, 92vw);              /* чуть уже не делаем — важен box-sizing */
   max-height:85vh; overflow:auto;
@@ -316,7 +361,7 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 
 
 .details-title{font-weight:800; font-size:20px; text-align:center;}
-.details-desc{color:#d1d5db; text-align:center; line-height:1.35;}
+.details-desc{color:var(--tg-hint); text-align:center; line-height:1.35;}
 
 /* область с фото и параметрами прокручивается, кнопки — всегда внизу */
 .details-body{overflow:auto; display:grid; gap:10px;}
@@ -390,7 +435,7 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 
 /* Левый столбец — чуть контрастнее и плотнее, лучше читается */
 .param-row .k{
-  color:#cfd6df;           /* было #9aa3af — повышаем контраст */
+  color:var(--tg-hint);
   font-weight:600;         /* подчёркиваем подпись параметра */
   letter-spacing:.1px;     /* микро-аптечка читабельности */
   white-space:nowrap;
@@ -401,7 +446,7 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 
 /* Значение — белым, чуть тяжелее (но не жирнее заголовков) */
 .param-row .v{
-  color:#ffffff;
+  color:var(--tg-text);
   font-weight:700;         /* было var(--param-value-weight); можно оставить 600–700 */
   white-space:nowrap;
   overflow:hidden;
@@ -797,7 +842,7 @@ html, body, .tg-app, .map-wrap, #map{overscroll-behavior:none;}
 /* сетка 2×2 одинаковых колонок */
 .modal-card.booking-shell .booking-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
 .modal-card.booking-shell .bk-field{display:grid; gap:6px;}
-.modal-card.booking-shell .bk-field>span{color:#8a8f98; font-size:12px;}
+.modal-card.booking-shell .bk-field>span{color:var(--tg-hint); font-size:12px;}
 
 /* визуальные «кнопки» */
 .modal-card.booking-shell .bk-input{
@@ -929,7 +974,7 @@ html, body, .tg-app, .map-wrap, #map{overscroll-behavior:none;}
 
 /* подсказка над сеткой */
 .modal-card.booking-shell .booking-hint{
-  font-size:13px; color:#8a8f98; margin:8px 2px 12px; line-height:1.4; text-align:center;
+  font-size:13px; color:var(--tg-hint); margin:8px 2px 12px; line-height:1.4; text-align:center;
 }
 
 /* чекбокс для split-room */
@@ -940,14 +985,14 @@ html, body, .tg-app, .map-wrap, #map{overscroll-behavior:none;}
 .modal-card.booking-shell .bk-checkbox{
   appearance:none; -webkit-appearance:none; -moz-appearance:none;
   width:20px; height:20px; min-width:20px; flex-shrink:0;
-  border:2px solid rgba(255,255,255,0.12); border-radius:6px;
-  background:#0f1216;
+  border:2px solid var(--border-color); border-radius:6px;
+  background:var(--field-bg);
   cursor:pointer;
   transition:all 0.2s ease;
   position:relative;
 }
 .modal-card.booking-shell .bk-checkbox:hover{
-  border-color:rgba(255,255,255,0.2);
+  border-color:var(--field-focus-border);
 }
 .modal-card.booking-shell .bk-checkbox:checked{
   background:#1a7dff; border-color:#1a7dff;
@@ -973,23 +1018,20 @@ html, body, .tg-app, .map-wrap, #map{overscroll-behavior:none;}
 /* ====================== ACCOMMODATIONS LIST (BOOKING FLOW) ====================== */
 .accom-card{display:grid; gap:12px;}
 .accom-head{display:grid; gap:4px; text-align:center;}
-.accom-title{font-weight:800; font-size:16px; color:#fff;}
-.accom-sub{color:#d1d5db; font-size:13px; line-height:1.25;}
+.accom-title{font-weight:800; font-size:16px; color:var(--tg-text);}
+.accom-sub{color:var(--tg-hint); font-size:13px; line-height:1.25;}
 .accom-hint{
-  color:#e5e7eb;
+  color:var(--tg-text);
   font-size:13px;
-
-/* Smaller font specifically for the "К выбору апартаментов" button */
-#bkApply {
-  font-size: 11px;
-}
   line-height:1.35;
   padding:10px 12px;
   border:1px solid #ef4444; /* red border to highlight */
   border-radius:12px;
-  background:rgba(255,255,255,0.03);
+  background:var(--card-bg);
   text-align:center; /* center caption inside red frame */
 }
+/* Smaller font specifically for the "К выбору апартаментов" button */
+#bkApply{font-size:11px;}
 .accom-list{display:grid; gap:10px;}
 .accom-item{
   display:grid;
@@ -997,28 +1039,28 @@ html, body, .tg-app, .map-wrap, #map{overscroll-behavior:none;}
   gap:12px;
   align-items:center;
   width:100%;
-  border:1px solid rgba(255,255,255,0.08);
+  border:1px solid var(--border-color);
   border-radius:14px;
-  background:rgba(255,255,255,0.03);
+  background:var(--card-bg);
   padding:10px;
   cursor:pointer;
-  color:#e5e7eb;
+  color:var(--tg-text);
   text-align:left;
 }
-.accom-item:hover{background:rgba(255,255,255,0.05);}
+.accom-item:hover{background:var(--card-bg-hover);}
 .accom-thumb{
   width:64px;
   height:52px;
   border-radius:12px;
-  border:1px solid rgba(255,255,255,0.08);
+  border:1px solid var(--border-color);
   object-fit:cover;
-  background:rgba(255,255,255,0.02);
+  background:var(--card-bg);
 }
 .accom-thumb.ph{display:block;}
 .accom-main{min-width:0; display:grid; gap:2px;}
-.accom-name{font-weight:800; font-size:14px; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-.accom-meta{color:#d1d5db; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-.accom-price{font-weight:800; font-size:13px; color:#fff; white-space:nowrap;}
+.accom-name{font-weight:800; font-size:14px; color:var(--tg-text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.accom-meta{color:var(--tg-hint); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.accom-price{font-weight:800; font-size:13px; color:var(--tg-text); white-space:nowrap;}
 .accom-actions{
   display:grid;
   grid-template-columns: 1fr 1fr;
@@ -1055,7 +1097,7 @@ html, body, .tg-app, .map-wrap, #map{overscroll-behavior:none;}
 }
 .alloc-thumb.ph{display:block;}
 .alloc-main{min-width:0; display:grid; gap:6px;}
-.alloc-name{font-weight:800; font-size:14px; color:#fff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.alloc-name{font-weight:800; font-size:14px; color:var(--tg-text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 .alloc-meta{font-size:12px; line-height:1.25; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
 .alloc-controls{display:grid; grid-template-columns: 1fr 1fr; gap:10px;}
 .alloc-control{display:grid; gap:4px;}
@@ -1088,7 +1130,7 @@ html, body, .tg-app, .map-wrap, #map{overscroll-behavior:none;}
   cursor:pointer;
   border-radius:10px;
 }
-.alloc-remove:hover{color:#e5e7eb; background:rgba(255,255,255,0.04);}
+.alloc-remove:hover{color:var(--tg-text); background:var(--card-bg-hover);}
 .alloc-add{
   display:grid;
   grid-template-columns: 1fr auto;
@@ -1114,7 +1156,7 @@ html, body, .tg-app, .map-wrap, #map{overscroll-behavior:none;}
 }
 .alloc-summary:empty{display:none;}
 .alloc-row{display:flex; justify-content:space-between; gap:10px; align-items:center;}
-.alloc-val{font-weight:900; color:#fff; white-space:nowrap;}
+.alloc-val{font-weight:900; color:var(--tg-text); white-space:nowrap;}
 .alloc-actions{display:grid; grid-template-columns:1fr; gap:10px;}
 .alloc-actions .button{height:42px; border-radius:12px; min-width:0; width:100%;}
 
@@ -1147,7 +1189,7 @@ html, body, .tg-app, .map-wrap, #map{overscroll-behavior:none;}
 .alloc-price-card .price-k{
   flex:1 1 auto;
   min-width:0;
-  color:#d1d5db;
+  color:var(--tg-hint);
   font-weight:800;
   font-size:inherit;
   white-space:nowrap;
@@ -1181,9 +1223,9 @@ html, body, .tg-app, .map-wrap, #map{overscroll-behavior:none;}
   flex-wrap:wrap;
   line-height:1.1;
 }
-.room-param-k{color:#cfd6df; font-size:14px; font-weight:800;}
+.room-param-k{color:var(--tg-hint); font-size:14px; font-weight:800;}
 .room-param-sep{color:rgba(255,255,255,0.22); font-weight:500;}
-.room-param-v{color:#fff; font-size:14px; font-weight:900;}
+.room-param-v{color:var(--tg-text); font-size:14px; font-weight:900;}
 .room-toggle-all{width:100%; height:38px; border-radius:12px;}
 .room-toggle-all.button.ghost{
   border:2px solid #2a9df4;
@@ -1213,8 +1255,8 @@ html, body, .tg-app, .map-wrap, #map{overscroll-behavior:none;}
   border-top:1px solid rgba(255,255,255,0.06);
 }
 .allparams-row:first-child{border-top:none;}
-.allparams-k{color:#cfd6df; font-weight:700; font-size:13px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-.allparams-v{color:#fff; font-weight:800; font-size:13px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:right;}
+.allparams-k{color:var(--tg-hint); font-weight:700; font-size:13px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.allparams-v{color:var(--tg-text); font-weight:800; font-size:13px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:right;}
 
 /* ====================== MISC ====================== */
 .loading-emoji{display:inline-block; animation:spinEmoji 1s linear infinite;}
@@ -1265,4 +1307,3 @@ html, body, .tg-app, .map-wrap, #map{overscroll-behavior:none;}
 .alloc-remove-btn:hover{
   background:rgba(239,68,68,0.1);
 }
-
