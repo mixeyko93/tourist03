@@ -977,13 +977,18 @@ function updateBookingDraftUi(){
   const btn = document.getElementById('openBookingDraft');
   const badge = document.getElementById('bookingDraftBadge');
   if (!btn) return;
+  // Кнопка корзины теперь всегда видна
+  btn.style.display = '';
   const d = window.__bookingDraft || loadBookingDraft();
   const has = !!d && Number.isFinite(Number(d.campId));
-  btn.style.display = has ? '' : 'none';
   if (has && badge) {
-    const n = Array.isArray(d.items) ? d.items.length : 1;
-    badge.textContent = String(Math.max(1, n));
-    badge.style.display = '';
+    const n = Array.isArray(d.items) ? d.items.length : 0;
+    if (n > 0) {
+      badge.textContent = String(n);
+      badge.style.display = '';
+    } else {
+      badge.style.display = 'none';
+    }
   } else if (badge) {
     badge.style.display = 'none';
   }
@@ -1027,10 +1032,43 @@ function showSnackbar({ message, actionText, onAction, timeoutMs = 4500 } = {}){
 }
 
 async function openBookingDraft(){
-  const d = window.__bookingDraft || loadBookingDraft();
-  if (!d) return;
+  let d = window.__bookingDraft || loadBookingDraft();
+
+  const isReadyFilter = (flt) => {
+    if (!flt || typeof flt !== 'object') return false;
+    if (!flt.from || !flt.to) return false;
+    const from = new Date(flt.from);
+    const to = new Date(flt.to);
+    if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime())) return false;
+    if (to <= from) return false;
+    const adults = Math.max(0, Number(flt.adults) || 0);
+    const kids = Math.max(0, Number(flt.kids) || 0);
+    if (adults + kids <= 0) return false;
+    if (kids > 0 && adults < 1) return false;
+    return true;
+  };
+
+  // Если "черновик" пустой и фильтр не настроен — считаем, что бронирование не начинали:
+  // не показываем привязку к базе (campName/campId) и открываем пустую корзину.
+  if (d) {
+    const rawItems = Array.isArray(d.items) ? d.items : [];
+    const hasValidItems = rawItems.some(it => Number.isFinite(Number(it?.room_id)));
+    if (!hasValidItems && !isReadyFilter(d.filter)) {
+      clearBookingDraft();
+      d = null;
+    }
+  }
+
+  if (!d) {
+    openEmptyBookingConfirmationModal();
+    return;
+  }
+
   const cid = Number(d.campId);
-  if (!Number.isFinite(cid)) return;
+  if (!Number.isFinite(cid)) {
+    showSnackbar({ message: 'Не выбрана база для бронирования.', timeoutMs: 1800 });
+    return;
+  }
 
   try { setTabById('tab-map'); } catch (_) {}
 
@@ -1063,8 +1101,20 @@ async function openBookingDraft(){
   }
 
   if (!picked.length) {
-    clearBookingDraft();
-    showSnackbar({ message: 'Черновик устарел и был удалён.', timeoutMs: 1800 });
+    // Пустая корзина (или удалённые апартаменты) — открываем корзину всё равно
+    const filter = d.filter || window.__bookingFilter || {};
+    if (items.length > 0) {
+      // если в черновике были позиции, но они не найдены — считаем черновик устаревшим
+      clearBookingDraft();
+      showSnackbar({ message: 'Некоторые апартаменты из черновика недоступны. Корзина очищена.', timeoutMs: 2200 });
+    }
+    openBookingConfirmationModal({
+      camp,
+      campId: cid,
+      rooms: [],
+      filter,
+      initialItems: [],
+    });
     return;
   }
 
@@ -1075,6 +1125,99 @@ async function openBookingDraft(){
     filter: d.filter || window.__bookingFilter || {},
     initialItems,
   });
+}
+
+function openEmptyBookingConfirmationModal(){
+  const f = window.__bookingFilter || {};
+
+  const isReadyFilter = (flt) => {
+    if (!flt || typeof flt !== 'object') return false;
+    if (!flt.from || !flt.to) return false;
+    const from = new Date(flt.from);
+    const to = new Date(flt.to);
+    if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime())) return false;
+    if (to <= from) return false;
+    const adults = Math.max(0, Number(flt.adults) || 0);
+    const kids = Math.max(0, Number(flt.kids) || 0);
+    if (adults + kids <= 0) return false;
+    if (kids > 0 && adults < 1) return false;
+    return true;
+  };
+
+  const dateText = `${fmtDateRu(f.from)} → ${fmtDateRu(f.to)}`;
+  const hintText = isReadyFilter(f)
+    ? 'Теперь выберите базу отдыха на карте и нажмите «Забронировать».'
+    : 'Укажите даты и количество гостей, чтобы продолжить бронирование.';
+
+  const shell = document.getElementById('modalCard');
+  if (shell) { shell.classList.remove('booking-shell'); shell.classList.remove('details'); }
+
+  showModal(`
+    <div class="alloc-card">
+      <div class="accom-head">
+        <div class="accom-title">Подтвердите бронирование</div>
+        <div class="accom-sub">
+          <button type="button" class="bk-input bk-input-inline" id="confirmEditDates">${dateText}</button>
+        </div>
+      </div>
+
+      <div class="alloc-hint muted" id="confirmHint" style="text-align:center;">${hintText}</div>
+
+      <div class="alloc-list" id="confirmList"></div>
+
+      <button class="button ghost alloc-autopick" id="confirmAutoPick" style="width:100%;margin-top:12px;">Подбор апартаментов для вас</button>
+
+      <div class="alloc-actions">
+        <button class="button ghost" id="confirmBack">Назад</button>
+        <button class="button" style="background:#22c55e;border-color:#22c55e;color:#fff;font-weight:600" id="confirmSubmit" disabled>БРОНИРУЮ!</button>
+      </div>
+    </div>
+  `);
+
+  const hintEl = document.getElementById('confirmHint');
+  const editDatesBtn = document.getElementById('confirmEditDates');
+  const backBtn = document.getElementById('confirmBack');
+  const autoPickBtn = document.getElementById('confirmAutoPick');
+
+  if (backBtn) backBtn.onclick = closeModal;
+
+  if (autoPickBtn) {
+    autoPickBtn.onclick = () => {
+      showSnackbar({ message: 'Сначала выберите базу отдыха на карте.', timeoutMs: 2000 });
+    };
+  }
+
+  if (editDatesBtn) {
+    editDatesBtn.onclick = () => {
+      const prev = window.__bookingFilter || {};
+      window.__bookingFilter = {
+        from: prev.from || null,
+        to: prev.to || null,
+        adults: Number.isFinite(Number(prev.adults)) ? Number(prev.adults) : 2,
+        kids: Number.isFinite(Number(prev.kids)) ? Number(prev.kids) : 0,
+        total: Number.isFinite(Number(prev.total)) ? Number(prev.total) : ((Number(prev.adults) || 2) + (Number(prev.kids) || 0)),
+        allowSplitRooms: !!prev.allowSplitRooms,
+      };
+
+      openBookingFilterModal({
+        mode: 'booking',
+        campId: null,
+        title: 'Выберите даты и гостей',
+        hint: 'Выберите даты заезда и выезда и укажите количество гостей — мы покажем доступные варианты размещения.',
+        applyText: 'Применить',
+        dontCloseBackground: true,
+        onApply: () => {
+          const nf = window.__bookingFilter || {};
+          editDatesBtn.textContent = `${fmtDateRu(nf.from)} → ${fmtDateRu(nf.to)}`;
+          if (hintEl) {
+            hintEl.textContent = isReadyFilter(nf)
+              ? 'Теперь выберите базу отдыха на карте и нажмите «Забронировать».'
+              : 'Укажите даты и количество гостей, чтобы продолжить бронирование.';
+          }
+        },
+      });
+    };
+  }
 }
 
 function closeModal(){
@@ -3264,8 +3407,8 @@ function setupBookingFilterElements(container, opts, isBooking, titleText) {
     else closeModal();
     if (isBooking) {
       const cid = (opts.campId != null) ? Number(opts.campId) : Number(window.__currentCampId);
-      if (!Number.isFinite(cid)) { appAlert('Не выбрана база отдыха'); return; }
       if (typeof opts.onApply === 'function') { await opts.onApply(window.__bookingFilter); return; }
+      if (!Number.isFinite(cid)) { appAlert('Не выбрана база отдыха'); return; }
       await openCampAccommodations(cid);
       return;
     }
@@ -3777,6 +3920,19 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack, ini
   const selectedRooms = Array.isArray(rooms) ? rooms : [];
   const addWord = housingLabelAddWord(camp?.housing_type);
   const choiceWord = housingLabelGenPluralWord(camp?.housing_type);
+  const isReadyFilter = (flt) => {
+    if (!flt || typeof flt !== 'object') return false;
+    if (!flt.from || !flt.to) return false;
+    const from = new Date(flt.from);
+    const to = new Date(flt.to);
+    if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime())) return false;
+    if (to <= from) return false;
+    const adults = Math.max(0, Number(flt.adults) || 0);
+    const kids = Math.max(0, Number(flt.kids) || 0);
+    if (adults + kids <= 0) return false;
+    if (kids > 0 && adults < 1) return false;
+    return true;
+  };
   
   // Автоматически распределяем гостей по выбранным апартаментам
   const items = (() => {
@@ -3943,6 +4099,12 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack, ini
         .filter(it => Number.isFinite(it.room_id)),
       updatedAt: Date.now(),
     };
+    const hasItems = Array.isArray(payload.items) && payload.items.length > 0;
+    const readyFilter = isReadyFilter(payload.filter);
+    if (!hasItems && !readyFilter) {
+      clearBookingDraft();
+      return;
+    }
     saveBookingDraft(payload);
   }
 
@@ -4214,8 +4376,14 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack, ini
 		    const v = validateAllocation(items, f);
 		    const totalGuests = (Number(f.adults) || 0) + (Number(f.kids) || 0);
 		    const allocatedGuests = v.sumAdults + v.sumKids;
-	    
+		    const isFilterReady = !!(f.from && f.to && totalGuests > 0 && !(Number(f.kids) > 0 && (Number(f.adults) || 0) < 1));
+		    
 		    if (hintEl) {
+		      if (!isFilterReady) {
+		        hintEl.classList.remove('ok', 'warn', 'err');
+		        hintEl.classList.add('muted');
+		        hintEl.textContent = 'Укажите даты и количество гостей, чтобы продолжить бронирование.';
+		      } else {
 		      const typeName = String((items[0]?.room?.class || items[0]?.room?.name || 'Размещение') || 'Размещение');
 		      const needAdults = Number(f.adults) || 0;
 		      const needKids = Number(f.kids) || 0;
@@ -4358,11 +4526,12 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack, ini
 		        };
 		        hintEl.appendChild(btn);
 		      }
+		      }
 		    }
-	    
-	    if (summaryEl) {
-	      const canShowSummary = items.length > 0 && v.ok && allocatedGuests === totalGuests && v.totalPrice != null;
-	      if (canShowSummary) {
+		    
+		    if (summaryEl) {
+		      const canShowSummary = items.length > 0 && v.ok && allocatedGuests === totalGuests && v.totalPrice != null;
+		      if (canShowSummary) {
 	        const priceText = formatPriceRub(v.totalPrice);
 	        summaryEl.innerHTML = `
 	          <div class="alloc-row"><div class="muted">Взрослые</div><div class="alloc-val">${v.sumAdults}</div></div>
@@ -4372,10 +4541,10 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack, ini
 	        summaryEl.style.display = '';
 	      } else {
 	        summaryEl.innerHTML = '';
-	        summaryEl.style.display = 'none';
-	      }
-	    }
-	    if (submitBtn) submitBtn.disabled = !v.ok || allocatedGuests !== totalGuests;
+		        summaryEl.style.display = 'none';
+		      }
+		    }
+	    if (submitBtn) submitBtn.disabled = !isFilterReady || !v.ok || allocatedGuests !== totalGuests;
 	    updateAutoPickButton();
 	    if (addRoomBtn) {
 	      isAllocationComplete = items.length > 0 && v.ok && allocatedGuests === totalGuests;

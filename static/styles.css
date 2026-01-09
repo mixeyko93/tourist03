@@ -692,7 +692,7 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 .snackbar{
   position:fixed;
   left:50%;
-  bottom:calc(env(safe-area-inset-bottom) + 96px);
+  top:calc(env(safe-area-inset-top) + 20px);
   transform:translateX(-50%);
   z-index:2000;
   display:flex;
@@ -710,7 +710,7 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 }
 .snackbar.hide{
   opacity:0;
-  transform:translateX(-50%) translateY(8px);
+  transform:translateX(-50%) translateY(-8px);
   transition:opacity .2s ease, transform .2s ease;
 }
 .snackbar-text{
@@ -729,7 +729,7 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   cursor:pointer;
 }
 .snackbar-action:active{transform:scale(.98);}
-@keyframes snackIn{from{opacity:0; transform:translateX(-50%) translateY(10px)} to{opacity:1; transform:translateX(-50%) translateY(0)}}
+@keyframes snackIn{from{opacity:0; transform:translateX(-50%) translateY(-10px)} to{opacity:1; transform:translateX(-50%) translateY(0)}}
 /* уменьшили геолокацию */
 #geoBtn .tg-emoji {
   transform:scale(0.83);
