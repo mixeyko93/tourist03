@@ -888,6 +888,49 @@ function showAuthChoiceModal({ title = 'Необходима авторизац�
   return { close, cancel };
 }
 
+function showConfirmModal({
+  title = 'Подтвердите действие',
+  message = '',
+  confirmText = 'Да',
+  cancelText = 'Нет',
+  danger = true,
+} = {}){
+  return new Promise((resolve) => {
+    const prev = document.getElementById('appConfirmModal');
+    if (prev) prev.remove();
+
+    const wrap = document.createElement('div');
+    wrap.id = 'appConfirmModal';
+    wrap.className = 'modal show';
+    wrap.style.zIndex = '10000';
+    wrap.innerHTML = `
+      <div class="modal-card">
+        <div class="auth-card" style="text-align:center">
+          <div class="auth-head" style="justify-content:center">
+            <div class="auth-title">${escapeHtml(title)}</div>
+          </div>
+          ${message ? `<div class="auth-subtitle" style="margin:8px 0 6px">${escapeHtml(message)}</div>` : ''}
+          <div class="auth-actions" style="grid-template-columns: 1fr 1fr;">
+            <button type="button" class="button ${danger ? 'danger' : 'primary'}" id="appConfirmYes">${escapeHtml(confirmText)}</button>
+            <button type="button" class="button ghost" id="appConfirmNo">${escapeHtml(cancelText)}</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(wrap);
+
+    const close = (val) => {
+      try { wrap.remove(); } catch (_) {}
+      resolve(!!val);
+    };
+    wrap.addEventListener('click', (e) => { if (e.target === wrap) close(false); });
+    const yes = wrap.querySelector('#appConfirmYes');
+    const no = wrap.querySelector('#appConfirmNo');
+    if (yes) yes.addEventListener('click', () => close(true));
+    if (no) no.addEventListener('click', () => close(false));
+  });
+}
+
 const BOOKING_DRAFT_KEY = 'bookingDraft:v1';
 window.__bookingDraft = null;
 window.__suppressDraftToastOnce = false;
@@ -3769,20 +3812,25 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack, ini
   // Загружаем все доступные апартаменты для добавления
   let availableRooms = [];
   
-  // Состояние подбора вариантов размещения
-  let autoPickVariants = [];
-  let autoPickIndex = 0;
-  let autoPickActive = false;
+	  // Состояние подбора вариантов размещения
+	  let autoPickVariants = [];
+	  let autoPickIndex = 0;
+	  let autoPickActive = false;
+	  let autoPickSnapshot = null; // снимок корзины ДО подбора (для отмены при 1 варианте)
+	  let autoPickSnapshotIsSingle = false;
 
   const shell = document.getElementById('modalCard');
   if (shell) { shell.classList.remove('booking-shell'); shell.classList.remove('details'); }
 
   showModal(`
-    <div class="alloc-card">
-      <div class="accom-head">
-        <div class="accom-title">Подтвердите бронирование</div>
-        <div class="accom-sub">${camp?.name ? `${camp.name} • ` : ''}${fmtDateRu(f.from)} → ${fmtDateRu(f.to)}</div>
-      </div>
+	      <div class="alloc-card">
+	      <div class="accom-head">
+	        <div class="accom-title">Подтвердите бронирование</div>
+	        <div class="accom-sub">
+	          ${camp?.name ? `${camp.name} • ` : ''}
+	          <button type="button" class="bk-input bk-input-inline" id="confirmEditDates">${fmtDateRu(f.from)} → ${fmtDateRu(f.to)}</button>
+	        </div>
+	      </div>
 
       <div class="alloc-hint muted" id="confirmHint">Проверьте данные бронирования и распределите гостей.</div>
 
@@ -3808,10 +3856,69 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack, ini
   const submitBtn = document.getElementById('confirmSubmit');
   const addRoomBtn = document.getElementById('confirmAddRoom');
   const autoPickBtn = document.getElementById('confirmAutoPick');
+  const editDatesBtn = document.getElementById('confirmEditDates');
 
   if (summaryEl) {
     summaryEl.innerHTML = '';
     summaryEl.style.display = 'none';
+  }
+
+  function reopenCartWithItems(nextItems) {
+    const normalized = (Array.isArray(nextItems) ? nextItems : items)
+      .map(it => ({
+        room: it?.room,
+        adults: Math.max(0, Number(it?.adults) || 0),
+        kids: Math.max(0, Number(it?.kids) || 0),
+      }))
+      .filter(it => Number.isFinite(Number(it?.room?.id)));
+    openBookingConfirmationModal({
+      camp,
+      campId: cid,
+      rooms: normalized.map(it => it.room),
+      filter: f,
+      onBack,
+      initialItems: normalized,
+    });
+  }
+
+  let isAllocationComplete = false;
+
+  if (editDatesBtn) {
+    editDatesBtn.onclick = async () => {
+      try {
+        const cur = window.__bookingFilter || {};
+        window.__bookingFilter = {
+          from: f.from || cur.from || null,
+          to: f.to || cur.to || null,
+          adults: Number.isFinite(Number(f.adults)) ? Number(f.adults) : (Number(cur.adults) || 2),
+          kids: Number.isFinite(Number(f.kids)) ? Number(f.kids) : (Number(cur.kids) || 0),
+          total: Number.isFinite(Number(f.total)) ? Number(f.total) : (Number(cur.total) || undefined),
+          allowSplitRooms: (f.allowSplitRooms != null) ? !!f.allowSplitRooms : !!cur.allowSplitRooms,
+        };
+      } catch (_) {}
+
+      const ht = normalizeHousingType(camp?.housing_type);
+      openBookingFilterModal({
+        mode: 'booking',
+        campId: cid,
+        title: 'Выберите даты и гостей',
+        hint: 'Выберите даты заезда и выезда и укажите количество гостей — мы покажем доступные варианты размещения.',
+        applyText: `Применить`,
+        dontCloseBackground: true,
+        campHousingType: ht,
+        onApply: async (newFilter) => {
+          if (!newFilter || typeof newFilter !== 'object') return;
+          f.from = newFilter.from || null;
+          f.to = newFilter.to || null;
+          f.adults = Number(newFilter.adults) || 0;
+          f.kids = Number(newFilter.kids) || 0;
+          f.total = Number(newFilter.total) || ((Number(newFilter.adults) || 0) + (Number(newFilter.kids) || 0)) || undefined;
+          f.allowSplitRooms = !!newFilter.allowSplitRooms;
+
+          reopenCartWithItems(items);
+        },
+      });
+    };
   }
 
   function persistDraft(){
@@ -3890,6 +3997,27 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack, ini
       if (remAdults === 0 && remKids === 0) break;
     }
   }
+
+  window.__bookingConfirmationModalContext = {
+    camp,
+    campId: cid,
+    filter: f,
+    onBack,
+    items,
+    addRoom: (room) => {
+      if (isAllocationComplete) {
+        showSnackbar({ message: 'Выбрано достаточное количество апартаментов для размещения всех гостей.', timeoutMs: 2200 });
+        return false;
+      }
+      const rid = Number(room?.id);
+      if (!Number.isFinite(rid)) return false;
+      if (items.some(it => Number(it?.room?.id) === rid)) return false;
+      items.push({ room, adults: 0, kids: 0 });
+      autoFillRemainingGuests();
+      return true;
+    },
+    reopen: () => reopenCartWithItems(items),
+  };
 
   // Функция открытия выбора гостей (центр, стилистика фильтра + ограничения)
   function openGuestPicker(idx) {
@@ -4057,31 +4185,40 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack, ini
     });
     
 	    // Обработчики кнопок удаления
-	    listEl.querySelectorAll('.alloc-remove-btn').forEach(btn => {
-	      btn.onclick = (e) => {
-	        e.stopPropagation();
-	        const idx = Number(btn.getAttribute('data-idx'));
-	        if (Number.isFinite(idx)) {
-	          autoPickActive = false;
-	          autoPickIndex = 0;
-	          items.splice(idx, 1);
-	          render();
-	          updateSummary();
-	        }
-	      };
-	    });
-	  }
+		    listEl.querySelectorAll('.alloc-remove-btn').forEach(btn => {
+		      btn.onclick = async (e) => {
+		        e.stopPropagation();
+		        const idx = Number(btn.getAttribute('data-idx'));
+		        if (Number.isFinite(idx)) {
+		          const name = (items[idx]?.room?.class || items[idx]?.room?.name || items[idx]?.room?.room_type || 'апартамент').toString();
+		          const ok = await showConfirmModal({
+		            title: 'Удалить из корзины?',
+		            message: `Удалить «${name}» из корзины?`,
+		            confirmText: 'Удалить',
+		            cancelText: 'Отмена',
+		            danger: true,
+		          });
+		          if (!ok) return;
+		          autoPickActive = false;
+		          autoPickIndex = 0;
+		          items.splice(idx, 1);
+		          render();
+		          updateSummary();
+		        }
+		      };
+		    });
+		  }
 
-  function updateSummary() {
-	    const v = validateAllocation(items, f);
-	    const totalGuests = (Number(f.adults) || 0) + (Number(f.kids) || 0);
-	    const allocatedGuests = v.sumAdults + v.sumKids;
+	  function updateSummary() {
+		    const v = validateAllocation(items, f);
+		    const totalGuests = (Number(f.adults) || 0) + (Number(f.kids) || 0);
+		    const allocatedGuests = v.sumAdults + v.sumKids;
 	    
-	    if (hintEl) {
-	      const typeName = String((items[0]?.room?.class || items[0]?.room?.name || 'Размещение') || 'Размещение');
-	      const needAdults = Number(f.adults) || 0;
-	      const needKids = Number(f.kids) || 0;
-	      const remainAdults = Math.max(0, needAdults - v.sumAdults);
+		    if (hintEl) {
+		      const typeName = String((items[0]?.room?.class || items[0]?.room?.name || 'Размещение') || 'Размещение');
+		      const needAdults = Number(f.adults) || 0;
+		      const needKids = Number(f.kids) || 0;
+		      const remainAdults = Math.max(0, needAdults - v.sumAdults);
 	      const remainKids = Math.max(0, needKids - v.sumKids);
 	      const remainTotal = remainAdults + remainKids;
 	      
@@ -4165,13 +4302,13 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack, ini
 
 	      hintEl.classList.remove('ok', 'warn', 'err', 'muted');
 	      
-	      if (allocatedGuests > totalGuests) {
-	        hintEl.classList.add('err');
-	        hintEl.textContent = `${typeName}: размещено ${adultsTxt(v.sumAdults)}${v.sumKids ? `, ${kidsTxt(v.sumKids)}` : ''}. Указано в фильтре: ${adultsTxt(needAdults)}${needKids ? ` и ${kidsTxt(needKids)}` : ''}.`;
-	      } else if (itemErrors.length) {
-	        hintEl.classList.add('err');
-	        hintEl.innerHTML = itemErrors.join('<br>');
-		      } else if (allocatedGuests < totalGuests) {
+		      if (allocatedGuests > totalGuests) {
+		        hintEl.classList.add('err');
+		        hintEl.textContent = `${typeName}: размещено ${adultsTxt(v.sumAdults)}${v.sumKids ? `, ${kidsTxt(v.sumKids)}` : ''}. Указано в фильтре: ${adultsTxt(needAdults)}${needKids ? ` и ${kidsTxt(needKids)}` : ''}.`;
+		      } else if (itemErrors.length) {
+		        hintEl.classList.add('err');
+		        hintEl.innerHTML = itemErrors.join('<br>');
+			      } else if (allocatedGuests < totalGuests) {
 		        hintEl.classList.add('warn');
 		        const placedParts = [];
 		        if (v.sumAdults > 0) placedParts.push(adultsTxt(v.sumAdults));
@@ -4190,11 +4327,37 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack, ini
 		          text += '.';
 		        }
 		        hintEl.textContent = text;
-		      } else {
-		        hintEl.classList.add('ok');
-		        hintEl.textContent = 'Всё готово к бронированию!';
+			      } else {
+			        hintEl.classList.add('ok');
+			        hintEl.textContent = 'Всё готово к бронированию!';
+			      }
+
+		      const canApplyGuestChanges = items.length > 0 && allocatedGuests > totalGuests;
+		      if (canApplyGuestChanges && typeof hintEl.textContent === 'string' && hintEl.innerHTML === hintEl.textContent) {
+		        hintEl.appendChild(document.createTextNode(' '));
+		        const btn = document.createElement('button');
+		        btn.type = 'button';
+		        btn.className = 'hint-link';
+		        btn.textContent = 'Применить изменения';
+		        btn.onclick = () => {
+		          f.adults = v.sumAdults;
+		          f.kids = v.sumKids;
+		          f.total = (v.sumAdults + v.sumKids) || undefined;
+		          try {
+		            window.__bookingFilter = Object.assign({}, window.__bookingFilter || {}, {
+		              from: f.from || null,
+		              to: f.to || null,
+		              adults: Number(f.adults) || 0,
+		              kids: Number(f.kids) || 0,
+		              total: Number(f.total) || undefined,
+		              allowSplitRooms: !!f.allowSplitRooms,
+		            });
+		          } catch (_) {}
+		          updateSummary();
+		        };
+		        hintEl.appendChild(btn);
 		      }
-	    }
+		    }
 	    
 	    if (summaryEl) {
 	      const canShowSummary = items.length > 0 && v.ok && allocatedGuests === totalGuests && v.totalPrice != null;
@@ -4211,10 +4374,14 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack, ini
 	        summaryEl.style.display = 'none';
 	      }
 	    }
-    if (submitBtn) submitBtn.disabled = !v.ok || allocatedGuests !== totalGuests;
-    updateAutoPickButton();
-    persistDraft();
-  }
+	    if (submitBtn) submitBtn.disabled = !v.ok || allocatedGuests !== totalGuests;
+	    updateAutoPickButton();
+	    if (addRoomBtn) {
+	      isAllocationComplete = items.length > 0 && v.ok && allocatedGuests === totalGuests;
+	      addRoomBtn.style.display = isAllocationComplete ? 'none' : '';
+	    }
+	    persistDraft();
+	  }
   
 	  // Загружаем доступные апартаменты базы для выбранных дат (чтобы подсказки/добавление были корректны)
 	  (async () => {
@@ -4237,12 +4404,16 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack, ini
 	  })();
   
   // Кнопка добавления апартамента
-  if (addRoomBtn) {
-    addRoomBtn.onclick = async () => {
-      if (!availableRooms.length) {
-        alert('Апартаменты не загружены. Попробуйте еще раз.');
-        return;
-      }
+	  if (addRoomBtn) {
+	    addRoomBtn.onclick = async () => {
+	      if (isAllocationComplete) {
+	        showSnackbar({ message: 'Выбрано достаточное количество апартаментов для размещения всех гостей.', timeoutMs: 2200 });
+	        return;
+	      }
+	      if (!availableRooms.length) {
+	        alert('Апартаменты не загружены. Попробуйте еще раз.');
+	        return;
+	      }
 
       // Используем стандартное окно выбора апартаментов, как при нажатии "Апартаменты" в меню Подробнее
       // Но при выборе апартамента добавляем его в корзину вместо открытия деталей
@@ -4452,51 +4623,115 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack, ini
 	    return variants;
 	  }
   
-	  function updateAutoPickButton() {
-	    if (!autoPickBtn) return;
+		  function updateAutoPickButton() {
+		    if (!autoPickBtn) return;
+		    
+		    const totalGuests = (Number(f.adults) || 0) + (Number(f.kids) || 0);
+		    const allocatedGuests = items.reduce((sum, it) => sum + (it.adults || 0) + (it.kids || 0), 0);
 	    
-	    const totalGuests = (Number(f.adults) || 0) + (Number(f.kids) || 0);
-	    const allocatedGuests = items.reduce((sum, it) => sum + (it.adults || 0) + (it.kids || 0), 0);
-    
-    // Показываем кнопку только если есть недораспределённые гости
-	    if (allocatedGuests < totalGuests && availableRooms.length > 0) {
-	      autoPickBtn.style.display = '';
+	    // Показываем кнопку если есть недораспределённые гости,
+	    // или если включён подбор с 1 вариантом (нужна кнопка «Отменить подбор»).
+		    const showCancelSingle = !!(autoPickActive && autoPickSnapshot && autoPickSnapshotIsSingle);
+		    if (showCancelSingle || (allocatedGuests < totalGuests && availableRooms.length > 0)) {
+		      autoPickBtn.style.display = '';
+		      
+		      // Если варианты не загружены или пользователь менял список — пересчитываем
+		      if (!autoPickActive || items.length === 0 || !autoPickVariants.length) {
+		        autoPickVariants = calculateAutoPickVariants();
+		        autoPickIndex = 0;
+		        autoPickActive = false;
+		        autoPickSnapshot = null;
+		        autoPickSnapshotIsSingle = false;
+		      }
 	      
-	      // Если варианты не загружены или пользователь менял список — пересчитываем
-	      if (!autoPickActive || items.length === 0 || !autoPickVariants.length) {
-	        autoPickVariants = calculateAutoPickVariants();
-	        autoPickIndex = 0;
-	        autoPickActive = false;
-	      }
-      
-	      const housingLabel = housingLabelGenPluralWord(camp?.housing_type);
-	      
-	      if (autoPickVariants.length === 0) {
-	        autoPickBtn.textContent = `Подбор ${housingLabel} для вас`;
-	        autoPickBtn.disabled = true;
-	        autoPickBtn.style.opacity = '0.5';
-	      } else if (autoPickVariants.length === 1) {
-	        autoPickBtn.textContent = `Подбор ${housingLabel} для вас`;
-	        autoPickBtn.disabled = autoPickActive;
-	        autoPickBtn.style.opacity = autoPickActive ? '0.5' : '1';
-	      } else {
-	        autoPickBtn.textContent = autoPickActive ? 'Следующий подбор' : `Подбор ${housingLabel} для вас`;
-	        autoPickBtn.disabled = false;
-	        autoPickBtn.style.opacity = '1';
-	      }
-	    } else {
-	      autoPickBtn.style.display = 'none';
-	    }
-	  }
+		      const housingLabel = housingLabelGenPluralWord(camp?.housing_type);
+		      
+		      if (autoPickVariants.length === 0) {
+		        autoPickBtn.textContent = `Подбор ${housingLabel} для вас`;
+		        autoPickBtn.disabled = true;
+		        autoPickBtn.style.opacity = '0.5';
+		        autoPickBtn.classList.remove('cancel');
+		      } else if (autoPickVariants.length === 1) {
+		        if (autoPickActive && autoPickSnapshot && autoPickSnapshotIsSingle) {
+		          autoPickBtn.textContent = 'Отменить подбор';
+		          autoPickBtn.disabled = false;
+		          autoPickBtn.style.opacity = '1';
+		          autoPickBtn.classList.add('cancel');
+		        } else {
+		          autoPickBtn.textContent = `Подбор ${housingLabel} для вас`;
+		          autoPickBtn.disabled = false;
+		          autoPickBtn.style.opacity = '1';
+		          autoPickBtn.classList.remove('cancel');
+		        }
+		      } else {
+		        autoPickBtn.textContent = autoPickActive ? 'Следующий подбор' : `Подбор ${housingLabel} для вас`;
+		        autoPickBtn.disabled = false;
+		        autoPickBtn.style.opacity = '1';
+		        autoPickBtn.classList.remove('cancel');
+		      }
+		    } else {
+		      autoPickBtn.style.display = 'none';
+		    }
+		  }
   
-  if (autoPickBtn) {
-    autoPickBtn.onclick = () => {
-      if (!autoPickVariants.length) return;
-      
-      // Берём следующий вариант
-      const variant = autoPickVariants[autoPickIndex];
-      autoPickIndex = (autoPickIndex + 1) % autoPickVariants.length;
-      autoPickActive = true;
+	  if (autoPickBtn) {
+	    autoPickBtn.onclick = () => {
+	      if (!autoPickVariants.length) return;
+	      // Если только один вариант — переключаемся между «подбор» и «отмена подбора»
+	      if (autoPickVariants.length === 1) {
+	        if (autoPickActive && autoPickSnapshot && autoPickSnapshotIsSingle) {
+	          const snap = autoPickSnapshot;
+	          autoPickSnapshot = null;
+	          autoPickActive = false;
+	          autoPickIndex = 0;
+	          autoPickSnapshotIsSingle = false;
+	          items.length = 0;
+	          snap.forEach(it => {
+	            items.push({
+	              room: it?.room,
+	              adults: Math.max(0, Number(it?.adults) || 0),
+	              kids: Math.max(0, Number(it?.kids) || 0),
+	            });
+	          });
+	          render();
+	          updateSummary();
+	          updateAutoPickButton();
+	          return;
+	        }
+
+	        // Сохраняем текущее состояние корзины, чтобы можно было отменить
+	        autoPickSnapshot = items.map(it => ({
+	          room: it?.room,
+	          adults: Math.max(0, Number(it?.adults) || 0),
+	          kids: Math.max(0, Number(it?.kids) || 0),
+	        }));
+	        autoPickSnapshotIsSingle = true;
+
+	        const variant = autoPickVariants[0];
+	        autoPickActive = true;
+	        autoPickIndex = 0;
+
+	        items.length = 0;
+	        for (const room of variant.rooms) {
+	          items.push({ room, adults: 0, kids: 0 });
+	        }
+	        const distributed = autoDistributeGuests(variant.rooms, f);
+	        distributed.forEach((d, i) => {
+	          if (items[i]) {
+	            items[i].adults = d.adults;
+	            items[i].kids = d.kids;
+	          }
+	        });
+	        render();
+	        updateSummary();
+	        updateAutoPickButton();
+	        return;
+	      }
+	      
+	      // Берём следующий вариант
+	      const variant = autoPickVariants[autoPickIndex];
+	      autoPickIndex = (autoPickIndex + 1) % autoPickVariants.length;
+	      autoPickActive = true;
       
       // Очищаем текущие апартаменты и заменяем на подобранный вариант
       items.length = 0;
@@ -4564,13 +4799,29 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack, ini
   updateSummary();
 }
 
-function openAllocationModal({ camp, campId, roomsAvailable, selectedRooms, filter, onBack }){
+function openAllocationModal({ camp, campId, roomsAvailable, selectedRooms, filter, onBack, initialItems }){
   const cid = Number(campId);
   const f = filter || window.__bookingFilter || {};
   const available = Array.isArray(roomsAvailable) ? roomsAvailable : [];
   const selected = Array.isArray(selectedRooms) ? selectedRooms : [];
 
-  const items = autoDistributeGuests(selected, f);
+  const items = (() => {
+    const src = Array.isArray(initialItems) ? initialItems : null;
+    if (src && src.length) {
+      const normalized = [];
+      for (const it of src) {
+        const room = it?.room;
+        const rid = Number(room?.id);
+        if (!Number.isFinite(rid)) continue;
+        let adults = Math.max(0, Number(it?.adults) || 0);
+        let kids = Math.max(0, Number(it?.kids) || 0);
+        if (kids > 0 && adults < 1) adults = 1;
+        normalized.push({ room, adults, kids });
+      }
+      if (normalized.length) return normalized;
+    }
+    return autoDistributeGuests(selected, f);
+  })();
 
   const shell = document.getElementById('modalCard');
   if (shell) { shell.classList.remove('booking-shell'); shell.classList.remove('details'); }
@@ -4623,6 +4874,7 @@ function openAllocationModal({ camp, campId, roomsAvailable, selectedRooms, filt
     campId: cid,
     availableRooms: available,
     filter: f,
+    onBack,
   };
 
   function render(){
@@ -4668,7 +4920,7 @@ function openAllocationModal({ camp, campId, roomsAvailable, selectedRooms, filt
     listEl.querySelectorAll('.alloc-item').forEach(row => {
       const idx = Number(row.getAttribute('data-idx'));
       if (!Number.isFinite(idx)) return;
-      row.addEventListener('click', (e) => {
+      row.addEventListener('click', async (e) => {
         const t = e.target;
         if (!(t instanceof HTMLElement)) return;
         const act = t.getAttribute('data-act');
@@ -4678,6 +4930,15 @@ function openAllocationModal({ camp, campId, roomsAvailable, selectedRooms, filt
         const it = items[idx];
         if (!it) return;
         if (act === 'rm') {
+          const name = (items[idx]?.room?.name || items[idx]?.room?.class || items[idx]?.room?.room_type || 'апартамент').toString();
+          const ok = await showConfirmModal({
+            title: 'Удалить из корзины?',
+            message: `Удалить «${name}» из корзины?`,
+            confirmText: 'Удалить',
+            cancelText: 'Отмена',
+            danger: true,
+          });
+          if (!ok) return;
           items.splice(idx, 1);
           render();
           updateSummary();
@@ -5018,30 +5279,32 @@ function openRoomDetailsFromCart(room, camp, context) {
     if (selectBtn) {
       selectBtn.textContent = 'Добавить в корзину';
       selectBtn.onclick = () => {
-        // Добавляем комнату в корзину (из контекста openAllocationModal)
-        const ctx = window.__allocationModalContext;
-        if (ctx && Array.isArray(ctx.items)) {
-          ctx.items.push({ room, adults: 0, kids: 0 });
-          if (typeof ctx.render === 'function') {
-            ctx.render();
-          }
-          if (typeof ctx.updateSummary === 'function') {
-            ctx.updateSummary();
-          }
+        // 1) Если сейчас открыта «корзина бронирования» (подтверждение) — добавляем туда и возвращаемся в неё
+        const confirmCtx = window.__bookingConfirmationModalContext;
+        if (confirmCtx && typeof confirmCtx.addRoom === 'function') {
+          const added = confirmCtx.addRoom(room);
+          if (!added) return;
+          if (typeof confirmCtx.reopen === 'function') confirmCtx.reopen();
+          return;
         }
-        // Закрываем карточку и сразу открываем корзину, чтобы пользователь её увидел
-        closeModal();
-        const ctx2 = window.__allocationModalContext;
-        if (ctx2) {
-          setTimeout(() => {
-            openAllocationModal({
-              camp: ctx2.camp,
-              campId: ctx2.campId,
-              roomsAvailable: ctx2.availableRooms,
-              selectedRooms: ctx2.items,
-              filter: ctx2.filter,
-            });
-          }, 0);
+
+        // 2) Если это контекст распределения гостей — добавляем и возвращаемся в него
+        const allocCtx = window.__allocationModalContext;
+        if (allocCtx && Array.isArray(allocCtx.items)) {
+          const rid = Number(room?.id);
+          const exists = Number.isFinite(rid) && allocCtx.items.some(it => Number(it?.room?.id) === rid);
+          if (!exists) allocCtx.items.push({ room, adults: 0, kids: 0 });
+
+          openAllocationModal({
+            camp: allocCtx.camp,
+            campId: allocCtx.campId,
+            roomsAvailable: allocCtx.availableRooms,
+            selectedRooms: allocCtx.items.map(it => it.room).filter(Boolean),
+            filter: allocCtx.filter,
+            onBack: allocCtx.onBack,
+            initialItems: allocCtx.items,
+          });
+          return;
         }
       };
     }

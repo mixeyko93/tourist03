@@ -109,6 +109,8 @@ html, body{
 .button:disabled:active{transform:none;}
 .button.primary{background:var(--tg-button); color:var(--tg-button-text);}
 .button.ghost{background:transparent; color:var(--tg-text); border:1px solid var(--border-color);}
+.button.danger{background:#ef4444; border:1px solid #ef4444; color:#fff;}
+.button.danger:hover{filter:brightness(1.05);}
 
 .row.gap{display:flex; gap:10px; flex-wrap:wrap;}
 
@@ -677,6 +679,10 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   border-color:var(--tg-link) !important;
   box-shadow:0 0 0 1px rgba(42,157,244,0.55), 0 0 14px rgba(42,157,244,0.22);
 }
+.alloc-autopick.cancel{
+  border-color:#ef4444 !important;
+  box-shadow:0 0 0 1px rgba(239,68,68,0.55), 0 0 14px rgba(239,68,68,0.22);
+}
 .alloc-autopick:disabled{
   border-color:rgba(42,157,244,0.35) !important;
   box-shadow:none;
@@ -844,11 +850,33 @@ html, body, .tg-app, .map-wrap, #map{overscroll-behavior:none;}
 .modal-card.booking-shell .bk-field{display:grid; gap:6px;}
 .modal-card.booking-shell .bk-field>span{color:var(--tg-hint); font-size:12px;}
 
-/* визуальные «кнопки» */
-.modal-card.booking-shell .bk-input{
-  height:44px; border:1px solid rgba(255,255,255,0.08); border-radius:12px;
-  background:#0f1216; color:#e5e7eb; padding:0 12px; display:flex; align-items:center;
-  font-size:17px; font-weight:700; cursor:pointer;
+/* визуальные «кнопки» (дата/значение) — используются и в корзине */
+.bk-input{
+  height:44px;
+  border:1px solid var(--border-color);
+  border-radius:12px;
+  background:var(--field-bg);
+  color:var(--tg-text);
+  padding:0 12px;
+  display:flex;
+  align-items:center;
+  font-size:17px;
+  font-weight:700;
+  cursor:pointer;
+  box-sizing:border-box;
+}
+.bk-input:focus{
+  outline:none;
+  border-color:var(--field-focus-border);
+  box-shadow:0 0 0 3px var(--field-focus-shadow);
+}
+.bk-input-inline{
+  height:34px;
+  padding:0 10px;
+  font-size:14px;
+  border-radius:12px;
+  display:inline-flex;
+  vertical-align:middle;
 }
 
 /* date — кладём нативный инпут поверх «кнопки» */
@@ -964,13 +992,26 @@ html, body, .tg-app, .map-wrap, #map{overscroll-behavior:none;}
 }
 
 
-/* селекты под тёмную тему + читабельные options */
-.modal-card.booking-shell .bk-select{
-  height:44px; border:1px solid rgba(255,255,255,0.08); border-radius:12px;
-  background:#0f1216; color:#e5e7eb; padding:0 10px; width:100%;
-  font-size:17px; font-weight:700; line-height:1.2;
+/* селекты в стиле фильтра (используются и в окне распределения гостей) */
+.bk-select{
+  height:44px;
+  border:1px solid var(--border-color);
+  border-radius:12px;
+  background:var(--field-bg);
+  color:var(--tg-text);
+  padding:0 10px;
+  width:100%;
+  font-size:17px;
+  font-weight:700;
+  line-height:1.2;
 }
-.modal-card.booking-shell .bk-select option{color:#0f1216; background:#ffffff;}
+.bk-select:focus{
+  outline:none;
+  border-color:var(--field-focus-border);
+  box-shadow:0 0 0 3px var(--field-focus-shadow);
+}
+/* выпадающий список: принудительно читаемые цвета (на части браузеров игнорируется) */
+.bk-select option{color:#0f1216; background:#ffffff;}
 
 /* подсказка над сеткой */
 .modal-card.booking-shell .booking-hint{
@@ -1019,7 +1060,16 @@ html, body, .tg-app, .map-wrap, #map{overscroll-behavior:none;}
 .accom-card{display:grid; gap:12px;}
 .accom-head{display:grid; gap:4px; text-align:center;}
 .accom-title{font-weight:800; font-size:16px; color:var(--tg-text);}
-.accom-sub{color:var(--tg-hint); font-size:13px; line-height:1.25;}
+.accom-sub{
+  color:var(--tg-hint);
+  font-size:13px;
+  line-height:1.25;
+  display:flex;
+  gap:8px;
+  align-items:center;
+  justify-content:center;
+  flex-wrap:wrap;
+}
 .accom-hint{
   color:var(--tg-text);
   font-size:13px;
@@ -1074,6 +1124,20 @@ html, body, .tg-app, .map-wrap, #map{overscroll-behavior:none;}
 .alloc-hint.ok{color:#22c55e;}
 .alloc-hint.warn{color:#f59e0b;}
 .alloc-hint.err{color:#ef4444;}
+.alloc-hint .hint-link{
+  appearance:none;
+  border:0;
+  background:transparent;
+  padding:0;
+  margin:0;
+  font:inherit;
+  font-weight:800;
+  color:var(--tg-link);
+  text-decoration:underline;
+  cursor:pointer;
+}
+.alloc-hint .hint-link:hover{opacity:0.9;}
+.alloc-hint .hint-link:active{opacity:0.8;}
 .alloc-list{display:grid; gap:10px;}
 .alloc-item{
   display:grid;
