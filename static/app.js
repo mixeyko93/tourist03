@@ -1201,7 +1201,59 @@ function renderBookingMultiTabs({ mountId, activeCampId, onSwitch } = {}){
     el.style.display = 'none';
     return;
   }
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const activeId = Number(activeCampId);
+
+  const prefersReducedMotion = (() => {
+    try { return !!window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; }
+  })();
+  const animateScrollLeft = (scroller, targetLeft, durationMs = 220) => {
+    if (!scroller) return;
+    const maxLeft = Math.max(0, (scroller.scrollWidth || 0) - (scroller.clientWidth || 0));
+    const to = clamp(Number(targetLeft) || 0, 0, maxLeft);
+
+    try { if (scroller.__scrollAnim && typeof scroller.__scrollAnim.cancel === 'function') scroller.__scrollAnim.cancel(); } catch (_) {}
+    if (prefersReducedMotion || durationMs <= 0) {
+      scroller.scrollLeft = to;
+      return;
+    }
+
+    const from = scroller.scrollLeft || 0;
+    const start = performance.now();
+    const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+    let raf = 0;
+    let cancelled = false;
+
+    const tick = (now) => {
+      if (cancelled) return;
+      const t = clamp((now - start) / durationMs, 0, 1);
+      const v = from + (to - from) * easeOutCubic(t);
+      scroller.scrollLeft = v;
+      if (t < 1) raf = requestAnimationFrame(tick);
+      else {
+        try { scroller.classList.remove('is-scrolling'); } catch (_) {}
+      }
+    };
+
+    try { scroller.classList.add('is-scrolling'); } catch (_) {}
+    raf = requestAnimationFrame(tick);
+    scroller.__scrollAnim = {
+      cancel: () => {
+        cancelled = true;
+        try { cancelAnimationFrame(raf); } catch (_) {}
+        try { scroller.classList.remove('is-scrolling'); } catch (_) {}
+      }
+    };
+  };
+  const scrollTabToCenter = (scroller, tabEl) => {
+    if (!scroller || !tabEl) return;
+    const tabLeft = tabEl.offsetLeft;
+    const tabW = tabEl.offsetWidth || 0;
+    const viewW = scroller.clientWidth || 0;
+    const target = tabLeft + tabW / 2 - viewW / 2;
+    animateScrollLeft(scroller, target, 220);
+  };
+
   el.style.display = '';
   el.innerHTML = carts.map(c => {
     const cid = Number(c?.campId);
@@ -1216,15 +1268,51 @@ function renderBookingMultiTabs({ mountId, activeCampId, onSwitch } = {}){
       </button>
     `;
   }).join('');
-  
-  el.querySelectorAll('.multi-tab').forEach(btn => {
+
+  // Restore previous scroll position to avoid horizontal jumps on rerender
+  try {
+    const savedLeft = Number(window.__bookingMultiTabsScrollLeft);
+    if (Number.isFinite(savedLeft)) {
+      const maxLeft = Math.max(0, (el.scrollWidth || 0) - (el.clientWidth || 0));
+      el.scrollLeft = clamp(savedLeft, 0, maxLeft);
+    }
+  } catch (_) {}
+
+  // Persist scrollLeft during user scroll (so switching carts doesn't reset scroll)
+  try {
+    if (!el.__scrollPersistBound) {
+      el.__scrollPersistBound = true;
+      el.addEventListener('scroll', () => {
+        try { window.__bookingMultiTabsScrollLeft = el.scrollLeft || 0; } catch (_) {}
+      }, { passive: true });
+    }
+  } catch (_) {}
+
+  // Center active tab after layout
+  try {
+    requestAnimationFrame(() => {
+      const activeBtn = el.querySelector('.multi-tab.active');
+      if (activeBtn) scrollTabToCenter(el, activeBtn);
+    });
+  } catch (_) {}
+
+  el.querySelectorAll('.multi-tab').forEach((btn) => {
     const cid = Number(btn.getAttribute('data-camp-id'));
-    let longPressTimer = null;
-    let isLongPress = false;
-    let touchMoved = false;
-    
+    if (!Number.isFinite(cid)) return;
+
+    let pressTimer = null;
+    let didLongPress = false;
+    let ignoreClickUntil = 0;
+    let startX = 0;
+    let startY = 0;
+
+    const clearTimer = () => {
+      if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+    };
+
     const handleLongPress = async () => {
-      isLongPress = true;
+      didLongPress = true;
+      ignoreClickUntil = Date.now() + 800;
       const campName = btn.querySelector('.multi-tab-title')?.textContent || 'База';
       const ok = await showConfirmModal({
         title: 'Удалить корзину?',
@@ -1250,10 +1338,10 @@ function renderBookingMultiTabs({ mountId, activeCampId, onSwitch } = {}){
         }
       }
     };
-    
+
     const handleTap = () => {
-      if (!Number.isFinite(cid)) return;
       if (cid === activeId) return;
+      try { window.__bookingMultiTabsScrollLeft = el.scrollLeft || 0; } catch (_) {}
       try { setActiveBookingMultiCart(cid); } catch (_) {}
       if (typeof onSwitch === 'function') { onSwitch(cid); return; }
       try {
@@ -1261,47 +1349,30 @@ function renderBookingMultiTabs({ mountId, activeCampId, onSwitch } = {}){
         openBookingDraft({ dontChangeTab: true });
       } catch (_) {}
     };
-    
-    // Touch events
-    btn.addEventListener('touchstart', () => {
-      isLongPress = false;
-      touchMoved = false;
-      longPressTimer = setTimeout(handleLongPress, 600);
+
+    // Use Pointer Events to avoid blocking native horizontal scrolling on iOS/Android.
+    btn.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      didLongPress = false;
+      startX = e.clientX || 0;
+      startY = e.clientY || 0;
+      clearTimer();
+      pressTimer = setTimeout(handleLongPress, 600);
     }, { passive: true });
-    
-    btn.addEventListener('touchmove', () => {
-      touchMoved = true;
-      if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+
+    btn.addEventListener('pointermove', (e) => {
+      if (!pressTimer) return;
+      const dx = Math.abs((e.clientX || 0) - startX);
+      const dy = Math.abs((e.clientY || 0) - startY);
+      // If user starts scrolling/swiping, cancel long press
+      if (dx > 8 || dy > 8) clearTimer();
     }, { passive: true });
-    
-    btn.addEventListener('touchend', (e) => {
-      if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
-      if (!isLongPress && !touchMoved) {
-        e.preventDefault(); // Prevent ghost click
-        handleTap();
-      }
-    });
-    
-    btn.addEventListener('touchcancel', () => {
-      if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
-    });
-    
-    // Mouse events (desktop)
-    btn.addEventListener('mousedown', () => {
-      isLongPress = false;
-      longPressTimer = setTimeout(handleLongPress, 600);
-    });
-    
-    btn.addEventListener('mouseup', () => {
-      if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
-    });
-    
-    btn.addEventListener('mouseleave', () => {
-      if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
-    });
-    
+
+    btn.addEventListener('pointerup', clearTimer, { passive: true });
+    btn.addEventListener('pointercancel', clearTimer, { passive: true });
+
     btn.addEventListener('click', (e) => {
-      if (isLongPress) { e.preventDefault(); return; }
+      if (didLongPress || Date.now() < ignoreClickUntil) { try { e.preventDefault(); } catch (_) {} return; }
       handleTap();
     });
   });

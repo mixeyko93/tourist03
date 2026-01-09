@@ -724,18 +724,15 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   overflow-y:hidden;
   scrollbar-width:none;
   -ms-overflow-style:none;
-  padding-bottom:4px;
-  /* Prevent layout shifts */
+  padding:2px 4px 6px;
   min-height:58px;
-  /* GPU acceleration for smooth scroll */
-  transform:translateZ(0);
-  -webkit-transform:translateZ(0);
-  will-change:scroll-position;
-  /* Touch scroll improvements */
-  -webkit-overflow-scrolling:touch;
+  scroll-behavior:auto;
   overscroll-behavior-x:contain;
+  -webkit-overflow-scrolling:touch;
+  touch-action:pan-x;
 }
 .multi-tabs::-webkit-scrollbar{display:none;}
+.multi-tabs.is-scrolling .multi-tab{transition:none;}
 .multi-tab{
   display:flex;
   flex-direction:column;
@@ -757,11 +754,9 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   user-select:none;
   -webkit-user-select:none;
   -webkit-touch-callout:none;
-  /* GPU layer for smooth transitions */
-  transform:translateZ(0);
-  -webkit-transform:translateZ(0);
   /* Smooth border transition */
   transition:border-color 0.15s ease, box-shadow 0.15s ease;
+  touch-action:manipulation;
 }
 .multi-tab.active{
   border-color:var(--tg-button);
