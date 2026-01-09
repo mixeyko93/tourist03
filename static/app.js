@@ -4069,7 +4069,8 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack, ini
     };
 
     const fillKids = (maxKids) => {
-      const current = Number(kidsSelect.value) || it.kids || 0;
+      const currentVal = kidsSelect.value;
+      const current = currentVal !== '' ? Math.max(0, parseInt(currentVal, 10) || 0) : (it.kids || 0);
       kidsSelect.innerHTML = Array.from({ length: maxKids + 1 }, (_, i) => `
         <option value="${i}" ${i === current ? 'selected' : ''}>${i}</option>
       `).join('');
@@ -4628,21 +4629,31 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack, ini
 		    
 		    const totalGuests = (Number(f.adults) || 0) + (Number(f.kids) || 0);
 		    const allocatedGuests = items.reduce((sum, it) => sum + (it.adults || 0) + (it.kids || 0), 0);
+        const isSingleActive = !!(autoPickActive && autoPickSnapshot && autoPickSnapshotIsSingle);
+        const hasRooms = Array.isArray(availableRooms) && availableRooms.length > 0;
+        const totalGuestsPositive = totalGuests > 0;
+        if (!hasRooms || !totalGuestsPositive) {
+          autoPickBtn.style.display = 'none';
+          return;
+        }
 	    
 	    // Показываем кнопку если есть недораспределённые гости,
 	    // или если включён подбор с 1 вариантом (нужна кнопка «Отменить подбор»).
-		    const showCancelSingle = !!(autoPickActive && autoPickSnapshot && autoPickSnapshotIsSingle);
-		    if (showCancelSingle || (allocatedGuests < totalGuests && availableRooms.length > 0)) {
-		      autoPickBtn.style.display = '';
-		      
-		      // Если варианты не загружены или пользователь менял список — пересчитываем
-		      if (!autoPickActive || items.length === 0 || !autoPickVariants.length) {
-		        autoPickVariants = calculateAutoPickVariants();
-		        autoPickIndex = 0;
-		        autoPickActive = false;
-		        autoPickSnapshot = null;
-		        autoPickSnapshotIsSingle = false;
-		      }
+        const needMoreGuests = allocatedGuests < totalGuests && hasRooms;
+        const showCancelSingle = isSingleActive;
+        // Разрешаем показать кнопку также когда варианты уже посчитаны (для циклического подбора)
+        const shouldShow = showCancelSingle || needMoreGuests || (autoPickVariants && autoPickVariants.length > 0);
+        if (shouldShow) {
+          autoPickBtn.style.display = '';
+	      
+          // Пересчитываем варианты только если подбор не активен или нет сохранённых вариантов
+          if (!isSingleActive && (!autoPickActive || items.length === 0 || !autoPickVariants.length)) {
+            autoPickVariants = calculateAutoPickVariants();
+            autoPickIndex = 0;
+            autoPickActive = false;
+            autoPickSnapshot = null;
+            autoPickSnapshotIsSingle = false;
+          }
 	      
 		      const housingLabel = housingLabelGenPluralWord(camp?.housing_type);
 		      
@@ -4652,7 +4663,7 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack, ini
 		        autoPickBtn.style.opacity = '0.5';
 		        autoPickBtn.classList.remove('cancel');
 		      } else if (autoPickVariants.length === 1) {
-		        if (autoPickActive && autoPickSnapshot && autoPickSnapshotIsSingle) {
+            if (isSingleActive) {
 		          autoPickBtn.textContent = 'Отменить подбор';
 		          autoPickBtn.disabled = false;
 		          autoPickBtn.style.opacity = '1';
