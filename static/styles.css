@@ -658,7 +658,7 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   display:block;
 }
 .map-btn.draft.cart-btn:active{
-  transform:translateX(-50%);
+  transform:translateX(-50%) !important;
   opacity:0.8;
 }
 .map-btn.draft .map-badge{
@@ -725,9 +725,15 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   scrollbar-width:none;
   -ms-overflow-style:none;
   padding-bottom:4px;
-  scroll-behavior:smooth;
   /* Prevent layout shifts */
   min-height:58px;
+  /* GPU acceleration for smooth scroll */
+  transform:translateZ(0);
+  -webkit-transform:translateZ(0);
+  will-change:scroll-position;
+  /* Touch scroll improvements */
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior-x:contain;
 }
 .multi-tabs::-webkit-scrollbar{display:none;}
 .multi-tab{
@@ -751,6 +757,11 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   user-select:none;
   -webkit-user-select:none;
   -webkit-touch-callout:none;
+  /* GPU layer for smooth transitions */
+  transform:translateZ(0);
+  -webkit-transform:translateZ(0);
+  /* Smooth border transition */
+  transition:border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .multi-tab.active{
   border-color:var(--tg-button);

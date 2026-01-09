@@ -1221,68 +1221,37 @@ function renderBookingMultiTabs({ mountId, activeCampId, onSwitch } = {}){
     const cid = Number(btn.getAttribute('data-camp-id'));
     let longPressTimer = null;
     let isLongPress = false;
+    let touchMoved = false;
     
-    // Prevent text selection on long press
-    btn.style.userSelect = 'none';
-    btn.style.webkitUserSelect = 'none';
-    btn.style.webkitTouchCallout = 'none';
-    
-    const startLongPress = (e) => {
-      isLongPress = false;
-      longPressTimer = setTimeout(async () => {
-        isLongPress = true;
-        // Показываем меню удаления
-        const campName = btn.querySelector('.multi-tab-title')?.textContent || 'База';
-        const ok = await showConfirmModal({
-          title: 'Удалить корзину?',
-          message: `Удалить корзину «${campName}» со всеми апартаментами?`,
-          confirmText: 'Удалить',
-          cancelText: 'Отмена',
-          danger: true,
-        });
-        if (ok) {
-          removeBookingMultiCart(cid);
-          // Также очищаем одиночный черновик если он от этой базы
-          const d = window.__bookingDraft || loadBookingDraft();
-          if (d && Number(d.campId) === cid) {
-            try { localStorage.removeItem(BOOKING_DRAFT_KEY); } catch (_) {}
-            window.__bookingDraft = null;
-          }
-          updateBookingDraftUi();
-          // Переоткрываем корзину
-          const nm = loadBookingMultiDraft();
-          if (nm && Array.isArray(nm.carts) && nm.carts.length > 0) {
-            window.__suppressDraftToastOnce = true;
-            openBookingDraft({ dontChangeTab: true });
-          } else {
-            openEmptyBookingConfirmationModal();
-          }
+    const handleLongPress = async () => {
+      isLongPress = true;
+      const campName = btn.querySelector('.multi-tab-title')?.textContent || 'База';
+      const ok = await showConfirmModal({
+        title: 'Удалить корзину?',
+        message: `Удалить корзину «${campName}» со всеми апартаментами?`,
+        confirmText: 'Удалить',
+        cancelText: 'Отмена',
+        danger: true,
+      });
+      if (ok) {
+        removeBookingMultiCart(cid);
+        const d = window.__bookingDraft || loadBookingDraft();
+        if (d && Number(d.campId) === cid) {
+          try { localStorage.removeItem(BOOKING_DRAFT_KEY); } catch (_) {}
+          window.__bookingDraft = null;
         }
-      }, 600);
-    };
-    
-    const cancelLongPress = () => {
-      if (longPressTimer) {
-        clearTimeout(longPressTimer);
-        longPressTimer = null;
+        updateBookingDraftUi();
+        const nm = loadBookingMultiDraft();
+        if (nm && Array.isArray(nm.carts) && nm.carts.length > 0) {
+          window.__suppressDraftToastOnce = true;
+          openBookingDraft({ dontChangeTab: true });
+        } else {
+          openEmptyBookingConfirmationModal();
+        }
       }
     };
     
-    btn.addEventListener('touchstart', (e) => {
-      e.preventDefault(); // Prevent text selection
-      startLongPress(e);
-    }, { passive: false });
-    btn.addEventListener('touchend', cancelLongPress);
-    btn.addEventListener('touchcancel', cancelLongPress);
-    btn.addEventListener('mousedown', startLongPress);
-    btn.addEventListener('mouseup', cancelLongPress);
-    btn.addEventListener('mouseleave', cancelLongPress);
-    
-    btn.onclick = (e) => {
-      if (isLongPress) {
-        e.preventDefault();
-        return;
-      }
+    const handleTap = () => {
       if (!Number.isFinite(cid)) return;
       if (cid === activeId) return;
       try { setActiveBookingMultiCart(cid); } catch (_) {}
@@ -1292,6 +1261,49 @@ function renderBookingMultiTabs({ mountId, activeCampId, onSwitch } = {}){
         openBookingDraft({ dontChangeTab: true });
       } catch (_) {}
     };
+    
+    // Touch events
+    btn.addEventListener('touchstart', () => {
+      isLongPress = false;
+      touchMoved = false;
+      longPressTimer = setTimeout(handleLongPress, 600);
+    }, { passive: true });
+    
+    btn.addEventListener('touchmove', () => {
+      touchMoved = true;
+      if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+    }, { passive: true });
+    
+    btn.addEventListener('touchend', (e) => {
+      if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+      if (!isLongPress && !touchMoved) {
+        e.preventDefault(); // Prevent ghost click
+        handleTap();
+      }
+    });
+    
+    btn.addEventListener('touchcancel', () => {
+      if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+    });
+    
+    // Mouse events (desktop)
+    btn.addEventListener('mousedown', () => {
+      isLongPress = false;
+      longPressTimer = setTimeout(handleLongPress, 600);
+    });
+    
+    btn.addEventListener('mouseup', () => {
+      if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+    });
+    
+    btn.addEventListener('mouseleave', () => {
+      if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+    });
+    
+    btn.addEventListener('click', (e) => {
+      if (isLongPress) { e.preventDefault(); return; }
+      handleTap();
+    });
   });
 }
 
