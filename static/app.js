@@ -5202,26 +5202,28 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
   };
 
   // Функция открытия выбора гостей (центр, стилистика фильтра + ограничения)
-  function openGuestPicker(idx) {
-    const it = items[idx];
-    const room = it.room || {};
-    const cap = roomCapacity(room);
+	  function openGuestPicker(idx) {
+	    const it = items[idx];
+	    const room = it.room || {};
+	    const cap = roomCapacity(room);
+	    const bedsInfo = formatBedsInfo(room);
 
     const sheet = document.createElement('div');
     sheet.className = 'modal show';
 
-    sheet.innerHTML = `
-      <div class="modal-card" style="width:92vw;max-width:380px;margin:0 auto;border-radius:18px">
-        <div style="font-size:18px;font-weight:700;margin-bottom:12px;text-align:center">Распределение гостей</div>
-        <div style="font-size:13px;color:#9ca3af;margin-bottom:16px;text-align:center">
-          ${room.name || room.room_type || 'Апартамент'} (до ${cap} гостей)
-        </div>
-
-        <div style="display:grid;gap:12px;margin-bottom:18px">
-          <div class="bk-field" style="display:grid;grid-template-columns:1fr auto;align-items:center;gap:12px">
-            <span style="color:#9aa3af;font-size:13px">Взрослые</span>
-            <select id="guestAdults" class="bk-select" style="width:100px"></select>
-          </div>
+	    sheet.innerHTML = `
+	      <div class="modal-card" style="width:92vw;max-width:380px;margin:0 auto;border-radius:18px">
+	        <div style="font-size:18px;font-weight:700;margin-bottom:12px;text-align:center">Распределение гостей</div>
+	        <div style="font-size:13px;color:#9ca3af;margin-bottom:${bedsInfo ? '8px' : '16px'};text-align:center">
+	          ${room.name || room.room_type || 'Апартамент'} (до ${cap} гостей)
+	        </div>
+	        ${bedsInfo ? `<div style="font-size:12px;color:#9ca3af;margin-bottom:16px;text-align:center">Спальные места: ${bedsInfo}</div>` : ''}
+	
+	        <div style="display:grid;gap:12px;margin-bottom:18px">
+	          <div class="bk-field" style="display:grid;grid-template-columns:1fr auto;align-items:center;gap:12px">
+	            <span style="color:#9aa3af;font-size:13px">Взрослые</span>
+	            <select id="guestAdults" class="bk-select" style="width:100px"></select>
+	          </div>
           <div class="bk-field" style="display:grid;grid-template-columns:1fr auto;align-items:center;gap:12px">
             <span style="color:#9aa3af;font-size:13px">Дети</span>
             <select id="guestKids" class="bk-select" style="width:100px"></select>
@@ -6442,7 +6444,7 @@ function openRoomsList(campId, typeName, rooms, camp) {
       <div class="accom-list" id="roomsDetailList"></div>
       <div class="accom-actions">
         <button class="button ghost" id="roomsListBack">Назад</button>
-        <button class="button primary" id="roomsListBook">Забронировать</button>
+        ${(Array.isArray(rooms) && rooms.length > 1) ? '' : `<button class="button primary" id="roomsListBook">Забронировать</button>`}
       </div>
     </div>
   `);
