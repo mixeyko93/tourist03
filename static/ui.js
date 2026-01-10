@@ -80,13 +80,31 @@
   }
 })();
 
-// Блокируем "резиновую" прокрутку WebView (pull-to-close) на верхнем крае
+// Блок "резинки" WebView (pull-to-close) — ВАЖНО:
+// не должен мешать скроллу внутри модалок/контейнеров (у нас document обычно не скроллится).
 (function preventRubberBand(){
+  const tg = window.Telegram && window.Telegram.WebApp;
+  // Не Telegram — не нужно.
+  if (!tg) return;
+  // На новых клиентах Telegram используем нативное отключение свайпов (делается в app.js).
+  if (typeof tg.disableVerticalSwipes === 'function') return;
+
+  const root = document.scrollingElement;
+  if (!root) return;
+
+  const isDocScrollable = () => {
+    const maxScroll = (root.scrollHeight || 0) - (root.clientHeight || 0);
+    return maxScroll > 1;
+  };
+  // Если документ не скроллится — не вмешиваемся (иначе ломаем скролл внутренних контейнеров).
+  if (!isDocScrollable()) return;
+
   let y = 0;
-  document.addEventListener('touchstart', (e)=>{ y = e.touches[0].clientY; }, {passive:true});
+  document.addEventListener('touchstart', (e)=>{ y = e.touches?.[0]?.clientY || 0; }, {passive:true});
   document.addEventListener('touchmove', (e)=>{
-    const dy = e.touches[0].clientY - y;
-    const atTop = (document.scrollingElement?.scrollTop || 0) <= 0;
+    if (!isDocScrollable()) return;
+    const dy = (e.touches?.[0]?.clientY || 0) - y;
+    const atTop = (root.scrollTop || 0) <= 0;
     if (atTop && dy > 0) e.preventDefault();
   }, {passive:false});
 })();
