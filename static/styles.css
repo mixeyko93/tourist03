@@ -309,9 +309,16 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 .modal{
   display:none; position:fixed; inset:0;
   background:var(--modal-overlay);
-  z-index:50; align-items:center; justify-content:center;
+  z-index:50;
+  /* Single scroll container for modals (fixes WebView "can't scroll up from bottom"). */
+  overflow-y:auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding:18px 0;
+  align-items:flex-start;
+  justify-content:center;
 }
-.modal.show{display:grid; animation:fadeIn .15s ease;}
+.modal.show{display:flex; animation:fadeIn .15s ease;}
 .modal.auth-modal{z-index:999 !important;}
 @keyframes fadeIn{from{opacity:0} to{opacity:1}}
 .modal-card{
@@ -319,13 +326,10 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   border:1px solid var(--modal-border); border-radius:20px;
   padding:20px;
   width:min(440px, 92vw);              /* чуть уже не делаем — важен box-sizing */
-  max-height:85vh; 
-  overflow-y:auto;
-  overflow-x:hidden;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
+  /* Outer `.modal` scrolls; avoid inner overflow scroll bugs in WebView */
+  max-height:none;
+  overflow:visible;
   box-shadow:0 6px 25px rgba(0,0,0,.4);
-  transform:scale(.97); animation:scaleIn .2s ease forwards;
   box-sizing:border-box;               /* ← фикс: паддинги учитываются во width */
 }
 @keyframes scaleIn{to{transform:scale(1)}}
@@ -338,6 +342,7 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   grid-template-rows: auto auto 1fr auto;
   gap:10px;
   padding:16px;
+  overflow:hidden;                     /* scroll only inside .details-body */
   box-sizing:border-box;               /* ← без «вываливания» за края */
 }
 

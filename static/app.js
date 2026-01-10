@@ -898,11 +898,11 @@ function showModal(html){
   try { delete modalCard.dataset.view; } catch (_) {}
   try { modal.classList.remove('auth-modal'); } catch (_) {}
   modalCard.innerHTML = html;
-  modal.style.display = 'grid';
+  modal.style.display = 'flex';
 }
 function showAuthModal(html){ 
   modalCard.innerHTML = html; 
-  modal.style.display = 'grid'; 
+  modal.style.display = 'flex'; 
   modal.classList.add('auth-modal');
 }
 
