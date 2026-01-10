@@ -227,10 +227,13 @@ html, body{
   caret-color:var(--tg-text);
   transition: background-color 9999s ease-in-out 0s;
 }
-.auth-field input::placeholder{ color:var(--field-placeholder); }
+.auth-field input::placeholder{
+  color:rgba(156,163,175,0.22);
+  opacity:0.22;
+}
 .auth-field input.auth-code::placeholder{
-  color:rgba(156,163,175,0.35);
-  opacity:0.35;
+  color:rgba(156,163,175,0.16);
+  opacity:0.16;
 }
 .auth-field input:focus{
   border-color:var(--field-focus-border);
