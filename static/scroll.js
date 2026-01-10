@@ -1,6 +1,7 @@
 // Stable scrolling helpers for iOS/Android WebView/Safari/Chrome.
-// Goal: prevent scroll chaining / rubber-band ONLY when nothing can scroll further,
-// and never block real scroll inside nested scroll areas (fixes "down ok, up stuck").
+// Important: do NOT call preventDefault() on touchmove for single-finger scroll.
+// That can cancel scrolling for the whole gesture and manifests as "stuck scroll",
+// while two-finger scroll still works (because it bypasses our 1-touch logic).
 (function () {
   function isTouchable() {
     return 'ontouchstart' in window || (navigator.maxTouchPoints || 0) > 0;
@@ -39,13 +40,18 @@
     return chain.length ? chain : null;
   }
 
-  function canScrollInDirection(el, dir) {
-    const scrollTop = Number(el.scrollTop) || 0;
+  function nudgeFromEdges(el) {
+    if (!el) return;
     const maxScroll = Math.max(0, (el.scrollHeight || 0) - (el.clientHeight || 0));
-    const eps = 1; // avoids fractional edge jitter on iOS
-    if (dir === 'up') return scrollTop > eps;
-    if (dir === 'down') return scrollTop < (maxScroll - eps);
-    return false;
+    if (maxScroll <= 1) return;
+    const top = Number(el.scrollTop) || 0;
+    if (top <= 0) {
+      el.scrollTop = 1;
+      return;
+    }
+    if (top >= maxScroll) {
+      el.scrollTop = maxScroll - 1;
+    }
   }
 
   function initStableScroll() {
@@ -63,42 +69,13 @@
       lastY = t.clientY || 0;
       moved = false;
       chain = getScrollableChain(e.target);
-    }, { passive: true, capture: true });
 
-    // Non-passive to allow edge prevention (iOS rubber-band / Android overscroll).
-    document.addEventListener('touchmove', (e) => {
-      if (!chain || !e.touches || e.touches.length !== 1) return;
-
-      const t = e.touches[0];
-      const x = t.clientX || 0;
-      const y = t.clientY || 0;
-      const dx = x - lastX;
-      const dy = y - lastY;
-      lastX = x;
-      lastY = y;
-
-      if (!moved && (Math.abs(dx) + Math.abs(dy)) < 2) return;
-      moved = true;
-
-      // Ignore mostly-horizontal gestures (carousels, horizontal lists)
-      if (Math.abs(dx) > Math.abs(dy)) return;
-
-      // dy > 0 => finger moved down => user scrolls UP (towards top)
-      // dy < 0 => finger moved up   => user scrolls DOWN (towards bottom)
-      const dir = dy > 0 ? 'up' : (dy < 0 ? 'down' : '');
-      if (!dir) return;
-
-      // If *any* scrollable in the chain can scroll further in that direction, do not block.
-      for (let i = 0; i < chain.length; i++) {
-        const el = chain[i];
-        // layout can change while dragging; skip stale elements
-        if (!el || !el.isConnected || !isScrollable(el)) continue;
-        if (canScrollInDirection(el, dir)) return;
+      // iOS overflow scroll edge-fix without preventDefault():
+      // keep the nearest scrollable away from exact edges to avoid rubber-band / chain glitches.
+      if (chain && chain[0]) {
+        try { nudgeFromEdges(chain[0]); } catch (_) {}
       }
-
-      // Nothing can scroll further => prevent rubber-band/chaining to background
-      e.preventDefault();
-    }, { passive: false, capture: true });
+    }, { passive: true, capture: true });
 
     document.addEventListener('touchend', () => { chain = null; }, { passive: true, capture: true });
     document.addEventListener('touchcancel', () => { chain = null; }, { passive: true, capture: true });

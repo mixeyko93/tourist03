@@ -294,7 +294,6 @@ html, body{
   bottom:calc(env(safe-area-inset-bottom) + var(--tabbar-offset));
   padding:10px 12px calc(env(safe-area-inset-bottom) + 10px);
   background:var(--card-bg);
-  backdrop-filter:saturate(1.2) blur(10px);
   border-top:1px solid var(--border-color);
   display:flex; gap:8px; align-items:stretch;
   z-index:1000;
@@ -309,7 +308,7 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 /* ====================== MODAL ====================== */
 .modal{
   display:none; position:fixed; inset:0;
-  backdrop-filter:blur(12px); background:var(--modal-overlay);
+  background:var(--modal-overlay);
   z-index:50; align-items:center; justify-content:center;
 }
 .modal.show{display:grid; animation:fadeIn .15s ease;}
@@ -317,7 +316,6 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 @keyframes fadeIn{from{opacity:0} to{opacity:1}}
 .modal-card{
   background:var(--modal-bg);
-  backdrop-filter:saturate(1.2) blur(10px);
   border:1px solid var(--modal-border); border-radius:20px;
   padding:20px;
   width:min(440px, 92vw);              /* чуть уже не делаем — важен box-sizing */
