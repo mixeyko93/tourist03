@@ -894,15 +894,18 @@ function formatPhoneRu(phone){
 // === showModal / closeModal и формы регистрации/входа (как были) ===
 const modal = document.getElementById('modal');
 const modalCard = document.getElementById('modalCard');
-let modalScroll = document.getElementById('modalScroll');
 
-// Если modalScroll не найден, создаём его динамически (для совместимости)
-if (modal && modalCard && !modalScroll) {
-  modalScroll = document.createElement('div');
-  modalScroll.id = 'modalScroll';
-  modalScroll.className = 'modal-scroll';
-  modal.insertBefore(modalScroll, modalCard);
-  modalScroll.appendChild(modalCard);
+function closeTransientOverlays({ keepMainModal = false } = {}){
+  // Никогда не удаляем основной `#modal` из DOM — иначе сломаются ссылки `modal/modalCard`.
+  try {
+    document.querySelectorAll('.modal.show').forEach((m) => {
+      if (!m || m.id === 'modal') return;
+      try { m.remove(); } catch (_) {}
+    });
+  } catch (_) {}
+  if (!keepMainModal) {
+    try { closeModal(); } catch (_) {}
+  }
 }
 
 function updateModalTallClass(){
@@ -937,7 +940,7 @@ function showModal(html){
   modal.style.display = 'flex';
   try { modal.classList.add('show'); } catch (_) {}
   // Reset scroll position
-  if (modalScroll) modalScroll.scrollTop = 0;
+  try { modal.scrollTop = 0; } catch (_) {}
   try {
     if (modalCard.__ro && typeof modalCard.__ro.disconnect === 'function') modalCard.__ro.disconnect();
     modalCard.__ro = null;
@@ -948,12 +951,12 @@ function showModal(html){
   } catch (_) {}
   updateModalTallClass();
   // After layout, fix scroll edge
-  requestAnimationFrame(() => fixScrollEdge(modalScroll));
+  requestAnimationFrame(() => fixScrollEdge(modal));
   if (typeof ResizeObserver === 'function') {
     try {
       modalCard.__ro = new ResizeObserver(() => {
         updateModalTallClass();
-        fixScrollEdge(modalScroll);
+        fixScrollEdge(modal);
       });
       modalCard.__ro.observe(modalCard);
     } catch (_) {}
@@ -969,7 +972,7 @@ function showAuthModal(html){
   modal.classList.add('auth-modal');
   try { modal.classList.add('show'); } catch (_) {}
   // Reset scroll position
-  if (modalScroll) modalScroll.scrollTop = 0;
+  try { modal.scrollTop = 0; } catch (_) {}
   try {
     if (modalCard.__ro && typeof modalCard.__ro.disconnect === 'function') modalCard.__ro.disconnect();
     modalCard.__ro = null;
@@ -979,12 +982,12 @@ function showAuthModal(html){
     modalCard.__onResize = null;
   } catch (_) {}
   updateModalTallClass();
-  requestAnimationFrame(() => fixScrollEdge(modalScroll));
+  requestAnimationFrame(() => fixScrollEdge(modal));
   if (typeof ResizeObserver === 'function') {
     try {
       modalCard.__ro = new ResizeObserver(() => {
         updateModalTallClass();
-        fixScrollEdge(modalScroll);
+        fixScrollEdge(modal);
       });
       modalCard.__ro.observe(modalCard);
     } catch (_) {}
@@ -995,14 +998,14 @@ function showAuthModal(html){
   } catch (_) {}
 }
 
-// Setup scroll edge fix on scrollend for WebView
-if (modalScroll) {
-  modalScroll.addEventListener('scrollend', () => fixScrollEdge(modalScroll), { passive: true });
+// Setup scroll edge fix on scroll end for WebView
+if (modal) {
+  try { modal.addEventListener('scrollend', () => fixScrollEdge(modal), { passive: true }); } catch (_) {}
   // Fallback for browsers without scrollend
   let scrollTimeout = null;
-  modalScroll.addEventListener('scroll', () => {
+  modal.addEventListener('scroll', () => {
     if (scrollTimeout) clearTimeout(scrollTimeout);
-    scrollTimeout = setTimeout(() => fixScrollEdge(modalScroll), 150);
+    scrollTimeout = setTimeout(() => fixScrollEdge(modal), 150);
   }, { passive: true });
 }
 function showAuthChoiceModal({ title = 'Необходима авторизация', subtitle = '', onCancel, onLogin, onRegister } = {}){
@@ -3575,8 +3578,7 @@ window.__showCampBrief = function(campId) {
 
 window.__openCampBooking = function(campId) {
   // закрываем «Подробнее», если открыто
-  const m = document.querySelector('.modal.show');
-  if (m) m.remove();
+  closeTransientOverlays();
   openBookingFilterWithAuth(campId);
 };
 
@@ -3771,8 +3773,7 @@ function openBookingFilterModal(opts = {}) {
   }
 
   // Обычная логика - используем основное окно
-  const prev = document.querySelector('.modal.show');
-  if (prev) prev.remove();
+  closeTransientOverlays({ keepMainModal: true });
 
   showModal(`
     <div class="booking-card">
@@ -6768,8 +6769,7 @@ async function openCampHousing(campId){
   // Если фильтр не настроен, показываем все апартаменты для ознакомления (БЕЗ авторизации)
   if (!f.from || !f.to) {
     window.__currentCampId = cid;
-    // закрываем любые старые .modal.show
-    try { document.querySelectorAll('.modal.show').forEach(m => m.remove()); } catch(_) {}
+    closeTransientOverlays({ keepMainModal: true });
     const shell = document.getElementById('modalCard');
     if (shell) { shell.classList.remove('booking-shell'); shell.classList.remove('details'); }
 
@@ -6908,8 +6908,7 @@ async function openCampAccommodations(campId){
   const cid = Number(campId);
   if (!Number.isFinite(cid)) return;
   window.__currentCampId = cid;
-  // закрываем любые старые .modal.show, чтобы не было «слоёв»
-  try { document.querySelectorAll('.modal.show').forEach(m => m.remove()); } catch(_) {}
+  closeTransientOverlays({ keepMainModal: true });
   const shell = document.getElementById('modalCard');
   if (shell) { shell.classList.remove('booking-shell'); shell.classList.remove('details'); }
 
