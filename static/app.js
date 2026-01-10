@@ -986,7 +986,7 @@ function showConfirmModal({
 }
 
 const BOOKING_DRAFT_KEY = 'bookingDraft:v1';
-const BOOKING_MULTI_KEY = 'bookingDraftMulti:v1';
+const BOOKING_MULTI_KEY = 'bookingDraftMulti:v2';
 window.__bookingDraft = null;
 window.__suppressDraftToastOnce = false;
 
@@ -1019,10 +1019,34 @@ function loadBookingMultiDraft(){
     if (!raw) return null;
     const d = JSON.parse(raw);
     if (!d || typeof d !== 'object') return null;
+    // v2: carts identified by key (campId can repeat for different variants)
+    if (d.v === 2 || d.activeKey != null) {
+      const carts = Array.isArray(d.carts) ? d.carts : [];
+      const normalized = carts
+        .map(c => ({
+          v: 2,
+          key: String(c?.key || ''),
+          campId: Number(c?.campId),
+          campName: String(c?.campName || ''),
+          lakeName: String(c?.lakeName || ''),
+          label: String(c?.label || ''),
+          filter: (c?.filter && typeof c.filter === 'object') ? c.filter : {},
+          items: Array.isArray(c?.items) ? c.items : [],
+          updatedAt: Number(c?.updatedAt) || 0,
+        }))
+        .filter(c => c.key && Number.isFinite(c.campId));
+      const activeKey = String(d.activeKey || '');
+      return {
+        v: 2,
+        activeKey: activeKey && normalized.some(c => c.key === activeKey) ? activeKey : (normalized[0]?.key ?? ''),
+        carts: normalized,
+      };
+    }
+
+    // v1 migration (if user still has old key) — best-effort
     const carts = Array.isArray(d.carts) ? d.carts : [];
-    const normalized = carts
+    const normalizedV1 = carts
       .map(c => ({
-        v: 1,
         campId: Number(c?.campId),
         campName: String(c?.campName || ''),
         lakeName: String(c?.lakeName || ''),
@@ -1032,11 +1056,19 @@ function loadBookingMultiDraft(){
       }))
       .filter(c => Number.isFinite(c.campId));
     const activeCampId = Number(d.activeCampId);
-    return {
-      v: 1,
-      activeCampId: Number.isFinite(activeCampId) ? activeCampId : (normalized[0]?.campId ?? null),
-      carts: normalized,
-    };
+    const normalized = normalizedV1.map(c => ({
+      v: 2,
+      key: `${Number(c.campId)}:main`,
+      campId: Number(c.campId),
+      campName: c.campName || '',
+      lakeName: c.lakeName || '',
+      label: '',
+      filter: c.filter || {},
+      items: Array.isArray(c.items) ? c.items : [],
+      updatedAt: Number(c.updatedAt) || 0,
+    }));
+    const activeKey = Number.isFinite(activeCampId) ? `${activeCampId}:main` : (normalized[0]?.key ?? '');
+    return { v: 2, activeKey, carts: normalized };
   } catch (_) {
     return null;
   }
@@ -1052,8 +1084,8 @@ function saveBookingMultiDraft(draft){
 function syncActiveSingleDraftFromMulti(){
   const m = loadBookingMultiDraft();
   if (!m || !Array.isArray(m.carts) || m.carts.length === 0) return null;
-  const activeId = Number(m.activeCampId);
-  const active = m.carts.find(c => Number(c?.campId) === activeId) || m.carts[0];
+  const activeKey = String(m.activeKey || '');
+  const active = (activeKey && m.carts.find(c => String(c?.key) === activeKey)) || m.carts[0];
   if (!active) return null;
   const single = {
     v: 1,
@@ -1066,22 +1098,27 @@ function syncActiveSingleDraftFromMulti(){
   try {
     window.__bookingDraft = single;
     localStorage.setItem(BOOKING_DRAFT_KEY, JSON.stringify(single));
+    window.__bookingMultiActiveKey = String(active.key || '');
   } catch (_) {}
   return single;
 }
 
-function upsertBookingMultiCart({ campId, campName, lakeName, filter, items }){
+function upsertBookingMultiCart({ campId, campName, lakeName, label, filter, items, key }){
   const cid = Number(campId);
   if (!Number.isFinite(cid)) return;
-  const m = loadBookingMultiDraft() || { v: 1, activeCampId: cid, carts: [] };
+  const cartKey = String(key || `${cid}:main`);
+  const m = loadBookingMultiDraft() || { v: 2, activeKey: cartKey, carts: [] };
   const now = Date.now();
   const carts = Array.isArray(m.carts) ? m.carts.slice() : [];
-  const idx = carts.findIndex(c => Number(c?.campId) === cid);
+  const idx = carts.findIndex(c => String(c?.key) === cartKey);
+  const prev = idx >= 0 ? carts[idx] : null;
   const next = {
-    v: 1,
+    v: 2,
+    key: cartKey,
     campId: cid,
     campName: String(campName || ''),
     lakeName: String(lakeName || ''),
+    label: (label != null) ? String(label || '') : String(prev?.label || ''),
     filter: (filter && typeof filter === 'object') ? filter : {},
     items: Array.isArray(items) ? items : [],
     updatedAt: now,
@@ -1105,38 +1142,44 @@ function upsertBookingMultiCart({ campId, campName, lakeName, filter, items }){
     carts.splice(oldestIdx, 1);
   }
 
-  const out = { v: 1, activeCampId: cid, carts };
+  const out = { v: 2, activeKey: cartKey, carts };
   saveBookingMultiDraft(out);
   syncActiveSingleDraftFromMulti();
   updateBookingDraftUi();
 }
 
-function setActiveBookingMultiCart(campId){
-  const cid = Number(campId);
-  if (!Number.isFinite(cid)) return;
+function setActiveBookingMultiCart(idOrKey){
+  const asStr = String(idOrKey || '');
+  const isKey = asStr.includes(':');
+  const cid = isKey ? Number(asStr.split(':')[0]) : Number(idOrKey);
+  const key = isKey ? asStr : (Number.isFinite(cid) ? `${cid}:main` : '');
+  if (!key) return;
   const m = loadBookingMultiDraft();
   if (!m || !Array.isArray(m.carts) || m.carts.length === 0) return;
-  const exists = m.carts.some(c => Number(c?.campId) === cid);
+  const exists = m.carts.some(c => String(c?.key) === key);
   if (!exists) return;
-  m.activeCampId = cid;
+  m.activeKey = key;
   saveBookingMultiDraft(m);
   syncActiveSingleDraftFromMulti();
   updateBookingDraftUi();
 }
 
-function removeBookingMultiCart(campId){
-  const cid = Number(campId);
-  if (!Number.isFinite(cid)) return;
+function removeBookingMultiCart(idOrKey){
+  const asStr = String(idOrKey || '');
+  const isKey = asStr.includes(':');
+  const cid = isKey ? Number(asStr.split(':')[0]) : Number(idOrKey);
+  const key = isKey ? asStr : (Number.isFinite(cid) ? `${cid}:main` : '');
+  if (!key) return;
   const m = loadBookingMultiDraft();
   if (!m || !Array.isArray(m.carts)) return;
-  const next = m.carts.filter(c => Number(c?.campId) !== cid);
+  const next = m.carts.filter(c => String(c?.key) !== key);
   if (next.length === 0) {
     try { localStorage.removeItem(BOOKING_MULTI_KEY); } catch (_) {}
     return;
   }
-  const activeId = Number(m.activeCampId);
-  const newActive = (activeId === cid) ? Number(next[0]?.campId) : activeId;
-  saveBookingMultiDraft({ v: 1, activeCampId: newActive, carts: next });
+  const activeKey = String(m.activeKey || '');
+  const newActive = (activeKey === key) ? String(next[0]?.key || '') : activeKey;
+  saveBookingMultiDraft({ v: 2, activeKey: newActive, carts: next });
   syncActiveSingleDraftFromMulti();
   updateBookingDraftUi();
 }
@@ -1156,6 +1199,7 @@ function saveBookingDraft(draft){
         campId: cid,
         campName: draft.campName || '',
         lakeName: camp?.lake_name || '',
+        key: String(window.__bookingMultiActiveKey || `${cid}:main`),
         filter: draft.filter || {},
         items: Array.isArray(draft.items) ? draft.items : [],
       });
@@ -1167,8 +1211,12 @@ function clearBookingDraft(){
   try { localStorage.removeItem(BOOKING_DRAFT_KEY); } catch (_) {}
   let nextActive = null;
   try {
-    const cid = Number((window.__bookingDraft || loadBookingDraft())?.campId);
-    if (Number.isFinite(cid)) removeBookingMultiCart(cid);
+    const activeKey = String(window.__bookingMultiActiveKey || '');
+    if (activeKey) removeBookingMultiCart(activeKey);
+    else {
+      const cid = Number((window.__bookingDraft || loadBookingDraft())?.campId);
+      if (Number.isFinite(cid)) removeBookingMultiCart(`${cid}:main`);
+    }
     nextActive = syncActiveSingleDraftFromMulti();
   } catch (_) {}
   window.__bookingDraft = nextActive || null;
@@ -1203,7 +1251,7 @@ function updateBookingDraftUi(){
   if (badge) badge.style.display = 'none';
 }
 
-function renderBookingMultiTabs({ mountId, activeCampId, onSwitch } = {}){
+function renderBookingMultiTabs({ mountId, activeKey, onSwitch } = {}){
   const el = mountId ? document.getElementById(mountId) : null;
   if (!el) return;
   const m = loadBookingMultiDraft();
@@ -1213,26 +1261,30 @@ function renderBookingMultiTabs({ mountId, activeCampId, onSwitch } = {}){
     el.style.display = 'none';
     return;
   }
-  const activeId = Number(activeCampId);
+  const aKey = String(activeKey || m?.activeKey || '');
 
   el.style.display = '';
   el.innerHTML = carts.map(c => {
     const cid = Number(c?.campId);
     const name = escapeHtml(String(c?.campName || 'База'));
     const lake = String(c?.lakeName || '').trim();
-    const lakeText = lake ? escapeHtml(`озеро ${lake}`) : '';
-    const isActive = Number.isFinite(activeId) && cid === activeId;
+    const label = String(c?.label || '').trim();
+    const lakeTextRaw = lake ? `озеро ${lake}` : '';
+    const subRaw = [lakeTextRaw, label].filter(Boolean).join(' • ');
+    const subText = subRaw ? escapeHtml(subRaw) : '';
+    const key = String(c?.key || (Number.isFinite(cid) ? `${cid}:main` : ''));
+    const isActive = aKey && key && key === aKey;
     return `
-      <button type="button" class="multi-tab ${isActive ? 'active' : ''}" data-camp-id="${cid}">
+      <button type="button" class="multi-tab ${isActive ? 'active' : ''}" data-cart-key="${escapeHtml(key)}">
         <div class="multi-tab-title">${name}</div>
-        ${lakeText ? `<div class="multi-tab-sub">${lakeText}</div>` : ''}
+        ${subText ? `<div class="multi-tab-sub">${subText}</div>` : ''}
       </button>
     `;
   }).join('');
 
   el.querySelectorAll('.multi-tab').forEach((btn) => {
-    const cid = Number(btn.getAttribute('data-camp-id'));
-    if (!Number.isFinite(cid)) return;
+    const cartKey = String(btn.getAttribute('data-cart-key') || '');
+    if (!cartKey) return;
 
     let pressTimer = null;
     let didLongPress = false;
@@ -1248,20 +1300,16 @@ function renderBookingMultiTabs({ mountId, activeCampId, onSwitch } = {}){
       didLongPress = true;
       ignoreClickUntil = Date.now() + 800;
       const campName = btn.querySelector('.multi-tab-title')?.textContent || 'База';
+      const sub = btn.querySelector('.multi-tab-sub')?.textContent || '';
       const ok = await showConfirmModal({
         title: 'Удалить корзину?',
-        message: `Удалить корзину «${campName}» со всеми апартаментами?`,
+        message: `Удалить корзину «${campName}${sub ? ' • ' + sub : ''}» со всеми апартаментами?`,
         confirmText: 'Удалить',
         cancelText: 'Отмена',
         danger: true,
       });
       if (ok) {
-        removeBookingMultiCart(cid);
-        const d = window.__bookingDraft || loadBookingDraft();
-        if (d && Number(d.campId) === cid) {
-          try { localStorage.removeItem(BOOKING_DRAFT_KEY); } catch (_) {}
-          window.__bookingDraft = null;
-        }
+        removeBookingMultiCart(cartKey);
         updateBookingDraftUi();
         const nm = loadBookingMultiDraft();
         if (nm && Array.isArray(nm.carts) && nm.carts.length > 0) {
@@ -1274,9 +1322,9 @@ function renderBookingMultiTabs({ mountId, activeCampId, onSwitch } = {}){
     };
 
     const handleTap = () => {
-      if (cid === activeId) return;
-      try { setActiveBookingMultiCart(cid); } catch (_) {}
-      if (typeof onSwitch === 'function') { onSwitch(cid); return; }
+      if (aKey && cartKey === aKey) return;
+      try { setActiveBookingMultiCart(cartKey); } catch (_) {}
+      if (typeof onSwitch === 'function') { onSwitch(cartKey); return; }
       try {
         window.__suppressDraftToastOnce = true;
         openBookingDraft({ dontChangeTab: true });
@@ -1346,32 +1394,6 @@ function showSnackbar({ message, actionText, onAction, timeoutMs = 4500 } = {}){
 
   el.addEventListener('click', close);
   if (timeoutMs > 0) setTimeout(close, timeoutMs);
-}
-
-function initScrollPerformanceMode(){
-  // During active scroll, disable expensive visual effects (blur/shadows) via CSS.
-  // This improves perceived smoothness on low-end Android and iOS WebView/Safari.
-  const root = document.documentElement;
-  let timer = 0;
-  let active = false;
-
-  const setActive = () => {
-    if (!active) {
-      active = true;
-      try { root.classList.add('is-scrolling'); } catch (_) {}
-    }
-    if (timer) clearTimeout(timer);
-    timer = setTimeout(() => {
-      active = false;
-      try { root.classList.remove('is-scrolling'); } catch (_) {}
-    }, 140);
-  };
-
-  // Capture scroll events from nested scroll containers (scroll doesn't bubble but can be captured)
-  try { document.addEventListener('scroll', setActive, { capture: true, passive: true }); } catch (_) {}
-  try { document.addEventListener('wheel', setActive, { capture: true, passive: true }); } catch (_) {}
-  // Touchmove gives earlier signal on mobile (do NOT preventDefault)
-  try { document.addEventListener('touchmove', setActive, { capture: true, passive: true }); } catch (_) {}
 }
 
 async function openBookingDraft(opts = {}){
@@ -1828,14 +1850,13 @@ async function openBookingCompareListModal({ filter } = {}){
       goCartBtn.textContent = count > 0 ? `Перейти в корзину (${count})` : 'Перейти в корзину';
     }
 
-    const byCamp = new Map();
-    for (const c of selected) byCamp.set(Number(c.campId), getCartKey(c));
+    const selectedKeys = new Set(selected.map(c => String(c?.key || '')).filter(Boolean));
 
     listEl.querySelectorAll('.compare-toggle').forEach(btn => {
       const cid = Number(btn.getAttribute('data-camp-id'));
       const vKey = String(btn.getAttribute('data-variant-key') || '');
-      const selectedKey = byCamp.get(cid) || '';
-      const isSelected = selectedKey && vKey && selectedKey === vKey;
+      const selKey = `${cid}:${vKey}`;
+      const isSelected = selectedKeys.has(selKey);
       btn.textContent = isSelected ? 'Убрать из корзины' : 'В корзину';
       btn.classList.toggle('compare-remove', isSelected);
     });
@@ -1865,21 +1886,21 @@ async function openBookingCompareListModal({ filter } = {}){
       const variant = row?.variants?.[vidx];
       if (!row || !variant) return;
 
+      const selKey = `${cid}:${vKey || getCartKey({ items: variant.rooms.map(r => ({ room_id: r?.id })) })}`;
+
       const m = getMulti();
       const carts = (m && Array.isArray(m.carts)) ? m.carts : [];
-      const existing = carts.find(c => Number(c?.campId) === cid) || null;
-      const existingKey = existing ? getCartKey(existing) : '';
+      const existing = carts.find(c => String(c?.key) === selKey) || null;
 
-      // Toggle off if the same variant is already selected
-      if (existing && existingKey && vKey && existingKey === vKey) {
-        removeBookingMultiCart(cid);
+      // Toggle off if already selected (exact variant)
+      if (existing) {
+        removeBookingMultiCart(selKey);
         refreshSelectionUi();
         return;
       }
 
-      // Enforce max 6 selections (carts)
-      const isNewCamp = !existing;
-      if (isNewCamp && carts.length >= 6) {
+      // Enforce max 6 selections (total carts)
+      if (carts.length >= 6) {
         showSnackbar({ message: 'Можно выбрать до 6 вариантов для сравнения.', timeoutMs: 2200 });
         return;
       }
@@ -1897,6 +1918,8 @@ async function openBookingCompareListModal({ filter } = {}){
         campId: cid,
         campName: row.camp?.name || '',
         lakeName: row.camp?.lake_name || '',
+        label: variant.text || '',
+        key: selKey,
         filter: {
           from: f.from || null,
           to: f.to || null,
@@ -1907,7 +1930,7 @@ async function openBookingCompareListModal({ filter } = {}){
         },
         items: itemsForDraft,
       });
-      setActiveBookingMultiCart(cid);
+      setActiveBookingMultiCart(selKey);
       refreshSelectionUi();
     };
   });
@@ -4729,7 +4752,7 @@ function openBookingConfirmationModal({ camp, campId, rooms, filter, onBack, ini
   const autoPickBtn = document.getElementById('confirmAutoPick');
   const editDatesBtn = document.getElementById('confirmEditDates');
 
-  renderBookingMultiTabs({ mountId: 'bookingMultiTabs', activeCampId: cid });
+  renderBookingMultiTabs({ mountId: 'bookingMultiTabs', activeKey: window.__bookingMultiActiveKey || (loadBookingMultiDraft()?.activeKey || '') });
 
   if (summaryEl) {
     summaryEl.innerHTML = '';
@@ -7033,13 +7056,17 @@ window.addEventListener('DOMContentLoaded', () => {
   initBookingFilterButton();
   setFilterButtonActive(!!window.__bookingFilter);
   initGeoButton();
-  initScrollPerformanceMode();
   loadBookingDraft();
   updateBookingDraftUi();
     setTabById('tab-map');
     loadCamps().then(()=> restoreMapView());  // <-- после загрузки маркеров сразу fitBounds
   setTimeout(()=> typeof map!=='undefined' && map.invalidateSize(), 80);
   document.getElementById('openBookingFilter').onclick = openBookingFilterModal;
+  const refreshBtn = document.getElementById('refreshMap');
+  if (refreshBtn) refreshBtn.onclick = () => {
+    try { refreshBtn.disabled = true; } catch (_) {}
+    try { location.reload(); } catch (_) {}
+  };
   const draftBtn = document.getElementById('openBookingDraft');
   if (draftBtn) draftBtn.onclick = openBookingDraft;
   try { renderAccount(); } catch(_) {}

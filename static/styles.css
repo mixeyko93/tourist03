@@ -91,24 +91,12 @@ html, body{
   border-radius:16px;
   padding:16px 18px;
   margin:0 18px 16px;
-  backdrop-filter:blur(8px);
-  box-shadow:0 8px 22px rgba(0,0,0,.25);
+  /* backdrop-filter is expensive on long scroll lists (iOS/Android) */
+  box-shadow:0 6px 16px rgba(0,0,0,.22);
   transition:background .2s ease, transform .2s ease;
   box-sizing:border-box;
 }
 .card:hover{background:var(--card-bg-hover);}
-
-/* Scroll performance mode: temporarily remove expensive effects while scrolling */
-.is-scrolling .card,
-.is-scrolling .modal,
-.is-scrolling .modal-card,
-.is-scrolling .snackbar,
-.is-scrolling .map-load-error-card{
-  backdrop-filter:none !important;
-}
-.is-scrolling .card{box-shadow:0 4px 12px rgba(0,0,0,.18) !important;}
-.is-scrolling .modal{background:rgba(10,12,16,.82) !important;}
-.is-scrolling .snackbar{box-shadow:0 8px 18px rgba(0,0,0,0.35) !important;}
 
 .button{
   display:inline-flex; align-items:center; justify-content:center;
@@ -650,6 +638,20 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 }
 .map-btn.left{left:18px;}
 .map-btn.right{right:18px;}
+.map-btn.text-btn{
+  top:18px;
+  bottom:auto;
+  height:34px;
+  padding:0 12px;
+  border-radius:18px;
+  background:#0E1621;
+  border:2px solid #7EB6FF;
+  color:#fff;
+  font-weight:800;
+  font-size:12px;
+  box-shadow:0 10px 28px rgba(0,0,0,0.35), 0 0 0 1px rgba(126,182,255,0.18);
+}
+.map-btn.text-btn:active{transform:scale(.98);}
 .map-btn:hover{background:none; box-shadow:none;}
 .map-btn:active{transform:scale(.96);}
 .map-btn.filter-active{filter:drop-shadow(0 10px 28px rgba(34,197,94,.7));}
@@ -1292,15 +1294,6 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   box-sizing:border-box;
 }
 
-/* Large lists: let Chromium skip offscreen rendering for smoother scroll */
-@supports (content-visibility: auto){
-  .accom-item,
-  .alloc-item,
-  .card{
-    content-visibility:auto;
-    contain-intrinsic-size: 160px 1px;
-  }
-}
 .alloc-thumb{
   width:74px;
   height:64px;
