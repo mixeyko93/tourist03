@@ -188,6 +188,45 @@ function markBookingDatesButtonRequired(btn){
   }, 900);
   try { btn.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' }); } catch (_) {}
 }
+
+function pluralRu(n, one, few, many){
+  const x = Math.abs(Number(n) || 0) % 100;
+  const y = x % 10;
+  if (x > 10 && x < 20) return many;
+  if (y > 1 && y < 5) return few;
+  if (y === 1) return one;
+  return many;
+}
+
+function parseDateYmdToUtcMidnight(value){
+  if (!value) return NaN;
+  if (typeof value === 'string') {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+    if (m) return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  }
+  const d = new Date(value);
+  const t = d.getTime();
+  if (!Number.isFinite(t)) return NaN;
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+
+function formatBookingStayText(flt){
+  const fromUtc = parseDateYmdToUtcMidnight(flt?.from);
+  const toUtc = parseDateYmdToUtcMidnight(flt?.to);
+  if (!Number.isFinite(fromUtc) || !Number.isFinite(toUtc)) return null;
+  const nights = Math.round((toUtc - fromUtc) / 86400000);
+  if (!Number.isFinite(nights) || nights <= 0) return null;
+  const days = nights + 1;
+  return `${days} ${pluralRu(days, 'день', 'дня', 'дней')} • ${nights} ${pluralRu(nights, 'ночь', 'ночи', 'ночей')}`;
+}
+
+function bookingNightsFromFilter(flt){
+  const fromUtc = parseDateYmdToUtcMidnight(flt?.from);
+  const toUtc = parseDateYmdToUtcMidnight(flt?.to);
+  if (!Number.isFinite(fromUtc) || !Number.isFinite(toUtc)) return 1;
+  const nights = Math.round((toUtc - fromUtc) / 86400000);
+  return (Number.isFinite(nights) && nights > 0) ? nights : 1;
+}
 function housingLabelTitle(housingType){
   const ht = normalizeHousingType(housingType);
   if (ht === 'houses') return 'Дома';
@@ -4503,6 +4542,7 @@ function validateAllocation(items, filter){
   let sumKids = 0;
   let totalPrice = 0;
   let priceUnknown = false;
+  const nights = bookingNightsFromFilter(filter);
 
   (items || []).forEach((it) => {
     const a = Number(it.adults) || 0;
@@ -4516,7 +4556,7 @@ function validateAllocation(items, filter){
     if ((a + k) > cap) itemErrors.push(`Превышена вместимость (${cap})`);
     const sub = calcRoomSubtotal(it.room, a, k);
     if (sub == null) priceUnknown = true;
-    else totalPrice += sub;
+    else totalPrice += sub * nights;
     perItem.push(itemErrors);
   });
 
@@ -5262,19 +5302,20 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
     });
   }
 
-  function render() {
-    if (!listEl) return;
-    listEl.innerHTML = items.map((it, idx) => {
-      const room = it.room || {};
-      const cap = roomCapacity(room);
+	  function render() {
+	    if (!listEl) return;
+	    const nights = bookingNightsFromFilter(f);
+	    listEl.innerHTML = items.map((it, idx) => {
+	      const room = it.room || {};
+	      const cap = roomCapacity(room);
       const photos = Array.isArray(room.photos) ? room.photos : [];
-      const cover = photos.find(p => p && p.cover) || photos[0];
-      const thumb = cover?.url ? `<img class="alloc-thumb" src="${cover.url}" alt="" data-idx="${idx}" style="cursor:pointer">` : `<div class="alloc-thumb ph"></div>`;
-      const sub = calcRoomSubtotal(room, it.adults, it.kids);
-      const subText = (sub == null) ? '—' : formatPriceRub(sub);
-      const total = (Number(it.adults) || 0) + (Number(it.kids) || 0);
-      const bedsInfo = formatBedsInfo(room);
-      const bedsLine = bedsInfo ? `<div class="alloc-meta muted">${bedsInfo}</div>` : '';
+	      const cover = photos.find(p => p && p.cover) || photos[0];
+	      const thumb = cover?.url ? `<img class="alloc-thumb" src="${cover.url}" alt="" data-idx="${idx}" style="cursor:pointer">` : `<div class="alloc-thumb ph"></div>`;
+	      const sub = calcRoomSubtotal(room, it.adults, it.kids);
+	      const subText = (sub == null) ? '—' : formatPriceRub(sub * nights);
+	      const total = (Number(it.adults) || 0) + (Number(it.kids) || 0);
+	      const bedsInfo = formatBedsInfo(room);
+	      const bedsLine = bedsInfo ? `<div class="alloc-meta muted">${bedsInfo}</div>` : '';
       
       return `
         <div class="alloc-item-new" data-idx="${idx}">
@@ -5536,6 +5577,7 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
 			      const canShowSummary = items.length > 0 && v.ok && allocatedGuests === totalGuests && v.totalPrice != null;
 			      if (canShowSummary) {
 	        const needKids = Math.max(0, Number(f.kids) || 0);
+	        const nights = bookingNightsFromFilter(f);
 	        let adultsCost = 0;
 	        let kidsCost = 0;
 	        for (const it of items) {
@@ -5545,24 +5587,27 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
 	          const fixed = Number(it?.room?.price) || 0;
 	          if (fixed > 0) {
 	            const total = a + k;
-	            const adultPart = Math.round(fixed * (a / total));
+	            const perStay = fixed * nights;
+	            const adultPart = Math.round(perStay * (a / total));
 	            adultsCost += adultPart;
-	            kidsCost += (fixed - adultPart);
+	            kidsCost += (perStay - adultPart);
 	            continue;
 	          }
 	          const pa = Number(it?.room?.price_adult) || 0;
 	          const pk = Number(it?.room?.price_child) || 0;
-	          if (pa > 0) adultsCost += a * pa;
-	          if (pk > 0) kidsCost += k * pk;
+	          if (pa > 0) adultsCost += a * pa * nights;
+	          if (pk > 0) kidsCost += k * pk * nights;
 	        }
 
 	        const priceText = formatPriceRub(v.totalPrice);
+	        const stayText = formatBookingStayText(f);
+	        const totalLabel = stayText ? `Итого за ${stayText}` : 'Итого';
 	        const rows = [];
 	        rows.push(`<div class="alloc-row"><div class="muted">Взрослые (${v.sumAdults})</div><div class="alloc-val">${formatPriceRub(adultsCost)}</div></div>`);
 	        if (needKids > 0) {
 	          rows.push(`<div class="alloc-row"><div class="muted">Дети (${v.sumKids})</div><div class="alloc-val">${formatPriceRub(kidsCost)}</div></div>`);
 	        }
-	        rows.push(`<div class="alloc-row" style="font-weight:600;font-size:16px"><div>Итого</div><div class="alloc-val">${priceText}</div></div>`);
+	        rows.push(`<div class="alloc-row" style="font-weight:600;font-size:16px"><div>${totalLabel}</div><div class="alloc-val">${priceText}</div></div>`);
 	        summaryEl.innerHTML = rows.join('');
 	        summaryEl.style.display = '';
 	      } else {
@@ -6092,19 +6137,20 @@ function openAllocationModal({ camp, campId, roomsAvailable, selectedRooms, filt
     onBack,
   };
 
-  function render(){
-    if (!listEl) return;
-    listEl.innerHTML = items.map((it, idx) => {
-      const room = it.room || {};
-      const cap = roomCapacity(room);
+	  function render(){
+	    if (!listEl) return;
+	    const nights = bookingNightsFromFilter(f);
+	    listEl.innerHTML = items.map((it, idx) => {
+	      const room = it.room || {};
+	      const cap = roomCapacity(room);
       const photos = Array.isArray(room.photos) ? room.photos : [];
-      const cover = photos.find(p => p && p.cover) || photos[0];
-      const thumb = cover?.url ? `<img class="alloc-thumb" src="${cover.url}" alt="">` : `<div class="alloc-thumb ph"></div>`;
-      const sub = calcRoomSubtotal(room, it.adults, it.kids);
-      const subText = (sub == null) ? '—' : formatPriceRub(sub);
-      return `
-        <div class="alloc-item" data-idx="${idx}">
-          ${thumb}
+	      const cover = photos.find(p => p && p.cover) || photos[0];
+	      const thumb = cover?.url ? `<img class="alloc-thumb" src="${cover.url}" alt="">` : `<div class="alloc-thumb ph"></div>`;
+	      const sub = calcRoomSubtotal(room, it.adults, it.kids);
+	      const subText = (sub == null) ? '—' : formatPriceRub(sub * nights);
+	      return `
+	        <div class="alloc-item" data-idx="${idx}">
+	          ${thumb}
           <div class="alloc-main">
             <div class="alloc-name">${room.name || room.room_type || 'Апартамент'}</div>
             <div class="alloc-meta muted">до ${cap} гостей • ${subText}</div>
@@ -6195,8 +6241,8 @@ function openAllocationModal({ camp, campId, roomsAvailable, selectedRooms, filt
     });
   }
 
-  function updateSummary(){
-    const v = validateAllocation(items, f);
+	  function updateSummary(){
+	    const v = validateAllocation(items, f);
     if (hintEl) {
       const extra = [];
       (v.perItem || []).forEach((errs, idx) => {
@@ -6206,17 +6252,19 @@ function openAllocationModal({ camp, campId, roomsAvailable, selectedRooms, filt
       });
       hintEl.textContent = [...v.errors, ...extra].filter(Boolean).join('. ');
     }
-	    if (summaryEl) {
-	      const canShowSummary = items.length > 0 && v.totalPrice != null;
-	      if (canShowSummary) {
-	        const priceText = formatPriceRub(v.totalPrice);
-	        summaryEl.innerHTML = `
-	          <div class="alloc-row"><div class="muted">Взрослые</div><div class="alloc-val">${v.sumAdults}</div></div>
-	          <div class="alloc-row"><div class="muted">Дети</div><div class="alloc-val">${v.sumKids}</div></div>
-	          <div class="alloc-row"><div class="muted">Итого</div><div class="alloc-val">${priceText}</div></div>
-	        `;
-	        summaryEl.style.display = '';
-	      } else {
+		    if (summaryEl) {
+		      const canShowSummary = items.length > 0 && v.totalPrice != null;
+		      if (canShowSummary) {
+		        const priceText = formatPriceRub(v.totalPrice);
+		        const stayText = formatBookingStayText(f);
+		        const totalLabel = stayText ? `Итого за ${stayText}` : 'Итого';
+		        summaryEl.innerHTML = `
+		          <div class="alloc-row"><div class="muted">Взрослые</div><div class="alloc-val">${v.sumAdults}</div></div>
+		          <div class="alloc-row"><div class="muted">Дети</div><div class="alloc-val">${v.sumKids}</div></div>
+		          <div class="alloc-row"><div class="muted">${totalLabel}</div><div class="alloc-val">${priceText}</div></div>
+		        `;
+		        summaryEl.style.display = '';
+		      } else {
 	        summaryEl.innerHTML = '';
 	        summaryEl.style.display = 'none';
 	      }
