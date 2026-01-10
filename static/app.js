@@ -2594,6 +2594,9 @@ function openLogin(){
         </label>
       </div>
       <div class="auth-error" id="authError" style="display:none;"></div>
+      <div class="auth-actions" id="loginNotFoundActions" style="display:none;grid-template-columns:1fr">
+        <button class="button primary" id="l_register">Регистрация</button>
+      </div>
       <div class="auth-actions">
         <button class="button ghost" id="l_cancel">Отмена</button>
         <button class="button primary" id="l_start">Получить код</button>
@@ -2602,10 +2605,30 @@ function openLogin(){
     </div>
   `);
 
-  attachPhoneAutoPrefix(document.getElementById('l_phone'), { requireRuMobile9: true });
+  const phoneInput = document.getElementById('l_phone');
+  const notFoundActions = document.getElementById('loginNotFoundActions');
+  const regBtn = document.getElementById('l_register');
+
+  attachPhoneAutoPrefix(phoneInput, { requireRuMobile9: true });
   document.getElementById('l_cancel').onclick = closeModal;
+
+  if (phoneInput) {
+    phoneInput.addEventListener('input', () => {
+      showAuthError('');
+      if (notFoundActions) notFoundActions.style.display = 'none';
+    });
+  }
+
+  if (regBtn) {
+    regBtn.onclick = () => {
+      const phone = (phoneInput?.value || '').trim();
+      openRegister({ phone });
+    };
+  }
+
   document.getElementById('l_start').onclick = async () => {
     showAuthError('');
+    if (notFoundActions) notFoundActions.style.display = 'none';
     const phone = document.getElementById('l_phone').value.trim();
     if (!phone) { showAuthError('Введите телефон'); return; }
     if (!isRuMobilePhoneComplete(phone)) { showAuthError('Телефон должен начинаться с +79 (мобильный номер РФ)'); return; }
@@ -2616,7 +2639,14 @@ function openLogin(){
     });
     if (!res.ok) {
       const err = await res.json().catch(()=>({}));
-      showAuthError(err.detail || 'Ошибка: не удалось отправить код');
+      const detail = String(err.detail || err.message || '').trim();
+      const isNotFound = res.status === 404 || /не\s*найден/i.test(detail);
+      if (isNotFound) {
+        showAuthError('Пользователь не найден. Проверьте введённый номер или зарегистрируйтесь.');
+        if (notFoundActions) notFoundActions.style.display = 'grid';
+      } else {
+        showAuthError(detail || 'Ошибка: не удалось отправить код');
+      }
       return;
     }
     showLoginVerify(phone);
