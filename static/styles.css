@@ -315,8 +315,12 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   padding:18px 0;
-  align-items:flex-start;
+  display:flex;
+  align-items:center;         /* center small modals */
   justify-content:center;
+}
+.modal.is-tall{
+  align-items:flex-start;     /* but start from top for tall content */
 }
 .modal.show{display:flex; animation:fadeIn .15s ease;}
 .modal.auth-modal{z-index:999 !important;}

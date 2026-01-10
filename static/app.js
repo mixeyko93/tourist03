@@ -894,16 +894,67 @@ function formatPhoneRu(phone){
 // === showModal / closeModal и формы регистрации/входа (как были) ===
 const modal = document.getElementById('modal');
 const modalCard = document.getElementById('modalCard');
+
+function updateModalTallClass(){
+  if (!modal || !modalCard) return;
+  const vh = window.innerHeight || document.documentElement?.clientHeight || 0;
+  if (!vh) return;
+  // modal has vertical padding (top+bottom) in CSS
+  const available = vh - 36;
+  const h = modalCard.scrollHeight || 0;
+  modal.classList.toggle('is-tall', h > available);
+}
+
 function showModal(html){
   try { delete modalCard.dataset.view; } catch (_) {}
   try { modal.classList.remove('auth-modal'); } catch (_) {}
   modalCard.innerHTML = html;
   modal.style.display = 'flex';
+  try { modal.classList.add('show'); } catch (_) {}
+  try {
+    if (modalCard.__ro && typeof modalCard.__ro.disconnect === 'function') modalCard.__ro.disconnect();
+    modalCard.__ro = null;
+  } catch (_) {}
+  try {
+    if (modalCard.__onResize) window.removeEventListener('resize', modalCard.__onResize);
+    modalCard.__onResize = null;
+  } catch (_) {}
+  updateModalTallClass();
+  if (typeof ResizeObserver === 'function') {
+    try {
+      modalCard.__ro = new ResizeObserver(() => updateModalTallClass());
+      modalCard.__ro.observe(modalCard);
+    } catch (_) {}
+  }
+  try {
+    modalCard.__onResize = () => updateModalTallClass();
+    window.addEventListener('resize', modalCard.__onResize, { passive: true });
+  } catch (_) {}
 }
 function showAuthModal(html){ 
   modalCard.innerHTML = html; 
   modal.style.display = 'flex'; 
   modal.classList.add('auth-modal');
+  try { modal.classList.add('show'); } catch (_) {}
+  try {
+    if (modalCard.__ro && typeof modalCard.__ro.disconnect === 'function') modalCard.__ro.disconnect();
+    modalCard.__ro = null;
+  } catch (_) {}
+  try {
+    if (modalCard.__onResize) window.removeEventListener('resize', modalCard.__onResize);
+    modalCard.__onResize = null;
+  } catch (_) {}
+  updateModalTallClass();
+  if (typeof ResizeObserver === 'function') {
+    try {
+      modalCard.__ro = new ResizeObserver(() => updateModalTallClass());
+      modalCard.__ro.observe(modalCard);
+    } catch (_) {}
+  }
+  try {
+    modalCard.__onResize = () => updateModalTallClass();
+    window.addEventListener('resize', modalCard.__onResize, { passive: true });
+  } catch (_) {}
 }
 
 function showAuthChoiceModal({ title = 'Необходима авторизация', subtitle = '', onCancel, onLogin, onRegister } = {}){
@@ -2022,6 +2073,8 @@ function closeModal(){
 	if (modal) {
     modal.style.display = 'none';
     modal.classList.remove('auth-modal');
+    modal.classList.remove('show');
+    modal.classList.remove('is-tall');
   }
 	if (card) {
 		  // снимаем ResizeObserver, если он был повешен
@@ -2029,6 +2082,10 @@ function closeModal(){
 		    try { card.__ro.disconnect(); } catch(_) {}
 		    card.__ro = null;
 		  }
+      if (card.__onResize) {
+        try { window.removeEventListener('resize', card.__onResize); } catch (_) {}
+        card.__onResize = null;
+      }
 		  try { delete card.dataset.view; } catch(_) {}
 		  card.innerHTML = '';
 		  card.classList.remove('booking-shell');  // снимаем «узкую» оболочку
