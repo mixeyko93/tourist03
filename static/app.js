@@ -5207,9 +5207,15 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
 	    const room = it.room || {};
 	    const cap = roomCapacity(room);
 	    const bedsInfo = formatBedsInfo(room);
+	    const priceAdult = Number(room.price_adult) || 0;
+	    const priceChild = Number(room.price_child) || 0;
+	    const priceFixed = Number(room.price) || 0;
+	    const adultRateText = priceAdult > 0 ? `${formatPriceRub(priceAdult)}/сутки` : '';
+	    const childRateText = priceChild > 0 ? `${formatPriceRub(priceChild)}/сутки` : '';
+	    const fixedRateText = (!adultRateText && !childRateText && priceFixed > 0) ? `${formatPriceRub(priceFixed)}/сутки (за дом)` : '';
 
-    const sheet = document.createElement('div');
-    sheet.className = 'modal show';
+	    const sheet = document.createElement('div');
+	    sheet.className = 'modal show';
 
 	    sheet.innerHTML = `
 	      <div class="modal-card" style="width:92vw;max-width:380px;margin:0 auto;border-radius:18px">
@@ -5218,18 +5224,20 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
 	          ${room.name || room.room_type || 'Апартамент'} (до ${cap} гостей)
 	        </div>
 	        ${bedsInfo ? `<div style="font-size:12px;color:#9ca3af;margin-bottom:16px;text-align:center">Спальные места: ${bedsInfo}</div>` : ''}
-	
+
 	        <div style="display:grid;gap:12px;margin-bottom:18px">
-	          <div class="bk-field" style="display:grid;grid-template-columns:1fr auto;align-items:center;gap:12px">
+	          <div class="bk-field" style="display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:12px">
 	            <span style="color:#9aa3af;font-size:13px">Взрослые</span>
+	            <span class="muted" style="margin:0;font-size:12px;justify-self:end">${adultRateText || fixedRateText || '&nbsp;'}</span>
 	            <select id="guestAdults" class="bk-select" style="width:100px"></select>
 	          </div>
-          <div class="bk-field" style="display:grid;grid-template-columns:1fr auto;align-items:center;gap:12px">
-            <span style="color:#9aa3af;font-size:13px">Дети</span>
-            <select id="guestKids" class="bk-select" style="width:100px"></select>
-          </div>
-          <div class="muted" style="text-align:center;font-size:12px">Дети размещаются только с минимум одним взрослым</div>
-        </div>
+	          <div class="bk-field" style="display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:12px">
+	            <span style="color:#9aa3af;font-size:13px">Дети</span>
+	            <span class="muted" style="margin:0;font-size:12px;justify-self:end">${childRateText || '&nbsp;'}</span>
+	            <select id="guestKids" class="bk-select" style="width:100px"></select>
+	          </div>
+	          <div class="muted" style="text-align:center;font-size:12px">Дети размещаются только с минимум одним взрослым</div>
+	        </div>
 
         <div style="display:grid;gap:10px">
           <button class="button primary" id="guestApply" style="width:100%">Применить</button>
