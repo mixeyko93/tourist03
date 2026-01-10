@@ -309,34 +309,20 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 .modal{
   display:none; position:fixed; inset:0;
   background:var(--modal-overlay);
-  z-index:50;
-  /* Overlay is positioning container only, no scroll */
-  overflow:hidden;
-}
-.modal.show{display:flex; animation:fadeIn .15s ease;}
-.modal.auth-modal{z-index:999 !important;}
-@keyframes fadeIn{from{opacity:0} to{opacity:1}}
-
-/* Inner scroll wrapper - this is the actual scroll container */
-.modal-scroll{
-  position:absolute;
-  inset:0;
+  z-index:5000; /* above tabbar/map UI */
+  /* Single scroll container for modals (WebView-safe) */
   overflow-x:hidden;
   overflow-y:auto;
-  overscroll-behavior:contain;
   -webkit-overflow-scrolling:touch;
-  /* Flexbox for centering */
-  display:flex;
-  flex-direction:column;
+  overscroll-behavior:contain;
+  padding:18px 0;
   align-items:center;
   justify-content:center;
-  padding:18px 0;
-  /* Fix iOS scroll edge detection */
-  min-height:calc(100% + 1px);
 }
-.modal.is-tall .modal-scroll{
-  justify-content:flex-start;
-}
+.modal.show{display:flex; animation:fadeIn .15s ease;}
+.modal.is-tall{ align-items:flex-start; }
+.modal.auth-modal{z-index:6000 !important;}
+@keyframes fadeIn{from{opacity:0} to{opacity:1}}
 
 .modal-card{
   background:var(--modal-bg);

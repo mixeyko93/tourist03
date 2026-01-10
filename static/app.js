@@ -4602,7 +4602,8 @@ function openPhotoGallery(photos, roomName) {
   const modal = document.createElement('div');
   modal.className = 'modal';
   modal.style.display = 'flex';
-  modal.style.zIndex = '100';
+  // keep above tabbar/modals
+  modal.style.zIndex = '7000';
 
   const card = document.createElement('div');
   card.style.cssText = `
