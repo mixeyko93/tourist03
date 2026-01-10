@@ -74,10 +74,10 @@ html, body{
   background:var(--tg-bg);
   color:var(--tg-text);
   font-family:system-ui,-apple-system,Roboto,sans-serif;
-  overscroll-behavior:none;
+  overscroll-behavior:auto;
   overflow:hidden;
   overflow-x:hidden;
-  touch-action:manipulation;
+  touch-action:auto;
 }
 *{box-sizing:border-box;}
 .tg-app{position:fixed; inset:0; display:flex; flex-direction:column; overflow:hidden;}
@@ -122,6 +122,8 @@ html, body{
   height:100%;
   overflow:auto;
   padding-bottom:calc(110px + var(--tabbar-offset));
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 .account-shell{
   flex:1;
@@ -322,6 +324,8 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   max-height:85vh; 
   overflow-y:auto;
   overflow-x:hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
   box-shadow:0 6px 25px rgba(0,0,0,.4);
   transform:scale(.97); animation:scaleIn .2s ease forwards;
   box-sizing:border-box;               /* ← фикс: паддинги учитываются во width */
