@@ -1563,6 +1563,56 @@ function showSnackbar({ message, actionText, onAction, timeoutMs = 4500 } = {}){
   if (timeoutMs > 0) setTimeout(close, timeoutMs);
 }
 
+function showDraftSavedCartToast({ timeoutMs = 1800 } = {}){
+  const cartBtn = document.getElementById('openBookingDraft');
+  const host = cartBtn?.parentElement;
+  if (!cartBtn || !host) {
+    showSnackbar({ message: 'Черновик бронирования сохранён', actionText: 'Продолжить', onAction: () => openBookingDraft(), timeoutMs });
+    return;
+  }
+
+  // ensure single instance
+  let toast = document.getElementById('bookingDraftToast');
+  if (!toast) {
+    toast = document.createElement('button');
+    toast.type = 'button';
+    toast.id = 'bookingDraftToast';
+    toast.className = 'map-btn draft-toast';
+    toast.setAttribute('aria-label', 'Черновик сохранён. Нажмите, чтобы продолжить.');
+    host.appendChild(toast);
+  }
+
+  if (toast.__timer) { try { clearTimeout(toast.__timer); } catch (_) {} }
+
+  const restoreCart = () => {
+    cartBtn.style.visibility = '';
+    cartBtn.style.pointerEvents = '';
+  };
+
+  const close = () => {
+    toast.classList.remove('show');
+    toast.classList.add('hide');
+    restoreCart();
+  };
+
+  toast.textContent = 'Черновик сохранён';
+  toast.onclick = (e) => {
+    try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+    close();
+    try { openBookingDraft({ dontChangeTab: true }); } catch (_) { try { openBookingDraft(); } catch (_) {} }
+  };
+
+  // swap button → toast
+  cartBtn.style.visibility = 'hidden';
+  cartBtn.style.pointerEvents = 'none';
+  toast.classList.remove('hide');
+  requestAnimationFrame(() => toast.classList.add('show'));
+
+  toast.__timer = setTimeout(() => {
+    close();
+  }, Math.max(500, Number(timeoutMs) || 1800));
+}
+
 async function openBookingDraft(opts = {}){
   let d = window.__bookingDraft || loadBookingDraft();
 
@@ -2224,7 +2274,7 @@ function closeModal(){
 		  card.classList.remove('details');       // снимаем «детали», если открывали карточку номера
 		 }
   if (shouldDraftToast) {
-    showSnackbar({ message: 'Черновик бронирования сохранён', actionText: 'Продолжить', onAction: openBookingDraft, timeoutMs: 1800 });
+    showDraftSavedCartToast({ timeoutMs: 1800 });
   }
   window.__suppressDraftToastOnce = false;
 }
