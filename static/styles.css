@@ -608,6 +608,11 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 .fs-counter{ grid-column:1 / -1; justify-self:center; color:#fff; font-size:13px; opacity:.9; }
 .fs-actions .button{ width:100%; height:44px; border-radius:12px; }
 .fs-actions{ grid-column:1 / -1; display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.fs-actions .button:only-child{
+  grid-column:1 / -1;
+  justify-self:center;
+  width:min(420px, 92vw);
+}
 
 
 
@@ -723,6 +728,14 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 .bk-select.bk-error{
   border-color:#ef4444 !important;
   box-shadow:0 0 0 1px rgba(239,68,68,0.55), 0 0 12px rgba(239,68,68,0.35);
+}
+.bk-input.bk-attn{
+  animation:bk-attn-pulse .9s ease-out 1;
+}
+@keyframes bk-attn-pulse{
+  0%{transform:translateZ(0) scale(1);}
+  35%{transform:translateZ(0) scale(1.02);}
+  100%{transform:translateZ(0) scale(1);}
 }
 
 /* Кнопка автоподбора — голубая рамка (телеграм-стиль) */

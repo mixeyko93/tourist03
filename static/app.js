@@ -177,6 +177,17 @@ function isBookingFilterReady(flt){
   if (kids > 0 && adults < 1) return false;
   return true;
 }
+
+function markBookingDatesButtonRequired(btn){
+  if (!btn) return;
+  try { hapticPulse('selection'); } catch (_) {}
+  btn.classList.add('bk-error', 'bk-attn');
+  // Убираем только анимацию, рамку оставляем до исправления
+  window.setTimeout(() => {
+    try { btn.classList.remove('bk-attn'); } catch (_) {}
+  }, 900);
+  try { btn.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' }); } catch (_) {}
+}
 function housingLabelTitle(housingType){
   const ht = normalizeHousingType(housingType);
   if (ht === 'houses') return 'Дома';
@@ -1615,8 +1626,8 @@ function openEmptyBookingConfirmationModal(){
   const shell = document.getElementById('modalCard');
   if (shell) { shell.classList.remove('booking-shell'); shell.classList.remove('details'); }
 
-  showModal(`
-    <div class="alloc-card">
+	  showModal(`
+	    <div class="alloc-card">
       <div class="accom-head">
         <div class="accom-title">Лист бронирования</div>
         <div class="accom-sub">
@@ -1630,19 +1641,34 @@ function openEmptyBookingConfirmationModal(){
 
       <button class="button ghost alloc-autopick" id="confirmAutoPick" style="width:100%;margin-top:12px;">Подбор апартаментов для вас</button>
 
-      <div class="alloc-actions">
-        <button class="button ghost" id="confirmBack">Назад</button>
-        <button class="button" style="background:#22c55e;border-color:#22c55e;color:#fff;font-weight:600" id="confirmSubmit" disabled>БРОНИРУЮ!</button>
-      </div>
-    </div>
-  `);
+	      <div class="alloc-actions">
+	        <button class="button ghost" id="confirmBack">Назад</button>
+	        <button class="button is-disabled" style="background:#22c55e;border-color:#22c55e;color:#fff;font-weight:600" id="confirmSubmit" aria-disabled="true">БРОНИРУЮ!</button>
+	      </div>
+	    </div>
+	  `);
 
-  const hintEl = document.getElementById('confirmHint');
-  const editDatesBtn = document.getElementById('confirmEditDates');
-  const backBtn = document.getElementById('confirmBack');
-  const autoPickBtn = document.getElementById('confirmAutoPick');
+	  const hintEl = document.getElementById('confirmHint');
+	  const editDatesBtn = document.getElementById('confirmEditDates');
+	  const backBtn = document.getElementById('confirmBack');
+	  const autoPickBtn = document.getElementById('confirmAutoPick');
+	  const submitBtn = document.getElementById('confirmSubmit');
 
-  if (backBtn) backBtn.onclick = closeModal;
+	  if (backBtn) backBtn.onclick = closeModal;
+
+	  if (submitBtn) {
+	    submitBtn.onclick = () => {
+	      const cur = window.__bookingFilter || {};
+	      if (!isBookingFilterReady(cur)) {
+	        markBookingDatesButtonRequired(editDatesBtn);
+	        if (hintEl) {
+	          hintEl.textContent = 'Укажите даты и количество гостей, чтобы продолжить бронирование.';
+	        }
+	        return;
+	      }
+	      showSnackbar({ message: 'Выберите базу отдыха на карте и добавьте апартаменты в корзину.', timeoutMs: 2400 });
+	    };
+	  }
 
   if (autoPickBtn) {
     autoPickBtn.onclick = () => {
@@ -3312,8 +3338,9 @@ function applyTwoColScale(root){
 
 
 // === Полноэкранная галерея (свайп + стрелки + зум + пан + кнопки) ===
-function openFullscreenGallery(pics, startIndex=0){
+function openFullscreenGallery(pics, startIndex=0, opts = {}){
   if (!Array.isArray(pics) || pics.length === 0) return;
+  const showBook = opts && opts.showBook === false ? false : true;
 
   const wrap = document.createElement('div');
   wrap.className = 'fs-modal';
@@ -3339,7 +3366,7 @@ function openFullscreenGallery(pics, startIndex=0){
     <div class="fs-ui">
       <div class="fs-counter" id="fsCounter">${Math.min(startIndex+1,pics.length)}/${pics.length}</div>
       <div class="fs-actions">
-        <button class="button" style="background:#22c55e;border-color:#22c55e;color:#fff" id="fsBook">Забронировать</button>
+        ${showBook ? `<button class="button" style="background:#22c55e;border-color:#22c55e;color:#fff" id="fsBook">Забронировать</button>` : ''}
         <button class="button ghost" id="fsBack">Назад</button>
       </div>
     </div>
@@ -3556,10 +3583,11 @@ if (fsNext) fsNext.onclick = () => { hapticPulse('light', 12); fsThNext(); };
     }
   }, {passive:true});
 
-  // Кнопки
-    wrap.querySelector('#fsBook').onclick = ()=> { hapticPulse('soft', 14); closeFullscreen(); openBookingFilterWithAuth(window.__currentCampId); };
-    wrap.querySelector('#fsBack').onclick  = ()=> { hapticPulse('selection', 10); closeFullscreen(); };
-    wrap.addEventListener('click', (e)=>{ if (e.target === wrap) closeFullscreen(); });
+	  // Кнопки
+	    const bookBtn = wrap.querySelector('#fsBook');
+	    if (bookBtn) bookBtn.onclick = ()=> { hapticPulse('soft', 14); closeFullscreen(); openBookingFilterWithAuth(window.__currentCampId); };
+	    wrap.querySelector('#fsBack').onclick  = ()=> { hapticPulse('selection', 10); closeFullscreen(); };
+	    wrap.addEventListener('click', (e)=>{ if (e.target === wrap) closeFullscreen(); });
 
   function closeFullscreen(){
     document.removeEventListener('keydown', fsKeyHandler);
@@ -5274,17 +5302,16 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
       };
     });
 
-    // Обработчики кликов по фото (открытие галереи)
+    // Обработчики кликов по фото — открываем точно так же, как в карточке апартамента (полноэкранка)
     listEl.querySelectorAll('.alloc-thumb[data-idx]').forEach(img => {
-      img.onclick = () => {
+      img.onclick = (e) => {
+        try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
         const idx = Number(img.getAttribute('data-idx'));
-        if (Number.isFinite(idx) && items[idx]) {
-          const room = items[idx].room || {};
-          const photos = Array.isArray(room.photos) ? room.photos : [];
-          if (photos.length > 0) {
-            openPhotoGallery(photos, room.name);
-          }
-        }
+        if (!Number.isFinite(idx) || !items[idx]) return;
+        const room = items[idx].room || {};
+        const photos = Array.isArray(room.photos) ? room.photos : [];
+        const pics = photos.map(p => (p && typeof p === 'object') ? p.url : p).filter(Boolean);
+        if (pics.length > 0) openFullscreenGallery(pics, 0, { showBook: false });
       };
     });
 
@@ -5294,7 +5321,16 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
         const idx = Number(nameEl.getAttribute('data-idx'));
         if (Number.isFinite(idx) && items[idx]) {
           const room = items[idx].room || {};
-          openRoomDetailsViewOnly(room, camp);
+          openRoomDetails(room, camp, {
+            viewOnly: true,
+            onBack: () => {
+              try {
+                const ctx = window.__bookingConfirmationModalContext;
+                if (ctx && typeof ctx.reopen === 'function') { ctx.reopen(); return; }
+              } catch (_) {}
+              try { window.__suppressDraftToastOnce = true; openBookingDraft({ dontChangeTab: true }); } catch (_) {}
+            },
+          });
         }
       };
     });
@@ -5496,22 +5532,50 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
 		      }
 		    }
 		    
-		    if (summaryEl) {
-		      const canShowSummary = items.length > 0 && v.ok && allocatedGuests === totalGuests && v.totalPrice != null;
-		      if (canShowSummary) {
+			    if (summaryEl) {
+			      const canShowSummary = items.length > 0 && v.ok && allocatedGuests === totalGuests && v.totalPrice != null;
+			      if (canShowSummary) {
+	        const needKids = Math.max(0, Number(f.kids) || 0);
+	        let adultsCost = 0;
+	        let kidsCost = 0;
+	        for (const it of items) {
+	          const a = Math.max(0, Number(it?.adults) || 0);
+	          const k = Math.max(0, Number(it?.kids) || 0);
+	          if ((a + k) <= 0) continue;
+	          const fixed = Number(it?.room?.price) || 0;
+	          if (fixed > 0) {
+	            const total = a + k;
+	            const adultPart = Math.round(fixed * (a / total));
+	            adultsCost += adultPart;
+	            kidsCost += (fixed - adultPart);
+	            continue;
+	          }
+	          const pa = Number(it?.room?.price_adult) || 0;
+	          const pk = Number(it?.room?.price_child) || 0;
+	          if (pa > 0) adultsCost += a * pa;
+	          if (pk > 0) kidsCost += k * pk;
+	        }
+
 	        const priceText = formatPriceRub(v.totalPrice);
-	        summaryEl.innerHTML = `
-	          <div class="alloc-row"><div class="muted">Взрослые</div><div class="alloc-val">${v.sumAdults}</div></div>
-	          <div class="alloc-row"><div class="muted">Дети</div><div class="alloc-val">${v.sumKids}</div></div>
-	          <div class="alloc-row" style="font-weight:600;font-size:16px"><div>Итого</div><div class="alloc-val">${priceText}</div></div>
-	        `;
+	        const rows = [];
+	        rows.push(`<div class="alloc-row"><div class="muted">Взрослые (${v.sumAdults})</div><div class="alloc-val">${formatPriceRub(adultsCost)}</div></div>`);
+	        if (needKids > 0) {
+	          rows.push(`<div class="alloc-row"><div class="muted">Дети (${v.sumKids})</div><div class="alloc-val">${formatPriceRub(kidsCost)}</div></div>`);
+	        }
+	        rows.push(`<div class="alloc-row" style="font-weight:600;font-size:16px"><div>Итого</div><div class="alloc-val">${priceText}</div></div>`);
+	        summaryEl.innerHTML = rows.join('');
 	        summaryEl.style.display = '';
 	      } else {
 	        summaryEl.innerHTML = '';
-		        summaryEl.style.display = 'none';
-		      }
-		    }
-	    if (submitBtn) submitBtn.disabled = !isFilterReady || !v.ok || allocatedGuests !== totalGuests;
+			        summaryEl.style.display = 'none';
+			      }
+			    }
+	    if (editDatesBtn && isFilterReady) editDatesBtn.classList.remove('bk-error');
+	    if (submitBtn && !submitBtn.disabled) {
+	      const blocked = !isFilterReady || !v.ok || allocatedGuests !== totalGuests;
+	      submitBtn.classList.toggle('is-disabled', blocked);
+	      submitBtn.setAttribute('aria-disabled', blocked ? 'true' : 'false');
+	    }
 	    updateAutoPickButton();
 	    if (addRoomBtn) {
 	      isAllocationComplete = items.length > 0 && v.ok && allocatedGuests === totalGuests;
@@ -5905,12 +5969,17 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
     closeModal();
   };
 
-  document.getElementById('confirmSubmit').onclick = async () => {
-    const v = validateAllocation(items, f);
-    if (!v.ok) { updateSummary(); return; }
-    if (!getAuth() || !getAuth().token) {
-      window.__postAuthAction = () => { try { openBookingDraft(); } catch (_) {} };
-      showAuthChoiceModal({
+	  document.getElementById('confirmSubmit').onclick = async () => {
+	    if (!isBookingFilterReady(f)) {
+	      markBookingDatesButtonRequired(editDatesBtn);
+	      updateSummary();
+	      return;
+	    }
+	    const v = validateAllocation(items, f);
+	    if (!v.ok) { updateSummary(); return; }
+	    if (!getAuth() || !getAuth().token) {
+	      window.__postAuthAction = () => { try { openBookingDraft(); } catch (_) {} };
+	      showAuthChoiceModal({
         subtitle: 'Для отправки заявки на бронирование необходимо авторизоваться.',
         onCancel: () => {},
         onLogin: () => { openLogin(); },
@@ -6473,6 +6542,7 @@ function openRoomDetailsFromCart(room, camp, context) {
 }
 
 function openRoomDetails(room, camp, context) {
+  const viewOnly = !!(context && context.viewOnly);
   const photos = Array.isArray(room.photos) ? room.photos : [];
   const pics = photos.map(p => p.url);
   const cap = roomCapacity(room);
@@ -6616,29 +6686,35 @@ function openRoomDetails(room, camp, context) {
   // Сохраняем в стек для возврата из фильтра
   pushNavStack({ type: 'roomDetails', room, camp, context: context || null });
 
-  // Обработчик кнопки "Выбрать" — проверяем авторизацию и показываем выбор Вход/Регистрация
-  document.getElementById('roomDetailBookBtn').onclick = async () => {
-    const campData = camp || await getCampQuick(camp.id);
-    
-    // Используем текущий фильтр или создаём базовый с 2 взрослыми
-    const filter = window.__bookingFilter || {
-      from: null,
-      to: null,
-      adults: 2,
-      kids: 0,
-      total: 2,
-      allowSplitRooms: false
+  // В корзине/режиме просмотра (viewOnly) не показываем кнопки "Выбрать/Забронировать"
+  const bookBtn = document.getElementById('roomDetailBookBtn');
+  if (viewOnly) {
+    if (bookBtn) bookBtn.style.display = 'none';
+  } else if (bookBtn) {
+    // Обработчик кнопки "Выбрать" — проверяем авторизацию и показываем выбор Вход/Регистрация
+    bookBtn.onclick = async () => {
+      const campData = camp || await getCampQuick(camp.id);
+      
+      // Используем текущий фильтр или создаём базовый с 2 взрослыми
+      const filter = window.__bookingFilter || {
+        from: null,
+        to: null,
+        adults: 2,
+        kids: 0,
+        total: 2,
+        allowSplitRooms: false
+      };
+      
+      // Открываем окно подтверждения бронирования напрямую
+      openBookingConfirmationModal({
+        camp: campData || camp,
+        campId: camp.id,
+        rooms: [room],
+        filter: filter,
+        onBack: () => openRoomDetails(room, camp, context),
+      });
     };
-    
-    // Открываем окно подтверждения бронирования напрямую
-    openBookingConfirmationModal({
-      camp: campData || camp,
-      campId: camp.id,
-      rooms: [room],
-      filter: filter,
-      onBack: () => openRoomDetails(room, camp, context),
-    });
-  };
+  }
 
   // Обработчик кнопки "Назад"
   const backBtn = document.getElementById('roomDetailsBack');
@@ -6646,6 +6722,10 @@ function openRoomDetails(room, camp, context) {
     backBtn.onclick = (e) => {
       try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
       const ctx = context || null;
+      if (ctx && typeof ctx.onBack === 'function') {
+        try { ctx.onBack(); } catch (_) {}
+        return;
+      }
       if (ctx && Array.isArray(ctx.rooms)) {
         const onlyOne = ctx.rooms.length === 1;
         const destTypeName = ctx.typeName || (room.class || room.name || 'Апартаменты');
@@ -6742,7 +6822,7 @@ function openRoomDetails(room, camp, context) {
 
       // Клик по изображению — полноэкранная галерея
       imgs.forEach((img, idx) => {
-        img.addEventListener('click', ()=> openFullscreenGallery(pics, idx));
+        img.addEventListener('click', ()=> openFullscreenGallery(pics, idx, { showBook: !viewOnly }));
       });
     }
 
@@ -6750,11 +6830,11 @@ function openRoomDetails(room, camp, context) {
   } else if (pics.length === 1) {
     // Одно фото - клик открывает полноэкранную галерею
     const img = root ? root.querySelector('.camp-gal img') : null;
-    if (img) {
-      img.style.cursor = 'pointer';
-      img.addEventListener('click', ()=> openFullscreenGallery(pics, 0));
+      if (img) {
+        img.style.cursor = 'pointer';
+      img.addEventListener('click', ()=> openFullscreenGallery(pics, 0, { showBook: !viewOnly }));
+      }
     }
-  }
 
   // Масштабирование
   const modalRoot = document.getElementById('modal');
