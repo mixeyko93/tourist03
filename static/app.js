@@ -915,17 +915,24 @@ function renderAccount(){
   user.style.display  = profile ? 'block' : 'none';
   if (actions) actions.style.display = profile ? 'block' : 'none';
   if (data) data.style.display = 'none';
+
+  const setGreetingTitle = (text, emoji) => {
+    if (!title) return;
+    title.classList.add('greet-title');
+    title.innerHTML = `<span class="greet-core">${escapeHtml(text)}<span class="greet-emoji" aria-hidden="true">${escapeHtml(emoji)}</span></span>`;
+  };
+
   if (profile) {
     const name = profile.user?.name?.split(' ')[0] || 'гость';
     const hr = new Date().getHours();
     const phrase = hr < 6 ? 'Доброй ночи' : hr < 12 ? 'Доброе утро' : hr < 18 ? 'Добрый день' : 'Добрый вечер';
     const emoji  = hr < 6 ? '🌙' : hr < 12 ? '☀️' : hr < 18 ? '🌤️' : '🌙';
-    if (title) title.textContent = `${phrase}, ${name}! ${emoji}`;
+    setGreetingTitle(`${phrase}, ${name}!`, emoji);
   } else {
     const hr = new Date().getHours();
     const phrase = hr < 6 ? 'Доброй ночи' : hr < 12 ? 'Доброе утро' : hr < 18 ? 'Добрый день' : 'Добрый вечер';
     const emoji  = hr < 6 ? '🌙' : hr < 12 ? '☀️' : hr < 18 ? '🌤️' : '🌙';
-    if (title) title.textContent = `${phrase}! ${emoji}`;
+    setGreetingTitle(`${phrase}!`, emoji);
   }
 }
 
@@ -1693,7 +1700,10 @@ function openEmptyBookingConfirmationModal(){
 	  const autoPickBtn = document.getElementById('confirmAutoPick');
 	  const submitBtn = document.getElementById('confirmSubmit');
 
-	  if (backBtn) backBtn.onclick = closeModal;
+	  if (backBtn) backBtn.onclick = () => {
+	    closeModal();
+	    try { setTabById('tab-map'); } catch (_) {}
+	  };
 
 	  if (submitBtn) {
 	    submitBtn.onclick = () => {
@@ -2294,33 +2304,50 @@ const TERMS_TEXT = `
 Устанавливая галочку «Я согласен(на) с Пользовательским соглашением», Пользователь подтверждает, что прочитал(а), понял(а) и принимает условия настоящего Соглашения.
 `.trim();
 
-function normalizePhoneInputValue(raw){
+function normalizePhoneInputValue(raw, opts){
+  const o = (opts && typeof opts === 'object') ? opts : {};
   const v = String(raw || '');
   const trimmed = v.trim();
   if (!trimmed) return '';
 
   const compact = trimmed.replace(/[^\d+]/g, '');
-  if (compact.startsWith('+')) {
-    const digits = compact.slice(1).replace(/\D/g, '');
-    if (!digits) return '+';
-    // if user typed +8..., normalize to +7...
-    if (digits.startsWith('8')) return '+7' + digits.slice(1);
-    return '+' + digits;
+  const hasPlus = compact.startsWith('+');
+  const digitsOnly = hasPlus ? compact.slice(1).replace(/\D/g, '') : compact.replace(/\D/g, '');
+  if (!digitsOnly) return hasPlus ? '+' : '';
+
+  // default normalization (keep previous behavior)
+  let normalized = '';
+  if (hasPlus) {
+    let d = digitsOnly;
+    if (d.startsWith('8')) d = '7' + d.slice(1);
+    normalized = '+' + d;
+  } else {
+    const d = digitsOnly;
+    if (d.startsWith('8')) normalized = '+7' + d.slice(1);
+    else if (d.startsWith('9')) normalized = '+7' + d;
+    else if (d.startsWith('7')) normalized = '+7' + d.slice(1);
+    else normalized = d;
   }
 
-  const digits = compact.replace(/\D/g, '');
-  if (!digits) return '';
-  if (digits.startsWith('8')) return '+7' + digits.slice(1);
-  if (digits.startsWith('9')) return '+7' + digits;
-  if (digits.startsWith('7')) return '+7' + digits.slice(1);
-  return digits;
+  if (o.requireRuMobile9) {
+    let d = normalized.replace(/[^\d]/g, '');
+    if (!d) return '';
+    if (d.startsWith('8')) d = '7' + d.slice(1);
+    if (d.startsWith('9')) d = '7' + d;
+    if (!d.startsWith('7')) d = '7';
+    // После +7 допускаются только мобильные номера: первая цифра должна быть 9
+    if (d.length >= 2 && d[1] !== '9') d = '7';
+    return '+' + d;
+  }
+
+  return normalized;
 }
 
-function attachPhoneAutoPrefix(input){
+function attachPhoneAutoPrefix(input, opts){
   if (!input || input.__phoneMaskAttached) return;
   input.__phoneMaskAttached = true;
   const handler = () => {
-    const next = normalizePhoneInputValue(input.value);
+    const next = normalizePhoneInputValue(input.value, opts);
     if (next !== input.value) {
       input.value = next;
       try { input.setSelectionRange(next.length, next.length); } catch(_) {}
@@ -2329,6 +2356,11 @@ function attachPhoneAutoPrefix(input){
   input.addEventListener('input', handler);
   input.addEventListener('blur', handler);
   handler();
+}
+
+function isRuMobilePhoneComplete(phone){
+  const v = String(phone || '').trim();
+  return /^\+79\d{9}$/.test(v);
 }
 
 function openTerms(draft){
@@ -2342,14 +2374,14 @@ function openTerms(draft){
       <div id="terms_text" style="white-space:pre-wrap;max-height:55vh;overflow:auto;border:1px solid var(--border-color);border-radius:14px;padding:12px;background:rgba(255,255,255,0.03);font-size:13px;line-height:1.45;"></div>
       <div class="auth-actions">
         <button class="button ghost" id="terms_back">Назад</button>
-        <button class="button primary" id="terms_ok">Понятно</button>
+        <button class="button primary" id="terms_ok">Согласен</button>
       </div>
     </div>
   `);
   const termsEl = document.getElementById('terms_text');
   if (termsEl) termsEl.textContent = TERMS_TEXT;
   document.getElementById('terms_back').onclick = ()=> openRegister(d);
-  document.getElementById('terms_ok').onclick = ()=> openRegister(Object.assign({}, d, { viewed_terms:true }));
+  document.getElementById('terms_ok').onclick = ()=> openRegister(Object.assign({}, d, { viewed_terms:true, accept_terms:true }));
 }
 
 function openRegister(draft){
@@ -2390,7 +2422,7 @@ function openRegister(draft){
     </div>
   `);
 
-  attachPhoneAutoPrefix(document.getElementById('reg_phone'));
+  attachPhoneAutoPrefix(document.getElementById('reg_phone'), { requireRuMobile9: true });
   const link = document.getElementById('reg_terms_link');
   if (link) link.onclick = () => {
     const name  = document.getElementById('reg_name').value.trim();
@@ -2407,6 +2439,7 @@ function openRegister(draft){
     const email = document.getElementById('reg_email').value.trim();
     const accept_terms = document.getElementById('reg_terms').checked;
     if (!name || !phone) { showAuthError('Заполните имя и телефон'); return; }
+    if (!isRuMobilePhoneComplete(phone)) { showAuthError('Телефон должен начинаться с +79 (мобильный номер РФ)'); return; }
     if (!accept_terms) { showAuthError('Нужно принять пользовательское соглашение'); return; }
 
     const res = await fetch('/api/auth/register/start', {
@@ -2435,7 +2468,7 @@ function showRegisterVerifyPhone(phone, email){
       <div class="auth-fields">
         <label class="auth-field">
           <span>Код из SMS</span>
-          <input id="v_phone_code" inputmode="numeric" placeholder="${TEST_VERIFY_CODE}">
+          <input id="v_phone_code" class="auth-code" inputmode="numeric" autocomplete="one-time-code" placeholder="1234">
         </label>
       </div>
       <div class="auth-error" id="authError" style="display:none;"></div>
@@ -2487,7 +2520,7 @@ function showRegisterVerifyEmail(phone, email){
       <div class="auth-fields">
         <label class="auth-field">
           <span>Код из письма</span>
-          <input id="v_email_code" inputmode="numeric" placeholder="${TEST_VERIFY_CODE}">
+          <input id="v_email_code" class="auth-code" inputmode="numeric" autocomplete="one-time-code" placeholder="1234">
         </label>
       </div>
       <div class="auth-error" id="authError" style="display:none;"></div>
@@ -2569,12 +2602,13 @@ function openLogin(){
     </div>
   `);
 
-  attachPhoneAutoPrefix(document.getElementById('l_phone'));
+  attachPhoneAutoPrefix(document.getElementById('l_phone'), { requireRuMobile9: true });
   document.getElementById('l_cancel').onclick = closeModal;
   document.getElementById('l_start').onclick = async () => {
     showAuthError('');
     const phone = document.getElementById('l_phone').value.trim();
     if (!phone) { showAuthError('Введите телефон'); return; }
+    if (!isRuMobilePhoneComplete(phone)) { showAuthError('Телефон должен начинаться с +79 (мобильный номер РФ)'); return; }
     const res = await fetch('/api/auth/login/start', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
@@ -2600,7 +2634,7 @@ function showLoginVerify(phone){
       <div class="auth-fields">
         <label class="auth-field">
           <span>Код</span>
-          <input id="lc_code" inputmode="numeric" placeholder="${TEST_VERIFY_CODE}" />
+          <input id="lc_code" class="auth-code" inputmode="numeric" autocomplete="one-time-code" placeholder="1234" />
         </label>
       </div>
       <div class="auth-error" id="authError" style="display:none;"></div>
@@ -2977,7 +3011,7 @@ function showProfileVerifyPhone(phone){
         <div class="auth-head"><div class="auth-title">Подтверждение телефона</div></div>
         <div class="auth-subtitle">Введите код, отправленный на ${phone}.</div>
         <div class="auth-fields">
-          <label class="auth-field"><span>Код из SMS</span><input id="pv_code" inputmode="numeric" placeholder="${TEST_VERIFY_CODE}"></label>
+          <label class="auth-field"><span>Код из SMS</span><input id="pv_code" class="auth-code" inputmode="numeric" autocomplete="one-time-code" placeholder="1234"></label>
         </div>
         <div class="auth-actions">
           <button class="button ghost" id="pv_cancel">Отмена</button>
@@ -3012,7 +3046,7 @@ function showProfileVerifyEmail(email){
         <div class="auth-head"><div class="auth-title">Подтверждение email</div></div>
         <div class="auth-subtitle">Введите код, отправленный на ${email}.</div>
         <div class="auth-fields">
-          <label class="auth-field"><span>Код из письма</span><input id="pe_code" inputmode="numeric" placeholder="${TEST_VERIFY_CODE}"></label>
+          <label class="auth-field"><span>Код из письма</span><input id="pe_code" class="auth-code" inputmode="numeric" autocomplete="one-time-code" placeholder="1234"></label>
         </div>
         <div class="auth-actions">
           <button class="button ghost" id="pe_skip">Пропустить</button>
@@ -5014,7 +5048,7 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
 
 	      <div class="alloc-summary" id="confirmSummary" style="display:none"></div>
       
-      <button class="button ghost alloc-autopick" id="confirmAutoPick" style="width:100%;margin-top:12px;display:none">Подбор ${choiceWord} для вас</button>
+	      <button class="button ghost alloc-autopick" id="confirmAutoPick" style="width:100%;margin-top:12px">Подбор ${choiceWord} для вас</button>
 
       <div class="alloc-actions">
         <button class="button ghost" id="confirmBack">Назад</button>
@@ -5879,24 +5913,30 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
 	    return variants;
 	  }
   
-		  function updateAutoPickButton() {
-		    if (!autoPickBtn) return;
+			  function updateAutoPickButton() {
+			    if (!autoPickBtn) return;
+			    
+			    const totalGuests = (Number(f.adults) || 0) + (Number(f.kids) || 0);
+			    const allocatedGuests = items.reduce((sum, it) => sum + (it.adults || 0) + (it.kids || 0), 0);
+	        const isSingleActive = !!(autoPickActive && autoPickSnapshot && autoPickSnapshotIsSingle);
+	        const hasRooms = Array.isArray(availableRooms) && availableRooms.length > 0;
+	        const totalGuestsPositive = totalGuests > 0;
+	        const isFilterReady = !!(f.from && f.to && totalGuestsPositive);
+	        
+	        // Кнопка подбора всегда видима в корзине
+	        autoPickBtn.style.display = '';
+	        if (!hasRooms || !isFilterReady) {
+	          autoPickBtn.textContent = !isFilterReady
+	            ? 'Подбор доступен после выбора дат и гостей'
+	            : `Подбор ${housingLabelGenPluralWord(camp?.housing_type)} для вас`;
+	          autoPickBtn.disabled = true;
+	          autoPickBtn.style.opacity = '0.5';
+	          autoPickBtn.classList.remove('cancel');
+	          return;
+	        }
 		    
-		    const totalGuests = (Number(f.adults) || 0) + (Number(f.kids) || 0);
-		    const allocatedGuests = items.reduce((sum, it) => sum + (it.adults || 0) + (it.kids || 0), 0);
-        const isSingleActive = !!(autoPickActive && autoPickSnapshot && autoPickSnapshotIsSingle);
-        const hasRooms = Array.isArray(availableRooms) && availableRooms.length > 0;
-        const totalGuestsPositive = totalGuests > 0;
-        const isFilterReady = !!(f.from && f.to && totalGuestsPositive);
-        
-        // Показываем кнопку если фильтр готов и есть комнаты
-        if (!hasRooms || !isFilterReady) {
-          autoPickBtn.style.display = 'none';
-          return;
-        }
-	    
-	    // Кнопка подбора показывается всегда когда есть апартаменты и фильтр готов
-        const shouldShow = true;
+		    // Кнопка подбора показывается всегда когда есть апартаменты и фильтр готов
+	        const shouldShow = true;
         if (shouldShow) {
           autoPickBtn.style.display = '';
 	      
@@ -6019,10 +6059,10 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
     };
   }
 
-  document.getElementById('confirmBack').onclick = () => {
-    if (typeof onBack === 'function') { onBack(); return; }
-    closeModal();
-  };
+	  document.getElementById('confirmBack').onclick = () => {
+	    closeModal();
+	    try { setTabById('tab-map'); } catch (_) {}
+	  };
 
 	  document.getElementById('confirmSubmit').onclick = async () => {
 	    if (!isBookingFilterReady(f)) {
