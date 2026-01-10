@@ -310,31 +310,45 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   display:none; position:fixed; inset:0;
   background:var(--modal-overlay);
   z-index:50;
-  /* Single scroll container for modals (fixes WebView "can't scroll up from bottom"). */
-  overflow-y:auto;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
-  padding:18px 0;
-  display:flex;
-  align-items:center;         /* center small modals */
-  justify-content:center;
-}
-.modal.is-tall{
-  align-items:flex-start;     /* but start from top for tall content */
+  /* Overlay is positioning container only, no scroll */
+  overflow:hidden;
 }
 .modal.show{display:flex; animation:fadeIn .15s ease;}
 .modal.auth-modal{z-index:999 !important;}
 @keyframes fadeIn{from{opacity:0} to{opacity:1}}
+
+/* Inner scroll wrapper - this is the actual scroll container */
+.modal-scroll{
+  position:absolute;
+  inset:0;
+  overflow-x:hidden;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  /* Flexbox for centering */
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  padding:18px 0;
+  /* Fix iOS scroll edge detection */
+  min-height:calc(100% + 1px);
+}
+.modal.is-tall .modal-scroll{
+  justify-content:flex-start;
+}
+
 .modal-card{
   background:var(--modal-bg);
   border:1px solid var(--modal-border); border-radius:20px;
   padding:20px;
-  width:min(440px, 92vw);              /* чуть уже не делаем — важен box-sizing */
-  /* Outer `.modal` scrolls; avoid inner overflow scroll bugs in WebView */
+  width:min(440px, 92vw);
   max-height:none;
   overflow:visible;
   box-shadow:0 6px 25px rgba(0,0,0,.4);
-  box-sizing:border-box;               /* ← фикс: паддинги учитываются во width */
+  box-sizing:border-box;
+  /* Prevent card from shrinking */
+  flex-shrink:0;
 }
 @keyframes scaleIn{to{transform:scale(1)}}
 

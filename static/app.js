@@ -894,6 +894,16 @@ function formatPhoneRu(phone){
 // === showModal / closeModal и формы регистрации/входа (как были) ===
 const modal = document.getElementById('modal');
 const modalCard = document.getElementById('modalCard');
+let modalScroll = document.getElementById('modalScroll');
+
+// Если modalScroll не найден, создаём его динамически (для совместимости)
+if (modal && modalCard && !modalScroll) {
+  modalScroll = document.createElement('div');
+  modalScroll.id = 'modalScroll';
+  modalScroll.className = 'modal-scroll';
+  modal.insertBefore(modalScroll, modalCard);
+  modalScroll.appendChild(modalCard);
+}
 
 function updateModalTallClass(){
   if (!modal || !modalCard) return;
@@ -905,12 +915,29 @@ function updateModalTallClass(){
   modal.classList.toggle('is-tall', h > available);
 }
 
+// Fix WebView scroll edge detection - ensure scroll container is never exactly at boundary
+function fixScrollEdge(scrollEl){
+  if (!scrollEl) return;
+  const maxScroll = scrollEl.scrollHeight - scrollEl.clientHeight;
+  if (maxScroll <= 0) return;
+  // If at exact top, nudge down 1px
+  if (scrollEl.scrollTop <= 0) {
+    scrollEl.scrollTop = 1;
+  }
+  // If at exact bottom, nudge up 1px
+  else if (scrollEl.scrollTop >= maxScroll) {
+    scrollEl.scrollTop = maxScroll - 1;
+  }
+}
+
 function showModal(html){
   try { delete modalCard.dataset.view; } catch (_) {}
   try { modal.classList.remove('auth-modal'); } catch (_) {}
   modalCard.innerHTML = html;
   modal.style.display = 'flex';
   try { modal.classList.add('show'); } catch (_) {}
+  // Reset scroll position
+  if (modalScroll) modalScroll.scrollTop = 0;
   try {
     if (modalCard.__ro && typeof modalCard.__ro.disconnect === 'function') modalCard.__ro.disconnect();
     modalCard.__ro = null;
@@ -920,9 +947,14 @@ function showModal(html){
     modalCard.__onResize = null;
   } catch (_) {}
   updateModalTallClass();
+  // After layout, fix scroll edge
+  requestAnimationFrame(() => fixScrollEdge(modalScroll));
   if (typeof ResizeObserver === 'function') {
     try {
-      modalCard.__ro = new ResizeObserver(() => updateModalTallClass());
+      modalCard.__ro = new ResizeObserver(() => {
+        updateModalTallClass();
+        fixScrollEdge(modalScroll);
+      });
       modalCard.__ro.observe(modalCard);
     } catch (_) {}
   }
@@ -936,6 +968,8 @@ function showAuthModal(html){
   modal.style.display = 'flex'; 
   modal.classList.add('auth-modal');
   try { modal.classList.add('show'); } catch (_) {}
+  // Reset scroll position
+  if (modalScroll) modalScroll.scrollTop = 0;
   try {
     if (modalCard.__ro && typeof modalCard.__ro.disconnect === 'function') modalCard.__ro.disconnect();
     modalCard.__ro = null;
@@ -945,9 +979,13 @@ function showAuthModal(html){
     modalCard.__onResize = null;
   } catch (_) {}
   updateModalTallClass();
+  requestAnimationFrame(() => fixScrollEdge(modalScroll));
   if (typeof ResizeObserver === 'function') {
     try {
-      modalCard.__ro = new ResizeObserver(() => updateModalTallClass());
+      modalCard.__ro = new ResizeObserver(() => {
+        updateModalTallClass();
+        fixScrollEdge(modalScroll);
+      });
       modalCard.__ro.observe(modalCard);
     } catch (_) {}
   }
@@ -957,6 +995,16 @@ function showAuthModal(html){
   } catch (_) {}
 }
 
+// Setup scroll edge fix on scrollend for WebView
+if (modalScroll) {
+  modalScroll.addEventListener('scrollend', () => fixScrollEdge(modalScroll), { passive: true });
+  // Fallback for browsers without scrollend
+  let scrollTimeout = null;
+  modalScroll.addEventListener('scroll', () => {
+    if (scrollTimeout) clearTimeout(scrollTimeout);
+    scrollTimeout = setTimeout(() => fixScrollEdge(modalScroll), 150);
+  }, { passive: true });
+}
 function showAuthChoiceModal({ title = 'Необходима авторизация', subtitle = '', onCancel, onLogin, onRegister } = {}){
   const prev = document.getElementById('authChoiceModal');
   if (prev) prev.remove();
@@ -965,25 +1013,28 @@ function showAuthChoiceModal({ title = 'Необходима авторизац�
   wrap.className = 'modal show';
   wrap.style.zIndex = '9999';
   wrap.innerHTML = `
-    <div class="modal-card auth">
-      <div class="auth-card" style="text-align:center">
-        <div class="auth-head" style="justify-content:center">
-          <div class="auth-title">${escapeHtml(title)}</div>
+    <div class="modal-scroll">
+      <div class="modal-card auth">
+        <div class="auth-card" style="text-align:center">
+          <div class="auth-head" style="justify-content:center">
+            <div class="auth-title">${escapeHtml(title)}</div>
+          </div>
+          ${subtitle ? `<div class="auth-subtitle" style="color:#fff;margin:12px 0 16px;line-height:1.5;font-size:15px">${escapeHtml(subtitle)}</div>` : ''}
+          <div class="auth-actions" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+            <button class="button primary" id="authChoiceLogin" style="background:#2a9df4;border-color:#2a9df4">Вход</button>
+            <button class="button primary" id="authChoiceRegister" style="background:#22c55e;border-color:#22c55e">Регистрация</button>
+          </div>
+          <button class="button ghost" id="authChoiceCancel" style="width:100%">Отмена</button>
         </div>
-        ${subtitle ? `<div class="auth-subtitle" style="color:#fff;margin:12px 0 16px;line-height:1.5;font-size:15px">${escapeHtml(subtitle)}</div>` : ''}
-        <div class="auth-actions" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-          <button class="button primary" id="authChoiceLogin" style="background:#2a9df4;border-color:#2a9df4">Вход</button>
-          <button class="button primary" id="authChoiceRegister" style="background:#22c55e;border-color:#22c55e">Регистрация</button>
-        </div>
-        <button class="button ghost" id="authChoiceCancel" style="width:100%">Отмена</button>
       </div>
     </div>
   `;
   document.body.appendChild(wrap);
 
+  const scrollEl = wrap.querySelector('.modal-scroll');
   const close = () => { try { wrap.remove(); } catch (_) {} };
   const cancel = () => { close(); try { if (typeof onCancel === 'function') onCancel(); } catch (_) {} };
-  wrap.addEventListener('click', (e) => { if (e.target === wrap) cancel(); });
+  if (scrollEl) scrollEl.addEventListener('click', (e) => { if (e.target === scrollEl) cancel(); });
   const btnCancel = wrap.querySelector('#authChoiceCancel');
   const btnLogin = wrap.querySelector('#authChoiceLogin');
   const btnRegister = wrap.querySelector('#authChoiceRegister');
@@ -1009,26 +1060,29 @@ function showConfirmModal({
     wrap.className = 'modal show';
     wrap.style.zIndex = '10000';
     wrap.innerHTML = `
-      <div class="modal-card">
-        <div class="auth-card" style="text-align:center">
-          <div class="auth-head" style="justify-content:center">
-            <div class="auth-title">${escapeHtml(title)}</div>
-          </div>
-          ${message ? `<div class="auth-subtitle" style="margin:8px 0 6px">${escapeHtml(message)}</div>` : ''}
-          <div class="auth-actions" style="grid-template-columns: 1fr 1fr;">
-            <button type="button" class="button ghost" id="appConfirmNo">${escapeHtml(cancelText)}</button>
-            <button type="button" class="button ${danger ? 'danger' : 'primary'}" id="appConfirmYes">${escapeHtml(confirmText)}</button>
+      <div class="modal-scroll">
+        <div class="modal-card">
+          <div class="auth-card" style="text-align:center">
+            <div class="auth-head" style="justify-content:center">
+              <div class="auth-title">${escapeHtml(title)}</div>
+            </div>
+            ${message ? `<div class="auth-subtitle" style="margin:8px 0 6px">${escapeHtml(message)}</div>` : ''}
+            <div class="auth-actions" style="grid-template-columns: 1fr 1fr;">
+              <button type="button" class="button ghost" id="appConfirmNo">${escapeHtml(cancelText)}</button>
+              <button type="button" class="button ${danger ? 'danger' : 'primary'}" id="appConfirmYes">${escapeHtml(confirmText)}</button>
+            </div>
           </div>
         </div>
       </div>
     `;
     document.body.appendChild(wrap);
 
+    const scrollEl = wrap.querySelector('.modal-scroll');
     const close = (val) => {
       try { wrap.remove(); } catch (_) {}
       resolve(!!val);
     };
-    wrap.addEventListener('click', (e) => { if (e.target === wrap) close(false); });
+    if (scrollEl) scrollEl.addEventListener('click', (e) => { if (e.target === scrollEl) close(false); });
     const yes = wrap.querySelector('#appConfirmYes');
     const no = wrap.querySelector('#appConfirmNo');
     if (yes) yes.addEventListener('click', () => close(true));
@@ -2097,7 +2151,17 @@ function closeModal(){
   window.__suppressDraftToastOnce = false;
 }
 
-modal.addEventListener('click', (e)=>{ if (e.target === modal) closeModal(); });
+// Click on scroll overlay (not card) closes modal
+// Use event delegation on modal element for robustness
+if (modal) {
+  modal.addEventListener('click', (e) => {
+    // Check if clicked on modal-scroll (not on modal-card or its children)
+    const scroll = modal.querySelector('.modal-scroll');
+    if (scroll && e.target === scroll) {
+      closeModal();
+    }
+  });
+}
 
 const TEST_VERIFY_CODE = '0000';
 function showAuthError(message){
@@ -3635,66 +3699,71 @@ function openBookingFilterModal(opts = {}) {
     filterModal.className = 'modal show';
     filterModal.id = 'filterModal';
     filterModal.innerHTML = `
-      <div class="modal-card booking-shell">
-        <div class="booking-card">
-          <div class="booking-title">${titleText}</div>
+      <div class="modal-scroll">
+        <div class="modal-card booking-shell">
+          <div class="booking-card">
+            <div class="booking-title">${titleText}</div>
 
-          <div class="booking-hint">${hintText}</div>
+            <div class="booking-hint">${hintText}</div>
 
-          <div class="booking-grid">
-            <label class="bk-field">
-              <span>Заезд</span>
-              <div class="bk-date">
-                <div class="bk-input" id="bkShowFrom">—</div>
-                <input type="hidden" id="bkFrom" class="bk-native">
-              </div>
+            <div class="booking-grid">
+              <label class="bk-field">
+                <span>Заезд</span>
+                <div class="bk-date">
+                  <div class="bk-input" id="bkShowFrom">—</div>
+                  <input type="hidden" id="bkFrom" class="bk-native">
+                </div>
+              </label>
+
+              <label class="bk-field">
+                <span>Выезд</span>
+                <div class="bk-date">
+                  <div class="bk-input" id="bkShowTo">—</div>
+                  <input type="hidden" id="bkTo" class="bk-native">
+                </div>
+              </label>
+
+              <label class="bk-field">
+                <span>Взрослые</span>
+                <select id="bkAdults" class="bk-select">
+                  ${Array.from({length:30},(_,i)=>`<option>${i+1}</option>`).join('')}
+                </select>
+              </label>
+
+              <label class="bk-field">
+                <span>Дети</span>
+                <select id="bkKids" class="bk-select">
+                  ${Array.from({length:31},(_,i)=>`<option>${i}</option>`).join('')}
+                </select>
+              </label>
+            </div>
+
+            <label class="bk-checkbox-wrapper">
+              <input type="checkbox" id="bkAllowSplit" class="bk-checkbox">
+              <span>Показать варианты заселения в разные номера или дома</span>
             </label>
 
-            <label class="bk-field">
-              <span>Выезд</span>
-              <div class="bk-date">
-                <div class="bk-input" id="bkShowTo">—</div>
-                <input type="hidden" id="bkTo" class="bk-native">
-              </div>
-            </label>
-
-            <label class="bk-field">
-              <span>Взрослые</span>
-              <select id="bkAdults" class="bk-select">
-                ${Array.from({length:30},(_,i)=>`<option>${i+1}</option>`).join('')}
-              </select>
-            </label>
-
-            <label class="bk-field">
-              <span>Дети</span>
-              <select id="bkKids" class="bk-select">
-                ${Array.from({length:31},(_,i)=>`<option>${i}</option>`).join('')}
-              </select>
-            </label>
-          </div>
-
-          <label class="bk-checkbox-wrapper">
-            <input type="checkbox" id="bkAllowSplit" class="bk-checkbox">
-            <span>Показать варианты заселения в разные номера или дома</span>
-          </label>
-
-          <div class="booking-actions">
-            <button class="button ghost" id="bkClose">${closeText}</button>
-            <button class="button ghost" id="bkReset">Сбросить</button>
-            <button class="button primary" id="bkApply">${applyText}</button>
+            <div class="booking-actions">
+              <button class="button ghost" id="bkClose">${closeText}</button>
+              <button class="button ghost" id="bkReset">Сбросить</button>
+              <button class="button primary" id="bkApply">${applyText}</button>
+            </div>
           </div>
         </div>
       </div>
     `;
     document.body.appendChild(filterModal);
 
-    // Клик по фону закрывает фильтр
-    filterModal.addEventListener('click', (e) => {
-      if (e.target === filterModal) {
-        filterModal.remove();
-        if (opts.onClose) opts.onClose();
-      }
-    });
+    // Клик по фону (scroll wrapper) закрывает фильтр
+    const scrollEl = filterModal.querySelector('.modal-scroll');
+    if (scrollEl) {
+      scrollEl.addEventListener('click', (e) => {
+        if (e.target === scrollEl) {
+          filterModal.remove();
+          if (opts.onClose) opts.onClose();
+        }
+      });
+    }
 
     // Настраиваем элементы фильтра
     setupBookingFilterElements(filterModal, opts, isBooking, titleText);
