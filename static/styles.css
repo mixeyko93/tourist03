@@ -880,18 +880,17 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 .compare-variants{display:flex;flex-direction:column;gap:10px;margin-top:10px;}
 .compare-variant-tabs{
   margin:10px 0 0;
-  display:flex;
+  display:grid;
+  grid-template-columns:repeat(auto-fit, minmax(0, 1fr));
   gap:8px;
   justify-content:center;
-  overflow-x:auto;
-  overflow-y:hidden;
+  align-items:stretch;
   padding:2px 2px 6px;
-  -webkit-overflow-scrolling:touch;
-  overscroll-behavior-x:contain;
+  overflow:hidden; /* без горизонтального скролла */
 }
 .compare-variant-tab{
-  flex:0 0 auto;
-  min-width:120px;
+  min-width:0;
+  width:100%;
   padding:10px 12px;
   border-radius:14px;
   border:1px solid var(--border-color);
@@ -918,6 +917,14 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   box-shadow:0 0 0 2px rgba(48, 158, 248, .25);
 }
 .compare-variant-tab:active{transform:scale(.99);}
+@media (max-width:420px){
+  .compare-variant-tab{
+    padding:9px 10px;
+    border-radius:12px;
+    font-size:12px;
+  }
+  .compare-variant-tab .sub{font-size:11px;}
+}
 .compare-variant{
   display:flex;
   flex-direction:row;
@@ -1500,6 +1507,16 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 .alloc-val{font-weight:900; color:var(--tg-text); white-space:nowrap;}
 .alloc-actions{display:grid; grid-template-columns:1fr; gap:10px;}
 .alloc-actions .button{height:42px; border-radius:12px; min-width:0; width:100%;}
+.alloc-actions.is-row{grid-template-columns:1fr 1fr;}
+
+.alloc-pick-actions{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+  margin-top:12px;
+}
+.alloc-pick-actions .button{width:100%;}
+.alloc-pick-actions .button:only-child{grid-column:1 / -1;}
 
 /* price block inside details */
 .alloc-price-card{
