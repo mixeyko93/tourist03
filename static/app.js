@@ -1571,46 +1571,45 @@ function showDraftSavedCartToast({ timeoutMs = 1800 } = {}){
     return;
   }
 
-  // ensure single instance
-  let toast = document.getElementById('bookingDraftToast');
-  if (!toast) {
-    toast = document.createElement('button');
-    toast.type = 'button';
-    toast.id = 'bookingDraftToast';
-    toast.className = 'map-btn draft-toast';
-    toast.setAttribute('aria-label', 'Черновик сохранён. Нажмите, чтобы продолжить.');
-    host.appendChild(toast);
+  // cleanup legacy toast element if it exists (older versions)
+  try { document.getElementById('bookingDraftToast')?.remove(); } catch (_) {}
+
+  // Ensure toast text span exists inside the cart button
+  let textEl = cartBtn.querySelector('.draft-toast-text');
+  if (!textEl) {
+    textEl = document.createElement('span');
+    textEl.className = 'draft-toast-text';
+    textEl.setAttribute('aria-hidden', 'true');
+    cartBtn.appendChild(textEl);
+  }
+  textEl.textContent = 'Черновик сохранён';
+
+  // Store previous handler once
+  if (!cartBtn.__draftPrevOnclick) {
+    cartBtn.__draftPrevOnclick = cartBtn.onclick;
   }
 
-  if (toast.__timer) { try { clearTimeout(toast.__timer); } catch (_) {} }
-
-  const restoreCart = () => {
-    cartBtn.style.visibility = '';
-    cartBtn.style.pointerEvents = '';
-  };
-
   const close = () => {
-    toast.classList.remove('show');
-    toast.classList.add('hide');
-    restoreCart();
+    cartBtn.classList.remove('draft-toast');
+    cartBtn.setAttribute('aria-label', 'Корзина бронирования');
+    if (typeof cartBtn.__draftPrevOnclick === 'function') cartBtn.onclick = cartBtn.__draftPrevOnclick;
   };
 
-  toast.textContent = 'Черновик сохранён';
-  toast.onclick = (e) => {
+  // When toast is active, click opens cart and closes toast (feels like morph back)
+  cartBtn.onclick = (e) => {
     try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
     close();
     try { openBookingDraft({ dontChangeTab: true }); } catch (_) { try { openBookingDraft(); } catch (_) {} }
   };
 
-  // swap button → toast
-  cartBtn.style.visibility = 'hidden';
-  cartBtn.style.pointerEvents = 'none';
-  toast.classList.remove('hide');
-  requestAnimationFrame(() => toast.classList.add('show'));
+  cartBtn.setAttribute('aria-label', 'Черновик сохранён. Нажмите, чтобы продолжить.');
+  // trigger morph animation on the same element
+  requestAnimationFrame(() => cartBtn.classList.add('draft-toast'));
 
-  toast.__timer = setTimeout(() => {
+  if (cartBtn.__draftToastTimer) { try { clearTimeout(cartBtn.__draftToastTimer); } catch (_) {} }
+  cartBtn.__draftToastTimer = setTimeout(() => {
     close();
-  }, Math.max(500, Number(timeoutMs) || 1800));
+  }, Math.max(700, Number(timeoutMs) || 1800));
 }
 
 async function openBookingDraft(opts = {}){
