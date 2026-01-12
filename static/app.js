@@ -965,11 +965,15 @@ function closeTransientOverlays({ keepMainModal = false } = {}){
   }
 }
 
-function closeAllWindowsAndShowMap(){
+function closeAllWindows(){
   try { closeTransientOverlays({ keepMainModal: false }); } catch (_) {}
   try {
     document.querySelectorAll('.fs-modal').forEach(el => { try { el.remove(); } catch (_) {} });
   } catch (_) {}
+}
+
+function closeAllWindowsAndShowMap(){
+  closeAllWindows();
   try { setTabById('tab-map'); } catch (_) {}
   try {
     if (typeof fixMapSize === 'function') fixMapSize();
@@ -1166,8 +1170,68 @@ const BOOKING_DRAFT_KEY = 'bookingDraft:v1';
 // Multi-cart временно отключён
 const MULTI_CART_ENABLED = false;
 const BOOKING_MULTI_KEY = 'bookingDraftMulti:v2';
+const BOOKING_FILTER_KEY = 'bookingFilter:v1';
 window.__bookingDraft = null;
 window.__suppressDraftToastOnce = false;
+window.__bookingFilter = window.__bookingFilter || null;
+
+function loadBookingFilter(){
+  try {
+    const raw = localStorage.getItem(BOOKING_FILTER_KEY);
+    if (!raw) return null;
+    const f = JSON.parse(raw);
+    if (!f || typeof f !== 'object') return null;
+    const fromRaw = String(f.from || '').trim();
+    const toRaw = String(f.to || '').trim();
+    const adults = Math.max(0, Number(f.adults) || 0);
+    const kids = Math.max(0, Number(f.kids) || 0);
+    const allowSplitRooms = !!f.allowSplitRooms;
+    if (kids > 0 && adults < 1) return null;
+
+    let from = fromRaw || null;
+    let to = toRaw || null;
+    if (from && to) {
+      const a = new Date(from);
+      const b = new Date(to);
+      if (!Number.isFinite(a.getTime()) || !Number.isFinite(b.getTime()) || b <= a) {
+        from = null;
+        to = null;
+      }
+    } else {
+      from = null;
+      to = null;
+    }
+
+    const total = Number(f.total) || (adults + kids) || 0;
+    const hasAny = (from && to) || total > 0 || adults > 0 || kids > 0 || allowSplitRooms;
+    if (!hasAny) return null;
+    return {
+      from,
+      to,
+      adults,
+      kids,
+      total: total || undefined,
+      allowSplitRooms,
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+function saveBookingFilter(filter){
+  if (!filter || typeof filter !== 'object') return;
+  try { localStorage.setItem(BOOKING_FILTER_KEY, JSON.stringify(filter)); } catch (_) {}
+}
+
+function clearBookingFilter(){
+  try { localStorage.removeItem(BOOKING_FILTER_KEY); } catch (_) {}
+}
+
+// Поднимаем последний фильтр пользователя при перезапуске (если он сам не сбрасывал)
+try {
+  const persisted = loadBookingFilter();
+  if (persisted) window.__bookingFilter = persisted;
+} catch (_) {}
 
 function escapeHtml(str){
   return String(str)
@@ -3061,7 +3125,7 @@ async function openAccountBookings(mode){
   const title = mode === 'history' ? 'История бронирований' : 'Активные бронирования';
   let items = [];
   try {
-    const data = await authFetchJson(`/api/auth/bookings?mode=${encodeURIComponent(mode)}`);
+    const data = await authFetchJson(`/api/auth/orders?mode=${encodeURIComponent(mode)}`);
     items = Array.isArray(data.items) ? data.items : [];
   } catch (e) {
     showModal(`
@@ -3081,13 +3145,15 @@ async function openAccountBookings(mode){
     const st = bookingStatusLabel(b.status);
     const pay = paymentStatusLabel(b.payment_status);
     const canPay = String(b.status||'').toLowerCase() === 'confirmed' && !!b.payment_required && String(b.payment_status||'').toLowerCase() === 'unpaid';
+    const roomsCount = Array.isArray(b.items) ? b.items.length : 0;
     return `
-      <div class="booking-item" data-bid="${b.id}">
+      <div class="booking-item" data-oid="${String(b.order_id || '')}">
         <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
           <div style="font-weight:800">${b.camp_name || `База #${b.camp_id}`}</div>
           <div class="muted" style="white-space:nowrap">${fmtDateRu(b.check_in)} → ${fmtDateRu(b.check_out)}</div>
         </div>
         <div class="muted" style="margin-top:6px;display:flex;gap:10px;flex-wrap:wrap">
+          ${roomsCount ? `<span>Апартаментов: <b style="color:#e6eaf0">${roomsCount}</b></span>` : ''}
           <span>Статус: <b style="color:#e6eaf0">${st}</b></span>
           <span>Оплата: <b style="color:#e6eaf0">${pay}</b></span>
           ${canPay ? '<span style="color:#22c55e;font-weight:700">доступна оплата</span>' : ''}
@@ -3111,22 +3177,23 @@ async function openAccountBookings(mode){
   document.getElementById('bk_list_close').onclick = closeModal;
   document.querySelectorAll('.booking-item').forEach(el=>{
     el.addEventListener('click', async ()=>{
-      const id = el.getAttribute('data-bid');
+      const id = el.getAttribute('data-oid');
       if (!id) return;
-      await openBookingDetail(Number(id), mode);
+      await openBookingDetail(id, mode);
     });
   });
 }
 
-async function openBookingDetail(bookingId, mode){
+async function openBookingDetail(orderId, mode){
   let item = null;
   try {
-    const data = await authFetchJson(`/api/auth/bookings/${bookingId}`);
+    const oid = encodeURIComponent(String(orderId || ''));
+    const data = await authFetchJson(`/api/auth/orders/${oid}`);
     item = data.item;
   } catch (e) {
     showModal(`
       <div class="auth-card">
-        <div class="auth-head"><div class="auth-title">Бронь #${bookingId}</div></div>
+        <div class="auth-head"><div class="auth-title">Бронь</div></div>
         <div class="auth-error" style="display:block;">${e.message}</div>
         <div class="auth-actions">
           <button class="button primary" id="bk_det_close">Закрыть</button>
@@ -3142,31 +3209,39 @@ async function openBookingDetail(bookingId, mode){
   const st = bookingStatusLabel(item.status);
   const pay = paymentStatusLabel(item.payment_status);
 
-  const canEdit = ['pending','confirmed','awaiting_payment',''].includes(stRaw) && payRaw !== 'paid' && stRaw !== 'completed';
   const canCancel = ['pending','confirmed','awaiting_payment',''].includes(stRaw);
   const canPay = stRaw === 'confirmed' && !!item.payment_required && payRaw === 'unpaid';
 
+  const roomLines = Array.isArray(item.items) && item.items.length
+    ? item.items.map((r)=>{
+      const rn = r.room_name || (r.room_id ? `#${r.room_id}` : '—');
+      const gc = (r.guests_count ?? '—');
+      return `<div class="kv-k">${rn}</div><div>${gc}</div>`;
+    }).join('')
+    : `<div class="kv-k">—</div><div></div>`;
+
   showModal(`
     <div class="auth-card">
-      <div class="auth-head"><div class="auth-title">Бронь #${item.id}</div></div>
+      <div class="auth-head"><div class="auth-title">Бронь</div></div>
       <div class="auth-fields" style="gap:10px">
         <div class="kv">
           <div class="kv-k">База</div><div>${item.camp_name || `База #${item.camp_id}`}</div>
-          <div class="kv-k">Номер</div><div>${item.room_name || (item.room_id ? `#${item.room_id}` : '—')}</div>
           <div class="kv-k">Даты</div><div>${fmtDateRu(item.check_in)} → ${fmtDateRu(item.check_out)}</div>
           <div class="kv-k">Гостей</div><div>${item.guests_count ?? '—'}</div>
           <div class="kv-k">Статус</div><div>${st}</div>
           <div class="kv-k">Оплата</div><div>${pay}${item.payment_required && payRaw==='unpaid' ? ' (ожидается)' : ''}</div>
+          <div class="kv-k" style="margin-top:10px">Апартаменты</div><div></div>
+          ${roomLines}
         </div>
       </div>
       <div class="auth-actions" style="grid-template-columns:repeat(2,minmax(0,1fr))">
         <button class="button ghost" id="bk_det_back">Назад</button>
         <button class="button primary" id="bk_det_close">Закрыть</button>
       </div>
-      ${(canEdit || canCancel) ? `
+      ${canCancel ? `
         <div class="auth-actions" style="grid-template-columns:repeat(2,minmax(0,1fr))">
-          ${canEdit ? '<button class="button ghost" id="bk_det_edit">Редактировать</button>' : '<div></div>'}
-          ${canCancel ? '<button class="button ghost" id="bk_det_cancel">Отменить</button>' : '<div></div>'}
+          <button class="button ghost" id="bk_det_cancel">Отменить</button>
+          <div></div>
         </div>
       ` : ''}
       ${canPay ? `
@@ -3179,20 +3254,20 @@ async function openBookingDetail(bookingId, mode){
 
   document.getElementById('bk_det_close').onclick = closeModal;
   document.getElementById('bk_det_back').onclick = ()=> openAccountBookings(mode);
-  const btnEdit = document.getElementById('bk_det_edit');
   const btnCancel = document.getElementById('bk_det_cancel');
   const btnPay = document.getElementById('bk_det_pay');
-  if (btnEdit) btnEdit.onclick = ()=> openBookingEdit(item, mode);
   if (btnCancel) btnCancel.onclick = async ()=>{
     if (!safeConfirm('Отменить бронь?')) return;
     try {
-      await authFetchJson(`/api/auth/bookings/${item.id}/cancel`, { method:'POST' });
+      const oid = encodeURIComponent(String(item.order_id || orderId || ''));
+      await authFetchJson(`/api/auth/orders/${oid}/cancel`, { method:'POST' });
       await openAccountBookings(mode);
     } catch (e) { alert(e.message); }
   };
   if (btnPay) btnPay.onclick = async ()=>{
     try {
-      await authFetchJson(`/api/auth/bookings/${item.id}/pay`, { method:'POST' });
+      const oid = encodeURIComponent(String(item.order_id || orderId || ''));
+      await authFetchJson(`/api/auth/orders/${oid}/pay`, { method:'POST' });
       alert('Запрос на оплату создан. Интеграция оплаты будет добавлена позже.');
     } catch (e) { alert(e.message); }
   };
@@ -4527,15 +4602,37 @@ function setupBookingFilterElements(container, opts, isBooking, titleText) {
   }
   updateApplyUi();
 
+  // Запоминаем последний просматриваемый месяц календаря, чтобы "Выезд" открывался на том же месяце
+  let lastPickerViewY = null;
+  let lastPickerViewM = null;
+
   function openCustomDatePicker({ targetInput, kind }) {
-    const currentValue = targetInput.value ? toMidday(targetInput.value) : toMidday(isoToday);
+    const seedFromInput = targetInput.value ? toMidday(targetInput.value) : null;
+    const seedFromCheckin = (fromI?.value) ? toMidday(fromI.value) : null;
+    const seedFromLast = (lastPickerViewY != null && lastPickerViewM != null) ? new Date(lastPickerViewY, lastPickerViewM, 1, 12, 0, 0) : null;
+    const currentValue = seedFromInput || seedFromCheckin || seedFromLast || toMidday(isoToday);
     let viewY = (currentValue || new Date()).getFullYear();
     let viewM = (currentValue || new Date()).getMonth();
+    lastPickerViewY = viewY;
+    lastPickerViewM = viewM;
+
+    const originalFrom = (fromI?.value || '').trim();
+    const originalTo = (toI?.value || '').trim();
+
+    let tempFrom = originalFrom;
+    let tempTo = originalTo;
+
+    // Range mode: choose check-in then check-out in one calendar
+    // When opened from "Выезд", start by choosing checkout (if check-in exists)
+    let step = (tempFrom && tempTo)
+      ? 'done'
+      : ((kind === 'from') ? 'from' : (tempFrom ? 'to' : 'from'));
 
     const overlay = document.createElement('div');
     overlay.className = 'dp-overlay';
     overlay.innerHTML = `
       <div class="dp-card" role="dialog" aria-modal="true">
+        <div class="dp-kind" id="dpKind"></div>
         <div class="dp-top">
           <button type="button" class="dp-nav" id="dpPrev">‹</button>
           <div class="dp-selects">
@@ -4545,6 +4642,11 @@ function setupBookingFilterElements(container, opts, isBooking, titleText) {
           <button type="button" class="dp-nav" id="dpNext">›</button>
         </div>
         <div class="dp-grid" id="dpGrid"></div>
+        <div class="dp-actions">
+          <button type="button" class="button ghost" id="dpCancel">Отмена</button>
+          <button type="button" class="button ghost" id="dpReset">Сброс</button>
+          <button type="button" class="button primary" id="dpSave" disabled>Сохранить</button>
+        </div>
       </div>
     `;
     document.body.appendChild(overlay);
@@ -4554,6 +4656,10 @@ function setupBookingFilterElements(container, opts, isBooking, titleText) {
     const gridEl = overlay.querySelector('#dpGrid');
     const prevBtn = overlay.querySelector('#dpPrev');
     const nextBtn = overlay.querySelector('#dpNext');
+    const kindEl = overlay.querySelector('#dpKind');
+    const cancelBtn = overlay.querySelector('#dpCancel');
+    const resetBtn = overlay.querySelector('#dpReset');
+    const saveBtn = overlay.querySelector('#dpSave');
 
     const monthNames = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
     monthSel.innerHTML = monthNames.map((n, i) => `<option value="${i}">${n}</option>`).join('');
@@ -4565,91 +4671,131 @@ function setupBookingFilterElements(container, opts, isBooking, titleText) {
 
     const close = () => { try { overlay.remove(); } catch(_) {} };
 
-	    function isDisabled(dayIso) {
-	      if (!dayIso) return true;
-	      if (isBooking && kind === 'from' && dayIso < isoToday) return true;
-	      if (kind === 'from') {
-	        if (!hasCampRoomsBusy && isBusyDay(dayIso)) return true;
-	        const toIso = toI?.value || '';
-	        if (toIso) {
-	          const dDay = toMidday(dayIso);
-	          const dTo = toMidday(toIso);
-	          if (!dDay || !dTo) return true;
-	          if (dDay >= dTo) return true;
-	          if (hasCampRoomsBusy) {
-	            if (!campCanStay(dayIso, toIso)) return true;
-	          } else {
-	            if (overlapRanges(dayIso, toIso)) return true;
-	          }
-	        } else if (hasCampRoomsBusy) {
-	          const next = addDays(dayIso, 1);
-	          if (!next || !campCanStay(dayIso, next)) return true;
-	        }
-	        return false;
-	      }
-	      // kind === 'to'
-	      const fromIso = fromI?.value || '';
-	      if (fromIso) {
-	        const dDay = toMidday(dayIso);
-	        const dFrom = toMidday(fromIso);
-	        if (!dDay || !dFrom) return true;
-	        if (dDay <= dFrom) return true;
-	        if (hasCampRoomsBusy) {
-	          if (!campCanStay(fromIso, dayIso)) return true;
-	        } else {
-	          if (overlapRanges(fromIso, dayIso)) return true;
-	        }
-	        return false;
-	      }
-	      // без check-in — не блокируем по busyDay, чтобы можно было выбрать чек-аут = start чужой брони
-	      return false;
-	    }
+    const canSave = () => {
+      if (!tempFrom || !tempTo) return false;
+      const a = toMidday(tempFrom);
+      const b = toMidday(tempTo);
+      return !!(a && b && b > a);
+    };
+
+    const updateActions = () => {
+      if (!saveBtn) return;
+      saveBtn.disabled = !canSave();
+    };
+
+    const isDisabledAsFrom = (dayIso) => {
+      if (!dayIso) return true;
+      if (isBooking && dayIso < isoToday) return true;
+      if (!hasCampRoomsBusy && isBusyDay(dayIso)) return true;
+      if (hasCampRoomsBusy) {
+        const next = addDays(dayIso, 1);
+        if (!next || !campCanStay(dayIso, next)) return true;
+      }
+      return false;
+    };
+
+    function isDisabled(dayIso) {
+      if (!dayIso) return true;
+      const effStep = (step === 'done') ? 'from' : step;
+      if (effStep === 'from') {
+        return isDisabledAsFrom(dayIso);
+      }
+
+      const fromIso = (tempFrom || '').trim();
+      if (!fromIso) return false;
+      const dDay = toMidday(dayIso);
+      const dFrom = toMidday(fromIso);
+      if (!dDay || !dFrom) return true;
+      // While choosing checkout: allow clicking earlier/equal dates — treat as new check-in
+      if (dDay <= dFrom) return isDisabledAsFrom(dayIso);
+      if (hasCampRoomsBusy) {
+        if (!campCanStay(fromIso, dayIso)) return true;
+      } else {
+        if (overlapRanges(fromIso, dayIso)) return true;
+      }
+      return false;
+    }
 
     function render() {
       monthSel.value = String(viewM);
       yearSel.value = String(viewY);
       if (!gridEl) return;
 
+      if (kindEl) {
+        kindEl.textContent = step === 'from'
+          ? 'Выберите дату заезда'
+          : (step === 'to' ? 'Выберите дату выезда' : 'Выбранный период проживания');
+      }
+      updateActions();
+
       const firstDay = new Date(viewY, viewM, 1).getDay(); // 0=Sun
       const adjustedFirstDay = firstDay === 0 ? 6 : firstDay - 1; // 0=Mon
       const daysInMonth = new Date(viewY, viewM + 1, 0).getDate();
-      const selectedIso = targetInput.value || '';
+
+      const selFrom = (tempFrom || '').trim();
+      const selTo = (tempTo || '').trim();
+      const dFrom = selFrom ? toMidday(selFrom) : null;
+      const dTo = selTo ? toMidday(selTo) : null;
 
       let html = '';
       const dow = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
       for (const d of dow) html += `<div class="dp-dow">${d}</div>`;
       for (let i = 0; i < adjustedFirstDay; i++) html += `<div class="dp-empty"></div>`;
 
-	      for (let d = 1; d <= daysInMonth; d++) {
-	        const dateIso = `${viewY}-${String(viewM + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-	        const isSel = selectedIso === dateIso;
-	        const isTod = isoToday === dateIso;
-	        let busy = false;
-	        if (kind === 'from') {
-	          if (hasCampRoomsBusy) {
-	            if (dateIso >= isoToday) {
-	              const next = addDays(dateIso, 1);
-	              busy = !!(next && !campCanStay(dateIso, next));
-	            }
-	          } else {
-	            busy = isBusyDay(dateIso);
-	          }
-	        } else {
-	          const fromIso = fromI?.value || '';
-	          if (hasCampRoomsBusy && fromIso && dateIso > fromIso) {
-	            busy = !campCanStay(fromIso, dateIso);
-	          }
-	        }
-	        const dis = isDisabled(dateIso);
-	        const cls = [
-	          'dp-day',
-	          isSel ? 'selected' : '',
-	          isTod ? 'today' : '',
-	          dis ? 'disabled' : '',
-	          busy ? 'busy' : '',
-	        ].filter(Boolean).join(' ');
-	        html += `<button type="button" class="${cls}" data-iso="${dateIso}" ${dis ? 'disabled' : ''}>${d}</button>`;
-	      }
+      for (let d = 1; d <= daysInMonth; d++) {
+        const dateIso = `${viewY}-${String(viewM + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+        const isStart = selFrom === dateIso;
+        const isEnd = selTo === dateIso;
+        const isTod = isoToday === dateIso;
+
+        const inRange = (dFrom && dTo) ? (() => {
+          const dd = toMidday(dateIso);
+          if (!dd) return false;
+          return dd > dFrom && dd < dTo;
+        })() : false;
+
+        let busy = false;
+        if (step === 'from' || step === 'done') {
+          if (hasCampRoomsBusy) {
+            if (dateIso >= isoToday) {
+              const next = addDays(dateIso, 1);
+              busy = !!(next && !campCanStay(dateIso, next));
+            }
+          } else {
+            busy = isBusyDay(dateIso);
+          }
+        } else {
+          const fromIso = selFrom;
+          if (fromIso && dateIso > fromIso) {
+            if (hasCampRoomsBusy) busy = !campCanStay(fromIso, dateIso);
+            else busy = overlapRanges(fromIso, dateIso);
+          } else {
+            // For dates <= selected check-in, treat them as potential new check-in and show busy days
+            if (hasCampRoomsBusy) {
+              if (dateIso >= isoToday) {
+                const next = addDays(dateIso, 1);
+                busy = !!(next && !campCanStay(dateIso, next));
+              }
+            } else {
+              busy = isBusyDay(dateIso);
+            }
+          }
+        }
+
+        const dis = isDisabled(dateIso);
+        const cls = [
+          'dp-day',
+          (isStart || isEnd) ? 'selected' : '',
+          isStart ? 'range-start' : '',
+          isEnd ? 'range-end' : '',
+          inRange ? 'in-range' : '',
+          isTod ? 'today' : '',
+          dis ? 'disabled' : '',
+          busy ? 'busy' : '',
+        ].filter(Boolean).join(' ');
+        html += `<button type="button" class="${cls}" data-iso="${dateIso}" ${dis ? 'disabled' : ''}>${d}</button>`;
+      }
+
       gridEl.innerHTML = html;
 
       gridEl.querySelectorAll('[data-iso]').forEach(btn => {
@@ -4657,30 +4803,78 @@ function setupBookingFilterElements(container, opts, isBooking, titleText) {
           e.preventDefault();
           const iso = btn.getAttribute('data-iso');
           if (!iso || isDisabled(iso)) return;
-	          targetInput.value = iso;
-	          sync();
-	          try { targetInput.dispatchEvent(new Event('change')); } catch(_) {}
-	          updateApplyUi();
-	          validateCampDatesOrReset();
-	          close();
-	        });
-	      });
-	    }
+          try {
+            const d = toMidday(iso);
+            if (d) { lastPickerViewY = d.getFullYear(); lastPickerViewM = d.getMonth(); }
+          } catch (_) {}
+
+          if (step === 'from' || step === 'done') {
+            tempFrom = iso;
+            tempTo = '';
+            step = 'to';
+            render();
+            return;
+          }
+
+          const fromIso = (tempFrom || '').trim();
+          if (!fromIso) { step = 'from'; render(); return; }
+          const dFrom2 = toMidday(fromIso);
+          const dTo2 = toMidday(iso);
+          if (!dFrom2 || !dTo2) return;
+          if (dTo2 <= dFrom2) {
+            tempFrom = iso;
+            tempTo = '';
+            step = 'to';
+            render();
+            return;
+          }
+
+          tempTo = iso;
+          step = 'done';
+          render();
+        });
+      });
+    }
 
     prevBtn.onclick = (e) => {
       e.preventDefault();
       viewM -= 1;
       if (viewM < 0) { viewM = 11; viewY -= 1; }
+      lastPickerViewY = viewY; lastPickerViewM = viewM;
       render();
     };
     nextBtn.onclick = (e) => {
       e.preventDefault();
       viewM += 1;
       if (viewM > 11) { viewM = 0; viewY += 1; }
+      lastPickerViewY = viewY; lastPickerViewM = viewM;
       render();
     };
-    monthSel.onchange = () => { viewM = Number(monthSel.value) || 0; render(); };
-    yearSel.onchange = () => { viewY = Number(yearSel.value) || viewY; render(); };
+    monthSel.onchange = () => { viewM = Number(monthSel.value) || 0; lastPickerViewY = viewY; lastPickerViewM = viewM; render(); };
+    yearSel.onchange = () => { viewY = Number(yearSel.value) || viewY; lastPickerViewY = viewY; lastPickerViewM = viewM; render(); };
+
+    if (cancelBtn) cancelBtn.onclick = () => close();
+    if (resetBtn) {
+      resetBtn.onclick = () => {
+        tempFrom = '';
+        tempTo = '';
+        step = 'from';
+        render();
+      };
+    }
+    if (saveBtn) {
+      saveBtn.onclick = () => {
+        if (!canSave()) return;
+        if (fromI) fromI.value = tempFrom || '';
+        if (toI) toI.value = tempTo || '';
+        sync();
+        try { if (fromI) fromI.dispatchEvent(new Event('change')); } catch(_) {}
+        try { if (toI) toI.dispatchEvent(new Event('change')); } catch(_) {}
+        updateApplyUi();
+        validateCampDatesOrReset();
+        close();
+      };
+    }
 
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
     render();
@@ -4707,6 +4901,8 @@ function setupBookingFilterElements(container, opts, isBooking, titleText) {
         window.__bookingFilter = null;
       }
       setFilterButtonActive(!!window.__bookingFilter);
+      if (window.__bookingFilter) saveBookingFilter(window.__bookingFilter);
+      else clearBookingFilter();
     }
     
     const filterModal = document.getElementById('filterModal');
@@ -4732,6 +4928,7 @@ function setupBookingFilterElements(container, opts, isBooking, titleText) {
     fromI.value=''; toI.value=''; adSel.value='2'; kdSel.value='0'; splitChk.checked=false; sync();
     // сброс — очищаем общий фильтр и перерисовываем всю карту
     window.__bookingFilter = null;
+    clearBookingFilter();
     setFilterButtonActive(false);
     applyCapacityConstraints();
     // Активируем кнопку "Применить" при сбросе
@@ -4775,6 +4972,7 @@ function setupBookingFilterElements(container, opts, isBooking, titleText) {
       total: adults + kids,
       allowSplitRooms: splitChk.checked
     };
+    saveBookingFilter(window.__bookingFilter);
     setFilterButtonActive(true);
     // Отменяем восстановление исходного фильтра, так как применили новый фильтр
     shouldRestoreOnClose = false;
@@ -4948,10 +5146,11 @@ function validateAllocation(items, filter){
   };
 }
 
-async function createBookingsFromAllocation(campId, filter, items){
+async function createBookingsFromAllocation(campId, filter, items, comment){
   const cid = Number(campId);
   const from = filter?.from;
   const to = filter?.to;
+  const userComment = String(comment || '').trim();
   const payloadItems = (items || [])
     .map(it => ({
       room_id: Number(it.room?.id),
@@ -4963,30 +5162,42 @@ async function createBookingsFromAllocation(campId, filter, items){
   // Future-ready payload
   window.__lastBookingRoomsPayload = payloadItems;
 
-  const created = [];
-  for (const it of payloadItems) {
-    const resp = await authFetchJson('/api/auth/bookings', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({
-        camp_id: cid,
+  const resp = await authFetchJson('/api/auth/orders', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      camp_id: cid,
+      check_in: from,
+      check_out: to,
+      items: payloadItems.map(it => ({
         room_id: it.room_id,
-        check_in: from,
-        check_out: to,
         adults: it.adults,
         kids: it.kids,
-      })
-    });
-    created.push(resp.booking_id);
-  }
-  return created;
+      })),
+      comment: userComment || undefined,
+    })
+  });
+  return resp;
 }
 
 // Показываем развёрнутое уведомление после успешного бронирования
-function showBookingSuccessNotification(bookingIds) {
-  const idsText = Array.isArray(bookingIds) && bookingIds.length > 1 
-    ? `№${bookingIds.join(', №')}` 
-    : `№${bookingIds[0] || '—'}`;
+function showBookingSuccessNotification(result, opts = {}) {
+  let orderId = null;
+  let bookingIds = null;
+  if (result && typeof result === 'object' && !Array.isArray(result)) {
+    orderId = result.order_id || result.orderId || null;
+    bookingIds = result.booking_ids || result.bookingIds || null;
+  } else if (Array.isArray(result)) {
+    bookingIds = result;
+  } else if (result != null) {
+    orderId = String(result);
+  }
+
+  const idsText = orderId
+    ? `№${orderId}`
+    : (Array.isArray(bookingIds) && bookingIds.length > 1
+      ? `№${bookingIds.join(', №')}`
+      : `№${(bookingIds && bookingIds[0]) || '—'}`);
   
   const modal = document.createElement('div');
   modal.className = 'modal show';
@@ -5011,15 +5222,72 @@ function showBookingSuccessNotification(bookingIds) {
   `;
   
   document.body.appendChild(modal);
+  const onDone = (opts && typeof opts.onDone === 'function') ? opts.onDone : null;
   
   const okBtn = modal.querySelector('#successOkBtn');
   if (okBtn) {
-    okBtn.onclick = () => modal.remove();
+    okBtn.onclick = () => {
+      try { modal.remove(); } catch (_) {}
+      if (onDone) { try { onDone(); } catch (_) {} }
+    };
   }
   
   modal.addEventListener('click', (e) => {
-    if (e.target === modal) modal.remove();
+    if (e.target === modal) {
+      try { modal.remove(); } catch (_) {}
+      if (onDone) { try { onDone(); } catch (_) {} }
+    }
   });
+}
+
+function openBookingCommentModal({ initialValue = '', onBack, onSubmit } = {}){
+  showModal(`
+    <div class="alloc-card">
+      <div class="accom-head">
+        <div class="accom-title">Комментарий к заказу</div>
+        <div class="accom-sub muted">Необязательно</div>
+      </div>
+
+      <textarea id="orderComment"
+        style="width:100%;min-height:120px;resize:none;border-radius:14px;border:1px solid var(--border-color);background:rgba(255,255,255,0.03);color:var(--tg-text);padding:12px;box-sizing:border-box;outline:none;"
+        placeholder="Например:\n— Приедем поздно вечером\n— Нужны раздельные кровати\n— Будем с ребёнком\n— Нужны отчётные документы"></textarea>
+
+      <div class="alloc-actions is-row">
+        <button class="button ghost" id="orderCommentBack">Назад</button>
+        <button class="button" style="background:#22c55e;border-color:#22c55e;color:#fff;font-weight:600" id="orderCommentSubmit">БРОНИРУЮ!</button>
+      </div>
+    </div>
+  `);
+  try { document.getElementById('modalCard').dataset.view = 'booking-comment'; } catch (_) {}
+
+  const ta = document.getElementById('orderComment');
+  if (ta) {
+    ta.value = String(initialValue || '');
+    try { ta.focus(); } catch (_) {}
+  }
+  const backBtn = document.getElementById('orderCommentBack');
+  const submitBtn = document.getElementById('orderCommentSubmit');
+
+  if (backBtn) {
+    backBtn.onclick = () => {
+      if (typeof onBack === 'function') { try { onBack(); } catch (_) {} return; }
+      closeModal();
+    };
+  }
+  if (submitBtn) {
+    submitBtn.onclick = async () => {
+      const text = ta ? ta.value : '';
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Отправляем...';
+      try {
+        if (typeof onSubmit === 'function') await onSubmit(text);
+      } catch (e) {
+        showSnackbar({ message: e?.message || 'Не удалось отправить заявку', timeoutMs: 2200 });
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'БРОНИРУЮ!';
+      }
+    };
+  }
 }
 
 // Функция форматирования кроватей для отображения
@@ -5943,18 +6211,19 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
 		          f.adults = v.sumAdults;
 		          f.kids = v.sumKids;
 		          f.total = (v.sumAdults + v.sumKids) || undefined;
-		          try {
-		            window.__bookingFilter = Object.assign({}, window.__bookingFilter || {}, {
-		              from: f.from || null,
-		              to: f.to || null,
-		              adults: Number(f.adults) || 0,
-		              kids: Number(f.kids) || 0,
-		              total: Number(f.total) || undefined,
-		              allowSplitRooms: !!f.allowSplitRooms,
-		            });
-		          } catch (_) {}
-		          updateSummary();
-		        };
+			          try {
+			            window.__bookingFilter = Object.assign({}, window.__bookingFilter || {}, {
+			              from: f.from || null,
+			              to: f.to || null,
+			              adults: Number(f.adults) || 0,
+			              kids: Number(f.kids) || 0,
+			              total: Number(f.total) || undefined,
+			              allowSplitRooms: !!f.allowSplitRooms,
+			            });
+			          } catch (_) {}
+			          try { if (window.__bookingFilter) saveBookingFilter(window.__bookingFilter); } catch (_) {}
+			          updateSummary();
+			        };
 		        hintEl.appendChild(btn);
 		      }
 		      }
@@ -6379,46 +6648,42 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
 		    closeAllWindowsAndShowMap();
 		  };
 
-	  document.getElementById('confirmSubmit').onclick = async () => {
-	    if (!isBookingFilterReady(f)) {
-	      markBookingDatesButtonRequired(editDatesBtn);
-	      updateSummary();
+		  document.getElementById('confirmSubmit').onclick = async () => {
+		    if (!isBookingFilterReady(f)) {
+		      markBookingDatesButtonRequired(editDatesBtn);
+		      updateSummary();
+		      return;
+		    }
+		    const v = validateAllocation(items, f);
+		    if (!v.ok) { updateSummary(); return; }
+		    if (!getAuth() || !getAuth().token) {
+		      window.__postAuthAction = () => { try { openBookingDraft(); } catch (_) {} };
+		      showAuthChoiceModal({
+	        subtitle: 'Для отправки заявки на бронирование необходимо авторизоваться.',
+	        onCancel: () => {},
+	        onLogin: () => { openLogin(); },
+	        onRegister: () => { openRegister(); },
+	      });
 	      return;
 	    }
-	    const v = validateAllocation(items, f);
-	    if (!v.ok) { updateSummary(); return; }
-	    if (!getAuth() || !getAuth().token) {
-	      window.__postAuthAction = () => { try { openBookingDraft(); } catch (_) {} };
-	      showAuthChoiceModal({
-        subtitle: 'Для отправки заявки на бронирование необходимо авторизоваться.',
-        onCancel: () => {},
-        onLogin: () => { openLogin(); },
-        onRegister: () => { openRegister(); },
-      });
-      return;
-    }
-    try {
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'Отправляем...';
-      const ids = await createBookingsFromAllocation(cid, f, items);
-      window.__suppressDraftToastOnce = true;
-      clearBookingDraft();
-      closeModal();
-      
-      // Показываем развёрнутое уведомление об успехе
-      showBookingSuccessNotification(ids);
-      
-      // Переключаемся на вкладку личного кабинета
-      setTimeout(() => {
-        setTabById('tab-account');
-        openAccountBookings('active');
-      }, 100);
-    } catch (e) {
-      alert(e.message || 'Не удалось создать бронь');
-      submitBtn.disabled = false;
-      submitBtn.textContent = 'БРОНИРУЮ!';
-    }
-  };
+	    openBookingCommentModal({
+	      onBack: () => reopenCartWithItems(items),
+	      onSubmit: async (commentText) => {
+	        const res = await createBookingsFromAllocation(cid, f, items, commentText);
+	        window.__suppressDraftToastOnce = true;
+	        clearBookingDraft();
+	        closeModal();
+
+	        showBookingSuccessNotification(res, {
+	          onDone: () => {
+	            closeAllWindows();
+	            setTabById('tab-account');
+	            openAccountBookings('active');
+	          }
+	        });
+	      }
+	    });
+	  };
 
   render();
   updateSummary();
@@ -6675,11 +6940,14 @@ function openAllocationModal({ camp, campId, roomsAvailable, selectedRooms, filt
     }
     try {
       document.getElementById('allocSubmit').disabled = true;
-      const ids = await createBookingsFromAllocation(cid, f, items);
+      const res = await createBookingsFromAllocation(cid, f, items);
       closeModal();
-      setTabById('tab-account');
-      await openAccountBookings('active');
-      alert(ids.length > 1 ? `Заявки на бронирование созданы: ${ids.join(', ')}` : `Заявка на бронирование создана (№${ids[0]}).`);
+      showBookingSuccessNotification(res, {
+        onDone: async () => {
+          setTabById('tab-account');
+          await openAccountBookings('active');
+        }
+      });
     } catch (e) {
       alert(e.message || 'Не удалось создать бронь');
       document.getElementById('allocSubmit').disabled = false;

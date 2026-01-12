@@ -689,7 +689,7 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 }
 .map-btn.text-btn:active{transform:scale(.98);}
 .map-btn:hover{background:none; box-shadow:none;}
-.map-btn:active{transform:scale(.96);}
+.map-btn:not(.cart-btn):active{transform:scale(.96);}
 .map-btn.filter-active{filter:drop-shadow(0 10px 28px rgba(34,197,94,.7));}
 .map-ui .map-btn .tg-emoji{width:64px; height:64px; display:block;}
 /* календарь чуть меньше компаса */
@@ -756,8 +756,8 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   opacity:1;
 }
 .map-btn.draft.cart-btn:active{
-  transform:translateX(-50%) !important;
-  opacity:0.8;
+  transform:translateX(-50%) scale(.96);
+  opacity:0.85;
 }
 .map-btn.draft .map-badge{
   position:absolute;
@@ -1193,6 +1193,14 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   box-shadow:0 20px 60px rgba(0,0,0,0.45);
   box-sizing:border-box;
 }
+.dp-kind{
+  text-align:center;
+  font-size:14px;
+  font-weight:900;
+  letter-spacing:0.2px;
+  color:#e6eaf0;
+  margin:2px 0 10px;
+}
 .dp-top{
   display:flex;
   align-items:center;
@@ -1235,6 +1243,12 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   gap:6px;
   text-align:center;
 }
+.dp-actions{
+  display:grid;
+  grid-template-columns:repeat(3, minmax(0, 1fr));
+  gap:10px;
+  margin-top:12px;
+}
 .dp-dow{
   color:#9aa3ad;
   font-size:12px;
@@ -1254,6 +1268,10 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   box-sizing:border-box;
 }
 .dp-day:hover{background:rgba(255,255,255,0.06);}
+.dp-day.in-range:not(.selected){
+  background:rgba(34,197,94,0.18);
+  border-color:rgba(34,197,94,0.35);
+}
 .dp-day.selected{
   background:#22c55e;
   border-color:#22c55e;

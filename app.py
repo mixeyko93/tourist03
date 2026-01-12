@@ -8,9 +8,10 @@ from pathlib import Path
 from datetime import datetime, date
 import re
 import secrets
+import uuid
 from contextlib import contextmanager
 from dotenv import load_dotenv
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from glob import glob
 
 # Load environment variables from .env file
@@ -357,6 +358,21 @@ class BookingCreateRequest(BaseModel):
     comment: Optional[str] = None
 
 
+class BookingOrderItemRequest(BaseModel):
+    room_id: int
+    adults: int = 1
+    kids: int = 0
+    guests_count: Optional[int] = None
+
+
+class BookingOrderCreateRequest(BaseModel):
+    camp_id: int
+    check_in: date
+    check_out: date
+    items: List[BookingOrderItemRequest]
+    comment: Optional[str] = None
+
+
 class BookingAdminUpdateRequest(BaseModel):
     status: Optional[str] = None
     payment_required: Optional[bool] = None
@@ -672,6 +688,7 @@ def init_crm_db():
                 user_id INTEGER,
                 camp_id INTEGER NOT NULL,
                 room_id INTEGER,
+                group_id TEXT,
                 check_in DATE NOT NULL,
                 check_out DATE NOT NULL,
                 guests_count INTEGER NOT NULL,
@@ -683,11 +700,20 @@ def init_crm_db():
             )
             """
         )
-        # Миграция: добавляем столбцы source и comment если их нет
+        # Миграция: добавляем служебные столбцы если их нет
         cur.execute(
             """
             DO $$
             BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = 'crm'
+                    AND table_name = 'bookings'
+                    AND column_name = 'group_id'
+                ) THEN
+                    ALTER TABLE crm.bookings ADD COLUMN group_id TEXT;
+                END IF;
+
                 IF NOT EXISTS (
                     SELECT 1 FROM information_schema.columns
                     WHERE table_schema = 'crm'
@@ -1347,6 +1373,100 @@ def _booking_public(row: dict) -> dict:
     }
 
 
+def _order_status_rollup(statuses: List[str]) -> str:
+    sts = [(s or "").strip().lower() for s in (statuses or [])]
+    sts = [s for s in sts if s]
+    if not sts:
+        return "pending"
+
+    terminal = {"cancelled_by_user", "rejected", "completed", "cancelled"}
+    if all(s in terminal for s in sts):
+        # If mixed terminal statuses, prefer "completed" (otherwise "cancelled")
+        if any(s == "completed" for s in sts):
+            return "completed"
+        if any(s == "rejected" for s in sts):
+            return "rejected"
+        if any(s == "cancelled_by_user" for s in sts):
+            return "cancelled_by_user"
+        return "cancelled"
+
+    # If any pending exists, order is still in processing
+    if any(s in ("pending", "new", "") for s in sts):
+        return "pending"
+    if any(s == "awaiting_payment" for s in sts):
+        return "awaiting_payment"
+    if any(s == "confirmed" for s in sts):
+        return "confirmed"
+    return sts[0] or "pending"
+
+
+def _order_payment_status_rollup(statuses: List[str]) -> str:
+    sts = [(s or "").strip().lower() for s in (statuses or [])]
+    sts = [s for s in sts if s]
+    if not sts:
+        return "unpaid"
+    if any(s == "unpaid" for s in sts):
+        return "unpaid"
+    if any(s == "cash" for s in sts):
+        return "cash"
+    if all(s == "paid" for s in sts):
+        return "paid"
+    return sts[0] or "unpaid"
+
+
+def _order_public(order_id: str, rows: List[dict]) -> Dict[str, Any]:
+    first = rows[0] if rows else {}
+    guests_total = 0
+    items = []
+    for r in rows:
+        try:
+            guests_total += int(r.get("guests_count") or 0)
+        except Exception:
+            pass
+        items.append(
+            {
+                "booking_id": r.get("id"),
+                "room_id": r.get("room_id"),
+                "room_name": r.get("room_name") or "",
+                "check_in": r.get("check_in"),
+                "check_out": r.get("check_out"),
+                "guests_count": r.get("guests_count"),
+                "status": r.get("status") or "",
+                "payment_required": bool(r.get("payment_required")),
+                "payment_status": r.get("payment_status") or "unpaid",
+                "comment": r.get("comment") or "",
+                "created_at": r.get("created_at"),
+                "updated_at": r.get("updated_at"),
+            }
+        )
+
+    created_at = None
+    updated_at = None
+    for r in rows:
+        ca = r.get("created_at")
+        ua = r.get("updated_at")
+        if ca and (created_at is None or ca < created_at):
+            created_at = ca
+        if ua and (updated_at is None or ua > updated_at):
+            updated_at = ua
+
+    return {
+        "order_id": order_id,
+        "camp_id": first.get("camp_id"),
+        "camp_name": first.get("camp_name") or "",
+        "check_in": first.get("check_in"),
+        "check_out": first.get("check_out"),
+        "guests_count": guests_total,
+        "status": _order_status_rollup([r.get("status") for r in rows]),
+        "payment_required": any(bool(r.get("payment_required")) for r in rows),
+        "payment_status": _order_payment_status_rollup([r.get("payment_status") for r in rows]),
+        "comment": next((str(r.get("comment") or "").strip() for r in rows if str(r.get("comment") or "").strip()), "") or "",
+        "created_at": created_at,
+        "updated_at": updated_at,
+        "items": items,
+    }
+
+
 @app.get("/api/auth/bookings")
 def auth_my_bookings(mode: str = "active", user: dict = Depends(get_current_user)):
     mode = (mode or "active").strip().lower()
@@ -1400,6 +1520,341 @@ def auth_my_bookings(mode: str = "active", user: dict = Depends(get_current_user
                 active.append(_booking_public(r))
 
     return {"ok": True, "items": (history if mode == "history" else active)}
+
+
+@app.get("/api/auth/orders")
+def auth_my_orders(mode: str = "active", user: dict = Depends(get_current_user)):
+    mode = (mode or "active").strip().lower()
+    today = date.today()
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT
+                b.id,
+                b.group_id,
+                b.camp_id,
+                c.name AS camp_name,
+                b.room_id,
+                r.name AS room_name,
+                b.check_in,
+                b.check_out,
+                b.guests_count,
+                b.status,
+                b.payment_required,
+                b.payment_status,
+                b.comment,
+                b.created_at,
+                b.updated_at
+            FROM crm.bookings b
+            LEFT JOIN catalog.camps c ON c.id = b.camp_id
+            LEFT JOIN catalog.rooms r ON r.id = b.room_id
+            WHERE b.user_id = %s
+            ORDER BY b.created_at DESC, b.id DESC
+            """,
+            (user["id"],),
+        )
+        rows = [dict(r) for r in cur.fetchall()]
+
+    terminal_statuses = {"cancelled_by_user", "rejected", "completed", "cancelled"}
+
+    for r in rows:
+        st = (r.get("status") or "").strip().lower()
+        is_terminal = st in terminal_statuses
+        is_past = r.get("check_out") is not None and r["check_out"] < today
+        if is_past and not is_terminal:
+            r["status"] = "completed"
+
+    groups: Dict[str, List[dict]] = {}
+    order_keys: List[str] = []
+    for r in rows:
+        key = (r.get("group_id") or "").strip() or str(r.get("id"))
+        if key not in groups:
+            groups[key] = []
+            order_keys.append(key)
+        groups[key].append(r)
+
+    active = []
+    history = []
+    for key in order_keys:
+        rs = groups.get(key) or []
+        if not rs:
+            continue
+        order = _order_public(key, rs)
+        # Order is history only if every booking in it is history/past/terminal
+        all_history = True
+        for r in rs:
+            st = (r.get("status") or "").strip().lower()
+            is_terminal = st in terminal_statuses
+            is_past = r.get("check_out") is not None and r["check_out"] < today
+            if not (is_terminal or is_past):
+                all_history = False
+                break
+        (history if all_history else active).append(order)
+
+    return {"ok": True, "items": (history if mode == "history" else active)}
+
+
+@app.get("/api/auth/orders/{order_id}")
+def auth_order_one(order_id: str, user: dict = Depends(get_current_user)):
+    order_id = (order_id or "").strip()
+    if not order_id:
+        raise HTTPException(status_code=400, detail="invalid id")
+
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        if order_id.isdigit():
+            cur.execute(
+                """
+                SELECT
+                    b.id,
+                    b.group_id,
+                    b.camp_id,
+                    c.name AS camp_name,
+                    b.room_id,
+                    r.name AS room_name,
+                    b.check_in,
+                    b.check_out,
+                    b.guests_count,
+                    b.status,
+                    b.payment_required,
+                    b.payment_status,
+                    b.comment,
+                    b.created_at,
+                    b.updated_at
+                FROM crm.bookings b
+                LEFT JOIN catalog.camps c ON c.id = b.camp_id
+                LEFT JOIN catalog.rooms r ON r.id = b.room_id
+                WHERE b.id = %s AND b.user_id = %s
+                ORDER BY b.id DESC
+                """,
+                (int(order_id), user["id"]),
+            )
+        else:
+            cur.execute(
+                """
+                SELECT
+                    b.id,
+                    b.group_id,
+                    b.camp_id,
+                    c.name AS camp_name,
+                    b.room_id,
+                    r.name AS room_name,
+                    b.check_in,
+                    b.check_out,
+                    b.guests_count,
+                    b.status,
+                    b.payment_required,
+                    b.payment_status,
+                    b.comment,
+                    b.created_at,
+                    b.updated_at
+                FROM crm.bookings b
+                LEFT JOIN catalog.camps c ON c.id = b.camp_id
+                LEFT JOIN catalog.rooms r ON r.id = b.room_id
+                WHERE b.group_id = %s AND b.user_id = %s
+                ORDER BY b.id DESC
+                """,
+                (order_id, user["id"]),
+            )
+        rows = [dict(r) for r in cur.fetchall()]
+        if not rows:
+            raise HTTPException(status_code=404, detail="not found")
+    return {"ok": True, "item": _order_public(order_id, rows)}
+
+
+@app.post("/api/auth/orders")
+def auth_order_create(payload: BookingOrderCreateRequest, user: dict = Depends(get_current_user)):
+    if payload.check_out <= payload.check_in:
+        raise HTTPException(status_code=400, detail="Дата выезда должна быть позже даты заезда")
+
+    raw_items = payload.items or []
+    if not raw_items:
+        raise HTTPException(status_code=400, detail="Добавьте апартаменты")
+
+    items = []
+    seen_room_ids = set()
+    for it in raw_items:
+        room_id = int(it.room_id)
+        if room_id in seen_room_ids:
+            raise HTTPException(status_code=400, detail="Дублирование апартаментов в заявке")
+        seen_room_ids.add(room_id)
+        guests_count = it.guests_count
+        if guests_count is None:
+            guests_count = int(it.adults or 0) + int(it.kids or 0)
+        try:
+            guests_count = int(guests_count)
+        except Exception:
+            guests_count = 0
+        if guests_count <= 0:
+            raise HTTPException(status_code=400, detail="Укажите количество гостей")
+        items.append({"room_id": room_id, "guests_count": guests_count})
+
+    room_ids = [it["room_id"] for it in items]
+
+    # Validate rooms belong to camp
+    with _db_conn("catalog") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT id, camp_id FROM catalog.rooms WHERE id = ANY(%s)",
+            (room_ids,),
+        )
+        rows = cur.fetchall()
+    rooms_by_id = {int(r["id"]): int(r.get("camp_id") or 0) for r in rows}
+    if len(rooms_by_id) != len(room_ids):
+        raise HTTPException(status_code=400, detail="Неверный номер апартамента")
+    for rid in room_ids:
+        if int(rooms_by_id.get(int(rid)) or 0) != int(payload.camp_id):
+            raise HTTPException(status_code=400, detail="Неверный номер/база")
+
+    order_id = uuid.uuid4().hex
+    comment = (payload.comment or "").strip() or None
+
+    blocked_statuses = ("rejected", "cancelled_by_user", "cancelled")
+    booking_ids: List[int] = []
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        # Check overlap with existing bookings for each room
+        for it in items:
+            cur.execute(
+                """
+                SELECT 1
+                FROM crm.bookings
+                WHERE room_id=%s
+                  AND camp_id=%s
+                  AND (status IS NULL OR lower(status) NOT IN %s)
+                  AND check_in < %s
+                  AND check_out > %s
+                LIMIT 1
+                """,
+                (it["room_id"], payload.camp_id, blocked_statuses, payload.check_out, payload.check_in),
+            )
+            if cur.fetchone():
+                raise HTTPException(status_code=409, detail="Один из вариантов уже забронирован на выбранные даты")
+
+        for it in items:
+            cur.execute(
+                """
+                INSERT INTO crm.bookings(user_id, camp_id, room_id, group_id, check_in, check_out, guests_count, status, source, comment)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,'pending','webapp',%s)
+                RETURNING id
+                """,
+                (
+                    user["id"],
+                    payload.camp_id,
+                    it["room_id"],
+                    order_id,
+                    payload.check_in,
+                    payload.check_out,
+                    it["guests_count"],
+                    comment,
+                ),
+            )
+            row = cur.fetchone()
+            booking_ids.append(int(row["id"]))
+        conn.commit()
+
+    log_user_event(
+        user["id"],
+        "order_create",
+        {
+            "order_id": order_id,
+            "camp_id": payload.camp_id,
+            "check_in": str(payload.check_in),
+            "check_out": str(payload.check_out),
+            "booking_ids": booking_ids,
+        },
+    )
+    return {"ok": True, "order_id": order_id, "booking_ids": booking_ids}
+
+
+@app.post("/api/auth/orders/{order_id}/cancel")
+def auth_order_cancel(order_id: str, user: dict = Depends(get_current_user)):
+    order_id = (order_id or "").strip()
+    if not order_id:
+        raise HTTPException(status_code=400, detail="invalid id")
+
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        if order_id.isdigit():
+            cur.execute(
+                "SELECT id, status FROM crm.bookings WHERE id=%s AND user_id=%s",
+                (int(order_id), user["id"]),
+            )
+            rows = [dict(r) for r in cur.fetchall()]
+        else:
+            cur.execute(
+                "SELECT id, status FROM crm.bookings WHERE group_id=%s AND user_id=%s",
+                (order_id, user["id"]),
+            )
+            rows = [dict(r) for r in cur.fetchall()]
+        if not rows:
+            raise HTTPException(status_code=404, detail="not found")
+
+        for r in rows:
+            st = (r.get("status") or "").strip().lower()
+            if st in ("completed", "rejected", "cancelled_by_user", "cancelled"):
+                raise HTTPException(status_code=400, detail="Бронь уже завершена")
+
+        if order_id.isdigit():
+            cur.execute(
+                "UPDATE crm.bookings SET status='cancelled_by_user', updated_at=NOW() WHERE id=%s AND user_id=%s",
+                (int(order_id), user["id"]),
+            )
+        else:
+            cur.execute(
+                "UPDATE crm.bookings SET status='cancelled_by_user', updated_at=NOW() WHERE group_id=%s AND user_id=%s",
+                (order_id, user["id"]),
+            )
+        conn.commit()
+
+    log_user_event(user["id"], "order_cancel", {"order_id": order_id})
+    return {"ok": True}
+
+
+@app.post("/api/auth/orders/{order_id}/pay")
+def auth_order_pay(order_id: str, user: dict = Depends(get_current_user)):
+    order_id = (order_id or "").strip()
+    if not order_id:
+        raise HTTPException(status_code=400, detail="invalid id")
+
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        if order_id.isdigit():
+            cur.execute(
+                """
+                SELECT id, status, payment_required, payment_status
+                FROM crm.bookings
+                WHERE id=%s AND user_id=%s
+                """,
+                (int(order_id), user["id"]),
+            )
+        else:
+            cur.execute(
+                """
+                SELECT id, status, payment_required, payment_status
+                FROM crm.bookings
+                WHERE group_id=%s AND user_id=%s
+                """,
+                (order_id, user["id"]),
+            )
+        rows = [dict(r) for r in cur.fetchall()]
+        if not rows:
+            raise HTTPException(status_code=404, detail="not found")
+
+        for r in rows:
+            st = (r.get("status") or "").strip().lower()
+            pay_required = bool(r.get("payment_required"))
+            pay_status = (r.get("payment_status") or "").strip().lower()
+            if st != "confirmed":
+                raise HTTPException(status_code=400, detail="Оплата доступна после подтверждения брони")
+            if not pay_required:
+                raise HTTPException(status_code=400, detail="Оплата пока не запрошена администратором")
+            if pay_status != "unpaid":
+                raise HTTPException(status_code=400, detail="Бронь уже оплачена или отмечена как наличная")
+
+    log_user_event(user["id"], "order_pay_click", {"order_id": order_id})
+    return {"ok": True, "payment_url": None}
 
 
 @app.post("/api/auth/bookings")

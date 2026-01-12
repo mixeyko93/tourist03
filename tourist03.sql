@@ -380,6 +380,7 @@ CREATE TABLE crm.bookings (
     user_id integer,
     camp_id integer,
     room_id integer,
+    group_id text,
     check_in date,
     check_out date,
     guests_count integer,
@@ -952,4 +953,3 @@ CREATE UNIQUE INDEX idx_users_phone_unique ON auth.users USING btree (phone) WHE
 --
 
 \unrestrict lANdggfEm7uFYc62JtmdmoscmOXWW2KYFuElTvwLEe4ZhR7jyczWaOzvfqiR1uN
-
