@@ -8067,7 +8067,21 @@ window.addEventListener('DOMContentLoaded', () => {
     try { location.reload(); } catch (_) {}
   };
   const draftBtn = document.getElementById('openBookingDraft');
-  if (draftBtn) draftBtn.onclick = openBookingDraft;
+  if (draftBtn) {
+    draftBtn.onclick = openBookingDraft;
+
+    // Android WebView sometimes "jumps" centered absolute buttons on tap.
+    // Force a stable pressed state on pointer/touch down.
+    const setPressed = () => { try { draftBtn.classList.add('is-pressed'); } catch (_) {} };
+    const clearPressed = () => { try { draftBtn.classList.remove('is-pressed'); } catch (_) {} };
+    try { draftBtn.addEventListener('pointerdown', setPressed, { passive: true }); } catch (_) {}
+    try { draftBtn.addEventListener('pointerup', clearPressed, { passive: true }); } catch (_) {}
+    try { draftBtn.addEventListener('pointercancel', clearPressed, { passive: true }); } catch (_) {}
+    try { draftBtn.addEventListener('touchstart', setPressed, { passive: true }); } catch (_) {}
+    try { draftBtn.addEventListener('touchend', clearPressed, { passive: true }); } catch (_) {}
+    try { draftBtn.addEventListener('touchcancel', clearPressed, { passive: true }); } catch (_) {}
+    try { draftBtn.addEventListener('blur', clearPressed, { passive: true }); } catch (_) {}
+  }
   try { renderAccount(); } catch(_) {}
   try {
     (async ()=>{

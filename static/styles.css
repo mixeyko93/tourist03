@@ -81,7 +81,7 @@ html, body{
 }
 *{box-sizing:border-box;}
 .tg-app{position:fixed; inset:0; display:flex; flex-direction:column; overflow:hidden;}
-.page-title{font-size:24px; font-weight:800; margin:18px 18px 14px; text-align:center !important;}
+.page-title{font-size:24px; font-weight:800; margin:18px 18px 14px; text-align:left !important;}
 .greet-title .greet-core{
   display:inline-block;
   position:relative;
@@ -702,7 +702,9 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   align-items:center;
   justify-content:center;
   left:50%;
-  transform:translateX(-50%);
+  transform:translate3d(-50%,0,0);
+  transform-origin:center center;
+  backface-visibility:hidden;
   bottom:18px;
   width:64px;
   height:64px;
@@ -763,10 +765,14 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 .map-btn.draft.cart-btn:focus,
 .map-btn.draft.cart-btn:active:focus{
   /* Lock position - no scale, no movement */
-  transform:translateX(-50%) !important;
+  transform:translate3d(-50%,0,0) !important;
   opacity:0.85;
   /* Disable any inherited transforms */
   will-change:auto !important;
+}
+.map-btn.draft.cart-btn.is-pressed{
+  transform:translate3d(-50%,0,0) !important;
+  opacity:0.85;
 }
 .map-btn.draft.cart-btn:active .tg-emoji,
 .map-btn.draft.cart-btn:focus .tg-emoji{
