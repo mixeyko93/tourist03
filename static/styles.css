@@ -708,6 +708,7 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   height:64px;
   border-radius:50%;
   overflow:visible;
+  /* No transform transition to prevent Android jump */
   transition:
     width .38s cubic-bezier(.2,.9,.2,1),
     height .38s cubic-bezier(.2,.9,.2,1),
@@ -716,12 +717,14 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
     border-color .38s ease,
     box-shadow .38s ease,
     opacity .22s ease;
+  /* Force no transform changes */
+  will-change:auto;
 }
 .map-btn.draft.cart-btn .tg-emoji{
   width:64px;
   height:64px;
   display:block;
-  transition:opacity .24s ease, transform .38s cubic-bezier(.2,.9,.2,1);
+  transition:opacity .24s ease, transform .24s ease;
 }
 .map-btn.draft.cart-btn .draft-toast-text{
   position:absolute;
@@ -755,13 +758,19 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 .map-btn.draft.cart-btn.draft-toast .draft-toast-text{
   opacity:1;
 }
-.map-btn.draft.cart-btn:active{
-  /* keep centered without horizontal jump */
+/* Android needs very explicit active state without any transform except centering */
+.map-btn.draft.cart-btn:active,
+.map-btn.draft.cart-btn:focus,
+.map-btn.draft.cart-btn:active:focus{
+  /* Lock position - no scale, no movement */
   transform:translateX(-50%) !important;
   opacity:0.85;
+  /* Disable any inherited transforms */
+  will-change:auto !important;
 }
-.map-btn.draft.cart-btn:active .tg-emoji{
-  transform:scale(0.94);
+.map-btn.draft.cart-btn:active .tg-emoji,
+.map-btn.draft.cart-btn:focus .tg-emoji{
+  transform:scale(0.92);
 }
 .map-btn.draft .map-badge{
   position:absolute;
