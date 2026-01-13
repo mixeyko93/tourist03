@@ -980,7 +980,7 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   left:50%;
   top:calc(env(safe-area-inset-top) + 20px);
   transform:translateX(-50%);
-  z-index:2000;
+  z-index:20000;
   display:flex;
   align-items:center;
   gap:10px;
@@ -1532,13 +1532,46 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 .alloc-actions.is-row{grid-template-columns:1fr 1fr;}
 
 .alloc-pick-actions{
-  display:grid;
-  grid-template-columns:1fr 1fr;
+  display:flex;
   gap:10px;
   margin-top:12px;
 }
+.alloc-pick-actions .pick-col{
+  min-width:0;
+  flex:0 0 auto;
+  max-width:100%;
+  overflow:hidden;
+  transition:max-width .28s ease, opacity .22s ease, transform .28s ease;
+}
 .alloc-pick-actions .button{width:100%;}
-.alloc-pick-actions .button:only-child{grid-column:1 / -1;}
+.alloc-pick-actions.is-full{gap:0;}
+.alloc-pick-actions.is-split{gap:10px;}
+.alloc-pick-actions.is-full .pick-main{
+  flex:1 1 0;
+  max-width:100%;
+}
+.alloc-pick-actions.is-split .pick-col{
+  flex:1 1 0;
+}
+.alloc-pick-actions.is-split .pick-main,
+.alloc-pick-actions.is-split .pick-cancel{
+  max-width:calc(50% - 5px);
+}
+.alloc-pick-actions.is-full .pick-cancel{
+  max-width:0;
+  opacity:0;
+  transform:translateX(8px);
+  pointer-events:none;
+}
+.alloc-pick-actions.is-split .pick-cancel{
+  max-width:1000px;
+  opacity:1;
+  transform:none;
+  pointer-events:auto;
+}
+.alloc-pick-actions.is-full .pick-main{
+  max-width:1000px;
+}
 
 /* price block inside details */
 .alloc-price-card{

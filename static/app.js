@@ -1840,7 +1840,7 @@ function openEmptyBookingConfirmationModal(opts = {}){
 	        }
 	        return;
 	      }
-	      showSnackbar({ message: 'Выберите базу отдыха на карте и добавьте апартаменты в корзину.', timeoutMs: 2400 });
+	      showSnackbar({ message: 'Выберите базу отдыха на карте и добавьте апартаменты в корзину или воспользуйтесь подбором в корзине.', timeoutMs: 6500 });
 	    };
 	  }
 
@@ -5653,9 +5653,13 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
 
 		      <div class="alloc-summary" id="confirmSummary" style="display:none"></div>
 	      
-		      <div class="alloc-pick-actions">
-		        <button class="button ghost alloc-autopick" id="confirmAutoPick">Подбор в этой базе</button>
-		        <button class="button ghost" id="confirmCancelPick" style="display:none;border-color:#ef4444;color:#ef4444">Отменить подбор</button>
+		      <div class="alloc-pick-actions is-full" id="confirmPickActions">
+		        <div class="pick-col pick-main">
+		          <button class="button ghost alloc-autopick" id="confirmAutoPick">Подбор в этой базе</button>
+		        </div>
+		        <div class="pick-col pick-cancel">
+		          <button class="button ghost" id="confirmCancelPick" style="border-color:#ef4444;color:#ef4444">Отменить подбор</button>
+		        </div>
 		      </div>
 
 		      <div class="alloc-actions is-row">
@@ -5673,6 +5677,7 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
 	  const addRoomBtn = document.getElementById('confirmAddRoom');
 	  const autoPickBtn = document.getElementById('confirmAutoPick');
 	  const cancelPickBtn = document.getElementById('confirmCancelPick');
+	  const pickActionsEl = document.getElementById('confirmPickActions');
 	  const editDatesBtn = document.getElementById('confirmEditDates');
 
   // Multi-cart отключён
@@ -6527,7 +6532,15 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
   
 				  function updateAutoPickButton() {
 				    if (!autoPickBtn) return;
-				    if (cancelPickBtn) cancelPickBtn.style.display = autoPickActive ? '' : 'none';
+				    if (pickActionsEl) {
+				      pickActionsEl.classList.toggle('is-split', !!autoPickActive);
+				      pickActionsEl.classList.toggle('is-full', !autoPickActive);
+				    }
+				    if (cancelPickBtn) {
+				      cancelPickBtn.disabled = !autoPickActive;
+				      cancelPickBtn.tabIndex = autoPickActive ? 0 : -1;
+				      cancelPickBtn.setAttribute('aria-hidden', autoPickActive ? 'false' : 'true');
+				    }
 				    
 				    const totalGuests = (Number(f.adults) || 0) + (Number(f.kids) || 0);
 				    const allocatedGuests = items.reduce((sum, it) => sum + (it.adults || 0) + (it.kids || 0), 0);
@@ -6565,7 +6578,7 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
 			        autoPickBtn.disabled = true;
 			        autoPickBtn.style.opacity = '0.5';
 			      } else if (autoPickVariants.length === 1) {
-			        autoPickBtn.textContent = 'Подбор в этой базе';
+			        autoPickBtn.textContent = autoPickActive ? 'Подбор применён' : 'Подбор в этой базе';
 			        autoPickBtn.disabled = false;
 			        autoPickBtn.style.opacity = '1';
 			      } else {
@@ -6578,69 +6591,84 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
 			    }
 			  }
   
-		  if (autoPickBtn) {
-		    autoPickBtn.onclick = () => {
-		      if (!autoPickVariants.length) return;
-		      // Если только один вариант — просто применяем его
-		      if (autoPickVariants.length === 1) {
-		        const variant = autoPickVariants[0];
-		        autoPickActive = true;
-		        autoPickIndex = 0;
+		  const scrollCartToTop = () => {
+		    try { modal.scrollTo({ top: 0, behavior: 'smooth' }); return; } catch (_) {}
+		    try { modal.scrollTop = 0; } catch (_) {}
+		  };
 
-	        items.length = 0;
-	        for (const room of variant.rooms) {
-	          items.push({ room, adults: 0, kids: 0 });
-	        }
-	        const distributed = autoDistributeGuests(variant.rooms, f);
-	        distributed.forEach((d, i) => {
-	          if (items[i]) {
-	            items[i].adults = d.adults;
-	            items[i].kids = d.kids;
-	          }
-	        });
-	        render();
-	        updateSummary();
-	        updateAutoPickButton();
-	        return;
-	      }
-	      
-	      // Берём следующий вариант
-	      const variant = autoPickVariants[autoPickIndex];
-	      autoPickIndex = (autoPickIndex + 1) % autoPickVariants.length;
-	      autoPickActive = true;
-      
-      // Очищаем текущие апартаменты и заменяем на подобранный вариант
-      items.length = 0;
-      for (const room of variant.rooms) {
-        items.push({ room, adults: 0, kids: 0 });
-      }
-      
-      // Автораспределяем гостей
-      const distributed = autoDistributeGuests(variant.rooms, f);
-      distributed.forEach((d, i) => {
-        if (items[i]) {
-          items[i].adults = d.adults;
-          items[i].kids = d.kids;
-        }
-      });
-      
-      render();
-      updateSummary();
-	      updateAutoPickButton();
-	    };
-	  }
+		  const cloneCartItems = (src) => (Array.isArray(src) ? src : []).map(it => ({
+		    room: it?.room,
+		    adults: Math.max(0, Number(it?.adults) || 0),
+		    kids: Math.max(0, Number(it?.kids) || 0),
+		  })).filter(it => Number.isFinite(Number(it?.room?.id)));
+
+		  const ensureAutoPickSnapshot = async () => {
+		    if (autoPickSnapshot) return true;
+		    if (items.length > 0) {
+		      const ok = await showConfirmModal({
+		        title: 'Подбор апартаментов',
+		        message: 'В случае подбора выбранные вами апартаменты будут удалены из корзины. Продолжить?',
+		        confirmText: 'Продолжить',
+		        cancelText: 'Отмена',
+		        danger: true,
+		      });
+		      if (!ok) return false;
+		    }
+		    autoPickSnapshot = cloneCartItems(items);
+		    return true;
+		  };
+
+		  const applyAutoPickVariant = (variant) => {
+		    if (!variant || !Array.isArray(variant.rooms) || variant.rooms.length === 0) return;
+		    items.length = 0;
+		    for (const room of variant.rooms) {
+		      items.push({ room, adults: 0, kids: 0 });
+		    }
+		    const distributed = autoDistributeGuests(variant.rooms, f);
+		    distributed.forEach((d, i) => {
+		      if (items[i]) {
+		        items[i].adults = d.adults;
+		        items[i].kids = d.kids;
+		      }
+		    });
+		    autoPickActive = true;
+		    render();
+		    updateSummary();
+		    updateAutoPickButton();
+		    scrollCartToTop();
+		  };
+
+		  if (autoPickBtn) {
+		    autoPickBtn.onclick = async () => {
+		      if (!autoPickVariants.length) return;
+		      const ok = await ensureAutoPickSnapshot();
+		      if (!ok) return;
+		      // Если только один вариант — применяем его
+		      if (autoPickVariants.length === 1) {
+		        autoPickIndex = 0;
+		        applyAutoPickVariant(autoPickVariants[0]);
+		        return;
+		      }
+		      const variant = autoPickVariants[autoPickIndex];
+		      autoPickIndex = (autoPickIndex + 1) % autoPickVariants.length;
+		      applyAutoPickVariant(variant);
+		    };
+		  }
 
 	  if (cancelPickBtn) {
 	    cancelPickBtn.onclick = () => {
-	      autoPickVariants = [];
+	      if (!autoPickSnapshot) return;
+	      const restored = cloneCartItems(autoPickSnapshot);
+	      items.length = 0;
+	      for (const it of restored) items.push(it);
 	      autoPickIndex = 0;
 	      autoPickActive = false;
 	      autoPickSnapshot = null;
 	      autoPickSnapshotIsSingle = false;
-	      try { localStorage.removeItem(BOOKING_DRAFT_KEY); } catch (_) {}
-	      window.__bookingDraft = null;
-	      updateBookingDraftUi();
-	      openEmptyBookingConfirmationModal({ filter: f });
+	      render();
+	      updateSummary();
+	      updateAutoPickButton();
+	      scrollCartToTop();
 	    };
 	  }
 
