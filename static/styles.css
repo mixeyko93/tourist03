@@ -756,8 +756,12 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   opacity:1;
 }
 .map-btn.draft.cart-btn:active{
-  transform:translateX(-50%) scale(.96);
+  /* keep centered without horizontal jump */
+  transform:translateX(-50%) !important;
   opacity:0.85;
+}
+.map-btn.draft.cart-btn:active .tg-emoji{
+  transform:scale(0.94);
 }
 .map-btn.draft .map-badge{
   position:absolute;
