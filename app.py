@@ -1,6 +1,8 @@
 import os
 import json
 import logging
+import socket
+import subprocess
 import psycopg2
 from psycopg2 import errors
 from psycopg2.extras import RealDictCursor
@@ -837,6 +839,81 @@ if DB_INIT:
 else:
     logger.info("DB_INIT=0 — skipping init_*_db() on startup")
 
+_CRM_BOOKINGS_SCHEMA_READY = False
+
+
+def ensure_crm_bookings_schema(conn) -> None:
+    """
+    Production-safe guard: some servers run with DB_INIT=0, so migrations don't execute.
+    Orders endpoints depend on several columns in crm.bookings (e.g. group_id).
+    """
+    global _CRM_BOOKINGS_SCHEMA_READY
+    if _CRM_BOOKINGS_SCHEMA_READY:
+        return
+
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = 'crm'
+                    AND table_name = 'bookings'
+                    AND column_name = 'group_id'
+                ) THEN
+                    ALTER TABLE crm.bookings ADD COLUMN group_id TEXT;
+                END IF;
+
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = 'crm'
+                    AND table_name = 'bookings'
+                    AND column_name = 'source'
+                ) THEN
+                    ALTER TABLE crm.bookings ADD COLUMN source TEXT NOT NULL DEFAULT 'crm';
+                END IF;
+
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = 'crm'
+                    AND table_name = 'bookings'
+                    AND column_name = 'comment'
+                ) THEN
+                    ALTER TABLE crm.bookings ADD COLUMN comment TEXT;
+                END IF;
+
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = 'crm'
+                    AND table_name = 'bookings'
+                    AND column_name = 'payment_status'
+                ) THEN
+                    ALTER TABLE crm.bookings ADD COLUMN payment_status TEXT NOT NULL DEFAULT 'unpaid';
+                END IF;
+
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = 'crm'
+                    AND table_name = 'bookings'
+                    AND column_name = 'payment_required'
+                ) THEN
+                    ALTER TABLE crm.bookings ADD COLUMN payment_required BOOLEAN NOT NULL DEFAULT FALSE;
+                END IF;
+            END $$;
+            """
+        )
+        conn.commit()
+        _CRM_BOOKINGS_SCHEMA_READY = True
+    except Exception:
+        conn.rollback()
+        logger.exception("Failed to ensure crm.bookings schema (DB migration required)")
+        raise HTTPException(
+            status_code=500,
+            detail="Требуется обновление базы данных на сервере (миграция crm.bookings).",
+        )
+
 TEST_ADMIN_EMAIL = os.getenv("TEST_ADMIN_EMAIL")
 TEST_ADMIN_PASSWORD = os.getenv("TEST_ADMIN_PASSWORD")
 if TEST_ADMIN_EMAIL and TEST_ADMIN_PASSWORD:
@@ -856,6 +933,39 @@ def index():
 def index_html():
     # Дополнительный маршрут: некоторые клиенты (прокси/вебвью) могут запрашивать /index.html
     return FileResponse(os.path.join(BASE_DIR, "index.html"))
+
+@app.get("/api/version")
+def api_version():
+    version_env = (os.getenv("APP_VERSION") or "").strip() or None
+    git_rev = None
+    try:
+        git_rev = (
+            subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=BASE_DIR, stderr=subprocess.DEVNULL)
+            .decode("utf-8", errors="ignore")
+            .strip()
+        ) or None
+    except Exception:
+        git_rev = None
+
+    def _mtime(path: str) -> Optional[str]:
+        try:
+            ts = os.path.getmtime(path)
+        except Exception:
+            return None
+        return datetime.utcfromtimestamp(ts).isoformat() + "Z"
+
+    return {
+        "ok": True,
+        "server_time": datetime.utcnow().isoformat() + "Z",
+        "hostname": socket.gethostname(),
+        "pid": os.getpid(),
+        "app_version": version_env,
+        "git_rev": git_rev,
+        "app_py_mtime": _mtime(os.path.join(BASE_DIR, "app.py")),
+        "index_html_mtime": _mtime(os.path.join(BASE_DIR, "index.html")),
+        "static_app_js_mtime": _mtime(os.path.join(STATIC_DIR, "app.js")),
+        "static_css_mtime": _mtime(os.path.join(STATIC_DIR, "styles.css")),
+    }
 
 @app.get("/superadmin", response_class=HTMLResponse)
 def superadmin_page():
@@ -1530,6 +1640,7 @@ def auth_my_orders(mode: str = "active", user: dict = Depends(get_current_user))
     mode = (mode or "active").strip().lower()
     today = date.today()
     with _db_conn("crm") as conn:
+        ensure_crm_bookings_schema(conn)
         cur = conn.cursor()
         cur.execute(
             """
@@ -1605,6 +1716,7 @@ def auth_order_one(order_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="invalid id")
 
     with _db_conn("crm") as conn:
+        ensure_crm_bookings_schema(conn)
         cur = conn.cursor()
         if order_id.isdigit():
             cur.execute(
@@ -1716,6 +1828,7 @@ def auth_order_create(payload: BookingOrderCreateRequest, user: dict = Depends(g
     blocked_statuses = ("rejected", "cancelled_by_user", "cancelled")
     booking_ids: List[int] = []
     with _db_conn("crm") as conn:
+        ensure_crm_bookings_schema(conn)
         cur = conn.cursor()
         # Check overlap with existing bookings for each room
         for it in items:
@@ -1778,6 +1891,7 @@ def auth_order_cancel(order_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="invalid id")
 
     with _db_conn("crm") as conn:
+        ensure_crm_bookings_schema(conn)
         cur = conn.cursor()
         if order_id.isdigit():
             cur.execute(
@@ -1822,6 +1936,7 @@ def auth_order_pay(order_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="invalid id")
 
     with _db_conn("crm") as conn:
+        ensure_crm_bookings_schema(conn)
         cur = conn.cursor()
         if order_id.isdigit():
             cur.execute(
