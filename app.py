@@ -1460,7 +1460,10 @@ def _order_public(order_id: str, rows: List[dict]) -> Dict[str, Any]:
         "status": _order_status_rollup([r.get("status") for r in rows]),
         "payment_required": any(bool(r.get("payment_required")) for r in rows),
         "payment_status": _order_payment_status_rollup([r.get("payment_status") for r in rows]),
-        "comment": next((str(r.get("comment") or "").strip() for r in rows if str(r.get("comment") or "").strip()), "") or "",
+        "comment": next(
+            (c for c in (str(r.get("comment") or "").strip() for r in rows) if c),
+            "",
+        ),
         "created_at": created_at,
         "updated_at": updated_at,
         "items": items,
