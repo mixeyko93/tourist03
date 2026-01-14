@@ -3211,6 +3211,7 @@ async function openBookingDetail(orderId, mode){
 
   const canCancel = ['pending','confirmed','awaiting_payment',''].includes(stRaw);
   const canPay = stRaw === 'confirmed' && !!item.payment_required && payRaw === 'unpaid';
+  const canEdit = canCancel && payRaw !== 'paid';
 
   const roomLines = Array.isArray(item.items) && item.items.length
     ? item.items.map((r)=>{
@@ -3238,10 +3239,10 @@ async function openBookingDetail(orderId, mode){
         <button class="button ghost" id="bk_det_back">Назад</button>
         <button class="button primary" id="bk_det_close">Закрыть</button>
       </div>
-      ${canCancel ? `
+      ${(canEdit || canCancel) ? `
         <div class="auth-actions" style="grid-template-columns:repeat(2,minmax(0,1fr))">
-          <button class="button ghost" id="bk_det_cancel">Отменить</button>
-          <div></div>
+          ${canEdit ? `<button class="button ghost" id="bk_det_edit">Редактировать</button>` : `<div></div>`}
+          ${canCancel ? `<button class="button ghost" id="bk_det_cancel">Отменить</button>` : `<div></div>`}
         </div>
       ` : ''}
       ${canPay ? `
@@ -3256,6 +3257,8 @@ async function openBookingDetail(orderId, mode){
   document.getElementById('bk_det_back').onclick = ()=> openAccountBookings(mode);
   const btnCancel = document.getElementById('bk_det_cancel');
   const btnPay = document.getElementById('bk_det_pay');
+  const btnEdit = document.getElementById('bk_det_edit');
+  if (btnEdit) btnEdit.onclick = ()=> openOrderEdit(item, mode);
   if (btnCancel) btnCancel.onclick = async ()=>{
     if (!safeConfirm('Отменить бронь?')) return;
     try {
@@ -3269,6 +3272,52 @@ async function openBookingDetail(orderId, mode){
       const oid = encodeURIComponent(String(item.order_id || orderId || ''));
       await authFetchJson(`/api/auth/orders/${oid}/pay`, { method:'POST' });
       alert('Запрос на оплату создан. Интеграция оплаты будет добавлена позже.');
+    } catch (e) { alert(e.message); }
+  };
+}
+
+function openOrderEdit(order, mode){
+  const oidRaw = String(order.order_id || '');
+  showModal(`
+    <div class="auth-card">
+      <div class="auth-head"><div class="auth-title">Редактирование брони</div></div>
+      <div class="auth-subtitle">Изменения применятся ко всем апартаментам в этой брони.</div>
+      <div class="auth-fields">
+        <label class="auth-field">
+          <span>Заезд</span>
+          <input id="oe_from" type="date" value="${order.check_in || ''}">
+        </label>
+        <label class="auth-field">
+          <span>Выезд</span>
+          <input id="oe_to" type="date" value="${order.check_out || ''}">
+        </label>
+        <label class="auth-field">
+          <span>Комментарий</span>
+          <input id="oe_comment" value="${String(order.comment||'').replace(/\"/g,'&quot;')}" placeholder="Например: поздний заезд">
+        </label>
+      </div>
+      <div class="auth-actions" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+        <button class="button ghost" id="oe_cancel">Отмена</button>
+        <button class="button primary" id="oe_save">Сохранить</button>
+      </div>
+    </div>
+  `);
+
+  document.getElementById('oe_cancel').onclick = ()=> openBookingDetail(oidRaw, mode);
+  document.getElementById('oe_save').onclick = async ()=>{
+    const payload = {
+      check_in: document.getElementById('oe_from').value || null,
+      check_out: document.getElementById('oe_to').value || null,
+      comment: document.getElementById('oe_comment').value || null,
+    };
+    try {
+      const oid = encodeURIComponent(String(oidRaw || ''));
+      await authFetchJson(`/api/auth/orders/${oid}`, {
+        method:'PUT',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payload),
+      });
+      await openBookingDetail(oidRaw, mode);
     } catch (e) { alert(e.message); }
   };
 }

@@ -349,6 +349,12 @@ class BookingEditRequest(BaseModel):
     comment: Optional[str] = None
 
 
+class OrderEditRequest(BaseModel):
+    check_in: Optional[date] = None
+    check_out: Optional[date] = None
+    comment: Optional[str] = None
+
+
 class BookingCreateRequest(BaseModel):
     camp_id: int
     room_id: int
@@ -1973,6 +1979,112 @@ def auth_order_pay(order_id: str, user: dict = Depends(get_current_user)):
 
     log_user_event(user["id"], "order_pay_click", {"order_id": order_id})
     return {"ok": True, "payment_url": None}
+
+
+@app.put("/api/auth/orders/{order_id}")
+def auth_order_edit(order_id: str, payload: OrderEditRequest, user: dict = Depends(get_current_user)):
+    order_id = (order_id or "").strip()
+    if not order_id:
+        raise HTTPException(status_code=400, detail="invalid id")
+
+    if payload.check_in is None and payload.check_out is None and payload.comment is None:
+        return {"ok": True}
+
+    blocked_statuses = ("rejected", "cancelled_by_user", "cancelled")
+    terminal_statuses = ("completed", "rejected", "cancelled_by_user", "cancelled")
+
+    with _db_conn("crm") as conn:
+        ensure_crm_bookings_schema(conn)
+        cur = conn.cursor()
+
+        if order_id.isdigit():
+            cur.execute(
+                """
+                SELECT id, room_id, camp_id, check_in, check_out, status, payment_status
+                FROM crm.bookings
+                WHERE id=%s AND user_id=%s
+                """,
+                (int(order_id), user["id"]),
+            )
+        else:
+            cur.execute(
+                """
+                SELECT id, room_id, camp_id, check_in, check_out, status, payment_status
+                FROM crm.bookings
+                WHERE group_id=%s AND user_id=%s
+                ORDER BY id
+                """,
+                (order_id, user["id"]),
+            )
+        rows = [dict(r) for r in cur.fetchall()]
+        if not rows:
+            raise HTTPException(status_code=404, detail="not found")
+
+        for r in rows:
+            st = (r.get("status") or "").strip().lower()
+            if st in terminal_statuses:
+                raise HTTPException(status_code=400, detail="Нельзя редактировать завершённую бронь")
+            if (r.get("payment_status") or "").strip().lower() == "paid":
+                raise HTTPException(status_code=400, detail="Нельзя редактировать оплаченную бронь")
+
+        current_check_in = rows[0].get("check_in")
+        current_check_out = rows[0].get("check_out")
+        new_check_in = payload.check_in if payload.check_in is not None else current_check_in
+        new_check_out = payload.check_out if payload.check_out is not None else current_check_out
+        if payload.check_in is not None or payload.check_out is not None:
+            if not new_check_in or not new_check_out or new_check_out <= new_check_in:
+                raise HTTPException(status_code=400, detail="Дата выезда должна быть позже даты заезда")
+
+            booking_ids = [int(r["id"]) for r in rows]
+            for r in rows:
+                cur.execute(
+                    """
+                    SELECT 1
+                    FROM crm.bookings
+                    WHERE room_id=%s
+                      AND camp_id=%s
+                      AND NOT (id = ANY(%s))
+                      AND (status IS NULL OR lower(status) NOT IN %s)
+                      AND check_in < %s
+                      AND check_out > %s
+                    LIMIT 1
+                    """,
+                    (int(r.get("room_id") or 0), int(r.get("camp_id") or 0), booking_ids, blocked_statuses, new_check_out, new_check_in),
+                )
+                if cur.fetchone():
+                    raise HTTPException(status_code=409, detail="Один из апартаментов уже забронирован на выбранные даты")
+
+        updates = []
+        params: List[Any] = []
+        if payload.check_in is not None:
+            updates.append("check_in=%s")
+            params.append(payload.check_in)
+        if payload.check_out is not None:
+            updates.append("check_out=%s")
+            params.append(payload.check_out)
+        if payload.comment is not None:
+            updates.append("comment=%s")
+            params.append((payload.comment or "").strip())
+        if not updates:
+            return {"ok": True}
+
+        updates.append("updated_at=NOW()")
+        if order_id.isdigit():
+            params.extend([int(order_id), user["id"]])
+            cur.execute(
+                f"UPDATE crm.bookings SET {', '.join(updates)} WHERE id=%s AND user_id=%s",
+                tuple(params),
+            )
+        else:
+            params.extend([order_id, user["id"]])
+            cur.execute(
+                f"UPDATE crm.bookings SET {', '.join(updates)} WHERE group_id=%s AND user_id=%s",
+                tuple(params),
+            )
+        conn.commit()
+
+    log_user_event(user["id"], "order_edit", {"order_id": order_id})
+    return {"ok": True}
 
 
 @app.post("/api/auth/bookings")
