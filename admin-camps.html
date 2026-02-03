@@ -4,46 +4,166 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Турист_03 CRM</title>
-  <link rel="stylesheet" href="/static/styles.css">
-  <style>
-    body.crm-body {
-      margin: 0;
-      background: #0c0f17;
-      color: #f5f7ff;
-      font-family: "Segoe UI", "Inter", sans-serif;
-    }
-    .hidden { display: none !important; }
-    .crm-login-view {
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: radial-gradient(ellipse at top, rgba(54,67,128,0.5), transparent),
-                  radial-gradient(ellipse at bottom, rgba(0,0,0,0.8), #04050a);
-    }
-    .crm-login-card {
-      width: 100%;
-      max-width: 400px;
-      padding: 40px;
-      border-radius: 20px;
-      background: rgba(21, 26, 42, 0.95);
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-      box-sizing: border-box;
-    }
-    .crm-login-card h1 {
-      margin: 0 0 8px 0;
-      font-size: 24px;
-      font-weight: 700;
-      text-align: center;
-      line-height: 1.3;
-    }
-    .crm-input {
-      width: 100%;
-      padding: 14px 16px;
-      border-radius: 12px;
+	  <link rel="stylesheet" href="/static/styles.css">
+	  <style>
+	    body.crm-body {
+	      margin: 0;
+	      background: #0c0f17;
+	      color: #f5f7ff;
+	      font-family: "Segoe UI", "Inter", sans-serif;
+	      -webkit-font-smoothing: antialiased;
+	      -moz-osx-font-smoothing: grayscale;
+	    }
+	    .hidden { display: none !important; }
+	    .crm-login-view {
+	      min-height: 100vh;
+	      width: 100%;
+	      display: grid;
+	      place-items: center;
+	      position: relative;
+	      overflow: hidden;
+	      background: linear-gradient(135deg, #020617 0%, #0b1220 45%, #020617 100%);
+	      isolation: isolate;
+	    }
+	    .crm-sr-only {
+	      position: absolute;
+	      width: 1px;
+	      height: 1px;
+	      padding: 0;
+	      margin: -1px;
+	      overflow: hidden;
+	      clip: rect(0, 0, 0, 0);
+	      white-space: nowrap;
+	      border: 0;
+	    }
+	    .crm-login-glow {
+	      position: absolute;
+	      border-radius: 999px;
+	      filter: blur(140px);
+	      opacity: 0.8;
+	      pointer-events: none;
+	      z-index: 0;
+	    }
+	    .crm-login-glow--1 {
+	      width: 520px;
+	      height: 520px;
+	      background: rgba(59, 130, 246, 0.16);
+	      top: 10%;
+	      left: 15%;
+	    }
+	    .crm-login-glow--2 {
+	      width: 420px;
+	      height: 420px;
+	      background: rgba(99, 102, 241, 0.10);
+	      bottom: 10%;
+	      right: 12%;
+	    }
+	    .crm-login-container {
+	      position: relative;
+	      z-index: 2;
+	      width: 100%;
+	      max-width: 440px;
+	      padding: 0 16px;
+	      box-sizing: border-box;
+	    }
+	    .crm-login-card-wrap {
+	      position: relative;
+	    }
+	    .crm-login-card-glow {
+	      position: absolute;
+	      inset: 0;
+	      border-radius: 20px;
+	      background: linear-gradient(135deg, rgba(59, 130, 246, 0.10), rgba(0, 0, 0, 0), rgba(59, 130, 246, 0.08));
+	      filter: blur(20px);
+	      z-index: 0;
+	    }
+	    .crm-login-card {
+	      position: relative;
+	      z-index: 1;
+	      width: 100%;
+	      padding: 32px;
+	      border-radius: 20px;
+	      background: rgba(255, 255, 255, 0.03);
+	      border: 1px solid rgba(255, 255, 255, 0.10);
+	      backdrop-filter: blur(18px);
+	      -webkit-backdrop-filter: blur(18px);
+	      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+	      display: flex;
+	      flex-direction: column;
+	      gap: 16px;
+	      box-sizing: border-box;
+	    }
+	    .crm-login-title {
+	      text-align: center;
+	      margin-bottom: 14px;
+	    }
+	    .crm-login-title h1 {
+	      margin: 0 0 6px 0;
+	      font-size: 34px;
+	      font-weight: 800;
+	      letter-spacing: -0.02em;
+	      color: #ffffff;
+	      line-height: 1.1;
+	    }
+	    .crm-login-title p {
+	      margin: 0;
+	      font-size: 13px;
+	      color: rgba(255, 255, 255, 0.55);
+	      line-height: 1.4;
+	    }
+	    .crm-login-field {
+	      display: grid;
+	      gap: 8px;
+	    }
+	    .crm-login-input-wrap {
+	      position: relative;
+	    }
+	    .crm-login-icon {
+	      position: absolute;
+	      left: 14px;
+	      top: 50%;
+	      transform: translateY(-50%);
+	      width: 18px;
+	      height: 18px;
+	      color: rgba(255, 255, 255, 0.35);
+	      pointer-events: none;
+	      transition: color 0.2s ease;
+	    }
+	    .crm-login-input:focus + .crm-login-icon {
+	      color: rgba(96, 165, 250, 0.9);
+	    }
+	    .crm-login-input.has-error + .crm-login-icon {
+	      color: rgba(248, 113, 113, 0.95);
+	    }
+	    .crm-login-input {
+	      width: 100%;
+	      height: 48px;
+	      padding: 0 14px 0 44px;
+	      border-radius: 12px;
+	      border: 1px solid rgba(255, 255, 255, 0.10);
+	      background: rgba(255, 255, 255, 0.05);
+	      color: #ffffff;
+	      font-size: 16px;
+	      box-sizing: border-box;
+	      outline: none;
+	      transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+	    }
+	    .crm-login-input::placeholder {
+	      color: rgba(255, 255, 255, 0.42);
+	    }
+	    .crm-login-input:hover {
+	      border-color: rgba(255, 255, 255, 0.18);
+	      background: rgba(255, 255, 255, 0.06);
+	    }
+	    .crm-login-input:focus {
+	      border-color: rgba(59, 130, 246, 0.55);
+	      background: rgba(255, 255, 255, 0.07);
+	      box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.10);
+	    }
+	    .crm-input {
+	      width: 100%;
+	      padding: 14px 16px;
+	      border-radius: 12px;
       border: 1px solid rgba(255, 255, 255, 0.12);
       background: #111425;
       color: inherit;
@@ -51,12 +171,12 @@
       box-sizing: border-box;
       outline: none;
       transition: border-color 0.2s ease;
-    }
-    .crm-input:focus {
-      border-color: rgba(42, 109, 255, 0.5);
-    }
-    .crm-btn-primary {
-      width: 100%;
+	    }
+	    .crm-input:focus {
+	      border-color: rgba(42, 109, 255, 0.5);
+	    }
+	    .crm-btn-primary {
+	      width: 100%;
       border: none;
       border-radius: 12px;
       padding: 14px;
@@ -66,29 +186,57 @@
       background: linear-gradient(120deg, #2a6dff, #5340ff);
       color: #fff;
       transition: opacity 0.2s ease, transform 0.1s ease;
-      box-sizing: border-box;
-    }
-    .crm-btn-primary:hover { 
-      opacity: 0.9; 
-    }
+	      box-sizing: border-box;
+	    }
+	    .crm-login-btn {
+	      height: 48px;
+	      border-radius: 12px;
+	      background: linear-gradient(90deg, #2563eb, #3b82f6);
+	      box-shadow: 0 18px 40px rgba(59, 130, 246, 0.22);
+	      position: relative;
+	      overflow: hidden;
+	      transform: translateZ(0);
+	    }
+	    .crm-login-btn::before {
+	      content: "";
+	      position: absolute;
+	      inset: 0;
+	      background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.22) 50%, rgba(255,255,255,0) 100%);
+	      transform: translateX(-220%);
+	      transition: transform 0.7s ease;
+	    }
+	    .crm-login-btn:hover::before {
+	      transform: translateX(220%);
+	    }
+	    .crm-btn-primary.crm-login-btn:hover {
+	      opacity: 1;
+	      transform: scale(1.02);
+	    }
+	    .crm-btn-primary:hover { 
+	      opacity: 0.9; 
+	    }
     .crm-btn-primary:active {
       transform: scale(0.98);
     }
     .crm-btn-primary:active {
       transform: scale(0.98);
     }
-    .crm-error {
-      color: #ff8c8c;
-      min-height: 20px;
-      text-align: center;
-      font-size: 14px;
-      line-height: 1.4;
-    }
-    .crm-app {
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      background: #090c14;
+	    .crm-error {
+	      color: #ff8c8c;
+	      min-height: 20px;
+	      text-align: center;
+	      font-size: 14px;
+	      line-height: 1.4;
+	    }
+	    .crm-login-error {
+	      text-align: center;
+	      color: rgba(248, 113, 113, 0.95);
+	    }
+	    .crm-app {
+	      min-height: 100vh;
+	      display: flex;
+	      flex-direction: column;
+	      background: #090c14;
     }
     .crm-header {
       display: flex;
@@ -349,17 +497,45 @@
 	    .crm-cal-dot.completed{background:#94a3b8}
 	  </style>
   <script src="/static/admin-camps.js" defer></script>
-</head>
-<body class="crm-body">
-  <div id="crm-login-view" class="crm-login-view">
-    <form id="crm-login-form" class="crm-login-card">
-      <h1>CRM для управляющих базами отдыха</h1>
-      <input type="email" name="email" placeholder="Email" class="crm-input" required>
-      <input type="password" name="password" placeholder="Пароль" class="crm-input" required>
-      <button type="submit" class="crm-btn-primary">Войти</button>
-      <div id="crm-login-error" class="crm-error"></div>
-    </form>
-  </div>
+	</head>
+	<body class="crm-body">
+	  <div id="crm-login-view" class="crm-login-view">
+	    <div class="crm-login-glow crm-login-glow--1" aria-hidden="true"></div>
+	    <div class="crm-login-glow crm-login-glow--2" aria-hidden="true"></div>
+	    <div class="crm-login-container">
+	      <div class="crm-login-card-wrap">
+	        <div class="crm-login-card-glow" aria-hidden="true"></div>
+	        <form id="crm-login-form" class="crm-login-card">
+	          <div class="crm-login-title">
+	            <h1>Турист <span aria-hidden="true">⛺️</span></h1>
+	            <p>CRM для управляющих базами отдыха</p>
+	          </div>
+	          <label class="crm-login-field">
+	            <span class="crm-sr-only">Email</span>
+	            <div class="crm-login-input-wrap">
+	              <input type="email" name="email" placeholder="Email" class="crm-login-input" required>
+	              <svg class="crm-login-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+	                <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+	                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path>
+	              </svg>
+	            </div>
+	          </label>
+	          <label class="crm-login-field">
+	            <span class="crm-sr-only">Пароль</span>
+	            <div class="crm-login-input-wrap">
+	              <input type="password" name="password" placeholder="Пароль" class="crm-login-input" required>
+	              <svg class="crm-login-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+	                <path d="M17 11V7a5 5 0 0 0-10 0v4"></path>
+	                <rect x="5" y="11" width="14" height="10" rx="2"></rect>
+	              </svg>
+	            </div>
+	          </label>
+	          <button type="submit" class="crm-btn-primary crm-login-btn"><span style="position:relative;z-index:1;">Войти</span></button>
+	          <div id="crm-login-error" class="crm-error crm-login-error"></div>
+	        </form>
+	      </div>
+	    </div>
+	  </div>
 
   <div id="crm-app-view" class="crm-app hidden">
     <header class="crm-header">
