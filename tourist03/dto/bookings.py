@@ -1,4 +1,9 @@
-from typing import Any, List, Optional, TypedDict
+from typing import Any, List, Optional
+
+from pydantic import BaseModel
+from typing_extensions import TypedDict
+
+from tourist03.dto.common import IdResponseDTO, OkResponseDTO, PaymentLinkResponseDTO
 
 
 class BookingPublicDTO(TypedDict):
@@ -70,3 +75,38 @@ class AdminBookingDTO(TypedDict):
     guest_phone: Any
     guest_email: Any
     comment: Any
+
+
+class BookingItemResponseDTO(BaseModel):
+    ok: bool
+    item: BookingPublicDTO
+
+
+class BookingListResponseDTO(BaseModel):
+    ok: bool
+    items: List[BookingPublicDTO]
+
+
+class BookingCreateResponseDTO(BaseModel):
+    ok: bool
+    booking_id: int
+
+
+class OrderItemResponseDTO(BaseModel):
+    ok: bool
+    item: OrderDTO
+
+
+class OrderListResponseDTO(BaseModel):
+    ok: bool
+    items: List[OrderDTO]
+
+
+class OrderCreateResponseDTO(BaseModel):
+    ok: bool
+    order_id: str
+    booking_ids: List[int]
+
+
+class AdminBookingCreateResponseDTO(IdResponseDTO):
+    pass
