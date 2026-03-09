@@ -11,6 +11,7 @@ from tourist03.dto.catalog import (
     RoomBusyRangesResponseDTO,
     UploadResponseDTO,
 )
+from tourist03.dto.common import OkResponseDTO
 from tourist03.security import get_superadmin
 from tourist03.services import catalog as catalog_service
 
@@ -89,6 +90,22 @@ router.add_api_route(
     dependencies=superadmin_guard,
     response_model=CampUpsertResponseDTO,
     responses=error_responses(401, 422, 500),
+)
+router.add_api_route(
+    "/api/camps/{camp_id}/status",
+    catalog_service.api_camp_status_update,
+    methods=["PATCH"],
+    dependencies=superadmin_guard,
+    response_model=OkResponseDTO,
+    responses=error_responses(400, 401, 404, 422, 500),
+)
+router.add_api_route(
+    "/api/camps/{camp_id}",
+    catalog_service.api_camps_delete,
+    methods=["DELETE"],
+    dependencies=superadmin_guard,
+    response_model=OkResponseDTO,
+    responses=error_responses(400, 401, 404, 409, 422, 500),
 )
 router.add_api_route(
     "/api/upload",

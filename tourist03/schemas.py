@@ -9,6 +9,10 @@ class AdminLoginRequest(BaseModel):
     password: str
 
 
+class SuperAdminLoginRequest(BaseModel):
+    key: str
+
+
 class AdminMeResponse(BaseModel):
     id: int
     email: EmailStr
@@ -28,6 +32,10 @@ class SuperAdminUpdateAccountRequest(BaseModel):
     display_name: Optional[str] = None
     is_active: Optional[bool] = None
     camp_ids: Optional[List[int]] = None
+
+
+class CampStatusUpdateRequest(BaseModel):
+    status: str
 
 
 class RegisterStartRequest(BaseModel):

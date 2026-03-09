@@ -194,6 +194,47 @@ class ApiHttpFlowTests(unittest.IsolatedAsyncioTestCase):
             ],
         )
 
+    async def test_superadmin_session_login_persists_across_requests(self):
+        with ExitStack() as stack:
+            stack.enter_context(patch("tourist03.security.SUPERADMIN_API_KEY", "super-key"))
+            stack.enter_context(
+                patch(
+                    "tourist03.services.auth.auth_repo.list_users",
+                    return_value=[
+                        {
+                            "id": 1,
+                            "name": "Root",
+                            "phone": "+79990000001",
+                            "role": "user",
+                            "email": "root@example.com",
+                            "email_verified": True,
+                            "phone_verified": True,
+                            "created_at": None,
+                        }
+                    ],
+                )
+            )
+
+            login_response = await self.client.post("/api/superadmin/session", json={"key": "super-key"})
+            users_response = await self.client.get("/api/users")
+
+        self.assertEqual(login_response.status_code, 200)
+        self.assertEqual(login_response.json(), {"ok": True, "authenticated": True})
+        self.assertEqual(users_response.status_code, 200)
+        self.assertEqual(len(users_response.json()), 1)
+
+    async def test_superadmin_session_logout_revokes_session(self):
+        with patch("tourist03.security.SUPERADMIN_API_KEY", "super-key"):
+            login_response = await self.client.post("/api/superadmin/session", json={"key": "super-key"})
+            logout_response = await self.client.delete("/api/superadmin/session")
+            users_response = await self.client.get("/api/users")
+
+        self.assertEqual(login_response.status_code, 200)
+        self.assertEqual(logout_response.status_code, 200)
+        self.assertEqual(logout_response.json(), {"ok": True, "authenticated": False})
+        self.assertEqual(users_response.status_code, 401)
+        self.assertEqual(users_response.json(), {"detail": "Нет доступа"})
+
     async def test_catalog_available_rooms_marks_booked_rooms(self):
         with ExitStack() as stack:
             stack.enter_context(
@@ -241,6 +282,98 @@ class ApiHttpFlowTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.json(), {"detail": "Нет доступа"})
+
+    async def test_camp_delete_requires_superadmin_access(self):
+        response = await self.client.delete("/api/camps/7")
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json(), {"detail": "Нет доступа"})
+
+    async def test_camp_status_patch_updates_only_status(self):
+        self._override_superadmin()
+
+        with ExitStack() as stack:
+            stack.enter_context(
+                patch(
+                    "tourist03.services.catalog.catalog_repo.get_camp",
+                    return_value={"id": 7, "status": "archived"},
+                )
+            )
+            update_status = stack.enter_context(
+                patch(
+                    "tourist03.services.catalog.catalog_repo.update_camp_status",
+                    return_value=True,
+                )
+            )
+
+            response = await self.client.patch("/api/camps/7/status", json={"status": "active"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"ok": True})
+        update_status.assert_called_once_with(7, "active")
+
+    async def test_camp_delete_rejects_active_camp(self):
+        self._override_superadmin()
+
+        with patch(
+            "tourist03.services.catalog.catalog_repo.get_camp",
+            return_value={"id": 7, "status": "active"},
+        ):
+            response = await self.client.delete("/api/camps/7")
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"detail": "Удалять из базы можно только архивные записи"})
+
+    async def test_camp_delete_rejects_camp_with_bookings(self):
+        self._override_superadmin()
+
+        with ExitStack() as stack:
+            stack.enter_context(
+                patch(
+                    "tourist03.services.catalog.catalog_repo.get_camp",
+                    return_value={"id": 7, "status": "archived"},
+                )
+            )
+            stack.enter_context(
+                patch(
+                    "tourist03.services.catalog.catalog_repo.camp_has_bookings",
+                    return_value=True,
+                )
+            )
+
+            response = await self.client.delete("/api/camps/7")
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json(), {"detail": "Нельзя удалить базу, по которой уже есть бронирования"})
+
+    async def test_camp_delete_removes_archived_camp_without_bookings(self):
+        self._override_superadmin()
+
+        with ExitStack() as stack:
+            stack.enter_context(
+                patch(
+                    "tourist03.services.catalog.catalog_repo.get_camp",
+                    return_value={"id": 7, "status": "archived"},
+                )
+            )
+            stack.enter_context(
+                patch(
+                    "tourist03.services.catalog.catalog_repo.camp_has_bookings",
+                    return_value=False,
+                )
+            )
+            delete_camp = stack.enter_context(
+                patch(
+                    "tourist03.services.catalog.catalog_repo.delete_camp",
+                    return_value=True,
+                )
+            )
+
+            response = await self.client.delete("/api/camps/7")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"ok": True})
+        delete_camp.assert_called_once_with(7)
 
     async def test_upload_requires_superadmin_access(self):
         response = await self.client.post(

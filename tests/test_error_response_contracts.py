@@ -36,9 +36,24 @@ class ErrorResponseContractsTests(unittest.TestCase):
         create_route = routes[("/api/camps", ("POST",))]
         self.assertIs(create_route.responses[401]["model"], ErrorResponseDTO)
 
+        status_route = routes[("/api/camps/{camp_id}/status", ("PATCH",))]
+        self.assertIs(status_route.responses[400]["model"], ErrorResponseDTO)
+        self.assertIs(status_route.responses[401]["model"], ErrorResponseDTO)
+        self.assertIs(status_route.responses[404]["model"], ErrorResponseDTO)
+        self.assertIs(status_route.responses[422]["model"], ValidationErrorResponseDTO)
+        self.assertIs(status_route.responses[500]["model"], ErrorResponseDTO)
+
         upload_route = routes[("/api/upload", ("POST",))]
         self.assertIs(upload_route.responses[400]["model"], ErrorResponseDTO)
         self.assertIs(upload_route.responses[401]["model"], ErrorResponseDTO)
+
+        delete_route = routes[("/api/camps/{camp_id}", ("DELETE",))]
+        self.assertIs(delete_route.responses[400]["model"], ErrorResponseDTO)
+        self.assertIs(delete_route.responses[401]["model"], ErrorResponseDTO)
+        self.assertIs(delete_route.responses[404]["model"], ErrorResponseDTO)
+        self.assertIs(delete_route.responses[409]["model"], ErrorResponseDTO)
+        self.assertIs(delete_route.responses[422]["model"], ValidationErrorResponseDTO)
+        self.assertIs(delete_route.responses[500]["model"], ErrorResponseDTO)
 
     def test_bookings_route_documents_expected_errors(self):
         routes = _route_map(bookings.router)
@@ -63,6 +78,11 @@ class ErrorResponseContractsTests(unittest.TestCase):
 
     def test_superadmin_route_documents_expected_errors(self):
         routes = _route_map(superadmin.router)
+        login_route = routes[("/api/superadmin/session", ("POST",))]
+        self.assertIs(login_route.responses[401]["model"], ErrorResponseDTO)
+        self.assertIs(login_route.responses[422]["model"], ValidationErrorResponseDTO)
+        self.assertIs(login_route.responses[500]["model"], ErrorResponseDTO)
+
         route = routes[("/api/superadmin/accounts/{account_id}", ("PATCH",))]
         self.assertIs(route.responses[400]["model"], ErrorResponseDTO)
         self.assertIs(route.responses[401]["model"], ErrorResponseDTO)

@@ -368,9 +368,23 @@ html[data-theme="dark"] .nav-emoji:hover{ background:#141821; }
   document.documentElement.setAttribute('data-theme','dark');
   try { localStorage.setItem('sa_theme','dark'); } catch(_) {}
 </script>
-
+    <button id="superadmin-logout-btn" type="button" class="button btn-soft hidden">Выйти</button>
   </div>
 </header>
+
+<div id="superadmin-auth-modal" class="accounts-modal hidden">
+  <div class="accounts-modal-card" style="max-width:420px">
+    <h2>Вход суперадмина</h2>
+    <div class="muted">Введите ключ суперадмина один раз. Дальше страница будет работать через серверную сессию.</div>
+    <label for="superadmin-auth-key">Ключ</label>
+    <input id="superadmin-auth-key" type="password" autocomplete="current-password" placeholder="Введите ключ">
+    <div id="superadmin-auth-error" class="text-error" style="margin-top:12px"></div>
+    <div class="appconfirm-actions" style="margin-top:16px">
+      <button type="button" id="superadmin-auth-cancel" class="button">Отмена</button>
+      <button type="button" id="superadmin-auth-submit" class="primary">Войти</button>
+    </div>
+  </div>
+</div>
 
 <div class="wrap">
   <!-- Список баз -->
@@ -753,72 +767,189 @@ for (const k in tabs) {
 }
 
 /* === API helper === */
-const SUPERADMIN_KEY_STORAGE_KEY = 'tourist03_superadmin_key';
+function escapeHtml(value){
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function escapeAttr(value){
+  return escapeHtml(value).replace(/`/g, '&#96;');
+}
+
+const superadminSessionState = {
+  authenticated: false,
+  pending: null,
+};
 
 function isProtectedSuperadminRequest(url, options = {}){
   const method = String(options.method || 'GET').toUpperCase();
   return url.startsWith('/api/superadmin')
+    || url === '/api/superadmin/session'
     || url === '/api/users'
     || url.startsWith('/api/admincamps/accounts')
     || url.startsWith('/api/admin/accounts')
     || url.startsWith('/api/admin/account')
     || (url === '/api/camps' && method === 'POST')
-    || (url.startsWith('/api/camps/') && ['PUT', 'DELETE'].includes(method))
+    || (url.startsWith('/api/camps/') && ['PUT', 'PATCH', 'DELETE'].includes(method))
     || url === '/api/upload';
 }
 
-function getStoredSuperadminKey(){
+function unauthorizedSuperadminResponse(){
+  return new Response(JSON.stringify({ detail: 'Нет доступа' }), {
+    status: 401,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+function setSuperadminAuthenticated(authenticated){
+  superadminSessionState.authenticated = Boolean(authenticated);
+  const logoutBtn = document.getElementById('superadmin-logout-btn');
+  if (logoutBtn) logoutBtn.classList.toggle('hidden', !superadminSessionState.authenticated);
+}
+
+async function fetchSuperadminSessionState(){
   try{
-    return (sessionStorage.getItem(SUPERADMIN_KEY_STORAGE_KEY) || '').trim();
+    const response = await fetch('/api/superadmin/session', { credentials: 'same-origin' });
+    if (!response.ok){
+      setSuperadminAuthenticated(false);
+      return false;
+    }
+    const data = await response.json().catch(()=>({}));
+    const authenticated = Boolean(data && data.authenticated);
+    setSuperadminAuthenticated(authenticated);
+    return authenticated;
   }catch(_){
-    return '';
+    setSuperadminAuthenticated(false);
+    return false;
   }
 }
 
-function storeSuperadminKey(value){
-  try{
-    if (value) sessionStorage.setItem(SUPERADMIN_KEY_STORAGE_KEY, value);
-    else sessionStorage.removeItem(SUPERADMIN_KEY_STORAGE_KEY);
-  }catch(_){}
+function ensureSuperadminAuthElements(){
+  return {
+    modal: document.getElementById('superadmin-auth-modal'),
+    input: document.getElementById('superadmin-auth-key'),
+    error: document.getElementById('superadmin-auth-error'),
+    submit: document.getElementById('superadmin-auth-submit'),
+    cancel: document.getElementById('superadmin-auth-cancel'),
+  };
 }
 
-async function resolveSuperadminKey(forcePrompt = false){
-  let key = forcePrompt ? '' : getStoredSuperadminKey();
-  if (!key){
-    key = (window.prompt('Введите ключ суперадмина') || '').trim();
-  }
-  if (!key) return '';
-  storeSuperadminKey(key);
-  return key;
+function openSuperadminAuthModal(message = ''){
+  const ui = ensureSuperadminAuthElements();
+  if (!ui.modal || !ui.input || !ui.error) return null;
+  ui.error.textContent = message || '';
+  ui.input.value = '';
+  ui.modal.classList.remove('hidden');
+  requestAnimationFrame(()=>{
+    ui.input.focus();
+    ui.input.select();
+  });
+  return ui;
+}
+
+function closeSuperadminAuthModal(){
+  const ui = ensureSuperadminAuthElements();
+  if (!ui.modal || !ui.input || !ui.error) return;
+  ui.modal.classList.add('hidden');
+  ui.input.value = '';
+  ui.error.textContent = '';
+}
+
+function requestSuperadminSession(){
+  if (superadminSessionState.pending) return superadminSessionState.pending;
+
+  superadminSessionState.pending = new Promise((resolve) => {
+    const ui = openSuperadminAuthModal();
+    if (!ui || !ui.input || !ui.error || !ui.submit || !ui.cancel){
+      superadminSessionState.pending = null;
+      resolve(false);
+      return;
+    }
+
+    const finish = (authenticated) => {
+      if (superadminSessionState.pending) superadminSessionState.pending = null;
+      resolve(Boolean(authenticated));
+    };
+
+    const submit = async () => {
+      const key = (ui.input.value || '').trim();
+      if (!key){
+        ui.error.textContent = 'Введите ключ суперадмина';
+        ui.input.focus();
+        return;
+      }
+      ui.error.textContent = '';
+      ui.submit.disabled = true;
+      ui.cancel.disabled = true;
+      try{
+        const response = await fetch('/api/superadmin/session', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key }),
+        });
+        const data = await response.json().catch(()=>({}));
+        if (!response.ok){
+          ui.error.textContent = data?.detail || 'Нет доступа';
+          ui.submit.disabled = false;
+          ui.cancel.disabled = false;
+          ui.input.focus();
+          ui.input.select();
+          return;
+        }
+        setSuperadminAuthenticated(Boolean(data && data.authenticated));
+        closeSuperadminAuthModal();
+        finish(Boolean(data && data.authenticated));
+      }catch(e){
+        ui.error.textContent = e?.message || 'Ошибка сети';
+        ui.submit.disabled = false;
+        ui.cancel.disabled = false;
+      }
+    };
+
+    ui.submit.onclick = (ev) => {
+      ev.preventDefault();
+      submit();
+    };
+    ui.cancel.onclick = (ev) => {
+      ev.preventDefault();
+      closeSuperadminAuthModal();
+      finish(false);
+    };
+    ui.input.onkeydown = (ev) => {
+      if (ev.key === 'Enter'){
+        ev.preventDefault();
+        submit();
+      }
+    };
+  });
+
+  return superadminSessionState.pending;
+}
+
+async function ensureSuperadminSession(interactive = false){
+  if (superadminSessionState.authenticated) return true;
+  if (await fetchSuperadminSessionState()) return true;
+  if (!interactive) return false;
+  return requestSuperadminSession();
 }
 
 async function superadminFetch(url, options = {}){
   const opts = { ...options, credentials: 'same-origin' };
-  const headers = new Headers(options.headers || {});
   const needsAuth = isProtectedSuperadminRequest(url, opts);
-  let attachedKey = false;
-
-  const attachKey = async (forcePrompt = false) => {
-    const key = await resolveSuperadminKey(forcePrompt);
-    if (!key) return false;
-    headers.set('x-superadmin-key', key);
-    return true;
-  };
-
-  if (needsAuth) attachedKey = await attachKey(false);
-  opts.headers = headers;
-
-  if (needsAuth && !attachedKey){
-    return new Response(JSON.stringify({ detail: 'Нет доступа' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
+  if (needsAuth && !(await ensureSuperadminSession(false))){
+    const authenticated = await ensureSuperadminSession(true);
+    if (!authenticated) return unauthorizedSuperadminResponse();
   }
 
   let response = await fetch(url, opts);
   if (needsAuth && response.status === 401){
-    storeSuperadminKey('');
-    if (await attachKey(true)){
+    setSuperadminAuthenticated(false);
+    if (await ensureSuperadminSession(true)){
       response = await fetch(url, opts);
     }
   }
@@ -838,6 +969,21 @@ async function api(u, o = {}){
   return r.json();
 }
 
+async function bootstrapSuperadminPage(){
+  const authenticated = await ensureSuperadminSession(true);
+  if (!authenticated) return;
+  await loadCamps();
+}
+
+document.getElementById('superadmin-logout-btn')?.addEventListener('click', async () => {
+  try{
+    await fetch('/api/superadmin/session', { method: 'DELETE', credentials: 'same-origin' });
+  }catch(_){}
+  setSuperadminAuthenticated(false);
+  closeSuperadminAuthModal();
+  window.location.reload();
+});
+
 /* === Список баз === */
 /* === Список баз === */
 async function loadCamps(){
@@ -847,9 +993,10 @@ async function loadCamps(){
     tb.innerHTML = '';
 
     list.forEach(c => {
-      const yMapBtn = (c.lat != null && c.lng != null)
-        ? `<span class="nav-emoji" title="Открыть в Яндекс.Картах"
-            onclick="window.open('https://yandex.ru/maps/?pt=${c.lng},${c.lat}&z=15&l=map','_blank')">🧭</span>`
+      const lat = Number(c.lat);
+      const lng = Number(c.lng);
+      const mapUrl = Number.isFinite(lat) && Number.isFinite(lng)
+        ? `https://yandex.ru/maps/?pt=${lng},${lat}&z=15&l=map`
         : '';
 
       // статус берём из c.status
@@ -862,18 +1009,21 @@ async function loadCamps(){
             ${isActive ? 'Активный' : 'Отключен'}
           </span>
         </td>
-        <td>#${c.id}</td>
-        <td>${c.name || ''}</td>
-        <td>${c.lake_name || ''}</td>
-        <td>${yMapBtn}</td>
-        <td>${c.owner || ''}</td>
-        <td>${c.manager || ''}</td>
-        <td>${c.min_price ?? ''}</td>
+        <td>#${escapeHtml(c.id ?? '')}</td>
+        <td>${escapeHtml(c.name || '')}</td>
+        <td>${escapeHtml(c.lake_name || '')}</td>
+        <td>${mapUrl ? `<span class="nav-emoji" title="Открыть в Яндекс.Картах" data-map-url="${escapeAttr(mapUrl)}">🧭</span>` : ''}</td>
+        <td>${escapeHtml(c.owner || '')}</td>
+        <td>${escapeHtml(c.manager || '')}</td>
+        <td>${escapeHtml(c.min_price ?? '')}</td>
         <td>
-          <button class="button" onclick='showCampForm("edit", ${JSON.stringify(c).replace(/'/g,"&apos;")})'>
-            Редактировать
-          </button>
+          <button type="button" class="button" data-action="edit">Редактировать</button>
         </td>`;
+      tr.querySelector('[data-map-url]')?.addEventListener('click', (event) => {
+        const url = event.currentTarget?.dataset?.mapUrl;
+        if (url) window.open(url, '_blank');
+      });
+      tr.querySelector('[data-action="edit"]')?.addEventListener('click', () => showCampForm('edit', c));
       tb.appendChild(tr);
     });
   } catch (e) {
@@ -892,22 +1042,29 @@ async function loadArchive(){
     const tb = document.querySelector('#archive_tbl tbody');
     tb.innerHTML = '';
     archived.forEach(c => {
-      const yMapBtn = (c.lat!=null && c.lng!=null)
-  ? `<span class="nav-emoji" title="Открыть в Яндекс.Картах"
-      onclick="window.open('https://yandex.ru/maps/?pt=${c.lng},${c.lat}&z=15&l=map','_blank')">🧭</span>`
-  : '';
+      const lat = Number(c.lat);
+      const lng = Number(c.lng);
+      const mapUrl = Number.isFinite(lat) && Number.isFinite(lng)
+        ? `https://yandex.ru/maps/?pt=${lng},${lat}&z=15&l=map`
+        : '';
 
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td>${c.id}</td>
-        <td>${c.name || ''}</td>
-        <td>${c.lake_name || ''}</td>
-        <td>${yMapBtn}</td>
-        <td>${c.min_price ?? ''}</td>
+        <td>${escapeHtml(c.id ?? '')}</td>
+        <td>${escapeHtml(c.name || '')}</td>
+        <td>${escapeHtml(c.lake_name || '')}</td>
+        <td>${mapUrl ? `<span class="nav-emoji" title="Открыть в Яндекс.Картах" data-map-url="${escapeAttr(mapUrl)}">🧭</span>` : ''}</td>
+        <td>${escapeHtml(c.min_price ?? '')}</td>
         <td style="display:flex;gap:6px;flex-wrap:wrap">
-          <button class="button" onclick="restoreCamp(${c.id})">Восстановить</button>
-          <button class="button danger" onclick="deleteCamp(${c.id})">Удалить</button>
+          <button type="button" class="button" data-action="restore">Восстановить</button>
+          <button type="button" class="button danger" data-action="delete">Удалить</button>
         </td>`;
+      tr.querySelector('[data-map-url]')?.addEventListener('click', (event) => {
+        const url = event.currentTarget?.dataset?.mapUrl;
+        if (url) window.open(url, '_blank');
+      });
+      tr.querySelector('[data-action="restore"]')?.addEventListener('click', () => restoreCamp(c.id));
+      tr.querySelector('[data-action="delete"]')?.addEventListener('click', () => deleteCamp(c.id));
       tb.appendChild(tr);
     });
 
@@ -924,8 +1081,8 @@ async function loadArchive(){
 
 async function restoreCamp(id){
   try{
-    await api(`/api/camps/${id}`, {
-      method:'PUT', headers:{'Content-Type':'application/json'},
+    await api(`/api/camps/${id}/status`, {
+      method:'PATCH', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ status:'active' })
     });
     await loadArchive(); await loadCamps();
@@ -1040,7 +1197,13 @@ function renderUsersTable(){
   const filtered = applyUsersFilters(_usersAll);
   filtered.forEach(u=>{
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td>${u.id}</td><td>${u.name || ''}</td><td>${formatPhoneRu(u.phone || '')}</td><td>${u.email||''}</td><td>${formatDateTime(u.created_at) || ''}</td>`;
+    tr.innerHTML = `
+      <td>${escapeHtml(u.id ?? '')}</td>
+      <td>${escapeHtml(u.name || '')}</td>
+      <td>${escapeHtml(formatPhoneRu(u.phone || ''))}</td>
+      <td>${escapeHtml(u.email || '')}</td>
+      <td>${escapeHtml(formatDateTime(u.created_at) || '')}</td>
+    `;
     tr.addEventListener('click', ()=> loadUserHistory(u.id));
     tb.appendChild(tr);
   });
@@ -1167,13 +1330,13 @@ async function loadUserHistory(userId){
       const room = b.room_name ? `${b.room_name} (#${b.room_id})` : (b.room_id ? `#${b.room_id}` : '');
       return `
         <tr>
-          <td>#${b.id}</td>
-          <td>${camp}</td>
-          <td>${room}</td>
-          <td>${period}</td>
-          <td>${b.guests_count ?? ''}</td>
-          <td>${b.status ?? ''}</td>
-          <td>${formatDateTime(b.created_at)}</td>
+          <td>#${escapeHtml(b.id ?? '')}</td>
+          <td>${escapeHtml(camp)}</td>
+          <td>${escapeHtml(room)}</td>
+          <td>${escapeHtml(period)}</td>
+          <td>${escapeHtml(b.guests_count ?? '')}</td>
+          <td>${escapeHtml(b.status ?? '')}</td>
+          <td>${escapeHtml(formatDateTime(b.created_at))}</td>
         </tr>`;
     }).join('') : `<tr><td colspan="7" class="muted">Нет бронирований.</td></tr>`;
 
@@ -1201,24 +1364,27 @@ async function loadUserHistory(userId){
       }
       return `
         <tr>
-          <td>${formatDateTime(e.created_at)}</td>
-          <td>${e.event_type || ''}</td>
-          <td style="word-break:break-word">${payload || '—'}</td>
+          <td>${escapeHtml(formatDateTime(e.created_at))}</td>
+          <td>${escapeHtml(e.event_type || '')}</td>
+          <td style="word-break:break-word">${escapeHtml(payload || '—')}</td>
         </tr>`;
     }).join('') : `<tr><td colspan="3" class="muted">Пока нет событий (логируется регистрация/вход/верификации).</td></tr>`;
 
+    const userName = escapeHtml(u.name || '');
+    const emailHtml = email ? escapeHtml(email) : '<span class="muted">—</span>';
+    const createdHtml = created ? escapeHtml(created) : '<span class="muted">—</span>';
     openUserHistoryModal(`
       <div class="userhist-grid">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
-          <div style="font-weight:800;font-size:18px">Пользователь #${u.id} — ${u.name || ''}</div>
+          <div style="font-weight:800;font-size:18px">Пользователь #${escapeHtml(u.id ?? '')} — ${userName}</div>
           <div class="userhist-close"><button class="primary" id="userhist_close">Закрыть</button></div>
         </div>
 
         <div class="userhist-kv">
-          <div class="k">Телефон</div><div>${phone}</div>
-          <div class="k">Email</div><div>${email || '<span class="muted">—</span>'}</div>
-          <div class="k">Создан</div><div>${created || '<span class="muted">—</span>'}</div>
-          <div class="k">Статус</div><div>${flags}</div>
+          <div class="k">Телефон</div><div>${escapeHtml(phone)}</div>
+          <div class="k">Email</div><div>${emailHtml}</div>
+          <div class="k">Создан</div><div>${createdHtml}</div>
+          <div class="k">Статус</div><div>${escapeHtml(flags)}</div>
         </div>
 
         <div class="userhist-section-title">Бронирования</div>
@@ -1429,7 +1595,7 @@ async function fetchCampsForAccounts(){
 	    }
 	    _accountsCampsLoaded = true;
 	  }catch(e){
-	    listEl.innerHTML = `<div class="muted" style="color:#f87171">Не удалось загрузить базы: ${e?.message || 'ошибка'}</div>`;
+	    listEl.innerHTML = `<div class="muted" style="color:#f87171">Не удалось загрузить базы: ${escapeHtml(e?.message || 'ошибка')}</div>`;
 	  }finally{
 	    _accountsCampsLoading = false;
 	  }
@@ -1505,7 +1671,7 @@ async function fetchAccountsList(){
 	    }
 	    _accountsListLoaded = true;
 	  }catch(e){
-	    box.innerHTML = `<div class="text-error">Не удалось загрузить учётные записи: ${e.message || 'ошибка'}</div>`;
+	    box.innerHTML = `<div class="text-error">Не удалось загрузить учётные записи: ${escapeHtml(e.message || 'ошибка')}</div>`;
 	  }finally{
     _accountsListLoading = false;
   }
@@ -1530,16 +1696,16 @@ async function fetchAccountsList(){
 	  const tbody = document.createElement('tbody');
 	  accounts.forEach(acc => {
 	    const camps = Array.isArray(acc.camps) && acc.camps.length
-	      ? acc.camps.map(c => `<span>${c.camp_name || `База #${c.camp_id}`}</span>`).join('')
+	      ? acc.camps.map(c => `<span>${escapeHtml(c.camp_name || `База #${c.camp_id}`)}</span>`).join('')
 	      : '<span class="muted">Не привязаны</span>';
 	    const tr = document.createElement('tr');
 	    tr.innerHTML = `
-	      <td>#${acc.id}</td>
-	      <td>${acc.email}</td>
-	      <td>${acc.display_name || ''}</td>
+	      <td>#${escapeHtml(acc.id ?? '')}</td>
+	      <td>${escapeHtml(acc.email || '')}</td>
+	      <td>${escapeHtml(acc.display_name || '')}</td>
 	      <td><div class="accounts-camps">${camps}</div></td>
 	      <td style="color:${acc.is_active ? '#22c55e' : '#f87171'}">${acc.is_active ? 'Активна' : 'Выключена'}</td>
-	      <td>${formatDateTime(acc.created_at)}</td>
+	      <td>${escapeHtml(formatDateTime(acc.created_at))}</td>
 	      <td style="white-space:nowrap">
 	        <button type="button" class="button btn-soft" data-action="edit">Редактировать</button>
 	      </td>
@@ -1792,7 +1958,7 @@ function renderGallery(list){
   const g=document.getElementById('cf_gallery');
   g.innerHTML = _cfPhotos.map((p,i)=>`
     <div style="position:relative;border:1px solid #2a2f3a;border-radius:10px;overflow:hidden">
-      <img src="${p.url}" style="width:100%;height:110px;object-fit:cover">
+      <img src="${escapeAttr(p.url)}" style="width:100%;height:110px;object-fit:cover">
       <div class="photo-star">
         <button type="button" class="btn" title="Сделать обложкой" onclick="setCover(${i})">${p.cover?'★':'☆'}</button>
       </div>
@@ -1876,7 +2042,7 @@ function renderRoomGallery(idx){
   const list = _roomPhotos[idx] || [];
   box.innerHTML = list.map((p,i)=>`
     <div class="ph">
-      <img src="${p.url}">
+      <img src="${escapeAttr(p.url)}">
       <div class="star"><button class="btn" title="Обложка" onclick="roomSetCover(${idx},${i})">${p.cover?'★':'☆'}</button></div>
       <div class="ov">
         <button class="btn" title="Вверх" onclick="roomMovePhoto(${idx},${i},-1)">↑</button>
@@ -2293,7 +2459,7 @@ function renderRoomPhotos(row, photos) {
     item.dataset.url = p.url;
 
     item.innerHTML = `
-      <img src="${p.url}" alt="" />
+      <img src="${escapeAttr(p.url)}" alt="" />
       <div class="room-photo-actions">
         <button type="button" class="btn-photo btn-cover"  title="Сделать обложкой">★</button>
         <button type="button" class="btn-photo btn-up"      title="Вверх">↑</button>
@@ -2420,8 +2586,8 @@ document.getElementById('cf_back').onclick  = () => {
 document.getElementById('cf_archive').onclick = async ()=>{
   if (_cfMode!=='edit' || !_cfData?.id) return;
   appConfirm('Переместить базу в архив?', async ()=>{
-    await api(`/api/camps/${_cfData.id}`, {
-      method:'PUT', headers:{'Content-Type':'application/json'},
+    await api(`/api/camps/${_cfData.id}/status`, {
+      method:'PATCH', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ status:'archived' })
     });
       await loadCamps(); backToList(); // appAlert('Сохранено');  <-- убрано
@@ -2532,7 +2698,7 @@ document.getElementById('btnAddCamp').addEventListener('click', () => {
   showCampForm('add');
 });
 
-loadCamps();
+bootstrapSuperadminPage();
 </script>
 
 <!-- Модалки -->
@@ -2546,10 +2712,11 @@ function showModal(html){
 function closeModal(){ if(window._curModal){ window._curModal.remove(); window._curModal=null; } }
 
 function appAlert(message, onClose){
+  const safeMessage = escapeHtml(message || '');
   showModal(`
     <div style="display:grid;gap:12px">
       <div style="font-weight:700">Сообщение</div>
-      <div>${message}</div>
+      <div>${safeMessage}</div>
       <div style="display:flex;justify-content:end;gap:8px">
         <button class="primary" id="al_ok">OK</button>
       </div>
@@ -2558,10 +2725,11 @@ function appAlert(message, onClose){
   document.getElementById('al_ok').onclick = ()=>{ closeModal(); onClose && onClose(); };
 }
 function appConfirm(message, onYes, onNo){
+  const safeMessage = escapeHtml(message || '');
   showModal(`
     <div style="display:grid;gap:12px">
       <div style="font-weight:700">Подтвердите действие</div>
-      <div>${message}</div>
+      <div>${safeMessage}</div>
       <div class="appconfirm-actions">
         <button class="primary ok"   id="cf_yes">OK</button>
         <button class="cancel" id="cf_no">Отмена</button>

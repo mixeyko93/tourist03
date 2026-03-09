@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from tourist03.config import UPLOAD_DIR
 from tourist03.domain import bookings as booking_domain
 from tourist03.repositories import catalog as catalog_repo
+from tourist03.schemas import CampStatusUpdateRequest
 from tourist03.storage import _normalize_move, _room_photos_from_fs
 
 
@@ -272,6 +273,34 @@ async def api_camps_upsert_new(req: Request):
 async def api_camps_upsert(camp_id: int, req: Request):
     data = await req.json()
     return catalog_repo.upsert_camp(camp_id, data, _normalize_move)
+
+
+def api_camp_status_update(camp_id: int, payload: CampStatusUpdateRequest):
+    row = catalog_repo.get_camp(camp_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="not found")
+
+    status_value = (payload.status or "").strip().lower()
+    if status_value not in {"active", "disabled", "archived"}:
+        raise HTTPException(status_code=400, detail="Некорректный статус базы")
+    if not catalog_repo.update_camp_status(camp_id, status_value):
+        raise HTTPException(status_code=404, detail="not found")
+    return {"ok": True}
+
+
+def api_camps_delete(camp_id: int):
+    row = catalog_repo.get_camp(camp_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="not found")
+
+    status_value = (row.get("status") or "active").strip().lower()
+    if status_value != "archived":
+        raise HTTPException(status_code=400, detail="Удалять из базы можно только архивные записи")
+    if catalog_repo.camp_has_bookings(camp_id):
+        raise HTTPException(status_code=409, detail="Нельзя удалить базу, по которой уже есть бронирования")
+    if not catalog_repo.delete_camp(camp_id):
+        raise HTTPException(status_code=404, detail="not found")
+    return {"ok": True}
 
 
 async def api_upload(request: Request):

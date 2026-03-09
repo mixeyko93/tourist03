@@ -187,11 +187,8 @@ def _get_admin_camp_ids(admin_id: int) -> list[int]:
         return [row["camp_id"] for row in cur.fetchall()]
 
 
-def get_superadmin(request: Request):
-    if request.session.get("superadmin") is True:
-        return True
-
-    header_token = (
+def extract_superadmin_header_token(request: Request) -> str:
+    return (
         request.headers.get("x-superadmin-key")
         or request.headers.get("x-superadmin-token")
         or (
@@ -200,7 +197,19 @@ def get_superadmin(request: Request):
             else ""
         )
     )
-    if SUPERADMIN_API_KEY and header_token and secrets.compare_digest(header_token, SUPERADMIN_API_KEY):
+
+
+def is_valid_superadmin_key(token: str) -> bool:
+    candidate = (token or "").strip()
+    return bool(SUPERADMIN_API_KEY and candidate and secrets.compare_digest(candidate, SUPERADMIN_API_KEY))
+
+
+def get_superadmin(request: Request):
+    if request.session.get("superadmin") is True:
+        return True
+
+    header_token = extract_superadmin_header_token(request)
+    if is_valid_superadmin_key(header_token):
         request.session["superadmin"] = True
         return True
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Нет доступа")
@@ -216,6 +225,8 @@ __all__ = [
     "get_current_user",
     "get_superadmin",
     "hash_password",
+    "extract_superadmin_header_token",
+    "is_valid_superadmin_key",
     "issue_user_token",
     "log_user_event",
     "verify_password",

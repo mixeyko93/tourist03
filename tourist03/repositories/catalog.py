@@ -41,6 +41,28 @@ def list_camp_photos(camp_id: int):
         return [dict(row) for row in cur.fetchall()]
 
 
+def camp_has_bookings(camp_id: int) -> bool:
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT 1 FROM crm.bookings WHERE camp_id = %s LIMIT 1", (camp_id,))
+        return cur.fetchone() is not None
+
+
+def update_camp_status(camp_id: int, status: str) -> bool:
+    conn = _pg_connect("catalog")
+    try:
+        cur = conn.cursor()
+        cur.execute("UPDATE catalog.camps SET status = %s WHERE id = %s", (status, camp_id))
+        changed = cur.rowcount > 0
+        conn.commit()
+        return changed
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def _list_room_rows(cur, camp_clause: str = "", params: tuple = ()):
     cur.execute(
         f"""
@@ -462,5 +484,24 @@ def upsert_camp(camp_id: Optional[int], data: dict, normalize_move):
 
         conn.commit()
         return {"ok": True, "id": camp_id}
+    finally:
+        conn.close()
+
+
+def delete_camp(camp_id: int) -> bool:
+    conn = _pg_connect("catalog")
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM crm.camp_admin_links WHERE camp_id = %s", (camp_id,))
+        cur.execute("DELETE FROM catalog.room_photos WHERE camp_id = %s", (camp_id,))
+        cur.execute("DELETE FROM catalog.camp_photos WHERE camp_id = %s", (camp_id,))
+        cur.execute("DELETE FROM catalog.rooms WHERE camp_id = %s", (camp_id,))
+        cur.execute("DELETE FROM catalog.camps WHERE id = %s", (camp_id,))
+        deleted = cur.rowcount > 0
+        conn.commit()
+        return deleted
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         conn.close()

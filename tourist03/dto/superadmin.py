@@ -65,3 +65,7 @@ class SuperAdminCreateAccountResponseDTO(StatusResponseDTO):
 
 class SuperAdminUpdateAccountResponseDTO(OkResponseDTO):
     pass
+
+
+class SuperAdminSessionResponseDTO(OkResponseDTO):
+    authenticated: bool

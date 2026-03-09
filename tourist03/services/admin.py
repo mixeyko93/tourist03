@@ -28,7 +28,7 @@ def admin_login(req: AdminLoginRequest, request: Request):
 
 
 def admin_logout(request: Request):
-    request.session.clear()
+    request.session.pop("admin_id", None)
     return {"status": "ok"}
 
 

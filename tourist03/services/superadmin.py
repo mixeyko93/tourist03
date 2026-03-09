@@ -1,9 +1,42 @@
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 
 from tourist03.config import logger
 from tourist03.repositories import superadmin as superadmin_repo
-from tourist03.schemas import SuperAdminCreateAccountRequest, SuperAdminUpdateAccountRequest
-from tourist03.security import hash_password
+from tourist03.schemas import (
+    SuperAdminCreateAccountRequest,
+    SuperAdminLoginRequest,
+    SuperAdminUpdateAccountRequest,
+)
+from tourist03.security import (
+    extract_superadmin_header_token,
+    hash_password,
+    is_valid_superadmin_key,
+)
+
+
+def superadmin_session(request: Request):
+    if request.session.get("superadmin") is True:
+        return {"ok": True, "authenticated": True}
+
+    header_token = extract_superadmin_header_token(request)
+    if is_valid_superadmin_key(header_token):
+        request.session["superadmin"] = True
+        return {"ok": True, "authenticated": True}
+
+    return {"ok": True, "authenticated": False}
+
+
+def superadmin_login(payload: SuperAdminLoginRequest, request: Request):
+    if not is_valid_superadmin_key(payload.key):
+        raise HTTPException(status_code=401, detail="Нет доступа")
+
+    request.session["superadmin"] = True
+    return {"ok": True, "authenticated": True}
+
+
+def superadmin_logout(request: Request):
+    request.session.pop("superadmin", None)
+    return {"ok": True, "authenticated": False}
 
 
 def superadmin_user_history(user_id: int):

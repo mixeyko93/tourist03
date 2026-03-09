@@ -17,6 +17,19 @@ const adminState = {
   roomsCacheByCamp: new Map(),
 };
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value).replace(/`/g, '&#96;');
+}
+
 function initAdminCamps() {
   const loginView = document.getElementById('crm-login-view');
   const appView = document.getElementById('crm-app-view');
@@ -299,13 +312,13 @@ function initAdminCamps() {
         tr.style.cursor = 'pointer';
         tr.title = 'Нажмите, чтобы открыть';
         tr.innerHTML = `
-          <td>${formatDate(booking.check_in)}</td>
-          <td>${formatDate(booking.check_out)}</td>
-          <td>${(booking.guests_count != null ? booking.guests_count : '—')}</td>
-          <td>${booking.room_name || booking.room_id || '—'}</td>
-          <td>${booking.status || '—'}</td>
-          <td>${formatPaymentCell(booking)}</td>
-          <td>${booking.source || '—'}</td>
+          <td>${escapeHtml(formatDate(booking.check_in))}</td>
+          <td>${escapeHtml(formatDate(booking.check_out))}</td>
+          <td>${escapeHtml(booking.guests_count != null ? booking.guests_count : '—')}</td>
+          <td>${escapeHtml(booking.room_name || booking.room_id || '—')}</td>
+          <td>${escapeHtml(booking.status || '—')}</td>
+          <td>${escapeHtml(formatPaymentCell(booking))}</td>
+          <td>${escapeHtml(booking.source || '—')}</td>
           <td><button class="crm-logout-btn" type="button">⋯</button></td>
         `;
         tr.addEventListener('click', () => openBookingModal(booking));
@@ -591,7 +604,7 @@ function renderCalendarGrid({ grid, rooms, bookings, roomFilter, days, periodSta
         b.guest_phone ||
         (b.user_id ? `Пользователь #${b.user_id}` : 'Гость');
       const pay = formatPaymentCell(b);
-      bar.innerHTML = `<span>#${b.id}</span><span class="meta">${who} • ${pay}</span>`;
+      bar.innerHTML = `<span>#${escapeHtml(b.id)}</span><span class="meta">${escapeHtml(who)} • ${escapeHtml(pay)}</span>`;
       bar.title = `${who}\nЗаезд: ${formatDate(b.check_in)}\nВыезд: ${formatDate(b.check_out)}\nСтатус: ${b.status}\nОплата: ${pay}`;
       bar.addEventListener('click', (ev) => {
         ev.preventDefault();
@@ -668,10 +681,10 @@ function openBookingModal(booking) {
   const phoneLabel = booking.user_phone || guestPhone || '';
   const emailLabel = (booking.user_email || guestEmail || '').trim();
   info.innerHTML = `
-    <div><strong>${campLabel}</strong> — ${roomLabel}</div>
-    <div class="crm-note" style="margin:6px 0 0;">Заезд: ${formatDate(booking.check_in)} • Выезд: ${formatDate(booking.check_out)} • Гостей: ${(booking.guests_count != null ? booking.guests_count : '—')}</div>
-    <div class="crm-note" style="margin:6px 0 0;">${userLabel}${phoneLabel ? ` • ${phoneLabel}` : ''}${emailLabel ? ` • ${emailLabel}` : ''}</div>
-    ${booking.comment ? `<div class="crm-note" style="margin:6px 0 0;">Комментарий: ${String(booking.comment).replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>` : ''}
+    <div><strong>${escapeHtml(campLabel)}</strong> — ${escapeHtml(roomLabel)}</div>
+    <div class="crm-note" style="margin:6px 0 0;">Заезд: ${escapeHtml(formatDate(booking.check_in))} • Выезд: ${escapeHtml(formatDate(booking.check_out))} • Гостей: ${escapeHtml(booking.guests_count != null ? booking.guests_count : '—')}</div>
+    <div class="crm-note" style="margin:6px 0 0;">${escapeHtml(userLabel)}${phoneLabel ? ` • ${escapeHtml(phoneLabel)}` : ''}${emailLabel ? ` • ${escapeHtml(emailLabel)}` : ''}</div>
+    ${booking.comment ? `<div class="crm-note" style="margin:6px 0 0;">Комментарий: ${escapeHtml(booking.comment)}</div>` : ''}
   `;
 
   statusSel.innerHTML = '';

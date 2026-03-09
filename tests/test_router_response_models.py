@@ -32,6 +32,7 @@ from tourist03.dto.superadmin import (
     SuperAdminAccountDTO,
     SuperAdminCampSummaryDTO,
     SuperAdminCreateAccountResponseDTO,
+    SuperAdminSessionResponseDTO,
     SuperAdminUpdateAccountResponseDTO,
     SuperAdminUserHistoryResponseDTO,
 )
@@ -147,10 +148,25 @@ class RouterResponseModelTests(unittest.TestCase):
         )
         self.assertIs(routes[("/api/camps", ("POST",))].response_model, CampUpsertResponseDTO)
         self.assertIs(routes[("/api/camps/{camp_id}", ("PUT",))].response_model, CampUpsertResponseDTO)
+        self.assertIs(routes[("/api/camps/{camp_id}/status", ("PATCH",))].response_model, OkResponseDTO)
+        self.assertIs(routes[("/api/camps/{camp_id}", ("DELETE",))].response_model, OkResponseDTO)
         self.assertIs(routes[("/api/upload", ("POST",))].response_model, UploadResponseDTO)
 
     def test_superadmin_router_response_models(self):
         routes = _route_map(superadmin.router)
+
+        self.assertIs(
+            routes[("/api/superadmin/session", ("GET",))].response_model,
+            SuperAdminSessionResponseDTO,
+        )
+        self.assertIs(
+            routes[("/api/superadmin/session", ("POST",))].response_model,
+            SuperAdminSessionResponseDTO,
+        )
+        self.assertIs(
+            routes[("/api/superadmin/session", ("DELETE",))].response_model,
+            SuperAdminSessionResponseDTO,
+        )
 
         self.assertIs(
             routes[("/api/superadmin/users/{user_id}/history", ("GET",))].response_model,

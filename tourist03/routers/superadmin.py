@@ -5,6 +5,7 @@ from tourist03.dto.superadmin import (
     SuperAdminAccountDTO,
     SuperAdminCampSummaryDTO,
     SuperAdminCreateAccountResponseDTO,
+    SuperAdminSessionResponseDTO,
     SuperAdminUpdateAccountResponseDTO,
     SuperAdminUserHistoryResponseDTO,
 )
@@ -15,6 +16,27 @@ from tourist03.services import superadmin as superadmin_service
 router = APIRouter()
 superadmin_guard = [Depends(get_superadmin)]
 
+router.add_api_route(
+    "/api/superadmin/session",
+    superadmin_service.superadmin_session,
+    methods=["GET"],
+    response_model=SuperAdminSessionResponseDTO,
+    responses=error_responses(500),
+)
+router.add_api_route(
+    "/api/superadmin/session",
+    superadmin_service.superadmin_login,
+    methods=["POST"],
+    response_model=SuperAdminSessionResponseDTO,
+    responses=error_responses(401, 422, 500),
+)
+router.add_api_route(
+    "/api/superadmin/session",
+    superadmin_service.superadmin_logout,
+    methods=["DELETE"],
+    response_model=SuperAdminSessionResponseDTO,
+    responses=error_responses(500),
+)
 router.add_api_route(
     "/api/superadmin/users/{user_id}/history",
     superadmin_service.superadmin_user_history,
