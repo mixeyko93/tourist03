@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, List, Optional
 
 from pydantic import BaseModel
 
@@ -21,3 +21,17 @@ class IdResponseDTO(OkResponseDTO):
 
 class PaymentLinkResponseDTO(OkResponseDTO):
     payment_url: Optional[str] = None
+
+
+class ErrorResponseDTO(BaseModel):
+    detail: str
+
+
+class ValidationErrorItemDTO(BaseModel):
+    loc: List[Any]
+    msg: str
+    type: str
+
+
+class ValidationErrorResponseDTO(BaseModel):
+    detail: List[ValidationErrorItemDTO]

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
 
+from tourist03.api_responses import error_responses
 from tourist03.dto.superadmin import (
     SuperAdminAccountDTO,
     SuperAdminCampSummaryDTO,
@@ -20,6 +21,7 @@ router.add_api_route(
     methods=["GET"],
     dependencies=superadmin_guard,
     response_model=SuperAdminUserHistoryResponseDTO,
+    responses=error_responses(401, 404, 422, 500),
 )
 router.add_api_route(
     "/api/superadmin/camps",
@@ -27,6 +29,7 @@ router.add_api_route(
     methods=["GET"],
     dependencies=superadmin_guard,
     response_model=list[SuperAdminCampSummaryDTO],
+    responses=error_responses(401, 500),
 )
 router.add_api_route(
     "/api/superadmin/accounts",
@@ -34,6 +37,7 @@ router.add_api_route(
     methods=["GET"],
     dependencies=superadmin_guard,
     response_model=list[SuperAdminAccountDTO],
+    responses=error_responses(401, 500),
 )
 router.add_api_route(
     "/api/admincamps/accounts",
@@ -41,6 +45,7 @@ router.add_api_route(
     methods=["GET"],
     dependencies=superadmin_guard,
     response_model=list[SuperAdminAccountDTO],
+    responses=error_responses(401, 500),
 )
 router.add_api_route(
     "/api/superadmin/accounts",
@@ -48,6 +53,7 @@ router.add_api_route(
     methods=["POST"],
     dependencies=superadmin_guard,
     response_model=SuperAdminCreateAccountResponseDTO,
+    responses=error_responses(400, 401, 422, 500),
 )
 router.add_api_route(
     "/api/admincamps/accounts",
@@ -55,6 +61,7 @@ router.add_api_route(
     methods=["POST"],
     dependencies=superadmin_guard,
     response_model=SuperAdminCreateAccountResponseDTO,
+    responses=error_responses(400, 401, 422, 500),
 )
 router.add_api_route(
     "/api/admincamps/account",
@@ -62,6 +69,7 @@ router.add_api_route(
     methods=["POST"],
     dependencies=superadmin_guard,
     response_model=SuperAdminCreateAccountResponseDTO,
+    responses=error_responses(400, 401, 422, 500),
 )
 router.add_api_route(
     "/api/admin/accounts",
@@ -69,6 +77,7 @@ router.add_api_route(
     methods=["POST"],
     dependencies=superadmin_guard,
     response_model=SuperAdminCreateAccountResponseDTO,
+    responses=error_responses(400, 401, 422, 500),
 )
 router.add_api_route(
     "/api/admin/account",
@@ -76,6 +85,7 @@ router.add_api_route(
     methods=["POST"],
     dependencies=superadmin_guard,
     response_model=SuperAdminCreateAccountResponseDTO,
+    responses=error_responses(400, 401, 422, 500),
 )
 router.add_api_route(
     "/api/superadmin/accounts/{account_id}",
@@ -83,6 +93,7 @@ router.add_api_route(
     methods=["PATCH"],
     dependencies=superadmin_guard,
     response_model=SuperAdminUpdateAccountResponseDTO,
+    responses=error_responses(400, 401, 404, 409, 422, 500),
 )
 router.add_api_route(
     "/api/admincamps/accounts/{account_id}",
@@ -90,6 +101,7 @@ router.add_api_route(
     methods=["PATCH"],
     dependencies=superadmin_guard,
     response_model=SuperAdminUpdateAccountResponseDTO,
+    responses=error_responses(400, 401, 404, 409, 422, 500),
 )
 router.add_api_route(
     "/api/admin/accounts/{account_id}",
@@ -97,4 +109,5 @@ router.add_api_route(
     methods=["PATCH"],
     dependencies=superadmin_guard,
     response_model=SuperAdminUpdateAccountResponseDTO,
+    responses=error_responses(400, 401, 404, 409, 422, 500),
 )
