@@ -3,7 +3,7 @@ import os
 import unittest
 
 from tourist03.dto.common import ErrorResponseDTO, ValidationErrorResponseDTO
-from tourist03.routers import admin, auth, catalog, superadmin
+from tourist03.routers import admin, auth, bookings, catalog, superadmin
 
 
 def _route_map(router):
@@ -30,6 +30,16 @@ class ErrorResponseContractsTests(unittest.TestCase):
         self.assertIs(route.responses[422]["model"], ValidationErrorResponseDTO)
         self.assertIs(route.responses[500]["model"], ErrorResponseDTO)
 
+    def test_bookings_route_documents_expected_errors(self):
+        routes = _route_map(bookings.router)
+        route = routes[("/api/auth/bookings/{booking_id}", ("PUT",))]
+        self.assertIs(route.responses[400]["model"], ErrorResponseDTO)
+        self.assertIs(route.responses[401]["model"], ErrorResponseDTO)
+        self.assertIs(route.responses[404]["model"], ErrorResponseDTO)
+        self.assertIs(route.responses[409]["model"], ErrorResponseDTO)
+        self.assertIs(route.responses[422]["model"], ValidationErrorResponseDTO)
+        self.assertIs(route.responses[500]["model"], ErrorResponseDTO)
+
     def test_admin_route_documents_expected_errors(self):
         routes = _route_map(admin.router)
         route = routes[("/api/admin/bookings", ("GET",))]
@@ -37,6 +47,9 @@ class ErrorResponseContractsTests(unittest.TestCase):
         self.assertIs(route.responses[403]["model"], ErrorResponseDTO)
         self.assertIs(route.responses[422]["model"], ValidationErrorResponseDTO)
         self.assertIs(route.responses[500]["model"], ErrorResponseDTO)
+
+        create_route = routes[("/api/admin/bookings", ("POST",))]
+        self.assertIs(create_route.responses[409]["model"], ErrorResponseDTO)
 
     def test_superadmin_route_documents_expected_errors(self):
         routes = _route_map(superadmin.router)

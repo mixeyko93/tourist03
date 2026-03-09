@@ -83,7 +83,7 @@ router.add_api_route(
     bookings_service.auth_booking_edit,
     methods=["PUT"],
     response_model=OkResponseDTO,
-    responses=error_responses(400, 401, 404, 422, 500),
+    responses=error_responses(400, 401, 404, 409, 422, 500),
 )
 router.add_api_route(
     "/api/auth/bookings/{booking_id}/cancel",

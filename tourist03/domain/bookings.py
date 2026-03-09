@@ -7,8 +7,32 @@ from fastapi import HTTPException
 CONFLICT_IGNORED_STATUSES = ("rejected", "cancelled_by_user", "cancelled")
 TERMINAL_BOOKING_STATUSES = ("completed", "rejected", "cancelled_by_user", "cancelled")
 ACTIVE_BOOKING_STATUSES = ("pending", "confirmed", "awaiting_payment")
-ALLOWED_ADMIN_BOOKING_STATUSES = ("pending", "confirmed", "rejected", "completed", "cancelled_by_user", "cancelled")
+ALLOWED_BOOKING_STATUSES = (
+    "pending",
+    "confirmed",
+    "awaiting_payment",
+    "rejected",
+    "completed",
+    "cancelled_by_user",
+    "cancelled",
+)
+ALLOWED_ADMIN_BOOKING_STATUSES = ALLOWED_BOOKING_STATUSES
 ALLOWED_PAYMENT_STATUSES = ("unpaid", "paid", "cash")
+
+BOOKING_DATE_RANGE_CONSTRAINT = "bookings_check_valid_date_range"
+BOOKING_GUESTS_COUNT_CONSTRAINT = "bookings_check_positive_guests"
+BOOKING_STATUS_CONSTRAINT = "bookings_check_status"
+BOOKING_PAYMENT_STATUS_CONSTRAINT = "bookings_check_payment_status"
+BOOKING_PAYMENT_REQUIRED_CONSTRAINT = "bookings_check_payment_required_consistency"
+BOOKING_OVERLAP_CONSTRAINT = "bookings_no_overlap_per_room"
+
+BOOKING_CONSTRAINT_DETAILS = {
+    BOOKING_DATE_RANGE_CONSTRAINT: "Дата выезда должна быть позже даты заезда",
+    BOOKING_GUESTS_COUNT_CONSTRAINT: "Некорректное количество гостей",
+    BOOKING_STATUS_CONSTRAINT: "Некорректный статус брони",
+    BOOKING_PAYMENT_STATUS_CONSTRAINT: "Некорректный статус оплаты",
+    BOOKING_PAYMENT_REQUIRED_CONSTRAINT: "Оплаченная бронь не может требовать оплату",
+}
 
 
 def normalize_booking_status(status: Optional[str], *, default: str = "pending") -> str:

@@ -1,6 +1,6 @@
 from typing import Optional
 
-from tourist03.bootstrap import ensure_crm_bookings_schema
+from tourist03.booking_db_errors import translate_booking_integrity_error
 from tourist03.db import _db_conn
 
 
@@ -44,7 +44,6 @@ def list_user_bookings(user_id: int):
 
 def list_user_order_rows(user_id: int):
     with _db_conn("crm") as conn:
-        ensure_crm_bookings_schema(conn)
         cur = conn.cursor()
         cur.execute(
             """
@@ -78,7 +77,6 @@ def list_user_order_rows(user_id: int):
 def get_user_order_rows(order_id: str, user_id: int):
     condition, value = _order_filter(order_id, id_expr="b.id = %s", group_expr="b.group_id = %s")
     with _db_conn("crm") as conn:
-        ensure_crm_bookings_schema(conn)
         cur = conn.cursor()
         cur.execute(
             f"""
@@ -128,52 +126,58 @@ def create_order(
 ):
     booking_ids = []
     with _db_conn("crm") as conn:
-        ensure_crm_bookings_schema(conn)
         cur = conn.cursor()
-        for item in items:
-            cur.execute(
-                """
-                SELECT 1
-                FROM crm.bookings
-                WHERE room_id=%s
-                  AND camp_id=%s
-                  AND (status IS NULL OR lower(status) NOT IN %s)
-                  AND check_in < %s
-                  AND check_out > %s
-                LIMIT 1
-                """,
-                (item["room_id"], camp_id, blocked_statuses, check_out, check_in),
-            )
-            if cur.fetchone():
-                return None
+        try:
+            for item in items:
+                cur.execute(
+                    """
+                    SELECT 1
+                    FROM crm.bookings
+                    WHERE room_id=%s
+                      AND camp_id=%s
+                      AND (status IS NULL OR lower(status) NOT IN %s)
+                      AND check_in < %s
+                      AND check_out > %s
+                    LIMIT 1
+                    """,
+                    (item["room_id"], camp_id, blocked_statuses, check_out, check_in),
+                )
+                if cur.fetchone():
+                    return None
 
-        for item in items:
-            cur.execute(
-                """
-                INSERT INTO crm.bookings(user_id, camp_id, room_id, group_id, check_in, check_out, guests_count, status, source, comment)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,'pending','webapp',%s)
-                RETURNING id
-                """,
-                (
-                    user_id,
-                    camp_id,
-                    item["room_id"],
-                    order_id,
-                    check_in,
-                    check_out,
-                    item["guests_count"],
-                    comment,
-                ),
+            for item in items:
+                cur.execute(
+                    """
+                    INSERT INTO crm.bookings(user_id, camp_id, room_id, group_id, check_in, check_out, guests_count, status, source, comment)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,'pending','webapp',%s)
+                    RETURNING id
+                    """,
+                    (
+                        user_id,
+                        camp_id,
+                        item["room_id"],
+                        order_id,
+                        check_in,
+                        check_out,
+                        item["guests_count"],
+                        comment,
+                    ),
+                )
+                booking_ids.append(int(cur.fetchone()["id"]))
+            conn.commit()
+        except Exception as exc:
+            conn.rollback()
+            translate_booking_integrity_error(
+                exc,
+                conflict_detail="Один из вариантов уже забронирован на выбранные даты",
             )
-            booking_ids.append(int(cur.fetchone()["id"]))
-        conn.commit()
+            raise
     return booking_ids
 
 
 def get_order_status_rows(order_id: str, user_id: int):
     condition, value = _order_filter(order_id, id_expr="id=%s", group_expr="group_id=%s")
     with _db_conn("crm") as conn:
-        ensure_crm_bookings_schema(conn)
         cur = conn.cursor()
         cur.execute(
             f"SELECT id, status FROM crm.bookings WHERE {condition} AND user_id=%s",
@@ -185,7 +189,6 @@ def get_order_status_rows(order_id: str, user_id: int):
 def cancel_order(order_id: str, user_id: int):
     condition, value = _order_filter(order_id, id_expr="id=%s", group_expr="group_id=%s")
     with _db_conn("crm") as conn:
-        ensure_crm_bookings_schema(conn)
         cur = conn.cursor()
         cur.execute(
             f"UPDATE crm.bookings SET status='cancelled_by_user', updated_at=NOW() WHERE {condition} AND user_id=%s",
@@ -197,7 +200,6 @@ def cancel_order(order_id: str, user_id: int):
 def get_order_payment_rows(order_id: str, user_id: int):
     condition, value = _order_filter(order_id, id_expr="id=%s", group_expr="group_id=%s")
     with _db_conn("crm") as conn:
-        ensure_crm_bookings_schema(conn)
         cur = conn.cursor()
         cur.execute(
             f"""
@@ -213,7 +215,6 @@ def get_order_payment_rows(order_id: str, user_id: int):
 def get_order_edit_rows(order_id: str, user_id: int):
     condition, value = _order_filter(order_id, id_expr="id=%s", group_expr="group_id=%s")
     with _db_conn("crm") as conn:
-        ensure_crm_bookings_schema(conn)
         cur = conn.cursor()
         cur.execute(
             f"""
@@ -271,14 +272,21 @@ def update_order(order_id: str, user_id: int, *, check_in=None, check_out=None, 
 
     condition, value = _order_filter(order_id, id_expr="id=%s", group_expr="group_id=%s")
     with _db_conn("crm") as conn:
-        ensure_crm_bookings_schema(conn)
         cur = conn.cursor()
-        updates.append("updated_at=NOW()")
-        cur.execute(
-            f"UPDATE crm.bookings SET {', '.join(updates)} WHERE {condition} AND user_id=%s",
-            tuple([*params, value, user_id]),
-        )
-        conn.commit()
+        try:
+            updates.append("updated_at=NOW()")
+            cur.execute(
+                f"UPDATE crm.bookings SET {', '.join(updates)} WHERE {condition} AND user_id=%s",
+                tuple([*params, value, user_id]),
+            )
+            conn.commit()
+        except Exception as exc:
+            conn.rollback()
+            translate_booking_integrity_error(
+                exc,
+                conflict_detail="Один из апартаментов уже забронирован на выбранные даты",
+            )
+            raise
     return True
 
 
@@ -315,19 +323,45 @@ def booking_has_conflict(
         return bool(cur.fetchone())
 
 
+def booking_has_conflict_except(
+    booking_id: int,
+    room_id: int,
+    camp_id: int,
+    check_in,
+    check_out,
+    blocked_statuses: tuple[str, ...],
+):
+    return order_has_conflict(
+        room_id,
+        camp_id,
+        [int(booking_id)],
+        check_in,
+        check_out,
+        blocked_statuses,
+    )
+
+
 def create_booking(user_id: int, camp_id: int, room_id: int, check_in, check_out, guests_count: int, comment: Optional[str]):
     with _db_conn("crm") as conn:
         cur = conn.cursor()
-        cur.execute(
-            """
-            INSERT INTO crm.bookings(user_id, camp_id, room_id, check_in, check_out, guests_count, status, source, comment)
-            VALUES (%s,%s,%s,%s,%s,%s,'pending','webapp',%s)
-            RETURNING id
-            """,
-            (user_id, camp_id, room_id, check_in, check_out, guests_count, comment),
-        )
-        booking_id = int(cur.fetchone()["id"])
-        conn.commit()
+        try:
+            cur.execute(
+                """
+                INSERT INTO crm.bookings(user_id, camp_id, room_id, check_in, check_out, guests_count, status, source, comment)
+                VALUES (%s,%s,%s,%s,%s,%s,'pending','webapp',%s)
+                RETURNING id
+                """,
+                (user_id, camp_id, room_id, check_in, check_out, guests_count, comment),
+            )
+            booking_id = int(cur.fetchone()["id"])
+            conn.commit()
+        except Exception as exc:
+            conn.rollback()
+            translate_booking_integrity_error(
+                exc,
+                conflict_detail="Этот вариант уже забронирован на выбранные даты",
+            )
+            raise
     return booking_id
 
 
@@ -366,7 +400,11 @@ def get_booking_edit_state(booking_id: int, user_id: int):
     with _db_conn("crm") as conn:
         cur = conn.cursor()
         cur.execute(
-            "SELECT id, status, payment_status FROM crm.bookings WHERE id=%s AND user_id=%s",
+            """
+            SELECT id, room_id, camp_id, check_in, check_out, status, payment_status
+            FROM crm.bookings
+            WHERE id=%s AND user_id=%s
+            """,
             (booking_id, user_id),
         )
         row = cur.fetchone()
@@ -393,12 +431,20 @@ def update_booking(booking_id: int, user_id: int, *, check_in=None, check_out=No
 
     with _db_conn("crm") as conn:
         cur = conn.cursor()
-        updates.append("updated_at=NOW()")
-        cur.execute(
-            f"UPDATE crm.bookings SET {', '.join(updates)} WHERE id=%s AND user_id=%s",
-            tuple([*params, booking_id, user_id]),
-        )
-        conn.commit()
+        try:
+            updates.append("updated_at=NOW()")
+            cur.execute(
+                f"UPDATE crm.bookings SET {', '.join(updates)} WHERE id=%s AND user_id=%s",
+                tuple([*params, booking_id, user_id]),
+            )
+            conn.commit()
+        except Exception as exc:
+            conn.rollback()
+            translate_booking_integrity_error(
+                exc,
+                conflict_detail="Этот вариант уже забронирован на выбранные даты",
+            )
+            raise
     return True
 
 

@@ -36,7 +36,7 @@ router.add_api_route(
     admin_service.api_admin_create_booking,
     methods=["POST"],
     response_model=AdminBookingCreateResponseDTO,
-    responses=error_responses(400, 401, 403, 422, 500),
+    responses=error_responses(400, 401, 403, 409, 422, 500),
 )
 router.add_api_route(
     "/api/admin/bookings/{booking_id}",

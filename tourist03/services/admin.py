@@ -3,11 +3,20 @@ from typing import Optional
 
 from fastapi import Depends, HTTPException, Request, status
 
+from tourist03.booking_db_errors import BookingConflictError, BookingValidationError
 from tourist03.domain import bookings as booking_domain
 from tourist03.repositories import admin as admin_repo
 from tourist03.schemas import AdminCreateBookingRequest, AdminLoginRequest, BookingAdminUpdateRequest
 from tourist03.serializers import bookings as booking_serializers
 from tourist03.security import _get_admin_camp_ids, get_current_admin, log_user_event, verify_password
+
+
+def _raise_booking_write_http_error(exc: Exception):
+    if isinstance(exc, BookingConflictError):
+        raise HTTPException(status_code=409, detail=exc.detail) from exc
+    if isinstance(exc, BookingValidationError):
+        raise HTTPException(status_code=400, detail=exc.detail) from exc
+    raise exc
 
 
 def admin_login(req: AdminLoginRequest, request: Request):
@@ -86,26 +95,37 @@ def api_admin_create_booking(payload: AdminCreateBookingRequest, admin: dict = D
     room_id = payload.room_id
     if room_id is not None and not admin_repo.room_exists_for_camp(room_id, payload.camp_id):
         raise HTTPException(status_code=400, detail="Некорректный номер (апартамент) для выбранной базы")
+    if room_id is not None and admin_repo.booking_has_conflict(
+        room_id,
+        payload.camp_id,
+        payload.check_in,
+        payload.check_out,
+        booking_domain.CONFLICT_IGNORED_STATUSES,
+    ):
+        raise HTTPException(status_code=409, detail="Этот вариант уже забронирован на выбранные даты")
 
     guest_name = (payload.guest_name or "").strip() or None
     guest_phone = (payload.guest_phone or "").strip() or None
     guest_email = (str(payload.guest_email).strip().lower() if payload.guest_email is not None else None) if payload.guest_email is not None else None
     comment = (payload.comment or "").strip() or None
 
-    booking_id = admin_repo.create_admin_booking(
-        payload.camp_id,
-        room_id,
-        payload.check_in,
-        payload.check_out,
-        guests_count,
-        booking_status,
-        comment,
-        payment_status,
-        payment_required,
-        guest_name,
-        guest_phone,
-        guest_email,
-    )
+    try:
+        booking_id = admin_repo.create_admin_booking(
+            payload.camp_id,
+            room_id,
+            payload.check_in,
+            payload.check_out,
+            guests_count,
+            booking_status,
+            comment,
+            payment_status,
+            payment_required,
+            guest_name,
+            guest_phone,
+            guest_email,
+        )
+    except Exception as exc:
+        _raise_booking_write_http_error(exc)
     return {"ok": True, "id": booking_id}
 
 
@@ -120,7 +140,7 @@ def api_admin_update_booking(
 
     payment_status = booking_domain.normalize_admin_payment_status(payload.payment_status, allow_none=True)
 
-    new_status = payload.status.strip() if payload.status is not None else None
+    new_status = booking_domain.normalize_admin_booking_status(payload.status) if payload.status is not None else None
     booking = admin_repo.get_booking_by_id(booking_id)
     if not booking:
         raise HTTPException(status_code=404, detail="not found")
@@ -133,12 +153,15 @@ def api_admin_update_booking(
         default=None,
     )
 
-    changed = admin_repo.update_admin_booking(
-        booking_id,
-        status=new_status if new_status != booking.get("status") else None,
-        payment_status=payment_status if payment_status != booking.get("payment_status") else None,
-        payment_required=payment_required if payment_required != booking.get("payment_required") else None,
-    )
+    try:
+        changed = admin_repo.update_admin_booking(
+            booking_id,
+            status=new_status if new_status != booking.get("status") else None,
+            payment_status=payment_status if payment_status != booking.get("payment_status") else None,
+            payment_required=payment_required if payment_required != booking.get("payment_required") else None,
+        )
+    except Exception as exc:
+        _raise_booking_write_http_error(exc)
     if not changed:
         return {"ok": True}
 

@@ -38,6 +38,7 @@ class PostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
             cls.app_module = importlib.import_module("app")
             cls.security = importlib.import_module("tourist03.security")
+            cls.migrations_module = importlib.import_module("tourist03.migrations")
         except Exception:
             cls.pg.stop()
             for key, value in cls._env_backup.items():
@@ -211,7 +212,8 @@ class PostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 ('auth', 'user_tokens'),
                 ('auth', 'camp_admin_accounts'),
                 ('crm', 'bookings'),
-                ('crm', 'camp_admin_links')
+                ('crm', 'camp_admin_links'),
+                ('public', 'schema_migrations')
             )
             ORDER BY table_schema, table_name
             """
@@ -229,8 +231,94 @@ class PostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
             ("auth", "camp_admin_accounts"),
             ("crm", "bookings"),
             ("crm", "camp_admin_links"),
+            ("public", "schema_migrations"),
         }
         self.assertEqual(found, expected)
+
+        migration_rows = self._fetch_all(
+            "SELECT version FROM public.schema_migrations ORDER BY version"
+        )
+        self.assertEqual(
+            [row["version"] for row in migration_rows],
+            ["0001_base_schema", "0002_booking_rules"],
+        )
+
+    async def test_migrations_are_idempotent(self):
+        self.migrations_module.run_migrations()
+
+        rows = self._fetch_all(
+            "SELECT version, COUNT(*) AS cnt FROM public.schema_migrations GROUP BY version ORDER BY version"
+        )
+        self.assertEqual(
+            rows,
+            [
+                {"version": "0001_base_schema", "cnt": 1},
+                {"version": "0002_booking_rules", "cnt": 1},
+            ],
+        )
+
+    async def test_booking_constraints_reject_invalid_rows(self):
+        camp_id = self._seed_camp()
+        room_id = self._seed_room(camp_id)
+
+        with self.assertRaises(psycopg2.errors.CheckViolation) as invalid_dates:
+            self._execute(
+                """
+                INSERT INTO crm.bookings (
+                    camp_id, room_id, check_in, check_out, guests_count, status, source, payment_status, payment_required
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (camp_id, room_id, "2026-09-10", "2026-09-09", 2, "pending", "crm", "unpaid", False),
+            )
+        self.assertEqual(
+            invalid_dates.exception.diag.constraint_name,
+            "bookings_check_valid_date_range",
+        )
+
+        with self.assertRaises(psycopg2.errors.CheckViolation) as invalid_status:
+            self._execute(
+                """
+                INSERT INTO crm.bookings (
+                    camp_id, room_id, check_in, check_out, guests_count, status, source, payment_status, payment_required
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (camp_id, room_id, "2026-09-10", "2026-09-12", 2, "CONFIRMED", "crm", "unpaid", False),
+            )
+        self.assertEqual(
+            invalid_status.exception.diag.constraint_name,
+            "bookings_check_status",
+        )
+
+    async def test_booking_overlap_guard_rejects_direct_overlap(self):
+        camp_id = self._seed_camp()
+        room_id = self._seed_room(camp_id)
+
+        self._execute(
+            """
+            INSERT INTO crm.bookings (
+                camp_id, room_id, check_in, check_out, guests_count, status, source, payment_status, payment_required
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (camp_id, room_id, "2026-10-01", "2026-10-05", 2, "pending", "crm", "unpaid", False),
+        )
+
+        with self.assertRaises(psycopg2.errors.ExclusionViolation) as overlap_error:
+            self._execute(
+                """
+                INSERT INTO crm.bookings (
+                    camp_id, room_id, check_in, check_out, guests_count, status, source, payment_status, payment_required
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                (camp_id, room_id, "2026-10-03", "2026-10-06", 1, "confirmed", "crm", "unpaid", False),
+            )
+        self.assertEqual(
+            overlap_error.exception.diag.constraint_name,
+            "bookings_no_overlap_per_room",
+        )
 
     async def test_auth_register_me_and_logout_flow_uses_real_db(self):
         token = await self._register_user_and_get_token(phone="+79990000011", name="Alice")
@@ -385,6 +473,43 @@ class PostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(items[0]["room_id"], room_id)
         self.assertEqual(items[0]["user_name"], "Bob")
         self.assertEqual(items[0]["status"], "pending")
+
+    async def test_admin_create_booking_returns_conflict_for_busy_room(self):
+        camp_id = self._seed_camp()
+        room_id = self._seed_room(camp_id)
+        admin = self._seed_admin_account(camp_id, email="admin2@example.com", password="pass123456")
+
+        self._execute(
+            """
+            INSERT INTO crm.bookings (
+                camp_id, room_id, check_in, check_out, guests_count, status, source, payment_status, payment_required
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (camp_id, room_id, "2026-08-10", "2026-08-15", 2, "pending", "crm", "unpaid", False),
+        )
+
+        login_response = await self.client.post(
+            "/api/admin/login",
+            json={"email": admin["email"], "password": admin["password"]},
+        )
+        self.assertEqual(login_response.status_code, 200, login_response.text)
+
+        create_response = await self.client.post(
+            "/api/admin/bookings",
+            json={
+                "camp_id": camp_id,
+                "room_id": room_id,
+                "check_in": "2026-08-12",
+                "check_out": "2026-08-14",
+                "guests_count": 2,
+            },
+        )
+        self.assertEqual(create_response.status_code, 409, create_response.text)
+        self.assertEqual(
+            create_response.json(),
+            {"detail": "Этот вариант уже забронирован на выбранные даты"},
+        )
 
     async def test_superadmin_create_account_hits_real_unique_data(self):
         camp_id = self._seed_camp(name="Admin Camp")

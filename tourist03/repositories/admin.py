@@ -1,6 +1,7 @@
 from datetime import date
 from typing import Optional
 
+from tourist03.booking_db_errors import translate_booking_integrity_error
 from tourist03.db import _db_conn
 
 
@@ -94,6 +95,31 @@ def room_exists_for_camp(room_id: int, camp_id: int) -> bool:
         return bool(cur.fetchone())
 
 
+def booking_has_conflict(
+    room_id: int,
+    camp_id: int,
+    check_in,
+    check_out,
+    blocked_statuses: tuple[str, ...],
+) -> bool:
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT 1
+            FROM crm.bookings
+            WHERE room_id=%s
+              AND camp_id=%s
+              AND (status IS NULL OR lower(status) NOT IN %s)
+              AND check_in < %s
+              AND check_out > %s
+            LIMIT 1
+            """,
+            (room_id, camp_id, blocked_statuses, check_out, check_in),
+        )
+        return bool(cur.fetchone())
+
+
 def create_admin_booking(
     camp_id: int,
     room_id: Optional[int],
@@ -110,35 +136,43 @@ def create_admin_booking(
 ):
     with _db_conn("crm") as conn:
         cur = conn.cursor()
-        cur.execute(
-            """
-            INSERT INTO crm.bookings (
-                user_id, camp_id, room_id,
-                check_in, check_out, guests_count,
-                status, source, comment,
-                payment_status, payment_required,
-                guest_name, guest_phone, guest_email
+        try:
+            cur.execute(
+                """
+                INSERT INTO crm.bookings (
+                    user_id, camp_id, room_id,
+                    check_in, check_out, guests_count,
+                    status, source, comment,
+                    payment_status, payment_required,
+                    guest_name, guest_phone, guest_email
+                )
+                VALUES (NULL, %s, %s, %s, %s, %s, %s, 'crm', %s, %s, %s, %s, %s, %s)
+                RETURNING id
+                """,
+                (
+                    camp_id,
+                    room_id,
+                    check_in,
+                    check_out,
+                    guests_count,
+                    booking_status,
+                    comment,
+                    payment_status,
+                    payment_required,
+                    guest_name,
+                    guest_phone,
+                    guest_email,
+                ),
             )
-            VALUES (NULL, %s, %s, %s, %s, %s, %s, 'crm', %s, %s, %s, %s, %s, %s)
-            RETURNING id
-            """,
-            (
-                camp_id,
-                room_id,
-                check_in,
-                check_out,
-                guests_count,
-                booking_status,
-                comment,
-                payment_status,
-                payment_required,
-                guest_name,
-                guest_phone,
-                guest_email,
-            ),
-        )
-        booking_id = cur.fetchone()["id"]
-        conn.commit()
+            booking_id = cur.fetchone()["id"]
+            conn.commit()
+        except Exception as exc:
+            conn.rollback()
+            translate_booking_integrity_error(
+                exc,
+                conflict_detail="Этот вариант уже забронирован на выбранные даты",
+            )
+            raise
         return booking_id
 
 
@@ -176,10 +210,18 @@ def update_admin_booking(
 
     with _db_conn("crm") as conn:
         cur = conn.cursor()
-        updates.append("updated_at=NOW()")
-        params.append(booking_id)
-        cur.execute(f"UPDATE crm.bookings SET {', '.join(updates)} WHERE id=%s", tuple(params))
-        conn.commit()
+        try:
+            updates.append("updated_at=NOW()")
+            params.append(booking_id)
+            cur.execute(f"UPDATE crm.bookings SET {', '.join(updates)} WHERE id=%s", tuple(params))
+            conn.commit()
+        except Exception as exc:
+            conn.rollback()
+            translate_booking_integrity_error(
+                exc,
+                conflict_detail="Этот вариант уже забронирован на выбранные даты",
+            )
+            raise
     return True
 
 

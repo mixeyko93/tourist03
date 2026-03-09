@@ -4,11 +4,20 @@ from typing import Dict, List
 
 from fastapi import Depends, HTTPException
 
+from tourist03.booking_db_errors import BookingConflictError, BookingValidationError
 from tourist03.domain import bookings as booking_domain
 from tourist03.repositories import bookings as bookings_repo
 from tourist03.schemas import BookingCreateRequest, BookingEditRequest, BookingOrderCreateRequest, OrderEditRequest
 from tourist03.serializers import bookings as booking_serializers
 from tourist03.security import get_current_user, log_user_event
+
+
+def _raise_booking_write_http_error(exc: Exception):
+    if isinstance(exc, BookingConflictError):
+        raise HTTPException(status_code=409, detail=exc.detail) from exc
+    if isinstance(exc, BookingValidationError):
+        raise HTTPException(status_code=400, detail=exc.detail) from exc
+    raise exc
 
 
 def auth_my_bookings(mode: str = "active", user: dict = Depends(get_current_user)):
@@ -103,16 +112,19 @@ def auth_order_create(payload: BookingOrderCreateRequest, user: dict = Depends(g
 
     order_id = uuid.uuid4().hex
     comment = (payload.comment or "").strip() or None
-    booking_ids = bookings_repo.create_order(
-        user["id"],
-        payload.camp_id,
-        order_id,
-        payload.check_in,
-        payload.check_out,
-        items,
-        comment,
-        booking_domain.CONFLICT_IGNORED_STATUSES,
-    )
+    try:
+        booking_ids = bookings_repo.create_order(
+            user["id"],
+            payload.camp_id,
+            order_id,
+            payload.check_in,
+            payload.check_out,
+            items,
+            comment,
+            booking_domain.CONFLICT_IGNORED_STATUSES,
+        )
+    except Exception as exc:
+        _raise_booking_write_http_error(exc)
     if booking_ids is None:
         raise HTTPException(status_code=409, detail="Один из вариантов уже забронирован на выбранные даты")
 
@@ -197,13 +209,16 @@ def auth_order_edit(order_id: str, payload: OrderEditRequest, user: dict = Depen
             ):
                 raise HTTPException(status_code=409, detail="Один из апартаментов уже забронирован на выбранные даты")
 
-    changed = bookings_repo.update_order(
-        order_id,
-        user["id"],
-        check_in=payload.check_in,
-        check_out=payload.check_out,
-        comment=(payload.comment or "").strip() if payload.comment is not None else None,
-    )
+    try:
+        changed = bookings_repo.update_order(
+            order_id,
+            user["id"],
+            check_in=payload.check_in,
+            check_out=payload.check_out,
+            comment=(payload.comment or "").strip() if payload.comment is not None else None,
+        )
+    except Exception as exc:
+        _raise_booking_write_http_error(exc)
     if not changed:
         return {"ok": True}
 
@@ -232,15 +247,18 @@ def auth_booking_create(payload: BookingCreateRequest, user: dict = Depends(get_
     ):
         raise HTTPException(status_code=409, detail="Этот вариант уже забронирован на выбранные даты")
 
-    booking_id = bookings_repo.create_booking(
-        user["id"],
-        payload.camp_id,
-        payload.room_id,
-        payload.check_in,
-        payload.check_out,
-        guests_count,
-        payload.comment,
-    )
+    try:
+        booking_id = bookings_repo.create_booking(
+            user["id"],
+            payload.camp_id,
+            payload.room_id,
+            payload.check_in,
+            payload.check_out,
+            guests_count,
+            payload.comment,
+        )
+    except Exception as exc:
+        _raise_booking_write_http_error(exc)
     log_user_event(
         user["id"],
         "booking_create",
@@ -270,14 +288,39 @@ def auth_booking_edit(booking_id: int, payload: BookingEditRequest, user: dict =
 
     booking_domain.ensure_editable(booking.get("status"), booking.get("payment_status"))
 
-    changed = bookings_repo.update_booking(
-        booking_id,
-        user["id"],
-        check_in=payload.check_in,
-        check_out=payload.check_out,
-        guests_count=payload.guests_count,
-        comment=(payload.comment or "").strip() if payload.comment is not None else None,
-    )
+    next_check_in = payload.check_in if payload.check_in is not None else booking.get("check_in")
+    next_check_out = payload.check_out if payload.check_out is not None else booking.get("check_out")
+    next_guests_count = None
+
+    if payload.guests_count is not None:
+        next_guests_count = booking_domain.ensure_positive_guest_count(
+            payload.guests_count,
+            detail="Укажите количество гостей",
+        )
+
+    if payload.check_in is not None or payload.check_out is not None:
+        booking_domain.ensure_valid_date_range(next_check_in, next_check_out)
+        if bookings_repo.booking_has_conflict_except(
+            booking_id,
+            int(booking.get("room_id") or 0),
+            int(booking.get("camp_id") or 0),
+            next_check_in,
+            next_check_out,
+            booking_domain.CONFLICT_IGNORED_STATUSES,
+        ):
+            raise HTTPException(status_code=409, detail="Этот вариант уже забронирован на выбранные даты")
+
+    try:
+        changed = bookings_repo.update_booking(
+            booking_id,
+            user["id"],
+            check_in=payload.check_in,
+            check_out=payload.check_out,
+            guests_count=next_guests_count,
+            comment=(payload.comment or "").strip() if payload.comment is not None else None,
+        )
+    except Exception as exc:
+        _raise_booking_write_http_error(exc)
     if not changed:
         return {"ok": True}
 

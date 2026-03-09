@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from fastapi import HTTPException
 
-from tourist03.schemas import BookingOrderCreateRequest, OrderEditRequest
+from tourist03.schemas import BookingEditRequest, BookingOrderCreateRequest, OrderEditRequest
 from tourist03.services import bookings
 
 
@@ -57,6 +57,36 @@ class BookingsServiceTests(unittest.TestCase):
         self.assertEqual(ctx.exception.status_code, 409)
         order_has_conflict.assert_called_once()
         update_order.assert_not_called()
+        log_user_event.assert_not_called()
+
+    @patch("tourist03.services.bookings.log_user_event")
+    @patch("tourist03.services.bookings.bookings_repo.update_booking")
+    @patch("tourist03.services.bookings.bookings_repo.booking_has_conflict_except", return_value=True)
+    @patch("tourist03.services.bookings.bookings_repo.get_booking_edit_state")
+    def test_booking_edit_stops_on_conflict(
+        self,
+        get_booking_edit_state,
+        booking_has_conflict_except,
+        update_booking,
+        log_user_event,
+    ):
+        get_booking_edit_state.return_value = {
+            "id": 44,
+            "room_id": 9,
+            "camp_id": 5,
+            "check_in": date(2026, 7, 10),
+            "check_out": date(2026, 7, 12),
+            "status": "pending",
+            "payment_status": "unpaid",
+        }
+        payload = BookingEditRequest(check_in=date(2026, 7, 11), check_out=date(2026, 7, 13))
+
+        with self.assertRaises(HTTPException) as ctx:
+            bookings.auth_booking_edit(44, payload, user={"id": 1})
+
+        self.assertEqual(ctx.exception.status_code, 409)
+        booking_has_conflict_except.assert_called_once()
+        update_booking.assert_not_called()
         log_user_event.assert_not_called()
 
 
