@@ -753,7 +753,90 @@ for (const k in tabs) {
 }
 
 /* === API helper === */
-const api = (u,o={})=>fetch(u,o).then(r=>{if(!r.ok)throw new Error(r.statusText);return r.json();});
+const SUPERADMIN_KEY_STORAGE_KEY = 'tourist03_superadmin_key';
+
+function isProtectedSuperadminRequest(url, options = {}){
+  const method = String(options.method || 'GET').toUpperCase();
+  return url.startsWith('/api/superadmin')
+    || url === '/api/users'
+    || url.startsWith('/api/admincamps/accounts')
+    || url.startsWith('/api/admin/accounts')
+    || url.startsWith('/api/admin/account')
+    || (url === '/api/camps' && method === 'POST')
+    || (url.startsWith('/api/camps/') && ['PUT', 'DELETE'].includes(method))
+    || url === '/api/upload';
+}
+
+function getStoredSuperadminKey(){
+  try{
+    return (sessionStorage.getItem(SUPERADMIN_KEY_STORAGE_KEY) || '').trim();
+  }catch(_){
+    return '';
+  }
+}
+
+function storeSuperadminKey(value){
+  try{
+    if (value) sessionStorage.setItem(SUPERADMIN_KEY_STORAGE_KEY, value);
+    else sessionStorage.removeItem(SUPERADMIN_KEY_STORAGE_KEY);
+  }catch(_){}
+}
+
+async function resolveSuperadminKey(forcePrompt = false){
+  let key = forcePrompt ? '' : getStoredSuperadminKey();
+  if (!key){
+    key = (window.prompt('Введите ключ суперадмина') || '').trim();
+  }
+  if (!key) return '';
+  storeSuperadminKey(key);
+  return key;
+}
+
+async function superadminFetch(url, options = {}){
+  const opts = { ...options, credentials: 'same-origin' };
+  const headers = new Headers(options.headers || {});
+  const needsAuth = isProtectedSuperadminRequest(url, opts);
+  let attachedKey = false;
+
+  const attachKey = async (forcePrompt = false) => {
+    const key = await resolveSuperadminKey(forcePrompt);
+    if (!key) return false;
+    headers.set('x-superadmin-key', key);
+    return true;
+  };
+
+  if (needsAuth) attachedKey = await attachKey(false);
+  opts.headers = headers;
+
+  if (needsAuth && !attachedKey){
+    return new Response(JSON.stringify({ detail: 'Нет доступа' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  let response = await fetch(url, opts);
+  if (needsAuth && response.status === 401){
+    storeSuperadminKey('');
+    if (await attachKey(true)){
+      response = await fetch(url, opts);
+    }
+  }
+  return response;
+}
+
+async function api(u, o = {}){
+  const r = await superadminFetch(u, o);
+  if (!r.ok){
+    let detail = r.statusText;
+    try{
+      const data = await r.json();
+      detail = data?.detail || detail;
+    }catch(_){}
+    throw new Error(detail || 'Ошибка запроса');
+  }
+  return r.json();
+}
 
 /* === Список баз === */
 /* === Список баз === */
@@ -1591,7 +1674,7 @@ async function fetchAccountsList(){
 
 async function httpJson(url, options = {}){
   try{
-    const response = await fetch(url, options);
+    const response = await superadminFetch(url, options);
     if (response.ok){
       const data = await response.json().catch(()=>null);
       return { ok: true, status: response.status, data };
@@ -1750,7 +1833,7 @@ function roomOpenPicker(idx){
 async function uploadOneFile(file){
   const fd = new FormData(); fd.append('file', file);
   try{
-    const r = await fetch('/api/upload', { method:'POST', body: fd });
+    const r = await superadminFetch('/api/upload', { method:'POST', body: fd });
     if (!r.ok) throw new Error('upload failed');
     const data = await r.json();
     return data.url || data.location || null;
@@ -1781,7 +1864,7 @@ async function uploadOneFileScoped(file, campId, roomIdx){
   fd.append('file', file);
   if (campId) fd.append('camp_id', String(campId));
   if (roomIdx !== undefined) fd.append('room_idx', String(roomIdx));
-  const r = await fetch('/api/upload', { method:'POST', body: fd });
+  const r = await superadminFetch('/api/upload', { method:'POST', body: fd });
   if (!r.ok) throw new Error('upload failed');
   return await r.json(); // {url}
 }
@@ -1836,7 +1919,7 @@ photoFile.onchange = async ()=>{
   for (const f of files.slice(0,remain)){
     const fd = new FormData(); fd.append('file', f);
     try{
-      const res = await fetch('/api/upload', { method:'POST', body:fd });
+      const res = await superadminFetch('/api/upload', { method:'POST', body:fd });
       if(!res.ok) throw new Error('Не удалось загрузить файл');
       const data = await res.json();
       _cfPhotos.push({url:data.url, cover:false});

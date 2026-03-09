@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from tourist03.api_responses import error_responses
 from tourist03.dto.catalog import (
@@ -11,10 +11,12 @@ from tourist03.dto.catalog import (
     RoomBusyRangesResponseDTO,
     UploadResponseDTO,
 )
+from tourist03.security import get_superadmin
 from tourist03.services import catalog as catalog_service
 
 
 router = APIRouter()
+superadmin_guard = [Depends(get_superadmin)]
 
 router.add_api_route(
     "/api/camps",
@@ -76,20 +78,23 @@ router.add_api_route(
     "/api/camps",
     catalog_service.api_camps_upsert_new,
     methods=["POST"],
+    dependencies=superadmin_guard,
     response_model=CampUpsertResponseDTO,
-    responses=error_responses(422, 500),
+    responses=error_responses(401, 422, 500),
 )
 router.add_api_route(
     "/api/camps/{camp_id}",
     catalog_service.api_camps_upsert,
     methods=["PUT"],
+    dependencies=superadmin_guard,
     response_model=CampUpsertResponseDTO,
-    responses=error_responses(422, 500),
+    responses=error_responses(401, 422, 500),
 )
 router.add_api_route(
     "/api/upload",
     catalog_service.api_upload,
     methods=["POST"],
+    dependencies=superadmin_guard,
     response_model=UploadResponseDTO,
-    responses=error_responses(400, 422, 500),
+    responses=error_responses(400, 401, 422, 500),
 )

@@ -23,12 +23,22 @@ class ErrorResponseContractsTests(unittest.TestCase):
         self.assertIs(route.responses[422]["model"], ValidationErrorResponseDTO)
         self.assertIs(route.responses[500]["model"], ErrorResponseDTO)
 
+        users_route = routes[("/api/users", ("GET",))]
+        self.assertIs(users_route.responses[401]["model"], ErrorResponseDTO)
+
     def test_catalog_route_documents_expected_errors(self):
         routes = _route_map(catalog.router)
         route = routes[("/api/camps/{camp_id}", ("GET",))]
         self.assertIs(route.responses[404]["model"], ErrorResponseDTO)
         self.assertIs(route.responses[422]["model"], ValidationErrorResponseDTO)
         self.assertIs(route.responses[500]["model"], ErrorResponseDTO)
+
+        create_route = routes[("/api/camps", ("POST",))]
+        self.assertIs(create_route.responses[401]["model"], ErrorResponseDTO)
+
+        upload_route = routes[("/api/upload", ("POST",))]
+        self.assertIs(upload_route.responses[400]["model"], ErrorResponseDTO)
+        self.assertIs(upload_route.responses[401]["model"], ErrorResponseDTO)
 
     def test_bookings_route_documents_expected_errors(self):
         routes = _route_map(bookings.router)

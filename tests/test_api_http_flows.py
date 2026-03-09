@@ -1,12 +1,14 @@
 import os
+import tempfile
 import unittest
 from contextlib import ExitStack
 from datetime import date
+from pathlib import Path
 from unittest.mock import patch
 
 import httpx
 
-os.environ.setdefault("DB_INIT", "0")
+os.environ["DB_INIT"] = "0"
 
 import app as app_module
 from tourist03 import security
@@ -146,6 +148,52 @@ class ApiHttpFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 409)
         self.assertEqual(response.json(), {"detail": "Пользователь уже зарегистрирован"})
 
+    async def test_users_list_requires_superadmin_access(self):
+        response = await self.client.get("/api/users")
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json(), {"detail": "Нет доступа"})
+
+    async def test_users_list_accepts_superadmin_key_header(self):
+        with ExitStack() as stack:
+            stack.enter_context(patch("tourist03.security.SUPERADMIN_API_KEY", "super-key"))
+            stack.enter_context(
+                patch(
+                    "tourist03.services.auth.auth_repo.list_users",
+                    return_value=[
+                        {
+                            "id": 1,
+                            "name": "Root",
+                            "phone": "+79990000001",
+                            "role": "user",
+                            "email": "root@example.com",
+                            "email_verified": True,
+                            "phone_verified": True,
+                            "created_at": None,
+                        }
+                    ],
+                )
+            )
+
+            response = await self.client.get("/api/users", headers={"x-superadmin-key": "super-key"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            [
+                {
+                    "id": 1,
+                    "name": "Root",
+                    "phone": "+79990000001",
+                    "role": "user",
+                    "email": "root@example.com",
+                    "email_verified": True,
+                    "phone_verified": True,
+                    "created_at": None,
+                }
+            ],
+        )
+
     async def test_catalog_available_rooms_marks_booked_rooms(self):
         with ExitStack() as stack:
             stack.enter_context(
@@ -187,6 +235,53 @@ class ApiHttpFlowTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json(), {"detail": "Дата выезда должна быть позже даты заезда"})
+
+    async def test_camp_upsert_requires_superadmin_access(self):
+        response = await self.client.post("/api/camps", json={"name": "Hidden Camp"})
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json(), {"detail": "Нет доступа"})
+
+    async def test_upload_requires_superadmin_access(self):
+        response = await self.client.post(
+            "/api/upload",
+            files={"file": ("cover.png", b"png", "image/png")},
+        )
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json(), {"detail": "Нет доступа"})
+
+    async def test_upload_rejects_non_image_file_for_superadmin(self):
+        self._override_superadmin()
+
+        response = await self.client.post(
+            "/api/upload",
+            files={"file": ("notes.txt", b"hello", "text/plain")},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.json(),
+            {"detail": "Разрешена загрузка только изображений JPG, PNG, GIF, WEBP или AVIF"},
+        )
+
+    async def test_upload_saves_image_for_superadmin(self):
+        self._override_superadmin()
+
+        with tempfile.TemporaryDirectory() as temp_dir, patch("tourist03.services.catalog.UPLOAD_DIR", temp_dir):
+            response = await self.client.post(
+                "/api/upload",
+                files={"file": ("cover.png", b"\x89PNG\r\n\x1a\n", "image/png")},
+                data={"camp_id": "4", "room_idx": "2"},
+            )
+
+            self.assertEqual(response.status_code, 200)
+            body = response.json()
+            self.assertTrue(body["url"].startswith("/static/uploads/camp_4/rooms/room_2/"))
+
+            relative_path = body["url"].removeprefix("/static/uploads/")
+            saved_path = Path(temp_dir) / relative_path
+            self.assertTrue(saved_path.exists())
 
     async def test_booking_create_returns_created_booking_id(self):
         self._override_current_user()
@@ -389,6 +484,12 @@ class ApiHttpFlowTests(unittest.IsolatedAsyncioTestCase):
                 "payments": [],
             },
         )
+
+    async def test_superadmin_route_requires_access(self):
+        response = await self.client.get("/api/superadmin/users/42/history")
+
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json(), {"detail": "Нет доступа"})
 
 
 if __name__ == "__main__":

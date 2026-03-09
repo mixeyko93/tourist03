@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from tourist03.api_responses import error_responses
 from tourist03.dto.auth import (
@@ -8,17 +8,20 @@ from tourist03.dto.auth import (
     AuthUsersListItemDTO,
 )
 from tourist03.dto.common import OkResponseDTO
+from tourist03.security import get_superadmin
 from tourist03.services import auth as auth_service
 
 
 router = APIRouter()
+superadmin_guard = [Depends(get_superadmin)]
 
 router.add_api_route(
     "/api/users",
     auth_service.api_users_list,
     methods=["GET"],
+    dependencies=superadmin_guard,
     response_model=list[AuthUsersListItemDTO],
-    responses=error_responses(500),
+    responses=error_responses(401, 500),
 )
 router.add_api_route(
     "/api/auth/register/start",

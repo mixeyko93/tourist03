@@ -12,6 +12,17 @@ from tourist03.repositories import catalog as catalog_repo
 from tourist03.storage import _normalize_move, _room_photos_from_fs
 
 
+ALLOWED_UPLOAD_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"}
+ALLOWED_UPLOAD_CONTENT_TYPES = {
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "image/gif",
+    "image/avif",
+}
+MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024
+
+
 def _parse_json_list(value):
     if isinstance(value, str):
         try:
@@ -284,11 +295,21 @@ async def api_upload(request: Request):
     save_dir = base_dir / sub
     save_dir.mkdir(parents=True, exist_ok=True)
 
-    suffix = Path(file.filename).suffix or ".jpg"
+    suffix = (Path(file.filename or "").suffix or "").lower()
+    content_type = (getattr(file, "content_type", "") or "").strip().lower()
+    if suffix not in ALLOWED_UPLOAD_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Разрешена загрузка только изображений JPG, PNG, GIF, WEBP или AVIF")
+    if content_type and content_type not in ALLOWED_UPLOAD_CONTENT_TYPES:
+        raise HTTPException(status_code=400, detail="Разрешена загрузка только изображений")
+
+    payload = await file.read(MAX_UPLOAD_SIZE_BYTES + 1)
+    if len(payload) > MAX_UPLOAD_SIZE_BYTES:
+        raise HTTPException(status_code=400, detail="Файл слишком большой")
+
     filename = datetime.now().strftime("%Y%m%d-%H%M%S%f") + suffix
     path = save_dir / filename
     with path.open("wb") as out:
-        out.write(await file.read())
+        out.write(payload)
 
     url = f"/static/uploads/{sub.as_posix()}/{filename}"
     return {"url": url}

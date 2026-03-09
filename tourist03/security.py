@@ -190,10 +190,18 @@ def _get_admin_camp_ids(admin_id: int) -> list[int]:
 def get_superadmin(request: Request):
     if request.session.get("superadmin") is True:
         return True
-    if not SUPERADMIN_API_KEY:
-        return True
-    header_token = request.headers.get("x-superadmin-key") or request.headers.get("x-superadmin-token")
-    if header_token == SUPERADMIN_API_KEY:
+
+    header_token = (
+        request.headers.get("x-superadmin-key")
+        or request.headers.get("x-superadmin-token")
+        or (
+            request.headers.get("authorization", "").split(" ", 1)[1].strip()
+            if request.headers.get("authorization", "").lower().startswith("bearer ")
+            else ""
+        )
+    )
+    if SUPERADMIN_API_KEY and header_token and secrets.compare_digest(header_token, SUPERADMIN_API_KEY):
+        request.session["superadmin"] = True
         return True
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Нет доступа")
 
