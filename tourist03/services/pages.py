@@ -59,6 +59,13 @@ def admin_camps_page(request: Request):
     return templates.TemplateResponse("admin-camps.html", {"request": request})
 
 
+def react_map_page():
+    react_index = os.path.join(STATIC_DIR, "react-map", "index.html")
+    if os.path.exists(react_index):
+        return FileResponse(react_index)
+    return JSONResponse({"detail": "React map build is missing"}, status_code=503)
+
+
 def favicon():
     icon_path = os.path.join(STATIC_DIR, "favicon.ico")
     if os.path.exists(icon_path):

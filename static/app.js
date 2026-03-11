@@ -340,40 +340,69 @@ async function getCampRoomsBusy(campId){
 // === СБОРКА БАЛУНА ДЛЯ БАЗЫ (с загрузочным эмоджи вместо фото до onload) ===
 function buildCampPopup(camp){
   const hasPhoto = !!camp.photo_main;
-  const priceText = (camp.min_price && Number(camp.min_price) > 0)
-      ? `Стоимость от ${camp.min_price}₽ за человека`
-      : 'Стоимость уточняйте';
+  const meta = campMarkerMeta(camp);
+  const campName = escapeHtml(camp?.name || 'База отдыха');
+  const typeLabel = escapeHtml(meta.label);
+  const accent = meta.color;
+  const rgb = meta.rgb;
+  const priceValue = Number(camp?.min_price);
+  const hasPrice = Number.isFinite(priceValue) && priceValue > 0;
+  const priceMain = hasPrice
+    ? markerPriceCompact(priceValue)
+    : 'По запросу';
+  const priceSub = hasPrice ? 'за человека' : 'стоимость уточняйте';
+  const photoUrl = hasPhoto ? escapeHtml(String(camp.photo_main)) : '';
 
   return `
-    <div style="min-width:260px;max-width:320px">
-      <div style="font-weight:800;font-size:22px;text-align:center;margin:0 0 8px">
-        ${camp.name||''}
-      </div>
+    <div class="camp-popup-shell ${meta.isVip ? 'is-vip' : ''}" style="--popup-accent:${accent}; --popup-rgb:${rgb};">
+      <div class="camp-popup-card">
+        <div class="camp-popup__media popup-cover">
+          <div class="camp-popup__type-row">
+            <div class="camp-popup__type-badge">
+              <span class="camp-popup__type-dot" aria-hidden="true"></span>
+              <span>${typeLabel}</span>
+            </div>
+            ${meta.isVip ? `
+              <div class="camp-popup__vip-pill" aria-label="VIP">
+                <span class="camp-popup__vip-star" aria-hidden="true">★</span>
+                <span>VIP</span>
+              </div>
+            ` : ''}
+          </div>
 
-      <!-- Крышка с эмоджи-плейсхолдером; фото проявится, когда загрузится -->
-      <div class="popup-cover">
-        <div class="popup-emoji">🏖️</div>
-        ${hasPhoto
-          ? `<img class="popup-photo"
-     src="${camp.photo_main}"
-     alt=""
+          <div class="popup-emoji">🏖️</div>
+          ${hasPhoto
+            ? `<img class="popup-photo"
+     src="${photoUrl}"
+     alt="${campName}"
      loading="eager"
      decoding="sync"
      fetchpriority="high"
      referrerpolicy="no-referrer"
      onload="window.__popupCoverLoaded(this)"
      onerror="window.__popupCoverError(this)">`
-          : ``}
-      </div>
+            : ``}
+          <div class="camp-popup__cover-overlay" aria-hidden="true"></div>
+          ${meta.isVip ? '<div class="camp-popup__cover-shine" aria-hidden="true"></div>' : ''}
+        </div>
 
-      <div class="price" style="text-align:center;margin:10px 0 12px;color:#6b7280">
-        ${priceText}
-      </div>
+        <div class="camp-popup__body">
+          <div class="camp-popup__title">${campName}</div>
 
-      <div style="display:flex;gap:10px;justify-content:center">
-        <button class="button primary" onclick="openDetails(${camp.id})">Подробнее</button>
-        <button class="btn btn-success" onclick="openBookingFilterWithAuth(${camp.id})">Забронировать</button>
+          <div class="camp-popup__price-pill">
+            <div class="camp-popup__price-main">${escapeHtml(priceMain)}</div>
+            <div class="camp-popup__price-sub">${escapeHtml(priceSub)}</div>
+          </div>
+
+          <div class="camp-popup__actions">
+            <button type="button" class="camp-popup__action camp-popup__action--details" onclick="openDetails(${camp.id})">Подробнее</button>
+            <button type="button" class="camp-popup__action camp-popup__action--book" onclick="openBookingFilterWithAuth(${camp.id})">Забронировать</button>
+          </div>
+
+          <div class="camp-popup__pattern" aria-hidden="true"></div>
+        </div>
       </div>
+      <div class="camp-popup__pointer" aria-hidden="true"></div>
     </div>
   `;
 }
@@ -746,10 +775,11 @@ const cluster = (typeof L.markerClusterGroup === 'function')
         const count = grp.getChildCount();
         const size =
           count < 10 ? 'small' : count < 30 ? 'medium' : 'large';
+        const iconPx = size === 'large' ? 68 : size === 'medium' ? 60 : 52;
         return L.divIcon({
           html: `<div class="cl-inner">${count}</div>`,
           className: `cl-marker cl-${size}`,
-          iconSize: L.point(44, 44)
+          iconSize: L.point(iconPx, iconPx)
         });
       }
     })
@@ -761,16 +791,258 @@ window.addEventListener('load', fixMapSize);
 window.addEventListener('resize', fixMapSize);
 if (isTG) Telegram.WebApp.onEvent('viewportChanged', fixMapSize);
 
-function emojiHouseIcon(emoji = '🏡', size = 'standard') {
-  // standard ≈ 36x44, vip ≈ 72x88
-  const isVip = (String(size).toLowerCase() === 'vip');
-  const iconSize   = isVip ? [72, 88] : [36, 44];
-  const iconAnchor = isVip ? [36, 80] : [18, 40];
-  const popupAnchor= isVip ? [0, -72] : [0, -36];
+const CAMP_MARKER_TYPES = {
+  hotel: {
+    label: 'Отель',
+    color: '#4a4237',
+    vipColor: '#6b5d47',
+    icon: `
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="5" y="8" width="14" height="11"></rect>
+        <path d="M7 11h2M11 11h2M15 11h2M7 14h2M11 14h2M15 14h2"></path>
+        <path d="M4 19h16"></path>
+      </svg>
+    `,
+  },
+  cottage: {
+    label: 'Коттедж',
+    color: '#3d4f3a',
+    vipColor: '#5a7052',
+    icon: `
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M3 19h18M5 19v-7l7-5 7 5v7"></path>
+        <rect x="10" y="14" width="4" height="5"></rect>
+        <path d="M8 11h2M14 11h2"></path>
+      </svg>
+    `,
+  },
+  apartment: {
+    label: 'Апартаменты',
+    color: '#3f4a5c',
+    vipColor: '#5d6b7e',
+    icon: `
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="6" y="5" width="12" height="14"></rect>
+        <path d="M9 8h2M13 8h2M9 11h2M13 11h2M9 14h2M13 14h2"></path>
+        <rect x="10" y="16" width="4" height="3"></rect>
+      </svg>
+    `,
+  },
+  glamping: {
+    label: 'Глэмпинг',
+    color: '#5a4f35',
+    vipColor: '#7d6b46',
+    icon: `
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 6l6 12H6l6-12z"></path>
+        <path d="M9 13h6M12 13v5"></path>
+      </svg>
+    `,
+  },
+  camping: {
+    label: 'Кемпинг',
+    color: '#3d5245',
+    vipColor: '#557361',
+    icon: `
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 5L4 19h16L12 5z"></path>
+        <path d="M12 5v5"></path>
+      </svg>
+    `,
+  },
+  villa: {
+    label: 'Вилла',
+    color: '#524540',
+    vipColor: '#73625a',
+    icon: `
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M3 19h18M5 19v-8l7-4 7 4v8"></path>
+        <rect x="9" y="13" width="6" height="6"></rect>
+        <path d="M11 16h2"></path>
+      </svg>
+    `,
+  },
+  hostel: {
+    label: 'Хостел',
+    color: '#3e4a52',
+    vipColor: '#5b6a74',
+    icon: `
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="5" y="7" width="14" height="12"></rect>
+        <path d="M8 10h3M13 10h3M8 13h3M13 13h3M8 16h8"></path>
+      </svg>
+    `,
+  },
+  resort: {
+    label: 'Курорт',
+    color: '#3a4f5a',
+    vipColor: '#547080',
+    icon: `
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="8" r="2"></circle>
+        <path d="M7 19c0-2.76 2.24-5 5-5s5 2.24 5 5"></path>
+        <path d="M4 12h16"></path>
+      </svg>
+    `,
+  },
+  guesthouse: {
+    label: 'Гостевой дом',
+    color: '#4a4037',
+    vipColor: '#6b5d4f',
+    icon: `
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 19h16M6 19v-6l6-4 6 4v6"></path>
+        <rect x="10" y="13" width="4" height="6"></rect>
+        <circle cx="12" cy="10" r="1" fill="currentColor" stroke="none"></circle>
+      </svg>
+    `,
+  },
+  bungalow: {
+    label: 'Бунгало',
+    color: '#3f4738',
+    vipColor: '#5c6650',
+    icon: `
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M3 18h18M5 18v-6h14v6"></path>
+        <path d="M5 12l7-5 7 5"></path>
+        <rect x="10" y="14" width="4" height="4"></rect>
+      </svg>
+    `,
+  },
+};
+
+const CAMP_MARKER_TYPE_ALIASES = {
+  hotel: 'hotel',
+  motel: 'hotel',
+  room: 'hotel',
+  rooms: 'hotel',
+  cottage: 'cottage',
+  house: 'cottage',
+  houses: 'cottage',
+  apartment: 'apartment',
+  apartments: 'apartment',
+  flat: 'apartment',
+  glamping: 'glamping',
+  camping: 'camping',
+  camp: 'camping',
+  villa: 'villa',
+  hostel: 'hostel',
+  resort: 'resort',
+  guesthouse: 'guesthouse',
+  bungalow: 'bungalow',
+};
+
+const CAMP_MARKER_TYPE_HINTS = [
+  { type: 'guesthouse', patterns: [/гостев/i, /гостиный/i, /guest\s*house/i] },
+  { type: 'hotel', patterns: [/отел/i, /гостиниц/i, /мотел/i, /hotel/i] },
+  { type: 'hostel', patterns: [/хостел/i, /hostel/i] },
+  { type: 'resort', patterns: [/курорт/i, /санатор/i, /resort/i, /спа/i, /\bspa\b/i] },
+  { type: 'glamping', patterns: [/глэмп/i, /glamp/i] },
+  { type: 'camping', patterns: [/кемп/i, /camping/i, /палат/i] },
+  { type: 'villa', patterns: [/вилл/i, /villa/i] },
+  { type: 'bungalow', patterns: [/бунгал/i, /bungalow/i] },
+  { type: 'cottage', patterns: [/коттедж/i, /домик/i, /cottage/i] },
+  { type: 'apartment', patterns: [/апарт/i, /квартир/i, /apartment/i] },
+];
+
+function markerPriceCompact(v){
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) return 'цена';
+  try { return `от ${n.toLocaleString('ru-RU')}₽`; } catch(_) { return `от ${n}₽`; }
+}
+
+function markerHexToRgb(hex){
+  const raw = String(hex || '').trim().replace('#', '');
+  const full = raw.length === 3 ? raw.split('').map((c) => c + c).join('') : raw;
+  if (full.length !== 6) return '74, 66, 55';
+  const value = Number.parseInt(full, 16);
+  if (!Number.isFinite(value)) return '74, 66, 55';
+  return `${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}`;
+}
+
+function campMarkerExplicitType(camp){
+  const candidates = [camp?.marker_type, camp?.camp_type, camp?.type];
+  for (const candidate of candidates) {
+    const raw = String(candidate || '').trim().toLowerCase();
+    if (!raw) continue;
+    if (CAMP_MARKER_TYPES[raw]) return raw;
+    if (CAMP_MARKER_TYPE_ALIASES[raw]) return CAMP_MARKER_TYPE_ALIASES[raw];
+  }
+  return '';
+}
+
+function campMarkerType(camp){
+  const explicit = campMarkerExplicitType(camp);
+  if (explicit) return explicit;
+
+  const haystack = [
+    camp?.name,
+    camp?.description,
+    camp?.housing_type,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  for (const rule of CAMP_MARKER_TYPE_HINTS) {
+    if (rule.patterns.some((pattern) => pattern.test(haystack))) return rule.type;
+  }
+
+  const ht = normalizeHousingType(camp?.housing_type);
+  if (ht === 'houses') return 'cottage';
+  if (ht === 'rooms') return 'hotel';
+  return 'apartment';
+}
+
+function campMarkerMeta(camp){
+  const type = campMarkerType(camp);
+  const config = CAMP_MARKER_TYPES[type] || CAMP_MARKER_TYPES.hotel;
+  const isVip = Boolean(camp?.is_vip) || (String(camp?.emoji_size || '').toLowerCase() === 'vip');
+  const color = isVip ? config.vipColor : config.color;
+  return {
+    type,
+    label: config.label,
+    icon: config.icon,
+    color,
+    rgb: markerHexToRgb(color),
+    isVip,
+  };
+}
+
+function campPinIcon(camp){
+  const meta = campMarkerMeta(camp);
+  const priceText = markerPriceCompact(camp?.min_price);
+  const label = escapeHtml(camp?.name || 'База отдыха');
+  const typeLabel = escapeHtml(meta.label);
+  const delay = ((Number(camp?.id) || 0) % 7) * 45;
+  const iconSize = meta.isVip ? [136, 90] : [124, 84];
+  const iconAnchor = meta.isVip ? [68, 70] : [62, 66];
+  const popupAnchor = meta.isVip ? [0, -64] : [0, -60];
 
   return L.divIcon({
-    html: `<div class="emoji-pin" aria-hidden="true">${emoji}</div>`,
-    className: `emoji-marker ${isVip ? 'vip' : 'std'}`,
+    html: `
+      <div
+        class="camp-marker"
+        title="${label}"
+        aria-label="${label}"
+        style="--marker-color:${meta.color}; --marker-rgb:${meta.rgb}; --marker-delay:${delay}ms"
+      >
+        <div class="camp-marker__glow" aria-hidden="true"></div>
+        <div class="camp-marker__tooltip" aria-hidden="true">
+          <span class="camp-marker__tooltip-icon">${meta.icon}</span>
+          <span class="camp-marker__tooltip-label">${typeLabel}</span>
+          ${meta.isVip ? '<span class="camp-marker__tooltip-vip">★</span>' : ''}
+        </div>
+        <div class="camp-marker__selection-ring" aria-hidden="true"></div>
+        <div class="camp-marker__badge">
+          <span class="camp-marker__price">${escapeHtml(priceText)}</span>
+          ${meta.isVip ? '<span class="camp-marker__vip-badge" aria-hidden="true">★</span><span class="camp-marker__shine-wrap" aria-hidden="true"><span class="camp-marker__shine"></span></span>' : ''}
+        </div>
+        <div class="camp-marker__pointer" aria-hidden="true"></div>
+        <div class="camp-marker__shadow" aria-hidden="true"></div>
+      </div>
+    `,
+    className: `camp-marker-icon ${meta.isVip ? 'camp-marker-icon--vip' : ''} camp-marker-icon--${meta.type}`,
     iconSize, iconAnchor, popupAnchor
   });
 }
@@ -791,17 +1063,326 @@ function restoreMapView() {
 }
 
 const topbar = document.getElementById('topbar');
+let activeCampMarker = null;
+let activeCampPopupMarker = null;
+let activeCampPopupCamp = null;
+let activeCampPopupMountBase = null;
+let campPopupHost = null;
+let campPopupSyncRaf = 0;
+let campPopupCenterTimer = 0;
+
+function getMapWrap(){
+  try { return map && map.getContainer ? map.getContainer().closest('.map-wrap') : null; } catch(_) { return null; }
+}
+
+function ensureCampPopupHost(){
+  if (campPopupHost && campPopupHost.isConnected) return campPopupHost;
+  const wrap = getMapWrap();
+  if (!wrap) return null;
+  const host = document.createElement('div');
+  host.id = 'campPopupWidgetHost';
+  host.className = 'camp-popup-widget-host';
+  wrap.appendChild(host);
+  campPopupHost = host;
+  return host;
+}
+
+function clampNumber(value, min, max){
+  if (!Number.isFinite(value)) return min;
+  if (max < min) return min;
+  return Math.min(max, Math.max(min, value));
+}
+
+function campPopupPosition(host, camp, marker){
+  const wrap = getMapWrap();
+  const frame = wrap || host;
+  const hostWidth = Math.max(0, Number(frame?.clientWidth) || 0);
+  const hostHeight = Math.max(0, Number(frame?.clientHeight) || 0);
+  const sidePad = 10;
+  const width = Math.max(240, Math.min(420, hostWidth - sidePad * 2));
+  const hostRect = frame?.getBoundingClientRect ? frame.getBoundingClientRect() : null;
+
+  let anchorX = hostWidth / 2;
+  let anchorY = Math.max(220, Math.round(hostHeight * 0.72));
+
+  try {
+    const iconEl = document.querySelector('.camp-marker-icon.is-selected')
+      || (marker && marker._icon)
+      || (activeCampMarker && activeCampMarker._icon)
+      || null;
+    if (iconEl && hostRect) {
+      const iconRect = iconEl.getBoundingClientRect();
+      anchorX = (iconRect.left - hostRect.left) + (iconRect.width / 2);
+      anchorY = (iconRect.top - hostRect.top) + 12;
+    } else {
+      const latlng = marker && typeof marker.getLatLng === 'function'
+        ? marker.getLatLng()
+        : (camp?.lat != null && camp?.lng != null ? L.latLng(camp.lat, camp.lng) : null);
+      if (latlng && map && typeof map.latLngToContainerPoint === 'function') {
+        const point = map.latLngToContainerPoint(latlng);
+        anchorX = Number(point?.x) || anchorX;
+        anchorY = (Number(point?.y) || anchorY) - 28;
+      }
+    }
+  } catch(_) {}
+
+  const left = clampNumber(anchorX - (width / 2), sidePad, hostWidth - width - sidePad);
+  const pointerLeft = clampNumber(anchorX - left, 40, width - 40);
+
+  return {
+    left: Math.round(left),
+    top: Math.round(anchorY),
+    width: Math.round(width),
+    pointerLeft: Math.round(pointerLeft),
+  };
+}
+
+function getCampPopupLatLng(camp, marker){
+  try {
+    if (marker && typeof marker.getLatLng === 'function') return marker.getLatLng();
+  } catch(_) {}
+  try {
+    if (camp?.lat != null && camp?.lng != null) return L.latLng(camp.lat, camp.lng);
+  } catch(_) {}
+  return null;
+}
+
+function setCampPopupMarkerHidden(marker, hidden){
+  try {
+    if (marker && marker._icon) {
+      marker._icon.classList.toggle('is-popup-hidden', Boolean(hidden));
+    }
+  } catch(_) {}
+}
+
+function renderActiveCampPopup(){
+  const host = ensureCampPopupHost();
+  if (!host || !activeCampPopupCamp || !activeCampPopupMountBase) return;
+  if (!window.TouristMapPopupWidget || typeof window.TouristMapPopupWidget.mount !== 'function') return;
+  const position = campPopupPosition(host, activeCampPopupCamp, activeCampPopupMarker);
+  window.TouristMapPopupWidget.mount(host, {
+    ...activeCampPopupMountBase,
+    position,
+  });
+}
+
+function scheduleCampPopupSync(){
+  if (!activeCampPopupCamp || !activeCampPopupMountBase) return;
+  if (campPopupSyncRaf && typeof cancelAnimationFrame === 'function') {
+    cancelAnimationFrame(campPopupSyncRaf);
+  }
+  const run = () => {
+    campPopupSyncRaf = 0;
+    renderActiveCampPopup();
+  };
+  if (typeof requestAnimationFrame === 'function') {
+    campPopupSyncRaf = requestAnimationFrame(run);
+  } else {
+    run();
+  }
+}
+
+function centerMapForCampPopup(opts = {}){
+  if (!activeCampPopupCamp || !activeCampPopupMarker) return;
+  const latlng = getCampPopupLatLng(activeCampPopupCamp, activeCampPopupMarker);
+  if (!latlng || !map || typeof map.project !== 'function' || typeof map.panTo !== 'function') return;
+
+  const size = map.getSize ? map.getSize() : null;
+  if (!size) return;
+  const dialogEl = campPopupHost ? campPopupHost.querySelector('.map-popup-widget__dialog') : null;
+  const popupHeight = Math.max(360, Math.min((dialogEl && dialogEl.offsetHeight) || 500, Math.round(size.y * 0.78)));
+  const desiredPoint = L.point(
+    Math.round(size.x / 2),
+    Math.round(Math.min(size.y - 108, popupHeight + 64))
+  );
+  const currentPoint = map.latLngToContainerPoint(latlng);
+  const delta = currentPoint.subtract(desiredPoint);
+  if (Math.abs(delta.x) < 4 && Math.abs(delta.y) < 4) return;
+
+  const centerPoint = map.project(map.getCenter()).add(delta);
+  map.panTo(map.unproject(centerPoint), {
+    animate: opts.animate !== false,
+    duration: opts.duration || 0.28,
+  });
+}
+
+function setActiveCampMarker(marker){
+  try {
+    if (activeCampMarker && activeCampMarker._icon) {
+      activeCampMarker._icon.classList.remove('is-selected');
+      if (typeof activeCampMarker.setZIndexOffset === 'function') activeCampMarker.setZIndexOffset(0);
+    }
+  } catch(_) {}
+  activeCampMarker = marker || null;
+  try {
+    if (activeCampMarker && activeCampMarker._icon) {
+      activeCampMarker._icon.classList.add('is-selected');
+      if (typeof activeCampMarker.setZIndexOffset === 'function') activeCampMarker.setZIndexOffset(1000);
+    }
+  } catch(_) {}
+}
+
+function closeCampPopupOverlay(opts = {}){
+  const immediate = Boolean(opts && opts.immediate);
+  if (campPopupCenterTimer) {
+    clearTimeout(campPopupCenterTimer);
+    campPopupCenterTimer = 0;
+  }
+  if (campPopupSyncRaf && typeof cancelAnimationFrame === 'function') {
+    cancelAnimationFrame(campPopupSyncRaf);
+    campPopupSyncRaf = 0;
+  }
+  setCampPopupMarkerHidden(activeCampPopupMarker, false);
+  activeCampPopupCamp = null;
+  activeCampPopupMountBase = null;
+  try {
+    if (campPopupHost && window.TouristMapPopupWidget) {
+      if (immediate) {
+        try { window.TouristMapPopupWidget.unmount(campPopupHost); } catch(_) {}
+        campPopupHost.innerHTML = '';
+      } else {
+        window.TouristMapPopupWidget.unmount(campPopupHost);
+      }
+    } else if (campPopupHost) {
+      campPopupHost.innerHTML = '';
+    }
+  } catch(_) {}
+  activeCampPopupMarker = null;
+  setActiveCampMarker(null);
+}
+
+function openCampPopupOverlay(camp, marker){
+  const host = ensureCampPopupHost();
+  if (!host || !window.TouristMapPopupWidget || typeof window.TouristMapPopupWidget.mount !== 'function') {
+    return false;
+  }
+
+  const meta = campMarkerMeta(camp);
+  const priceValue = Number(camp?.min_price);
+  const hasPrice = Number.isFinite(priceValue) && priceValue > 0;
+  const price = hasPrice ? markerPriceCompact(priceValue) : 'По запросу';
+  const priceDescription = hasPrice ? 'за человека' : 'стоимость уточняйте';
+
+  setCampPopupMarkerHidden(activeCampPopupMarker, false);
+  activeCampPopupMarker = marker || null;
+  activeCampPopupCamp = camp || null;
+  setActiveCampMarker(marker || null);
+  setCampPopupMarkerHidden(marker || null, true);
+
+  activeCampPopupMountBase = {
+    markerType: meta.type,
+    isVIP: meta.isVip,
+    data: {
+      name: String(camp?.name || 'База отдыха'),
+      image: camp?.photo_main ? String(camp.photo_main) : '',
+      price,
+      priceDescription,
+    },
+    onClose: () => closeCampPopupOverlay(),
+    onDetails: () => {
+      closeCampPopupOverlay({ immediate: true });
+      openDetails(camp.id);
+    },
+    onBook: () => {
+      closeCampPopupOverlay({ immediate: true });
+      openBookingFilterWithAuth(camp.id);
+    },
+  };
+
+  renderActiveCampPopup();
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(() => {
+      renderActiveCampPopup();
+      centerMapForCampPopup();
+    });
+  }
+  campPopupCenterTimer = setTimeout(() => {
+    renderActiveCampPopup();
+    centerMapForCampPopup();
+    campPopupCenterTimer = 0;
+  }, 110);
+  return true;
+}
+
 // Центруем карту так, чтобы балун был в видимой середине
 map.on('popupopen', (e) => {
   try {
+    const src = e && e.popup ? (e.popup._source || null) : null;
+    if (src) {
+      setActiveCampMarker(src);
+      setCampPopupMarkerHidden(src, true);
+    }
     const cont = e && e.popup && e.popup._container ? e.popup._container : null;
+    const wrap = map && map.getContainer ? map.getContainer().closest('.map-wrap') : null;
+    if (wrap) wrap.classList.add('popup-open');
 
-    // 1) центрирование с учётом высоты балуна
-    const h = cont ? cont.offsetHeight : 260;
-    const latlng = e.popup.getLatLng();
-    const px = map.project(latlng);
-px.y -= (h / 2);
-map.panTo(map.unproject(px), { animate: true, duration: 0.25 }); // короче анимация = меньше «дёргания»
+    const camp = src && src.__campData ? src.__campData : null;
+    if (cont && camp && window.TouristMapPopupWidget && typeof window.TouristMapPopupWidget.mount === 'function') {
+      const host = cont.querySelector('.camp-popup-react-host');
+      if (host) {
+        const meta = campMarkerMeta(camp);
+        const priceValue = Number(camp?.min_price);
+        const hasPrice = Number.isFinite(priceValue) && priceValue > 0;
+        window.TouristMapPopupWidget.mount(host, {
+          mode: 'leaflet',
+          markerType: meta.type,
+          isVIP: meta.isVip,
+          data: {
+            name: String(camp?.name || 'База отдыха'),
+            image: camp?.photo_main ? String(camp.photo_main) : '',
+            price: hasPrice ? markerPriceCompact(priceValue) : 'По запросу',
+            priceDescription: hasPrice ? 'за человека' : 'стоимость уточняйте',
+          },
+          onClose: () => {
+            try { src.closePopup(); } catch(_) {}
+          },
+          onDetails: () => {
+            try { src.closePopup(); } catch(_) {}
+            openDetails(camp.id);
+          },
+          onBook: () => {
+            try { src.closePopup(); } catch(_) {}
+            openBookingFilterWithAuth(camp.id);
+          },
+        });
+      }
+    }
+
+    const syncPopupGeometry = () => {
+      try { if (e && e.popup && typeof e.popup.update === 'function') e.popup.update(); } catch(_) {}
+
+      const size = map && map.getSize ? map.getSize() : null;
+      const popupCont = e && e.popup && e.popup._container ? e.popup._container : cont;
+      if (!size) return;
+      const h = popupCont ? popupCont.offsetHeight : 260;
+      const latlng = e.popup.getLatLng();
+      const currentPoint = map.latLngToContainerPoint(latlng);
+      const popupAnchorY = Math.abs(
+        Number(src && src.options && src.options.icon && src.options.icon.options && src.options.icon.options.popupAnchor
+          ? src.options.icon.options.popupAnchor[1]
+          : 0) || 0
+      );
+      const desiredY = clampNumber(
+        Math.round((size.y + h) / 2 + popupAnchorY),
+        Math.round(h + 20),
+        Math.round(size.y - 28)
+      );
+      const desiredPoint = L.point(
+        Math.round(size.x / 2),
+        desiredY
+      );
+      const delta = currentPoint.subtract(desiredPoint);
+      if (Math.abs(delta.x) > 4 || Math.abs(delta.y) > 4) {
+        const centerPoint = map.project(map.getCenter()).add(delta);
+        map.panTo(map.unproject(centerPoint), { animate: true, duration: 0.22 });
+      }
+    };
+
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => requestAnimationFrame(syncPopupGeometry));
+    } else {
+      setTimeout(syncPopupGeometry, 0);
+    }
 
     // 2) запускаем перебор эмоджи для только что открытого балуна
     if (cont) __startPopupEmojiLoop(cont);
@@ -811,7 +1392,18 @@ map.panTo(map.unproject(px), { animate: true, duration: 0.25 }); // короче
 // Чистим таймер, когда балун закрыли
 map.on('popupclose', (e) => {
   try {
+    const src = e && e.popup ? (e.popup._source || null) : null;
+    if (src) setCampPopupMarkerHidden(src, false);
+    if (!src || src === activeCampMarker) setActiveCampMarker(null);
     const cont = e && e.popup && e.popup._container ? e.popup._container : null;
+    const wrap = map && map.getContainer ? map.getContainer().closest('.map-wrap') : null;
+    if (wrap) wrap.classList.remove('popup-open');
+    try {
+      const host = cont && cont.querySelector ? cont.querySelector('.camp-popup-react-host') : null;
+      if (host && window.TouristMapPopupWidget && typeof window.TouristMapPopupWidget.unmount === 'function') {
+        window.TouristMapPopupWidget.unmount(host);
+      }
+    } catch(_) {}
     if (cont) __stopPopupEmojiLoop(cont);
   } catch(_) {}
 });
@@ -3645,15 +4237,33 @@ async function loadCamps() {
     }
 
     // 4) Отрисовка
+    closeCampPopupOverlay({ immediate: true });
     if (typeof cluster?.clearLayers === 'function') cluster.clearLayers();
     filtered.forEach(c => {
       if (c.lat == null || c.lng == null) return;
 
       const marker = L.marker(
         [c.lat, c.lng],
-        { icon: emojiHouseIcon(c.emoji || '🏕️', c.emoji_size || 'standard') }
+        { icon: campPinIcon(c) }
       );
-      marker.bindPopup(popupHtmlForCamp(c), { maxWidth: 260, className: 'camp-popup' });
+      marker.__campData = c;
+      if (window.TouristMapPopupWidget && typeof window.TouristMapPopupWidget.mount === 'function') {
+        const popupHost = document.createElement('div');
+        popupHost.className = 'camp-popup-react-host';
+        marker.__popupHost = popupHost;
+        marker.bindPopup(popupHost, {
+          maxWidth: 440,
+          className: 'camp-popup',
+          autoPan: false,
+          closeButton: false,
+        });
+      } else {
+        marker.bindPopup(popupHtmlForCamp(c), {
+          maxWidth: 440,
+          className: 'camp-popup',
+          autoPan: false,
+        });
+      }
       cluster.addLayer(marker);
     });
   } catch (e) {

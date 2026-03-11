@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Marker Concepts</title>
+  <style>
+    :root {
+      --bg: #f2eee4;
+      --ink: #1d221d;
+      --muted: #5c6257;
+      --card: rgba(255, 251, 243, 0.84);
+      --line: rgba(29, 34, 29, 0.12);
+      --forest: #325645;
+      --forest-deep: #20392d;
+      --sand: #d2a56d;
+      --sand-soft: #edd3aa;
+      --water: #7296a6;
+      --sky: #dce7ef;
+      --danger: #a16a57;
+      --glow: rgba(35, 47, 42, 0.14);
+      --vip: #32271b;
+      --vip-accent: #d9b86e;
+      --selected: #f26a4b;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(255,255,255,0.6), transparent 32%),
+        linear-gradient(180deg, #f9f5ec 0%, var(--bg) 100%);
+    }
+
+    .page {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 40px 28px 60px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 28px;
+      margin-bottom: 28px;
+    }
+
+    .hero-copy,
+    .hero-map,
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      background: var(--card);
+      backdrop-filter: blur(16px);
+      box-shadow: 0 24px 60px var(--glow);
+    }
+
+    .hero-copy {
+      padding: 32px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(50, 86, 69, 0.08);
+      color: var(--forest);
+      font-weight: 700;
+      font-size: 13px;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 18px 0 14px;
+      font-size: clamp(34px, 4vw, 62px);
+      line-height: 0.95;
+      letter-spacing: -0.04em;
+    }
+
+    .lead {
+      margin: 0 0 18px;
+      max-width: 52ch;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.6;
+    }
+
+    .bullet-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .bullet {
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.5);
+      border: 1px solid rgba(29, 34, 29, 0.08);
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .hero-map {
+      position: relative;
+      overflow: hidden;
+      min-height: 430px;
+      background:
+        radial-gradient(circle at 24% 22%, rgba(114, 150, 166, 0.18), transparent 20%),
+        radial-gradient(circle at 65% 38%, rgba(50, 86, 69, 0.1), transparent 18%),
+        linear-gradient(145deg, #ede5d4 0%, #f7f1e6 52%, #efe4d3 100%);
+    }
+
+    .hero-map::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(90deg, rgba(255,255,255,0.22) 1px, transparent 1px) 0 0 / 72px 72px,
+        linear-gradient(rgba(255,255,255,0.22) 1px, transparent 1px) 0 0 / 72px 72px;
+      opacity: 0.35;
+      pointer-events: none;
+    }
+
+    .lake {
+      position: absolute;
+      background: linear-gradient(160deg, rgba(114, 150, 166, 0.9), rgba(101, 134, 149, 0.55));
+      filter: drop-shadow(0 16px 22px rgba(95, 126, 142, 0.25));
+      border-radius: 58% 42% 44% 56% / 50% 44% 56% 50%;
+    }
+
+    .lake.one { width: 220px; height: 130px; top: 38px; right: 34px; transform: rotate(-11deg); }
+    .lake.two { width: 150px; height: 92px; left: 44px; bottom: 52px; transform: rotate(18deg); }
+
+    .road {
+      position: absolute;
+      height: 18px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.66);
+      box-shadow: inset 0 0 0 1px rgba(29,34,29,0.05);
+    }
+
+    .road.one { width: 290px; left: 72px; top: 168px; transform: rotate(-14deg); }
+    .road.two { width: 260px; right: 38px; bottom: 130px; transform: rotate(11deg); }
+
+    .map-note {
+      position: absolute;
+      left: 22px;
+      top: 20px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.72);
+      border: 1px solid rgba(29,34,29,0.08);
+      font-size: 13px;
+      font-weight: 700;
+      backdrop-filter: blur(12px);
+    }
+
+    .marker-stage {
+      position: absolute;
+      inset: 0;
+    }
+
+    .marker-wrap {
+      position: absolute;
+      transform: translate(-50%, -100%);
+    }
+
+    .marker-shadow {
+      position: absolute;
+      left: 50%;
+      bottom: -10px;
+      width: 44px;
+      height: 12px;
+      background: rgba(24, 28, 24, 0.18);
+      border-radius: 999px;
+      filter: blur(10px);
+      transform: translateX(-50%);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 20px;
+    }
+
+    .card {
+      padding: 18px;
+    }
+
+    .card-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .card-title {
+      margin: 0;
+      font-size: 24px;
+      letter-spacing: -0.03em;
+    }
+
+    .card-tag {
+      white-space: nowrap;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(50, 86, 69, 0.08);
+      color: var(--forest);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .card-copy {
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.55;
+      margin-bottom: 16px;
+      min-height: 72px;
+    }
+
+    .mini-map {
+      position: relative;
+      min-height: 260px;
+      border-radius: 24px;
+      overflow: hidden;
+      border: 1px solid rgba(29,34,29,0.08);
+      background:
+        radial-gradient(circle at 18% 26%, rgba(114, 150, 166, 0.2), transparent 17%),
+        radial-gradient(circle at 74% 68%, rgba(50, 86, 69, 0.12), transparent 19%),
+        linear-gradient(145deg, #f4ebdd 0%, #fbf7ef 100%);
+    }
+
+    .mini-map::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(90deg, rgba(255,255,255,0.24) 1px, transparent 1px) 0 0 / 52px 52px,
+        linear-gradient(rgba(255,255,255,0.24) 1px, transparent 1px) 0 0 / 52px 52px;
+      opacity: 0.4;
+    }
+
+    .mini-map .lake.small { width: 110px; height: 70px; top: 28px; right: 24px; }
+    .mini-map .lake.left { width: 92px; height: 56px; bottom: 24px; left: 18px; }
+    .mini-map .road.small { width: 170px; top: 118px; left: 24px; transform: rotate(-11deg); }
+
+    .specs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .spec {
+      padding: 8px 10px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.55);
+      border: 1px solid rgba(29,34,29,0.06);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .icon-svg {
+      width: 15px;
+      height: 15px;
+      display: block;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .icon-glyph {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.18);
+      color: inherit;
+    }
+
+    .marker-a {
+      display: grid;
+      gap: 4px;
+      justify-items: center;
+    }
+
+    .marker-a .head {
+      min-width: 58px;
+      height: 34px;
+      padding: 0 11px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: #fff;
+      background: linear-gradient(180deg, #3f6b56, var(--forest));
+      box-shadow: 0 14px 22px rgba(32, 57, 45, 0.22);
+      border: 1px solid rgba(255,255,255,0.14);
+    }
+
+    .marker-a .price {
+      min-width: 68px;
+      height: 28px;
+      padding: 0 12px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 250, 242, 0.95);
+      border: 1px solid rgba(50, 86, 69, 0.12);
+      color: var(--forest-deep);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      box-shadow: 0 8px 18px rgba(34, 45, 39, 0.12);
+    }
+
+    .marker-a::after {
+      content: "";
+      width: 18px;
+      height: 16px;
+      margin-top: -3px;
+      background: rgba(255, 250, 242, 0.96);
+      clip-path: polygon(50% 100%, 0 0, 100% 0);
+      box-shadow: 0 8px 18px rgba(34, 45, 39, 0.12);
+    }
+
+    .marker-a.selected .head { background: linear-gradient(180deg, #ff8669, var(--selected)); }
+    .marker-a.selected .price { border-color: rgba(242, 106, 75, 0.24); color: #6c2417; }
+    .marker-a.vip .head { background: linear-gradient(180deg, #473826, var(--vip)); color: var(--vip-accent); }
+    .marker-a.vip .price { background: rgba(56, 45, 33, 0.95); color: #f2dfb4; border-color: rgba(217,184,110,0.22); }
+    .marker-a.vip::after { background: rgba(56, 45, 33, 0.95); }
+    .marker-a.disabled { opacity: 0.5; filter: grayscale(0.25); }
+
+    .marker-b {
+      position: relative;
+      min-width: 112px;
+      height: 48px;
+      padding: 0 16px 0 14px;
+      border-radius: 20px;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: linear-gradient(180deg, #fff9ef, #f3e7d1);
+      border: 1px solid rgba(36, 47, 42, 0.12);
+      box-shadow: 0 18px 28px rgba(40, 46, 42, 0.14);
+      color: var(--forest-deep);
+      font-weight: 900;
+      letter-spacing: -0.03em;
+    }
+
+    .marker-b::after {
+      content: "";
+      position: absolute;
+      left: 18px;
+      bottom: -12px;
+      width: 20px;
+      height: 18px;
+      background: #f3e7d1;
+      clip-path: polygon(0 0, 100% 0, 18% 100%);
+      filter: drop-shadow(0 10px 12px rgba(40, 46, 42, 0.12));
+    }
+
+    .marker-b .icon-glyph {
+      background: linear-gradient(180deg, #416d58, var(--forest));
+      color: #fff;
+      width: 30px;
+      height: 30px;
+    }
+
+    .marker-b .price { font-size: 18px; }
+    .marker-b.selected {
+      background: linear-gradient(180deg, #fff1ee, #ffd7cd);
+      color: #7d2e1e;
+    }
+    .marker-b.selected .icon-glyph { background: linear-gradient(180deg, #ff8a6d, var(--selected)); }
+    .marker-b.vip {
+      background: linear-gradient(180deg, #3b3025, #241b14);
+      color: #f0d18a;
+      border-color: rgba(217,184,110,0.18);
+    }
+    .marker-b.vip .icon-glyph { background: rgba(217,184,110,0.14); color: var(--vip-accent); }
+    .marker-b.disabled { opacity: 0.48; }
+
+    .marker-c {
+      display: grid;
+      justify-items: center;
+      gap: 0;
+    }
+
+    .marker-c .frame {
+      width: 68px;
+      padding: 8px 8px 10px;
+      border-radius: 22px 22px 22px 12px;
+      background: linear-gradient(180deg, #fffaf3, #f1e8da);
+      border: 1px solid rgba(29,34,29,0.08);
+      box-shadow: 0 18px 24px rgba(33, 38, 36, 0.14);
+      display: grid;
+      gap: 6px;
+      justify-items: center;
+    }
+
+    .marker-c .badge {
+      width: 40px;
+      height: 40px;
+      border-radius: 14px;
+      background: linear-gradient(180deg, #426f59, var(--forest));
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.14);
+    }
+
+    .marker-c .price {
+      font-size: 14px;
+      font-weight: 900;
+      letter-spacing: -0.03em;
+      color: var(--forest-deep);
+    }
+
+    .marker-c::after {
+      content: "";
+      width: 18px;
+      height: 16px;
+      background: #f1e8da;
+      clip-path: polygon(50% 100%, 0 0, 100% 0);
+      filter: drop-shadow(0 10px 10px rgba(33, 38, 36, 0.12));
+      margin-top: -1px;
+    }
+
+    .marker-c.selected .badge { background: linear-gradient(180deg, #ff8769, var(--selected)); }
+    .marker-c.selected .price { color: #7d2e1e; }
+    .marker-c.vip .frame { background: linear-gradient(180deg, #403427, #271f18); border-color: rgba(217,184,110,0.14); }
+    .marker-c.vip .badge { background: rgba(217,184,110,0.14); color: var(--vip-accent); }
+    .marker-c.vip .price { color: #f2dbab; }
+    .marker-c.vip::after { background: #271f18; }
+    .marker-c.disabled { opacity: 0.48; }
+
+    .cluster {
+      width: 60px;
+      height: 60px;
+      border-radius: 999px;
+      background: linear-gradient(180deg, rgba(50,86,69,0.16), rgba(50,86,69,0.08));
+      border: 1px solid rgba(50,86,69,0.28);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--forest-deep);
+      font-weight: 900;
+      box-shadow: 0 18px 24px rgba(32, 57, 45, 0.12);
+      backdrop-filter: blur(12px);
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .legend-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.56);
+      border: 1px solid rgba(29,34,29,0.06);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      display: block;
+    }
+
+    .recommended {
+      margin-top: 26px;
+      border: 1px solid rgba(50, 86, 69, 0.12);
+      border-radius: 24px;
+      background: linear-gradient(135deg, rgba(255,255,255,0.7), rgba(255,255,255,0.45));
+      padding: 18px 20px;
+      display: flex;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .recommended strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 16px;
+    }
+
+    @media (max-width: 1120px) {
+      .hero { grid-template-columns: 1fr; }
+      .grid { grid-template-columns: 1fr; }
+      .hero-map { min-height: 340px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="hero">
+      <div class="hero-copy">
+        <div class="eyebrow">Tourist_03 Marker System</div>
+        <h1>Три направления для новых значков баз отдыха</h1>
+        <p class="lead">
+          Все варианты показывают не только тип базы, но и минимальную стоимость.
+          Идея в том, чтобы уйти от emoji и сделать карту дороже визуально, чище и понятнее на первом взгляде.
+        </p>
+        <div class="bullet-list">
+          <div class="bullet">Тип базы по пиктограмме</div>
+          <div class="bullet">Цена прямо в маркере</div>
+          <div class="bullet">Отдельные состояния VIP / selected / disabled</div>
+          <div class="bullet">Работает для плотной карты</div>
+        </div>
+        <div class="recommended">
+          <div class="eyebrow" style="margin: 0;">Рекомендация</div>
+          <div>
+            <strong>Концепт A: Capsule Pin</strong>
+            Он лучше всего держит баланс между премиальным видом, читаемостью цены и понятной иерархией состояний на мобильной карте.
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-map">
+        <div class="map-note">Как это может выглядеть прямо на карте</div>
+        <div class="lake one"></div>
+        <div class="lake two"></div>
+        <div class="road one"></div>
+        <div class="road two"></div>
+        <div class="marker-stage">
+          <div class="marker-wrap" style="left:28%; top:52%;">
+            <div class="marker-shadow"></div>
+            <div class="marker-a">
+              <div class="head">
+                <span class="icon-glyph">
+                  <svg class="icon-svg" viewBox="0 0 24 24"><path d="M3 11 12 4l9 7"></path><path d="M5 10v9h14v-9"></path><path d="M10 19v-5h4v5"></path></svg>
+                </span>
+              </div>
+              <div class="price">3500₽</div>
+            </div>
+          </div>
+
+          <div class="marker-wrap" style="left:49%; top:44%;">
+            <div class="marker-shadow"></div>
+            <div class="marker-a selected">
+              <div class="head">
+                <span class="icon-glyph">
+                  <svg class="icon-svg" viewBox="0 0 24 24"><path d="M4 19h16"></path><path d="M6 19V11l6-5 6 5v8"></path><path d="M8 11h8"></path></svg>
+                </span>
+              </div>
+              <div class="price">4200₽</div>
+            </div>
+          </div>
+
+          <div class="marker-wrap" style="left:67%; top:68%;">
+            <div class="marker-shadow"></div>
+            <div class="marker-a vip">
+              <div class="head">
+                <span class="icon-glyph">
+                  <svg class="icon-svg" viewBox="0 0 24 24"><path d="m3 19 9-14 9 14"></path><path d="M8 13h8"></path><path d="M10.5 19v-3h3v3"></path></svg>
+                </span>
+              </div>
+              <div class="price">7800₽</div>
+            </div>
+          </div>
+
+          <div class="marker-wrap" style="left:78%; top:38%;">
+            <div class="marker-shadow"></div>
+            <div class="cluster">12</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid">
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <h2 class="card-title">A. Capsule Pin</h2>
+            <div class="card-copy">Двухэтажный маркер: сверху тип базы, снизу отдельная цена. Премиально выглядит и хорошо читается даже на шумной карте.</div>
+          </div>
+          <div class="card-tag">Рекомендуется</div>
+        </div>
+        <div class="mini-map">
+          <div class="lake small"></div>
+          <div class="lake left"></div>
+          <div class="road small"></div>
+
+          <div class="marker-wrap" style="left:22%; top:76%;">
+            <div class="marker-shadow"></div>
+            <div class="marker-a">
+              <div class="head">
+                <span class="icon-glyph">
+                  <svg class="icon-svg" viewBox="0 0 24 24"><path d="M3 11 12 4l9 7"></path><path d="M5 10v9h14v-9"></path><path d="M10 19v-5h4v5"></path></svg>
+                </span>
+              </div>
+              <div class="price">3500₽</div>
+            </div>
+          </div>
+
+          <div class="marker-wrap" style="left:48%; top:59%;">
+            <div class="marker-shadow"></div>
+            <div class="marker-a selected">
+              <div class="head">
+                <span class="icon-glyph">
+                  <svg class="icon-svg" viewBox="0 0 24 24"><path d="m3 19 9-14 9 14"></path><path d="M8 13h8"></path><path d="M10.5 19v-3h3v3"></path></svg>
+                </span>
+              </div>
+              <div class="price">4200₽</div>
+            </div>
+          </div>
+
+          <div class="marker-wrap" style="left:74%; top:70%;">
+            <div class="marker-shadow"></div>
+            <div class="marker-a vip">
+              <div class="head">
+                <span class="icon-glyph">
+                  <svg class="icon-svg" viewBox="0 0 24 24"><path d="M4 19h16"></path><path d="M6 19V11l6-5 6 5v8"></path><path d="M8 11h8"></path></svg>
+                </span>
+              </div>
+              <div class="price">7800₽</div>
+            </div>
+          </div>
+
+          <div class="marker-wrap" style="left:83%; top:37%;">
+            <div class="marker-shadow"></div>
+            <div class="cluster">9</div>
+          </div>
+        </div>
+        <div class="specs">
+          <div class="spec">цена читается лучше всех</div>
+          <div class="spec">легко сделать states</div>
+          <div class="spec">визуально дорого</div>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <h2 class="card-title">B. Price-first Badge</h2>
+            <div class="card-copy">Горизонтальная капсула, где цена главный элемент, а тип базы работает как акцент слева. Быстро считывается при выборе по бюджету.</div>
+          </div>
+          <div class="card-tag">Сильный price-focus</div>
+        </div>
+        <div class="mini-map">
+          <div class="lake small"></div>
+          <div class="lake left"></div>
+          <div class="road small"></div>
+
+          <div class="marker-wrap" style="left:24%; top:72%;">
+            <div class="marker-shadow"></div>
+            <div class="marker-b">
+              <span class="icon-glyph">
+                <svg class="icon-svg" viewBox="0 0 24 24"><path d="M3 11 12 4l9 7"></path><path d="M5 10v9h14v-9"></path><path d="M10 19v-5h4v5"></path></svg>
+              </span>
+              <span class="price">3500₽</span>
+            </div>
+          </div>
+
+          <div class="marker-wrap" style="left:50%; top:57%;">
+            <div class="marker-shadow"></div>
+            <div class="marker-b selected">
+              <span class="icon-glyph">
+                <svg class="icon-svg" viewBox="0 0 24 24"><path d="m3 19 9-14 9 14"></path><path d="M8 13h8"></path><path d="M10.5 19v-3h3v3"></path></svg>
+              </span>
+              <span class="price">4200₽</span>
+            </div>
+          </div>
+
+          <div class="marker-wrap" style="left:74%; top:69%;">
+            <div class="marker-shadow"></div>
+            <div class="marker-b vip">
+              <span class="icon-glyph">
+                <svg class="icon-svg" viewBox="0 0 24 24"><path d="M4 19h16"></path><path d="M6 19V11l6-5 6 5v8"></path><path d="M8 11h8"></path></svg>
+              </span>
+              <span class="price">7800₽</span>
+            </div>
+          </div>
+
+          <div class="marker-wrap" style="left:83%; top:37%;">
+            <div class="marker-shadow"></div>
+            <div class="cluster">14</div>
+          </div>
+        </div>
+        <div class="specs">
+          <div class="spec">цена максимально заметна</div>
+          <div class="spec">хорошо для фильтра по бюджету</div>
+          <div class="spec">чуть тяжелее на плотной карте</div>
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <h2 class="card-title">C. Totem Tile</h2>
+            <div class="card-copy">Более дизайнерский и модульный вариант: сначала иконка типа, затем цена как подпись. Выглядит необычно, но чуть слабее считывается в массе.</div>
+          </div>
+          <div class="card-tag">Более арт-дирекшн</div>
+        </div>
+        <div class="mini-map">
+          <div class="lake small"></div>
+          <div class="lake left"></div>
+          <div class="road small"></div>
+
+          <div class="marker-wrap" style="left:23%; top:74%;">
+            <div class="marker-shadow"></div>
+            <div class="marker-c">
+              <div class="frame">
+                <div class="badge">
+                  <svg class="icon-svg" viewBox="0 0 24 24"><path d="M3 11 12 4l9 7"></path><path d="M5 10v9h14v-9"></path><path d="M10 19v-5h4v5"></path></svg>
+                </div>
+                <div class="price">3500₽</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="marker-wrap" style="left:49%; top:58%;">
+            <div class="marker-shadow"></div>
+            <div class="marker-c selected">
+              <div class="frame">
+                <div class="badge">
+                  <svg class="icon-svg" viewBox="0 0 24 24"><path d="m3 19 9-14 9 14"></path><path d="M8 13h8"></path><path d="M10.5 19v-3h3v3"></path></svg>
+                </div>
+                <div class="price">4200₽</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="marker-wrap" style="left:74%; top:71%;">
+            <div class="marker-shadow"></div>
+            <div class="marker-c vip">
+              <div class="frame">
+                <div class="badge">
+                  <svg class="icon-svg" viewBox="0 0 24 24"><path d="M4 19h16"></path><path d="M6 19V11l6-5 6 5v8"></path><path d="M8 11h8"></path></svg>
+                </div>
+                <div class="price">7800₽</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="marker-wrap" style="left:83%; top:37%;">
+            <div class="marker-shadow"></div>
+            <div class="cluster">7</div>
+          </div>
+        </div>
+        <div class="specs">
+          <div class="spec">самый нестандартный</div>
+          <div class="spec">подходит для сильного брендинга</div>
+          <div class="spec">цена чуть слабее читается</div>
+        </div>
+      </article>
+    </section>
+
+    <div class="legend">
+      <div class="legend-chip"><span class="legend-dot" style="background: var(--forest);"></span>обычная база</div>
+      <div class="legend-chip"><span class="legend-dot" style="background: var(--selected);"></span>выбранная база</div>
+      <div class="legend-chip"><span class="legend-dot" style="background: var(--vip-accent);"></span>VIP-состояние</div>
+      <div class="legend-chip"><span class="legend-dot" style="background: rgba(29,34,29,0.28);"></span>архив / недоступно</div>
+      <div class="legend-chip"><span class="legend-dot" style="background: rgba(50,86,69,0.18);"></span>кластер</div>
+    </div>
+  </div>
+</body>
+</html>

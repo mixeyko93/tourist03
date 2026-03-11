@@ -19,6 +19,11 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+.tools/
+frontend/dist/
+frontend/*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
 
 # === PyCharm project files ===
 *.iml

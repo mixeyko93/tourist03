@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Capsule Pin System</title>
+  <style>
+    :root {
+      --bg: #eee7d9;
+      --sheet: rgba(255, 251, 243, 0.82);
+      --line: rgba(25, 29, 25, 0.1);
+      --text: #1d221d;
+      --muted: #5a6257;
+      --forest: #345746;
+      --forest-dark: #21392d;
+      --water: #7ba7b0;
+      --sand: #d7b57a;
+      --selected: #f26c48;
+      --selected-dark: #8f301c;
+      --vip: #2d241b;
+      --vip-accent: #e6c57b;
+      --disabled: #8e8b84;
+      --glow: rgba(37, 45, 40, 0.14);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(255,255,255,0.52), transparent 28%),
+        linear-gradient(180deg, #f7f2e8 0%, var(--bg) 100%);
+    }
+
+    .page {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 34px 28px 60px;
+    }
+
+    .top {
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 22px;
+      margin-bottom: 22px;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 30px;
+      background: var(--sheet);
+      box-shadow: 0 26px 60px var(--glow);
+      backdrop-filter: blur(18px);
+    }
+
+    .intro {
+      padding: 30px 32px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(52, 87, 70, 0.08);
+      color: var(--forest);
+      font-weight: 700;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    h1 {
+      margin: 18px 0 14px;
+      font-size: clamp(34px, 4.5vw, 66px);
+      line-height: 0.96;
+      letter-spacing: -0.045em;
+    }
+
+    .lead {
+      max-width: 54ch;
+      margin: 0 0 18px;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.6;
+    }
+
+    .notes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .note {
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.56);
+      border: 1px solid rgba(25,29,25,0.07);
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .map-panel {
+      position: relative;
+      overflow: hidden;
+      min-height: 430px;
+      background:
+        radial-gradient(circle at 72% 18%, rgba(123,167,176,0.18), transparent 18%),
+        radial-gradient(circle at 30% 78%, rgba(52,87,70,0.12), transparent 16%),
+        linear-gradient(145deg, #f0e7d8 0%, #f7f3ea 56%, #efe4d2 100%);
+    }
+
+    .map-panel::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(90deg, rgba(255,255,255,0.24) 1px, transparent 1px) 0 0 / 70px 70px,
+        linear-gradient(rgba(255,255,255,0.24) 1px, transparent 1px) 0 0 / 70px 70px;
+      opacity: 0.45;
+    }
+
+    .map-label {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.72);
+      border: 1px solid rgba(25,29,25,0.06);
+      font-size: 13px;
+      font-weight: 700;
+      z-index: 2;
+    }
+
+    .lake, .road {
+      position: absolute;
+      pointer-events: none;
+    }
+
+    .lake {
+      background: linear-gradient(160deg, rgba(123,167,176,0.92), rgba(100,142,151,0.56));
+      border-radius: 58% 42% 46% 54% / 48% 42% 58% 52%;
+      filter: drop-shadow(0 18px 24px rgba(96, 128, 141, 0.22));
+    }
+
+    .lake.l1 { width: 220px; height: 126px; right: 36px; top: 38px; transform: rotate(-10deg); }
+    .lake.l2 { width: 170px; height: 96px; left: 54px; bottom: 46px; transform: rotate(17deg); }
+
+    .road {
+      height: 18px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.68);
+      box-shadow: inset 0 0 0 1px rgba(25,29,25,0.04);
+    }
+
+    .road.r1 { width: 300px; left: 84px; top: 178px; transform: rotate(-14deg); }
+    .road.r2 { width: 240px; right: 34px; bottom: 136px; transform: rotate(11deg); }
+
+    .map-stage {
+      position: absolute;
+      inset: 0;
+    }
+
+    .block-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 22px;
+    }
+
+    .section {
+      padding: 22px;
+    }
+
+    .section h2 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      letter-spacing: -0.04em;
+    }
+
+    .section p {
+      margin: 0 0 16px;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .mini-map {
+      position: relative;
+      min-height: 280px;
+      overflow: hidden;
+      border-radius: 24px;
+      border: 1px solid rgba(25,29,25,0.08);
+      background:
+        radial-gradient(circle at 76% 24%, rgba(123,167,176,0.18), transparent 16%),
+        radial-gradient(circle at 20% 78%, rgba(52,87,70,0.12), transparent 14%),
+        linear-gradient(145deg, #f4ecdd 0%, #fbf7ef 100%);
+    }
+
+    .mini-map::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(90deg, rgba(255,255,255,0.24) 1px, transparent 1px) 0 0 / 56px 56px,
+        linear-gradient(rgba(255,255,255,0.24) 1px, transparent 1px) 0 0 / 56px 56px;
+      opacity: 0.42;
+    }
+
+    .mini-map .lake.small1 { width: 120px; height: 72px; right: 20px; top: 24px; }
+    .mini-map .lake.small2 { width: 92px; height: 56px; left: 18px; bottom: 22px; }
+    .mini-map .road.smallr { width: 168px; left: 28px; top: 124px; transform: rotate(-12deg); }
+
+    .states {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .state-card {
+      padding: 18px;
+      border-radius: 22px;
+      background: rgba(255,255,255,0.44);
+      border: 1px solid rgba(25,29,25,0.06);
+      min-height: 146px;
+    }
+
+    .state-title {
+      font-size: 14px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+
+    .stack {
+      display: flex;
+      gap: 18px;
+      flex-wrap: wrap;
+      align-items: flex-end;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.58);
+      border: 1px solid rgba(25,29,25,0.06);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      display: inline-block;
+    }
+
+    .pin-wrap {
+      position: absolute;
+      transform: translate(-50%, -100%);
+    }
+
+    .shadow {
+      position: absolute;
+      left: 50%;
+      bottom: -12px;
+      width: 48px;
+      height: 12px;
+      border-radius: 999px;
+      background: rgba(25,29,25,0.18);
+      filter: blur(10px);
+      transform: translateX(-50%);
+    }
+
+    .pin {
+      display: grid;
+      gap: 4px;
+      justify-items: center;
+      transform-origin: center bottom;
+    }
+
+    .pin-head {
+      min-width: 58px;
+      height: 35px;
+      padding: 0 11px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: linear-gradient(180deg, #416d58, var(--forest));
+      color: #fff;
+      border: 1px solid rgba(255,255,255,0.12);
+      box-shadow: 0 14px 22px rgba(33, 54, 44, 0.24);
+    }
+
+    .pin-price {
+      min-width: 72px;
+      height: 28px;
+      padding: 0 12px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 249, 240, 0.96);
+      color: var(--forest-dark);
+      border: 1px solid rgba(52, 87, 70, 0.14);
+      box-shadow: 0 10px 18px rgba(30, 39, 34, 0.12);
+      font-weight: 900;
+      letter-spacing: -0.02em;
+    }
+
+    .pin::after {
+      content: "";
+      width: 18px;
+      height: 16px;
+      margin-top: -2px;
+      background: rgba(255, 249, 240, 0.96);
+      clip-path: polygon(50% 100%, 0 0, 100% 0);
+      filter: drop-shadow(0 10px 12px rgba(30, 39, 34, 0.12));
+    }
+
+    .pin.compact .pin-head { min-width: 50px; height: 32px; }
+    .pin.compact .pin-price { min-width: 64px; height: 26px; font-size: 14px; }
+    .pin.large { transform: scale(1.18); }
+
+    .pin.selected .pin-head {
+      background: linear-gradient(180deg, #ff8a69, var(--selected));
+    }
+    .pin.selected .pin-price {
+      color: var(--selected-dark);
+      border-color: rgba(242,108,72,0.18);
+    }
+
+    .pin.vip .pin-head {
+      background: linear-gradient(180deg, #473826, var(--vip));
+      color: var(--vip-accent);
+    }
+    .pin.vip .pin-price {
+      background: rgba(52, 41, 30, 0.97);
+      color: #f2ddb0;
+      border-color: rgba(230,197,123,0.22);
+    }
+    .pin.vip::after {
+      background: rgba(52, 41, 30, 0.97);
+    }
+
+    .pin.disabled {
+      opacity: 0.48;
+      filter: grayscale(0.3);
+    }
+
+    .pin.hotel .pin-head { background: linear-gradient(180deg, #4b6670, #35515b); }
+    .pin.hotel .pin-price { color: #28414a; border-color: rgba(53,81,91,0.18); }
+    .pin.glamping .pin-head { background: linear-gradient(180deg, #6a5f2e, #4e4722); color: #f8e6aa; }
+    .pin.glamping .pin-price { color: #433b1a; border-color: rgba(78,71,34,0.18); }
+    .pin.family .pin-head { background: linear-gradient(180deg, #4c6c52, #31523a); }
+
+    .cluster {
+      width: 60px;
+      height: 60px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(180deg, rgba(52,87,70,0.18), rgba(52,87,70,0.08));
+      color: var(--forest-dark);
+      font-weight: 900;
+      border: 1px solid rgba(52,87,70,0.26);
+      box-shadow: 0 18px 22px rgba(33, 54, 44, 0.12);
+      backdrop-filter: blur(10px);
+    }
+
+    .cluster.large { width: 68px; height: 68px; font-size: 18px; }
+
+    .glyph {
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.16);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .glyph svg {
+      width: 15px;
+      height: 15px;
+      display: block;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.85;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    @media (max-width: 1120px) {
+      .top, .block-grid { grid-template-columns: 1fr; }
+      .states { grid-template-columns: 1fr; }
+    }
+  </style>
+  <script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async></script>
+</head>
+<body>
+  <div class="page">
+    <section class="top">
+      <div class="panel intro">
+        <div class="chip">Chosen Direction: Variant A</div>
+        <h1>Capsule Pin как финальное направление для карты</h1>
+        <p class="lead">
+          Это уже не просто абстрактный концепт, а почти система: показаны типы баз, выбранное состояние, VIP, недоступность, кластер и работа на плотной карте.
+        </p>
+        <div class="notes">
+          <div class="note">цена читается сразу</div>
+          <div class="note">тип базы виден по пиктограмме и цвету</div>
+          <div class="note">выбранная база контрастно выделяется</div>
+          <div class="note">VIP отличается без перегруза</div>
+        </div>
+      </div>
+
+      <div class="panel map-panel">
+        <div class="map-label">Preview in context</div>
+        <div class="lake l1"></div>
+        <div class="lake l2"></div>
+        <div class="road r1"></div>
+        <div class="road r2"></div>
+
+        <div class="map-stage">
+          <div class="pin-wrap" style="left:26%; top:58%;">
+            <div class="shadow"></div>
+            <div class="pin house">
+              <div class="pin-head">
+                <span class="glyph">
+                  <svg viewBox="0 0 24 24"><path d="M3 11 12 4l9 7"></path><path d="M5 10v9h14v-9"></path><path d="M10 19v-5h4v5"></path></svg>
+                </span>
+              </div>
+              <div class="pin-price">3500₽</div>
+            </div>
+          </div>
+
+          <div class="pin-wrap" style="left:46%; top:46%;">
+            <div class="shadow"></div>
+            <div class="pin hotel compact">
+              <div class="pin-head">
+                <span class="glyph">
+                  <svg viewBox="0 0 24 24"><path d="M4 19h16"></path><path d="M6 19V8h12v11"></path><path d="M8 11h2"></path><path d="M14 11h2"></path><path d="M8 14h2"></path><path d="M14 14h2"></path></svg>
+                </span>
+              </div>
+              <div class="pin-price">4200₽</div>
+            </div>
+          </div>
+
+          <div class="pin-wrap" style="left:58%; top:66%;">
+            <div class="shadow"></div>
+            <div class="pin selected glamping large">
+              <div class="pin-head">
+                <span class="glyph">
+                  <svg viewBox="0 0 24 24"><path d="m3 19 9-14 9 14"></path><path d="M8 13h8"></path><path d="M10.5 19v-3h3v3"></path></svg>
+                </span>
+              </div>
+              <div class="pin-price">7800₽</div>
+            </div>
+          </div>
+
+          <div class="pin-wrap" style="left:74%; top:55%;">
+            <div class="shadow"></div>
+            <div class="pin vip family">
+              <div class="pin-head">
+                <span class="glyph">
+                  <svg viewBox="0 0 24 24"><path d="M4 18h16"></path><path d="M6 18v-5l4-3 4 3 4-3v8"></path><path d="M10 18v-3"></path><path d="M14 18v-3"></path></svg>
+                </span>
+              </div>
+              <div class="pin-price">9500₽</div>
+            </div>
+          </div>
+
+          <div class="pin-wrap" style="left:82%; top:37%;">
+            <div class="shadow"></div>
+            <div class="cluster large">12</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="block-grid">
+      <div class="panel section">
+        <h2>Типы баз в одном языке</h2>
+        <p>Одна форма, разные пиктограммы и мягкая цветовая дифференциация. Пользователь быстро понимает, что это всё одна система, а не набор случайных иконок.</p>
+
+        <div class="states">
+          <div class="state-card">
+            <div class="state-title">Домики / коттеджи</div>
+            <div class="stack">
+              <div class="pin house">
+                <div class="pin-head">
+                  <span class="glyph"><svg viewBox="0 0 24 24"><path d="M3 11 12 4l9 7"></path><path d="M5 10v9h14v-9"></path><path d="M10 19v-5h4v5"></path></svg></span>
+                </div>
+                <div class="pin-price">3500₽</div>
+              </div>
+              <div class="pin house compact">
+                <div class="pin-head">
+                  <span class="glyph"><svg viewBox="0 0 24 24"><path d="M3 11 12 4l9 7"></path><path d="M5 10v9h14v-9"></path><path d="M10 19v-5h4v5"></path></svg></span>
+                </div>
+                <div class="pin-price">2700₽</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="state-card">
+            <div class="state-title">Отель / гостевой дом</div>
+            <div class="stack">
+              <div class="pin hotel">
+                <div class="pin-head">
+                  <span class="glyph"><svg viewBox="0 0 24 24"><path d="M4 19h16"></path><path d="M6 19V8h12v11"></path><path d="M8 11h2"></path><path d="M14 11h2"></path><path d="M8 14h2"></path><path d="M14 14h2"></path></svg></span>
+                </div>
+                <div class="pin-price">4200₽</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="state-card">
+            <div class="state-title">Глэмпинг / шатры</div>
+            <div class="stack">
+              <div class="pin glamping">
+                <div class="pin-head">
+                  <span class="glyph"><svg viewBox="0 0 24 24"><path d="m3 19 9-14 9 14"></path><path d="M8 13h8"></path><path d="M10.5 19v-3h3v3"></path></svg></span>
+                </div>
+                <div class="pin-price">6100₽</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="state-card">
+            <div class="state-title">Семейная / база с территорией</div>
+            <div class="stack">
+              <div class="pin family">
+                <div class="pin-head">
+                  <span class="glyph"><svg viewBox="0 0 24 24"><path d="M4 18h16"></path><path d="M6 18v-5l4-3 4 3 4-3v8"></path><path d="M10 18v-3"></path><path d="M14 18v-3"></path></svg></span>
+                </div>
+                <div class="pin-price">5400₽</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel section">
+        <h2>Состояния</h2>
+        <p>Это набор, который нужен уже не для концепта, а для реального интерфейса карты.</p>
+
+        <div class="stack" style="margin-bottom: 16px;">
+          <div class="pin house">
+            <div class="pin-head"><span class="glyph"><svg viewBox="0 0 24 24"><path d="M3 11 12 4l9 7"></path><path d="M5 10v9h14v-9"></path><path d="M10 19v-5h4v5"></path></svg></span></div>
+            <div class="pin-price">3500₽</div>
+          </div>
+          <div class="pin selected house">
+            <div class="pin-head"><span class="glyph"><svg viewBox="0 0 24 24"><path d="M3 11 12 4l9 7"></path><path d="M5 10v9h14v-9"></path><path d="M10 19v-5h4v5"></path></svg></span></div>
+            <div class="pin-price">3500₽</div>
+          </div>
+          <div class="pin vip family">
+            <div class="pin-head"><span class="glyph"><svg viewBox="0 0 24 24"><path d="M4 18h16"></path><path d="M6 18v-5l4-3 4 3 4-3v8"></path><path d="M10 18v-3"></path><path d="M14 18v-3"></path></svg></span></div>
+            <div class="pin-price">9500₽</div>
+          </div>
+          <div class="pin disabled hotel">
+            <div class="pin-head"><span class="glyph"><svg viewBox="0 0 24 24"><path d="M4 19h16"></path><path d="M6 19V8h12v11"></path><path d="M8 11h2"></path><path d="M14 11h2"></path><path d="M8 14h2"></path><path d="M14 14h2"></path></svg></span></div>
+            <div class="pin-price">4200₽</div>
+          </div>
+          <div class="cluster">8</div>
+        </div>
+
+        <div class="legend">
+          <div class="legend-item"><span class="dot" style="background: var(--forest);"></span>обычная</div>
+          <div class="legend-item"><span class="dot" style="background: var(--selected);"></span>selected</div>
+          <div class="legend-item"><span class="dot" style="background: var(--vip-accent);"></span>VIP</div>
+          <div class="legend-item"><span class="dot" style="background: var(--disabled);"></span>disabled / архив</div>
+          <div class="legend-item"><span class="dot" style="background: rgba(52,87,70,0.18);"></span>cluster</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel section" style="margin-top: 22px;">
+      <h2>Плотность на карте</h2>
+      <p>Здесь видно, что вариант A держится и в нормальной плотности, и при более насыщенном экране. Цена по-прежнему считывается, а selected не теряется.</p>
+      <div class="mini-map">
+        <div class="lake small1"></div>
+        <div class="lake small2"></div>
+        <div class="road smallr"></div>
+
+        <div class="pin-wrap" style="left:16%; top:74%;"><div class="shadow"></div><div class="pin compact house"><div class="pin-head"><span class="glyph"><svg viewBox="0 0 24 24"><path d="M3 11 12 4l9 7"></path><path d="M5 10v9h14v-9"></path><path d="M10 19v-5h4v5"></path></svg></span></div><div class="pin-price">2900₽</div></div></div>
+        <div class="pin-wrap" style="left:28%; top:59%;"><div class="shadow"></div><div class="pin compact hotel"><div class="pin-head"><span class="glyph"><svg viewBox="0 0 24 24"><path d="M4 19h16"></path><path d="M6 19V8h12v11"></path><path d="M8 11h2"></path><path d="M14 11h2"></path><path d="M8 14h2"></path><path d="M14 14h2"></path></svg></span></div><div class="pin-price">4100₽</div></div></div>
+        <div class="pin-wrap" style="left:40%; top:71%;"><div class="shadow"></div><div class="pin compact glamping"><div class="pin-head"><span class="glyph"><svg viewBox="0 0 24 24"><path d="m3 19 9-14 9 14"></path><path d="M8 13h8"></path><path d="M10.5 19v-3h3v3"></path></svg></span></div><div class="pin-price">5600₽</div></div></div>
+        <div class="pin-wrap" style="left:52%; top:49%;"><div class="shadow"></div><div class="pin selected compact house"><div class="pin-head"><span class="glyph"><svg viewBox="0 0 24 24"><path d="M3 11 12 4l9 7"></path><path d="M5 10v9h14v-9"></path><path d="M10 19v-5h4v5"></path></svg></span></div><div class="pin-price">3500₽</div></div></div>
+        <div class="pin-wrap" style="left:64%; top:67%;"><div class="shadow"></div><div class="pin compact family"><div class="pin-head"><span class="glyph"><svg viewBox="0 0 24 24"><path d="M4 18h16"></path><path d="M6 18v-5l4-3 4 3 4-3v8"></path><path d="M10 18v-3"></path><path d="M14 18v-3"></path></svg></span></div><div class="pin-price">4700₽</div></div></div>
+        <div class="pin-wrap" style="left:76%; top:57%;"><div class="shadow"></div><div class="pin vip compact family"><div class="pin-head"><span class="glyph"><svg viewBox="0 0 24 24"><path d="M4 18h16"></path><path d="M6 18v-5l4-3 4 3 4-3v8"></path><path d="M10 18v-3"></path><path d="M14 18v-3"></path></svg></span></div><div class="pin-price">9200₽</div></div></div>
+        <div class="pin-wrap" style="left:86%; top:38%;"><div class="shadow"></div><div class="cluster">6</div></div>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

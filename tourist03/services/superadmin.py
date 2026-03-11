@@ -10,12 +10,17 @@ from tourist03.schemas import (
 from tourist03.security import (
     extract_superadmin_header_token,
     hash_password,
+    is_local_superadmin_bypass,
     is_valid_superadmin_key,
 )
 
 
 def superadmin_session(request: Request):
     if request.session.get("superadmin") is True:
+        return {"ok": True, "authenticated": True}
+
+    if is_local_superadmin_bypass(request):
+        request.session["superadmin"] = True
         return {"ok": True, "authenticated": True}
 
     header_token = extract_superadmin_header_token(request)
@@ -27,6 +32,10 @@ def superadmin_session(request: Request):
 
 
 def superadmin_login(payload: SuperAdminLoginRequest, request: Request):
+    if is_local_superadmin_bypass(request):
+        request.session["superadmin"] = True
+        return {"ok": True, "authenticated": True}
+
     if not is_valid_superadmin_key(payload.key):
         raise HTTPException(status_code=401, detail="Нет доступа")
 

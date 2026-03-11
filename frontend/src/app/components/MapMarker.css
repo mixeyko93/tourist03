@@ -1,0 +1,230 @@
+.map-marker {
+  --marker-color: #4a4237;
+  --marker-rgb: 74, 66, 55;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 0 12px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  user-select: none;
+  appearance: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.map-marker:focus-visible {
+  outline: 2px solid rgba(96, 165, 250, 0.85);
+  outline-offset: 6px;
+  border-radius: 999px;
+}
+
+.map-marker__glow {
+  position: absolute;
+  inset: -14px -14px 8px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(var(--marker-rgb), 0.3) 0%, rgba(var(--marker-rgb), 0) 70%);
+  filter: blur(14px);
+  pointer-events: none;
+}
+
+.map-marker__tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgba(var(--marker-rgb), 0.87);
+  box-shadow: 0 4px 12px rgba(var(--marker-rgb), 0.4);
+  backdrop-filter: blur(10px);
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 2;
+}
+
+.map-marker__tooltip-icon {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #f5ead1;
+}
+
+.map-marker__tooltip-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.map-marker__tooltip-label {
+  color: #f5ead1;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.map-marker__tooltip-vip {
+  color: #fbbf24;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.map-marker__badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 20px;
+  border-radius: 999px;
+  background: var(--marker-color);
+  color: #f5ead1;
+  backdrop-filter: blur(8px);
+  overflow: visible;
+  isolation: isolate;
+}
+
+.map-marker__price {
+  position: relative;
+  z-index: 1;
+  color: #f5ead1;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.map-marker__vip-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  z-index: 2;
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%);
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(245, 158, 11, 0.38);
+  border: 2px solid rgba(255, 255, 255, 0.28);
+}
+
+.map-marker__vip-badge svg {
+  width: 10px;
+  height: 10px;
+  display: block;
+  fill: currentColor;
+}
+
+.map-marker__shine-wrap {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.map-marker__shine {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.22), transparent);
+  opacity: 0.85;
+}
+
+.map-marker__pointer-row {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin-top: 1px;
+}
+
+.map-marker__pointer {
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 10px solid var(--marker-color);
+  filter: drop-shadow(0 4px 6px rgba(var(--marker-rgb), 0.4));
+}
+
+.map-marker__shadow {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.2);
+  filter: blur(12px);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.map-marker svg {
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.react-map-marker-icon {
+  background: transparent !important;
+  border: 0 !important;
+  overflow: visible !important;
+}
+
+.react-map-marker-root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.react-map-marker-shell {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.react-map-marker-shell.is-selected::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 18px;
+  width: calc(100% + 22px);
+  height: 58px;
+  border-radius: 999px;
+  border: 2px solid rgba(96, 165, 250, 0.88);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: react-map-marker-ring 1.8s ease-out infinite;
+}
+
+.react-map-marker-shell.is-disabled {
+  opacity: 0.48;
+  filter: grayscale(0.35);
+}
+
+@keyframes react-map-marker-ring {
+  0% {
+    opacity: 0.52;
+    transform: translate(-50%, -50%) scale(0.92);
+  }
+
+  75%,
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.18);
+  }
+}
