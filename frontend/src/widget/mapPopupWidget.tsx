@@ -10,6 +10,8 @@ type MountedEntry = {
   hideTimer: number | null;
 };
 
+const POPUP_EXIT_MS = 320;
+
 declare global {
   interface Window {
     TouristMapPopupWidget?: {
@@ -64,7 +66,7 @@ function unmount(element: HTMLElement) {
   entry.hideTimer = window.setTimeout(() => {
     entry.root.unmount();
     mounted.delete(element);
-  }, 260);
+  }, POPUP_EXIT_MS);
 }
 
 window.TouristMapPopupWidget = {

@@ -280,22 +280,28 @@ class UiSmokeTests(unittest.TestCase):
     def test_map_popup_layout_contract(self):
         measure_js = """
             () => {
-              const shell = document.querySelector('.camp-popup-shell');
-              const media = document.querySelector('.camp-popup__media');
-              const actions = [...document.querySelectorAll('.camp-popup__action')];
-              const close = document.querySelector('.leaflet-popup-close-button');
-              const pointer = document.querySelector('.camp-popup__pointer');
+              const shell = document.querySelector('.leaflet-popup .map-popup-widget__dialog--leaflet');
+              const media = document.querySelector('.leaflet-popup .map-popup-widget__media');
+              const actions = [...document.querySelectorAll('.leaflet-popup .map-popup-widget__button')];
+              const close = document.querySelector('.leaflet-popup .map-popup-widget__close');
+              const pointer = document.querySelector('.leaflet-popup');
+              const title = document.querySelector('.leaflet-popup .map-popup-widget__title');
+              const price = document.querySelector('.leaflet-popup .map-popup-widget__price-main');
               const mapUi = document.querySelector('.map-ui');
               const mapWrap = document.querySelector('.map-wrap');
               const hiddenMarker = document.querySelector('.camp-marker-icon.is-popup-hidden');
               const hiddenMarkers = document.querySelectorAll('.camp-marker-icon.is-popup-hidden').length;
-              if (!shell || !media || actions.length < 2 || !close || !pointer) return null;
+              if (!shell || !media || actions.length < 2 || !close || !pointer || !title || !price) return null;
               const shellBox = shell.getBoundingClientRect();
               const mediaBox = media.getBoundingClientRect();
               const actionBoxes = actions.map((node) => node.getBoundingClientRect());
               const closeBox = close.getBoundingClientRect();
               const pointerBox = pointer.getBoundingClientRect();
               const hiddenMarkerBox = hiddenMarker ? hiddenMarker.getBoundingClientRect() : null;
+              const hiddenMarkerPointer = hiddenMarker && hiddenMarker.querySelector
+                ? hiddenMarker.querySelector('.camp-marker__pointer')
+                : null;
+              const hiddenMarkerPointerBox = hiddenMarkerPointer ? hiddenMarkerPointer.getBoundingClientRect() : null;
               return {
                 shellWidth: shellBox.width,
                 shellTop: shellBox.top,
@@ -306,16 +312,22 @@ class UiSmokeTests(unittest.TestCase):
                 actionWidths: actionBoxes.map((box) => box.width),
                 closeWidth: closeBox.width,
                 closeHeight: closeBox.height,
-                pointerCenterX: pointerBox.left + pointerBox.width / 2,
-                pointerTop: pointerBox.top,
+                popupAnchorX: pointerBox.left + pointerBox.width / 2,
+                popupAnchorY: pointerBox.top + pointerBox.height,
                 hiddenMarkers,
                 hiddenMarkerOpacity: hiddenMarker
                   ? Number.parseFloat(getComputedStyle(hiddenMarker.querySelector('.camp-marker')).opacity || "1")
                   : null,
                 hiddenMarkerTop: hiddenMarkerBox ? hiddenMarkerBox.top : null,
                 hiddenMarkerCenterX: hiddenMarkerBox ? hiddenMarkerBox.left + hiddenMarkerBox.width / 2 : null,
+                hiddenMarkerBottom: hiddenMarkerBox ? hiddenMarkerBox.bottom : null,
+                hiddenMarkerPointX: hiddenMarkerPointerBox ? hiddenMarkerPointerBox.left + hiddenMarkerPointerBox.width / 2 : null,
+                hiddenMarkerPointY: hiddenMarkerPointerBox ? hiddenMarkerPointerBox.top + hiddenMarkerPointerBox.height : null,
                 mapUiOpacity: mapUi ? Number.parseFloat(getComputedStyle(mapUi).opacity || "1") : 1,
                 popupOpenClass: mapWrap ? mapWrap.classList.contains('popup-open') : false,
+                titleFamily: getComputedStyle(title).fontFamily,
+                titleAlign: getComputedStyle(title).textAlign,
+                priceText: price.textContent,
               };
             }
         """
@@ -360,7 +372,7 @@ class UiSmokeTests(unittest.TestCase):
                 click_x,
                 click_y,
             )
-            page.wait_for_selector(".camp-popup-shell", timeout=10000)
+            page.wait_for_selector(".map-popup-widget__dialog--leaflet", timeout=10000)
             page.wait_for_timeout(1200)
 
             geometry = page.evaluate(measure_js)
@@ -373,22 +385,28 @@ class UiSmokeTests(unittest.TestCase):
         self.assertIsNotNone(geometry)
         self.assertGreaterEqual(geometry["shellWidth"], 384)
         self.assertLessEqual(geometry["shellWidth"], 392)
-        self.assertGreaterEqual(geometry["mediaHeight"], 252)
-        self.assertLessEqual(geometry["mediaHeight"], 260)
-        self.assertTrue(all(46 <= height <= 52 for height in geometry["actionHeights"]))
-        self.assertTrue(abs(geometry["actionWidths"][0] - geometry["actionWidths"][1]) <= 4 or max(geometry["actionWidths"]) >= 320)
-        self.assertTrue(52 <= geometry["closeWidth"] <= 60)
-        self.assertTrue(52 <= geometry["closeHeight"] <= 60)
+        self.assertGreaterEqual(geometry["mediaHeight"], 280)
+        self.assertLessEqual(geometry["mediaHeight"], 292)
+        self.assertTrue(all(80 <= height <= 100 for height in geometry["actionHeights"]))
+        self.assertTrue(all(width >= 140 for width in geometry["actionWidths"]))
+        self.assertTrue(54 <= geometry["closeWidth"] <= 66)
+        self.assertTrue(54 <= geometry["closeHeight"] <= 66)
         self.assertGreaterEqual(geometry["hiddenMarkers"], 1)
         self.assertIsNotNone(geometry["hiddenMarkerOpacity"])
         self.assertLessEqual(geometry["hiddenMarkerOpacity"], 0.05)
         self.assertIsNotNone(geometry["hiddenMarkerTop"])
         self.assertIsNotNone(geometry["hiddenMarkerCenterX"])
+        self.assertIsNotNone(geometry["hiddenMarkerBottom"])
+        self.assertIsNotNone(geometry["hiddenMarkerPointX"])
+        self.assertIsNotNone(geometry["hiddenMarkerPointY"])
         self.assertGreaterEqual(geometry["mapUiOpacity"], 0.95)
         self.assertTrue(geometry["popupOpenClass"])
-        self.assertLess(geometry["shellBottom"], geometry["hiddenMarkerTop"] + 32)
-        self.assertLess(abs(geometry["pointerCenterX"] - geometry["hiddenMarkerCenterX"]), 32)
-        self.assertLessEqual(geometry["pointerTop"], geometry["hiddenMarkerTop"] + 24)
+        self.assertLess(abs(geometry["shellBottom"] - geometry["hiddenMarkerBottom"]), 24)
+        self.assertLess(abs(geometry["popupAnchorX"] - geometry["hiddenMarkerPointX"]), 2)
+        self.assertLess(abs((geometry["popupAnchorY"] + 12) - geometry["hiddenMarkerPointY"]), 10)
+        self.assertIn("Rooftop Regular", geometry["titleFamily"])
+        self.assertEqual(geometry["titleAlign"], "left")
+        self.assertTrue(geometry["priceText"])
         self.assertIsNotNone(moved_geometry)
         self.assertTrue(
             abs(moved_geometry["shellTop"] - geometry["shellTop"]) >= 8

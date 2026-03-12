@@ -1017,7 +1017,7 @@ function campPinIcon(camp){
   const delay = ((Number(camp?.id) || 0) % 7) * 45;
   const iconSize = meta.isVip ? [136, 90] : [124, 84];
   const iconAnchor = meta.isVip ? [68, 70] : [62, 66];
-  const popupAnchor = meta.isVip ? [0, -64] : [0, -60];
+  const popupAnchor = [0, 12];
 
   return L.divIcon({
     html: `
@@ -1070,6 +1070,7 @@ let activeCampPopupMountBase = null;
 let campPopupHost = null;
 let campPopupSyncRaf = 0;
 let campPopupCenterTimer = 0;
+const LEAFLET_POPUP_EXIT_MS = 320;
 
 function getMapWrap(){
   try { return map && map.getContainer ? map.getContainer().closest('.map-wrap') : null; } catch(_) { return null; }
@@ -1113,7 +1114,7 @@ function campPopupPosition(host, camp, marker){
     if (iconEl && hostRect) {
       const iconRect = iconEl.getBoundingClientRect();
       anchorX = (iconRect.left - hostRect.left) + (iconRect.width / 2);
-      anchorY = (iconRect.top - hostRect.top) + 12;
+      anchorY = (iconRect.top - hostRect.top) + Math.round(iconRect.height * 0.78);
     } else {
       const latlng = marker && typeof marker.getLatLng === 'function'
         ? marker.getLatLng()
@@ -1153,6 +1154,53 @@ function setCampPopupMarkerHidden(marker, hidden){
       marker._icon.classList.toggle('is-popup-hidden', Boolean(hidden));
     }
   } catch(_) {}
+}
+
+function getCampPopupHostFromMarker(marker, popupContainer){
+  if (marker && marker.__popupHost) return marker.__popupHost;
+  try {
+    if (popupContainer && popupContainer.querySelector) {
+      return popupContainer.querySelector('.camp-popup-react-host');
+    }
+  } catch(_) {}
+  return null;
+}
+
+function getCampMarkerMorphRect(marker){
+  try {
+    const iconEl = marker && marker._icon ? marker._icon : null;
+    const badgeEl = iconEl && iconEl.querySelector ? iconEl.querySelector('.camp-marker__badge') : null;
+    const target = badgeEl || iconEl;
+    if (!target || !target.getBoundingClientRect) return null;
+    const rect = target.getBoundingClientRect();
+    return {
+      x: 0,
+      y: 0,
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+    };
+  } catch(_) {
+    return null;
+  }
+}
+
+function requestLeafletCampPopupClose(marker){
+  if (!marker) return;
+  try {
+    if (marker.__popupClosing) return;
+    marker.__popupClosing = true;
+    const popup = typeof marker.getPopup === 'function' ? marker.getPopup() : null;
+    const cont = popup && popup._container ? popup._container : null;
+    const host = getCampPopupHostFromMarker(marker, cont);
+    if (host && window.TouristMapPopupWidget && typeof window.TouristMapPopupWidget.unmount === 'function') {
+      window.TouristMapPopupWidget.unmount(host);
+      setTimeout(() => {
+        try { marker.closePopup(); } catch(_) {}
+      }, LEAFLET_POPUP_EXIT_MS);
+      return;
+    }
+  } catch(_) {}
+  try { marker.closePopup(); } catch(_) {}
 }
 
 function renderActiveCampPopup(){
@@ -1318,7 +1366,7 @@ map.on('popupopen', (e) => {
 
     const camp = src && src.__campData ? src.__campData : null;
     if (cont && camp && window.TouristMapPopupWidget && typeof window.TouristMapPopupWidget.mount === 'function') {
-      const host = cont.querySelector('.camp-popup-react-host');
+      const host = getCampPopupHostFromMarker(src, cont);
       if (host) {
         const meta = campMarkerMeta(camp);
         const priceValue = Number(camp?.min_price);
@@ -1327,6 +1375,7 @@ map.on('popupopen', (e) => {
           mode: 'leaflet',
           markerType: meta.type,
           isVIP: meta.isVip,
+          markerRect: getCampMarkerMorphRect(src),
           data: {
             name: String(camp?.name || 'База отдыха'),
             image: camp?.photo_main ? String(camp.photo_main) : '',
@@ -1334,7 +1383,7 @@ map.on('popupopen', (e) => {
             priceDescription: hasPrice ? 'за человека' : 'стоимость уточняйте',
           },
           onClose: () => {
-            try { src.closePopup(); } catch(_) {}
+            requestLeafletCampPopupClose(src);
           },
           onDetails: () => {
             try { src.closePopup(); } catch(_) {}
@@ -1393,17 +1442,21 @@ map.on('popupopen', (e) => {
 map.on('popupclose', (e) => {
   try {
     const src = e && e.popup ? (e.popup._source || null) : null;
-    if (src) setCampPopupMarkerHidden(src, false);
+    const closingAnimated = Boolean(src && src.__popupClosing);
+    if (src) {
+      setCampPopupMarkerHidden(src, false);
+    }
     if (!src || src === activeCampMarker) setActiveCampMarker(null);
     const cont = e && e.popup && e.popup._container ? e.popup._container : null;
     const wrap = map && map.getContainer ? map.getContainer().closest('.map-wrap') : null;
     if (wrap) wrap.classList.remove('popup-open');
     try {
-      const host = cont && cont.querySelector ? cont.querySelector('.camp-popup-react-host') : null;
-      if (host && window.TouristMapPopupWidget && typeof window.TouristMapPopupWidget.unmount === 'function') {
+      const host = getCampPopupHostFromMarker(src, cont);
+      if (host && window.TouristMapPopupWidget && typeof window.TouristMapPopupWidget.unmount === 'function' && !closingAnimated) {
         window.TouristMapPopupWidget.unmount(host);
       }
     } catch(_) {}
+    if (src) src.__popupClosing = false;
     if (cont) __stopPopupEmojiLoop(cont);
   } catch(_) {}
 });
