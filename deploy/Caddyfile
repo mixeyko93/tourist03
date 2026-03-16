@@ -3,6 +3,10 @@
   # email you@example.com
 }
 
+http://45.153.71.21 {
+  reverse_proxy app:8000
+}
+
 {$DOMAIN_ROOT}, www.{$DOMAIN_ROOT} {
   reverse_proxy app:8000
 }
@@ -28,4 +32,3 @@
 
   reverse_proxy app:8000
 }
-

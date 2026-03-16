@@ -24,6 +24,9 @@ frontend/dist/
 frontend/*.tsbuildinfo
 frontend/vite.config.js
 frontend/vite.config.d.ts
+frontend/*.zip
+frontend/src/assets/fonts/__MACOSX/
+frontend/src/assets/fonts/t2 Rooftop + Template/
 
 # === PyCharm project files ===
 *.iml
@@ -47,6 +50,12 @@ backup/
 # === System files ===
 Thumbs.db
 desktop.ini
+
+# === Xcode / iOS ===
+DerivedData/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
 
 # === Media uploads / cache ===
 uploads/
