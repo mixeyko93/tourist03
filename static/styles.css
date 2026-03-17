@@ -646,7 +646,14 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 }
 
 /* ====================== MAP ====================== */
-.map-wrap{position:relative; height:calc(100vh - 110px); margin:16px; border-radius:16px; overflow:hidden;}
+.map-wrap{
+  position:relative;
+  height:calc(100vh - 110px);
+  height:calc(100dvh - 110px);
+  margin:0;
+  border-radius:0;
+  overflow:hidden;
+}
 #map{position:absolute; inset:0; z-index:0;}
 .map-ui{position:absolute; inset:0; pointer-events:none; z-index:500; transition:opacity .2s ease, transform .2s ease;}
 .map-wrap.popup-open #map{z-index:0;}
