@@ -35,6 +35,7 @@
   document.addEventListener('pointerdown', (e) => {
     const t = e.target.closest(pressableSel);
     if (!t) return;
+    if (t.closest('.map-ui')) return;
     t.style.transform = 'scale(0.97)';
     t.style.transition = 'transform .08s ease';
   });
@@ -42,6 +43,7 @@
     document.addEventListener(ev, (e) => {
       const t = e.target.closest(pressableSel);
       if (!t) return;
+      if (t.closest('.map-ui')) return;
       t.style.transform = '';
     });
   });

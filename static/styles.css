@@ -24,6 +24,16 @@
   --border-color: rgba(255,255,255,0.10);
   --blue: var(--tg-link);
   --tabbar-offset: 12px;
+  --tabbar-safe-bottom: max(12px, env(safe-area-inset-bottom));
+  --tabbar-reserve: calc(82px + var(--tabbar-safe-bottom));
+  --map-shell-bg: #000000;
+  --map-frame-bg: #d8d8de;
+  --glass-bg: rgba(26,26,26,0.90);
+  --glass-bg-strong: rgba(26,26,26,0.95);
+  --glass-bg-hover: rgba(42,42,42,0.90);
+  --glass-border: rgba(255,255,255,0.10);
+  --glass-shadow: 0 24px 48px rgba(0,0,0,0.32);
+  --glass-shadow-soft: 0 18px 36px rgba(0,0,0,0.24);
 
   --modal-overlay: rgba(0,0,0,0.62);
   --modal-bg: rgba(17,19,23,.92);
@@ -71,9 +81,9 @@
 html, body{
   height:100%;
   margin:0;
-  background:var(--tg-bg);
+  background:var(--map-shell-bg);
   color:var(--tg-text);
-  font-family:system-ui,-apple-system,Roboto,sans-serif;
+  font-family:"Manrope", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   overscroll-behavior:auto;
   overflow:hidden;
   overflow-x:hidden;
@@ -81,6 +91,13 @@ html, body{
 }
 *{box-sizing:border-box;}
 .tg-app{position:fixed; inset:0; display:flex; flex-direction:column; overflow:hidden;}
+.tab-content{min-height:0;}
+#tab-map{
+  flex:1 1 auto;
+  min-height:0;
+  padding:12px 12px calc(var(--tabbar-reserve) + 4px);
+  background:var(--map-shell-bg);
+}
 .page-title{font-size:24px; font-weight:800; margin:18px 18px 14px; text-align:left !important;}
 .page-title.greet-title{
   text-align:left !important;
@@ -137,9 +154,16 @@ html, body{
   flex-direction:column;
   height:100%;
   overflow:auto;
-  padding-bottom:calc(110px + var(--tabbar-offset));
+  padding-bottom:var(--tabbar-reserve);
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+}
+#tab-services,
+#tab-help{
+  height:100%;
+  overflow:auto;
+  padding-bottom:var(--tabbar-reserve);
+  -webkit-overflow-scrolling:touch;
 }
 .account-shell{
   flex:1;
@@ -313,19 +337,47 @@ html, body{
 
 /* ====================== TABBAR ====================== */
 .tabbar{
-  position:fixed; left:0; right:0;
-  bottom:calc(env(safe-area-inset-bottom) + var(--tabbar-offset));
-  padding:10px 12px calc(env(safe-area-inset-bottom) + 10px);
-  background:var(--card-bg);
-  border-top:1px solid var(--border-color);
-  display:flex; gap:8px; align-items:stretch;
+  position:fixed;
+  left:50%;
+  bottom:var(--tabbar-safe-bottom);
+  width:min(calc(100% - 24px), 720px);
+  transform:translateX(-50%);
+  display:flex;
+  gap:0;
+  align-items:stretch;
+  padding:4px 8px;
+  background:var(--glass-bg-strong);
+  border:1px solid var(--glass-border);
+  border-radius:24px;
+  box-shadow:var(--glass-shadow);
+  backdrop-filter:blur(24px);
+  -webkit-backdrop-filter:blur(24px);
   z-index:1000;
 }
-.tabbar .tab{flex:1 1 0; min-width:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; color:var(--tg-hint);}
+.tabbar .tab{
+  flex:1 1 0;
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:2px;
+  padding:6px 4px 8px;
+  border-radius:14px;
+  color:#9ca3af;
+  transition:color .18s ease, background .18s ease;
+}
 .tabbar .tab .icon{width:28px; height:28px; display:flex; align-items:center; justify-content:center;}
 .tabbar .tab .icon svg, .tabbar .tab .icon img{width:28px; height:28px; display:block;}
-.tabbar .tab .label{font-size:12px; white-space:nowrap; opacity:.85; text-align:center;}
-.tabbar .tab.active{color:var(--blue);}
+.tabbar .tab .label{
+  font-size:12px;
+  font-weight:700;
+  line-height:1.1;
+  white-space:nowrap;
+  opacity:1;
+  text-align:center;
+}
+.tabbar .tab.active{color:#3b82f6;}
 body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 
 /* ====================== MODAL ====================== */
@@ -1213,13 +1265,21 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 /* ====================== MAP ====================== */
 .map-wrap{
   position:relative;
-  height:calc(100vh - 110px);
-  height:calc(100dvh - 110px);
+  height:100%;
   margin:0;
-  border-radius:0;
+  border-radius:28px;
   overflow:hidden;
+  background:var(--map-frame-bg);
+  box-shadow:
+    0 28px 64px rgba(0,0,0,0.48),
+    0 8px 24px rgba(0,0,0,0.18);
 }
-#map{position:absolute; inset:0; z-index:0;}
+#map{
+  position:absolute;
+  inset:0;
+  z-index:0;
+  background:var(--map-frame-bg);
+}
 .map-ui{position:absolute; inset:0; pointer-events:none; z-index:500; transition:opacity .2s ease, transform .2s ease;}
 .map-wrap.popup-open #map{z-index:0;}
 .map-wrap.popup-open .map-ui{opacity:1; transform:none; pointer-events:none;}
@@ -1249,34 +1309,67 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 .map-load-error-text{margin-top:8px;color:var(--tg-hint);line-height:1.35;}
 .map-load-error-btn{margin-top:12px;width:100%;}
 .map-btn{
-  pointer-events:auto; position:absolute; bottom:18px; border:none; background:none; box-shadow:none;
-  padding:0; cursor:pointer; transition:transform .12s ease;
-}
-.map-btn.left{left:18px;}
-.map-btn.right{right:18px;}
-.map-btn.text-btn{
-  top:18px;
-  bottom:auto;
-  height:34px;
-  padding:0 12px;
-  border-radius:18px;
-  background:#0E1621;
-  border:2px solid #7EB6FF;
+  pointer-events:auto;
+  position:absolute;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:56px;
+  height:56px;
+  padding:0;
+  border:1px solid var(--glass-border);
+  border-radius:999px;
+  background:var(--glass-bg);
+  box-shadow:var(--glass-shadow);
+  backdrop-filter:blur(24px);
+  -webkit-backdrop-filter:blur(24px);
   color:#fff;
-  font-weight:800;
-  font-size:12px;
-  box-shadow:0 10px 28px rgba(0,0,0,0.35), 0 0 0 1px rgba(126,182,255,0.18);
+  cursor:pointer;
+  transition:transform .12s ease, background-color .18s ease, box-shadow .18s ease;
 }
-.map-btn.text-btn:active{transform:scale(.98);}
-.map-btn:hover{background:none; box-shadow:none;}
+.map-btn.left{left:16px;}
+.map-btn.right{right:16px;}
+.map-btn.text-btn{
+  top:16px;
+  bottom:auto;
+  width:38px;
+  height:38px;
+  border:1px solid rgba(255,255,255,0.05);
+  background:rgba(42,42,42,0.90);
+}
+.map-btn:hover{background:var(--glass-bg-hover);}
 .map-btn:not(.cart-btn):active{transform:scale(.96);}
-.map-btn.filter-active{filter:drop-shadow(0 10px 28px rgba(34,197,94,.7));}
-.map-ui .map-btn .tg-emoji{width:64px; height:64px; display:block;}
-/* календарь чуть меньше компаса */
-#openBookingFilter .tg-emoji{transform:scale(0.74); transform-origin:center center;}
+.map-btn.filter-active{
+  background:rgba(26,48,33,0.94);
+  border-color:rgba(74,222,128,0.36);
+  box-shadow:
+    0 0 0 8px rgba(34,197,94,0.18),
+    var(--glass-shadow-soft);
+}
+.map-btn__glyph{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:100%;
+  height:100%;
+}
+.map-btn__glyph svg{
+  width:24px;
+  height:24px;
+  display:block;
+  fill:none;
+  stroke:currentColor;
+  stroke-width:2;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+.map-btn.text-btn .map-btn__glyph svg{
+  width:16px;
+  height:16px;
+}
 
 /* Черновик бронирования — кнопка над календарём */
-.map-btn.draft{bottom:94px;}
+.map-btn.draft{bottom:16px;}
 .map-btn.draft.cart-btn{
   display:flex;
   align-items:center;
@@ -1285,11 +1378,14 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   transform:translate3d(-50%,0,0);
   transform-origin:center center;
   backface-visibility:hidden;
-  bottom:18px;
-  width:64px;
-  height:64px;
+  bottom:12px;
+  width:68px;
+  height:68px;
   border-radius:50%;
   overflow:visible;
+  background:var(--glass-bg);
+  border:2px solid rgba(59,130,246,0.30);
+  box-shadow:var(--glass-shadow);
   /* No transform transition to prevent Android jump */
   transition:
     width .38s cubic-bezier(.2,.9,.2,1),
@@ -1302,10 +1398,13 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   /* Force no transform changes */
   will-change:auto;
 }
-.map-btn.draft.cart-btn .tg-emoji{
-  width:64px;
-  height:64px;
-  display:block;
+.map-btn.draft.cart-btn .map-btn__glyph{
+  width:100%;
+  height:100%;
+}
+.map-btn.draft.cart-btn .map-btn__glyph svg{
+  width:32px;
+  height:32px;
   transition:opacity .24s ease, transform .24s ease;
 }
 .map-btn.draft.cart-btn .draft-toast-text{
@@ -1323,13 +1422,13 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 }
 .map-btn.draft.cart-btn.draft-toast{
   width:190px;
-  height:34px;
-  border-radius:18px;
-  background:#0E1621;
+  height:38px;
+  border-radius:20px;
+  background:var(--glass-bg-strong);
   border:2px solid rgba(34,197,94,0.9);
-  box-shadow:0 10px 28px rgba(0,0,0,0.35), 0 0 0 1px rgba(34,197,94,0.18);
+  box-shadow:0 18px 36px rgba(0,0,0,0.28), 0 0 0 1px rgba(34,197,94,0.18);
 }
-.map-btn.draft.cart-btn.draft-toast .tg-emoji{
+.map-btn.draft.cart-btn.draft-toast .map-btn__glyph{
   opacity:0;
   transform:scale(0.9);
 }
@@ -1354,41 +1453,28 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   transform:translate3d(-50%,0,0) !important;
   opacity:0.85;
 }
-.map-btn.draft.cart-btn:active .tg-emoji,
-.map-btn.draft.cart-btn:focus .tg-emoji{
+.map-btn.draft.cart-btn:active .map-btn__glyph svg,
+.map-btn.draft.cart-btn:focus .map-btn__glyph svg{
   transform:scale(0.92);
 }
 .map-btn.draft .map-badge{
   position:absolute;
   top:-2px;
   right:-2px;
-  min-width:20px;
-  height:20px;
+  min-width:24px;
+  height:24px;
   padding:0 6px;
   border-radius:999px;
-  background:var(--tg-button);
-  color:var(--tg-button-text);
+  background:#3b82f6;
+  color:#fff;
   font-size:12px;
   font-weight:800;
   display:flex;
   align-items:center;
   justify-content:center;
-  border:2px solid rgba(14,22,33,0.95);
-  box-shadow:0 6px 14px rgba(0,0,0,0.35);
+  border:0;
+  box-shadow:0 10px 20px rgba(59,130,246,0.36);
   box-sizing:border-box;
-}
-
-/* подсветка активного фильтра */
-#openBookingFilter.filter-active .tg-emoji,
-#toggleFilters.filter-active .tg-emoji{
-  box-shadow:
-    0 0 0 8px rgba(34,197,94,0.26),
-    0 0 0 14px rgba(34,197,94,0.12),
-    0 12px 28px rgba(0,0,0,0.45);
-  border-radius:50%;
-  background:rgba(34,197,94,0.22);
-  transform:scale(0.78);
-  transform-origin:center center;
 }
 
 /* Ошибка в полях бронирования/фильтра */
@@ -1611,16 +1697,91 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 }
 .snackbar-action:active{transform:scale(.98);}
 @keyframes snackIn{from{opacity:0; transform:translateX(-50%) translateY(-10px)} to{opacity:1; transform:translateX(-50%) translateY(0)}}
-/* уменьшили геолокацию */
-#geoBtn .tg-emoji {
-  transform:scale(0.83);
-  transform-origin:center center;
-}
-
 /* Anti-overscroll (не отдаём жесты «шторке» Telegram) */
 html, body, .tg-app, .map-wrap, #map{overscroll-behavior:none;}
 html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !important;}
 #map, .leaflet-container{touch-action:pan-x pan-y;}
+
+@media (min-width: 768px){
+  #tab-map{
+    padding:24px 24px calc(104px + max(12px, env(safe-area-inset-bottom)));
+  }
+
+  .map-wrap{
+    border-radius:32px;
+  }
+
+  .map-btn{
+    width:72px;
+    height:72px;
+  }
+
+  .map-btn.left{left:24px;}
+  .map-btn.right{right:24px;}
+
+  .map-btn.text-btn{
+    top:24px;
+    width:44px;
+    height:44px;
+  }
+
+  .map-btn.text-btn .map-btn__glyph svg{
+    width:20px;
+    height:20px;
+  }
+
+  .map-btn:not(.text-btn) .map-btn__glyph svg{
+    width:28px;
+    height:28px;
+  }
+
+  .map-btn.draft{
+    bottom:24px;
+  }
+
+  .map-btn.draft.cart-btn{
+    bottom:16px;
+    width:84px;
+    height:84px;
+  }
+
+  .map-btn.draft.cart-btn .map-btn__glyph svg{
+    width:34px;
+    height:34px;
+  }
+
+  .map-btn.draft .map-badge{
+    min-width:28px;
+    height:28px;
+    font-size:13px;
+  }
+
+  .tabbar{
+    width:min(calc(100% - 48px), 720px);
+    padding:6px 16px;
+    border-radius:32px;
+  }
+
+  .tabbar .tab{
+    gap:4px;
+    padding:6px 8px 10px;
+  }
+
+  .tabbar .tab .icon{
+    width:32px;
+    height:32px;
+  }
+
+  .tabbar .tab .icon svg,
+  .tabbar .tab .icon img{
+    width:32px;
+    height:32px;
+  }
+
+  .tabbar .tab .label{
+    font-size:14px;
+  }
+}
 
 /* ====================== CLUSTERS & POPUPS ====================== */
 .camp-popup{
