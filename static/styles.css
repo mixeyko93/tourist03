@@ -1374,12 +1374,12 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   stroke-linejoin:round;
 }
 .map-btn--filter .map-btn__glyph svg{
-  width:25px;
-  height:25px;
+  width:22px;
+  height:22px;
 }
 .map-btn--geo .map-btn__glyph svg{
-  width:24px;
-  height:24px;
+  width:21px;
+  height:21px;
 }
 .map-btn.text-btn .map-btn__glyph svg{
   width:18px;
@@ -1421,8 +1421,8 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   height:100%;
 }
 .map-btn.draft.cart-btn .map-btn__glyph svg{
-  width:30px;
-  height:30px;
+  width:26px;
+  height:26px;
   transition:opacity .24s ease, transform .24s ease;
 }
 .map-btn.draft.cart-btn .draft-toast-text{
@@ -1751,8 +1751,8 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 
   .map-btn--filter .map-btn__glyph svg,
   .map-btn--geo .map-btn__glyph svg{
-    width:28px;
-    height:28px;
+    width:25px;
+    height:25px;
   }
 
   .map-btn.draft{
@@ -1766,8 +1766,8 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   }
 
   .map-btn.draft.cart-btn .map-btn__glyph svg{
-    width:34px;
-    height:34px;
+    width:30px;
+    height:30px;
   }
 
   .map-btn.draft .map-badge{
