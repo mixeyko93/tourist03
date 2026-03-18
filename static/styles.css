@@ -1380,6 +1380,7 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 .map-btn--geo .map-btn__glyph svg{
   width:24px;
   height:24px;
+  transform:translateY(1px);
 }
 .map-btn.text-btn .map-btn__glyph svg{
   width:18px;
