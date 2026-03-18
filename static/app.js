@@ -1167,7 +1167,7 @@ function campPopupPosition(host, camp, marker){
   const hostWidth = Math.max(0, Number(frame?.clientWidth) || 0);
   const hostHeight = Math.max(0, Number(frame?.clientHeight) || 0);
   const sidePad = 10;
-  const width = Math.max(240, Math.min(420, hostWidth - sidePad * 2));
+  const width = Math.max(320, Math.min(360, hostWidth - sidePad * 2));
   const hostRect = frame?.getBoundingClientRect ? frame.getBoundingClientRect() : null;
 
   let anchorX = hostWidth / 2;
@@ -4470,18 +4470,17 @@ function campDetailIconSvg(kind, meta){
   }
 }
 
-function campDetailFacts(camp, meta){
-  const unitLabel = titleCaseLabel(housingLabelGenPluralWord(camp?.housing_type));
+function campDetailFacts(camp){
   return [
     { label: 'Озеро', value: camp?.lake_name || '—', icon: 'water' },
-    { label: unitLabel || 'Апартаментов', value: camp?.rooms_count ?? '—', icon: 'units' },
-    { label: 'BBQ общая', value: formatCampDetailCount(camp?.bbq_shared_count), icon: 'bbq' },
-    { label: 'BBQ личная', value: formatCampDetailCount(camp?.bbq_count), icon: 'bbq' },
     { label: 'Баня', value: formatCampDetailCount(camp?.bath_count), icon: 'bath' },
+    { label: 'Апартаментов', value: camp?.rooms_count ?? '—', icon: 'units' },
     { label: 'Сауна', value: formatCampDetailCount(camp?.sauna_count), icon: 'sauna' },
+    { label: 'BBQ общая', value: formatCampDetailCount(camp?.bbq_shared_count), icon: 'bbq' },
     { label: 'Бассейн общий', value: formatCampDetailCount(camp?.pools_shared_count), icon: 'pool' },
+    { label: 'BBQ личная', value: formatCampDetailCount(camp?.bbq_count), icon: 'bbq' },
     { label: 'Бассейн личный', value: formatCampDetailCount(camp?.pools_private_count), icon: 'pool' },
-  ].map((item) => ({ ...item, iconHtml: campDetailIconSvg(item.icon, meta) }));
+  ].map((item) => ({ label: item.label, value: item.value }));
 }
 
 // === Детали базы (модалка «Подробнее») — layout и анимации по Figma, данные из реального backend ===
@@ -4501,13 +4500,8 @@ async function openDetails(campId, opts = {}){
     const meta = campMarkerMeta(camp);
     const pics = ((photos && photos.length) ? photos.map((p) => p?.url) : (camp.photo_main ? [camp.photo_main] : []))
       .filter(Boolean);
-    const descHtml = escapeHtml(camp.description || 'Описание пока отсутствует').replace(/\n/g,'<br>');
     const safeName = escapeHtml(camp.name || 'База');
-    const ht = normalizeHousingType(camp.housing_type);
-    const housingBtn = escapeHtml(housingLabelTitle(ht));
-    const facts = campDetailFacts(camp, meta);
-    const leftFacts = facts.slice(0, 4);
-    const rightFacts = facts.slice(4, 8);
+    const facts = campDetailFacts(camp);
     const showBookInGallery = !(opts && opts.showBookInGallery === false);
 
     let modal = takeoverMiniLoaderAsModal();
@@ -4531,26 +4525,9 @@ async function openDetails(campId, opts = {}){
             </svg>
           </button>
 
-          <div class="camp-detail__ornament" aria-hidden="true">
-            <svg viewBox="0 0 200 200">
-              <circle cx="154" cy="46" r="82"></circle>
-              <circle cx="118" cy="84" r="54"></circle>
-            </svg>
-          </div>
-
           <div class="camp-detail__scroll">
             <div class="camp-detail__header">
-              <div class="camp-detail__title-row">
-                <h2 class="camp-detail__title">${safeName}</h2>
-                ${meta.isVip ? `
-                  <span class="camp-detail__vip-badge" aria-label="VIP">
-                    <svg viewBox="0 0 20 20" aria-hidden="true">
-                      <path d="M9.05 2.93c.3-.92 1.6-.92 1.9 0l1.07 3.29a1 1 0 0 0 .95.69h3.46c.97 0 1.37 1.24.59 1.81l-2.8 2.03a1 1 0 0 0-.37 1.12l1.07 3.29c.3.92-.75 1.69-1.54 1.12l-2.8-2.04a1 1 0 0 0-1.17 0l-2.8 2.04c-.78.57-1.84-.2-1.54-1.12l1.07-3.29a1 1 0 0 0-.36-1.12L2.98 8.72c-.79-.57-.38-1.81.58-1.81h3.47a1 1 0 0 0 .95-.69l1.07-3.29Z"></path>
-                    </svg>
-                  </span>
-                ` : ''}
-              </div>
-              <div class="camp-detail__desc">${descHtml}</div>
+              <h2 class="camp-detail__title">${safeName}</h2>
             </div>
 
             <div class="camp-detail__gallery">
@@ -4596,12 +4573,6 @@ async function openDetails(campId, opts = {}){
                 }
 
                 ${
-                  pics.length
-                    ? `<div class="camp-detail__counter">1 / ${pics.length}</div>`
-                    : ''
-                }
-
-                ${
                   pics.length > 1
                     ? `
                       <div class="camp-detail__dots" role="tablist" aria-label="Переключение фото">
@@ -4616,36 +4587,20 @@ async function openDetails(campId, opts = {}){
             </div>
 
             <div class="camp-detail__facts">
-              <div class="camp-detail__facts-col">
-                ${leftFacts.map((fact, index) => `
-                  <div class="camp-detail__fact" style="--detail-delay:${320 + index * 55}ms;">
-                    <div class="camp-detail__fact-row">
-                      <span class="camp-detail__fact-icon" aria-hidden="true">${fact.iconHtml}</span>
-                      <span class="camp-detail__fact-label">${escapeHtml(fact.label)}</span>
-                      <span class="camp-detail__fact-value">${escapeHtml(String(fact.value))}</span>
-                    </div>
+              ${facts.map((fact, index) => `
+                <div class="camp-detail__fact" style="--detail-delay:${320 + index * 55}ms;">
+                  <div class="camp-detail__fact-row">
+                    <span class="camp-detail__fact-label">${escapeHtml(fact.label)}</span>
+                    <span class="camp-detail__fact-value">${escapeHtml(String(fact.value))}</span>
                   </div>
-                `).join('')}
-              </div>
-
-              <div class="camp-detail__facts-col">
-                ${rightFacts.map((fact, index) => `
-                  <div class="camp-detail__fact" style="--detail-delay:${320 + index * 55}ms;">
-                    <div class="camp-detail__fact-row">
-                      <span class="camp-detail__fact-icon" aria-hidden="true">${fact.iconHtml}</span>
-                      <span class="camp-detail__fact-label">${escapeHtml(fact.label)}</span>
-                      <span class="camp-detail__fact-value">${escapeHtml(String(fact.value))}</span>
-                    </div>
-                  </div>
-                `).join('')}
-              </div>
+                </div>
+              `).join('')}
             </div>
           </div>
 
           <div class="camp-detail__actions">
+            <button type="button" class="camp-detail__action camp-detail__action--housing">Апартаменты</button>
             <button type="button" class="camp-detail__action camp-detail__action--book">Забронировать</button>
-            <button type="button" class="camp-detail__action camp-detail__action--housing">${housingBtn}</button>
-            <button type="button" class="camp-detail__action camp-detail__action--back">Назад</button>
           </div>
         </div>
       </div>
@@ -4661,12 +4616,10 @@ async function openDetails(campId, opts = {}){
     };
 
     const closeBtn = modal.querySelector('.camp-detail__close');
-    const backBtn = modal.querySelector('.camp-detail__action--back');
     const bookBtn = modal.querySelector('.camp-detail__action--book');
     const housingBtnEl = modal.querySelector('.camp-detail__action--housing');
 
     if (closeBtn) closeBtn.onclick = () => { hapticPulse('light', 10); closeDetails(); };
-    if (backBtn) backBtn.onclick = () => { hapticPulse('light', 10); closeDetails(); };
     if (bookBtn) bookBtn.onclick = () => { hapticPulse('soft', 14); openBookingFilterWithAuth(campId); };
     if (housingBtnEl) housingBtnEl.onclick = () => { hapticPulse('light', 12); closeDetails(); openCampHousing(campId); };
 
