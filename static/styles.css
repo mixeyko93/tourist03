@@ -2635,6 +2635,8 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   line-height:1;
   font-weight:700;
   letter-spacing:-0.02em;
+  font-variant-numeric:tabular-nums;
+  font-feature-settings:"tnum" 1, "lnum" 1;
 }
 .bk-picker-trigger[aria-expanded="true"]{
   background:#333333;
@@ -2790,11 +2792,15 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 }
 .bk-wheel-scroll{
   height:100%;
+  overflow-x:hidden;
   overflow-y:auto;
   padding:48px 0;
   scroll-snap-type:y mandatory;
   scrollbar-width:none;
   -ms-overflow-style:none;
+  overscroll-behavior-x:none;
+  overscroll-behavior-y:contain;
+  touch-action:pan-y;
 }
 .bk-wheel-scroll::-webkit-scrollbar{display:none;}
 .bk-wheel-fade{
@@ -2827,6 +2833,7 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   z-index:2;
 }
 .bk-wheel-item{
+  width:100%;
   height:48px;
   display:flex;
   align-items:center;
@@ -2836,6 +2843,9 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   font-size:30px;
   line-height:1;
   font-weight:600;
+  white-space:nowrap;
+  font-variant-numeric:tabular-nums;
+  font-feature-settings:"tnum" 1, "lnum" 1;
   opacity:.42;
   transform:scale(.90);
   transition:color .18s ease, opacity .18s ease, transform .18s ease;
