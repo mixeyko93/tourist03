@@ -1414,8 +1414,8 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   height:25px;
 }
 .map-btn--geo .map-btn__glyph svg{
-  width:24px;
-  height:24px;
+  width:36px;
+  height:36px;
   transform:translateY(1px);
 }
 .map-btn.text-btn .map-btn__glyph svg{
@@ -1789,8 +1789,8 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 
   .map-btn--filter .map-btn__glyph svg,
   .map-btn--geo .map-btn__glyph svg{
-    width:28px;
-    height:28px;
+    width:42px;
+    height:42px;
   }
 
   .map-btn.draft{
