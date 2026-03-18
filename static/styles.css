@@ -25,7 +25,8 @@
   --blue: var(--tg-link);
   --tabbar-offset: 12px;
   --tabbar-safe-bottom: max(12px, env(safe-area-inset-bottom));
-  --tabbar-reserve: calc(82px + var(--tabbar-safe-bottom));
+  --tabbar-lift: 10px;
+  --tabbar-reserve: calc(82px + var(--tabbar-safe-bottom) + var(--tabbar-lift));
   --map-shell-bg: #000000;
   --map-frame-bg: #d8d8de;
   --glass-bg: rgba(26,26,26,0.90);
@@ -339,7 +340,7 @@ html, body{
 .tabbar{
   position:fixed;
   left:50%;
-  bottom:var(--tabbar-safe-bottom);
+  bottom:calc(var(--tabbar-safe-bottom) + var(--tabbar-lift));
   width:min(calc(100% - 24px), 720px);
   transform:translateX(-50%);
   display:flex;
