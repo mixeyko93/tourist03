@@ -2893,6 +2893,12 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   animation:bookingGlassIn .34s cubic-bezier(.18,.9,.28,1) both;
 }
 .dp-title{
+  position:relative;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-height:52px;
+  overflow:hidden;
   margin:0;
   color:#fff;
   text-align:center;
@@ -2900,6 +2906,48 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   line-height:1.15;
   font-weight:800;
   letter-spacing:-0.02em;
+}
+.dp-title.is-animating{
+  animation:dp-title-pulse .26s ease;
+}
+.dp-title__text{
+  position:absolute;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:100%;
+  text-align:center;
+  will-change:transform, opacity, filter;
+}
+.dp-title__text--current{
+  transform:translateY(0);
+  opacity:1;
+}
+.dp-title__text--old{
+  transform:translateY(0);
+  opacity:1;
+  filter:blur(0);
+}
+.dp-title__text--new{
+  transform:translateY(18px) scale(.985);
+  opacity:0;
+  filter:blur(1px);
+}
+.dp-title.is-animating .dp-title__text--old{
+  transform:translateY(-12px) scale(.98);
+  opacity:0;
+  filter:blur(1px);
+}
+.dp-title.is-animating .dp-title__text--new{
+  transform:translateY(0) scale(1);
+  opacity:1;
+  filter:blur(0);
+}
+@keyframes dp-title-pulse{
+  0%{transform:translateY(0) scale(1);}
+  40%{transform:translateY(-1px) scale(1.02);}
+  100%{transform:translateY(0) scale(1);}
 }
 .dp-top{
   display:grid;
@@ -3022,13 +3070,15 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 }
 .dp-day:active{transform:scale(.96);}
 .dp-day.in-range:not(.selected){
-  background:rgba(59,130,246,.14);
-  border-color:rgba(59,130,246,.24);
+  background:rgba(59,130,246,.28);
+  border-color:rgba(96,165,250,.44);
+  box-shadow:inset 0 0 0 1px rgba(147,197,253,.18);
 }
 .dp-day.selected{
   border-color:#3b82f6;
-  background:transparent;
-  box-shadow:0 0 0 1px rgba(59,130,246,.22);
+  background:#3b82f6;
+  color:#fff;
+  box-shadow:0 16px 26px rgba(59,130,246,.22), 0 0 0 1px rgba(147,197,253,.25);
 }
 .dp-day.today{
   border-color:rgba(255,255,255,.18);

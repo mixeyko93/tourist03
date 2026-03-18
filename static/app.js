@@ -5831,6 +5831,8 @@ function setupBookingFilterElements(container, opts, isBooking, titleText) {
     const cancelBtn = overlay.querySelector('#dpCancel');
     const resetBtn = overlay.querySelector('#dpReset');
     const saveBtn = overlay.querySelector('#dpSave');
+    let titleAnimTimer = null;
+    let lastTitle = '';
 
     const monthNames = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
     monthSel.innerHTML = monthNames.map((n, i) => `<option value="${i}">${n}</option>`).join('');
@@ -5840,7 +5842,54 @@ function setupBookingFilterElements(container, opts, isBooking, titleText) {
     for (let y = nowY - 2; y <= nowY + 6; y++) years.push(y);
     yearSel.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join('');
 
-    const close = () => { try { overlay.remove(); } catch(_) {} };
+    const close = () => {
+      clearTimeout(titleAnimTimer);
+      try { overlay.remove(); } catch(_) {}
+    };
+
+    const setTitle = (nextTitle) => {
+      if (!kindEl) return;
+      const text = String(nextTitle || '');
+      if (!text || text === lastTitle) return;
+      const shouldAnimate = !!lastTitle;
+      lastTitle = text;
+
+      clearTimeout(titleAnimTimer);
+      kindEl.classList.remove('is-animating');
+      kindEl.innerHTML = '';
+
+      const oldSpan = document.createElement('span');
+      oldSpan.className = 'dp-title__text dp-title__text--old';
+      oldSpan.textContent = shouldAnimate ? (kindEl.dataset.currentText || '') : text;
+
+      const newSpan = document.createElement('span');
+      newSpan.className = 'dp-title__text dp-title__text--new';
+      newSpan.textContent = text;
+
+      if (!shouldAnimate) {
+        newSpan.classList.add('is-current');
+        kindEl.appendChild(newSpan);
+        kindEl.dataset.currentText = text;
+        return;
+      }
+
+      kindEl.appendChild(oldSpan);
+      kindEl.appendChild(newSpan);
+      kindEl.dataset.currentText = text;
+
+      requestAnimationFrame(() => {
+        kindEl.classList.add('is-animating');
+      });
+
+      titleAnimTimer = setTimeout(() => {
+        kindEl.classList.remove('is-animating');
+        kindEl.innerHTML = '';
+        const current = document.createElement('span');
+        current.className = 'dp-title__text dp-title__text--current';
+        current.textContent = text;
+        kindEl.appendChild(current);
+      }, 260);
+    };
 
     const canSave = () => {
       if (!tempFrom || !tempTo) return false;
@@ -5893,9 +5942,9 @@ function setupBookingFilterElements(container, opts, isBooking, titleText) {
       if (!gridEl) return;
 
       if (kindEl) {
-        kindEl.textContent = step === 'from'
+        setTitle(step === 'from'
           ? 'Выберите дату заезда'
-          : (step === 'to' ? 'Выберите дату выезда' : 'Выбранный период проживания');
+          : (step === 'to' ? 'Выберите дату выезда' : 'Выбранный период проживания'));
       }
       updateActions();
 
@@ -6048,6 +6097,9 @@ function setupBookingFilterElements(container, opts, isBooking, titleText) {
     }
 
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+    if (kindEl) {
+      kindEl.dataset.currentText = '';
+    }
     render();
   }
 
