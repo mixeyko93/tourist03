@@ -1374,10 +1374,14 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 .map-btn--filter{
   left:18px;
   bottom:18px;
+  width:50px;
+  height:50px;
 }
 .map-btn--geo{
   right:18px;
   bottom:18px;
+  width:50px;
+  height:50px;
 }
 .map-btn--refresh{
   top:16px;
@@ -1774,6 +1778,11 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 
   .map-btn--filter{left:24px; bottom:24px;}
   .map-btn--geo{right:24px; bottom:24px;}
+  .map-btn--filter,
+  .map-btn--geo{
+    width:64px;
+    height:64px;
+  }
 
   .map-btn.text-btn{
     top:24px;
