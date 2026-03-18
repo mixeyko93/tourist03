@@ -1315,8 +1315,8 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   display:flex;
   align-items:center;
   justify-content:center;
-  width:56px;
-  height:56px;
+  width:52px;
+  height:52px;
   padding:0;
   border:1px solid var(--glass-border);
   border-radius:999px;
@@ -1374,12 +1374,12 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   stroke-linejoin:round;
 }
 .map-btn--filter .map-btn__glyph svg{
-  width:22px;
-  height:22px;
+  width:25px;
+  height:25px;
 }
 .map-btn--geo .map-btn__glyph svg{
-  width:21px;
-  height:21px;
+  width:24px;
+  height:24px;
 }
 .map-btn.text-btn .map-btn__glyph svg{
   width:18px;
@@ -1397,8 +1397,8 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   transform-origin:center center;
   backface-visibility:hidden;
   bottom:14px;
-  width:68px;
-  height:68px;
+  width:62px;
+  height:62px;
   border-radius:50%;
   overflow:visible;
   background:var(--glass-bg);
@@ -1421,8 +1421,8 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   height:100%;
 }
 .map-btn.draft.cart-btn .map-btn__glyph svg{
-  width:26px;
-  height:26px;
+  width:30px;
+  height:30px;
   transition:opacity .24s ease, transform .24s ease;
 }
 .map-btn.draft.cart-btn .draft-toast-text{
@@ -1730,8 +1730,8 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   }
 
   .map-btn{
-    width:72px;
-    height:72px;
+    width:68px;
+    height:68px;
   }
 
   .map-btn--filter{left:24px; bottom:24px;}
@@ -1751,8 +1751,8 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 
   .map-btn--filter .map-btn__glyph svg,
   .map-btn--geo .map-btn__glyph svg{
-    width:25px;
-    height:25px;
+    width:28px;
+    height:28px;
   }
 
   .map-btn.draft{
@@ -1761,13 +1761,13 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 
   .map-btn.draft.cart-btn{
     bottom:18px;
-    width:84px;
-    height:84px;
+    width:78px;
+    height:78px;
   }
 
   .map-btn.draft.cart-btn .map-btn__glyph svg{
-    width:30px;
-    height:30px;
+    width:34px;
+    height:34px;
   }
 
   .map-btn.draft .map-badge{
