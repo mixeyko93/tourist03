@@ -2930,24 +2930,30 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   filter:blur(0);
 }
 .dp-title__text--new{
-  transform:translateY(18px) scale(.985);
+  transform:translateY(18px) scale(.94);
   opacity:0;
-  filter:blur(1px);
-}
-.dp-title.is-animating .dp-title__text--old{
-  transform:translateY(-12px) scale(.98);
-  opacity:0;
-  filter:blur(1px);
+  filter:blur(1.5px);
 }
 .dp-title.is-animating .dp-title__text--new{
-  transform:translateY(0) scale(1);
-  opacity:1;
-  filter:blur(0);
+  animation:dp-title-pop .32s cubic-bezier(.2,1.15,.24,1) both;
+}
+.dp-title.is-animating .dp-title__text--old{
+  animation:dp-title-away .24s cubic-bezier(.2,.8,.2,1) both;
 }
 @keyframes dp-title-pulse{
   0%{transform:translateY(0) scale(1);}
   40%{transform:translateY(-1px) scale(1.02);}
   100%{transform:translateY(0) scale(1);}
+}
+@keyframes dp-title-pop{
+  0%{transform:translateY(16px) scale(.92); opacity:0; filter:blur(2px);}
+  48%{transform:translateY(-8px) scale(1.10); opacity:1; filter:blur(0);}
+  72%{transform:translateY(3px) scale(.985); opacity:1; filter:blur(0);}
+  100%{transform:translateY(0) scale(1); opacity:1; filter:blur(0);}
+}
+@keyframes dp-title-away{
+  0%{transform:translateY(0) scale(1); opacity:1; filter:blur(0);}
+  100%{transform:translateY(-12px) scale(.95); opacity:0; filter:blur(1px);}
 }
 .dp-top{
   display:grid;
@@ -3070,15 +3076,20 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 }
 .dp-day:active{transform:scale(.96);}
 .dp-day.in-range:not(.selected){
-  background:rgba(59,130,246,.28);
-  border-color:rgba(96,165,250,.44);
-  box-shadow:inset 0 0 0 1px rgba(147,197,253,.18);
+  background:rgba(59,130,246,.34);
+  border-color:rgba(96,165,250,.52);
+  box-shadow:
+    inset 0 0 0 1px rgba(147,197,253,.22),
+    0 0 0 1px rgba(59,130,246,.10);
 }
 .dp-day.selected{
   border-color:#3b82f6;
   background:#3b82f6;
   color:#fff;
-  box-shadow:0 16px 26px rgba(59,130,246,.22), 0 0 0 1px rgba(147,197,253,.25);
+  box-shadow:
+    0 16px 26px rgba(59,130,246,.26),
+    0 0 0 1px rgba(147,197,253,.28),
+    0 0 16px rgba(96,165,250,.14);
 }
 .dp-day.today{
   border-color:rgba(255,255,255,.18);

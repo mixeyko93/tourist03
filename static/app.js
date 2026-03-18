@@ -5858,20 +5858,22 @@ function setupBookingFilterElements(container, opts, isBooking, titleText) {
       kindEl.classList.remove('is-animating');
       kindEl.innerHTML = '';
 
+      if (!shouldAnimate) {
+        const currentSpan = document.createElement('span');
+        currentSpan.className = 'dp-title__text dp-title__text--current';
+        currentSpan.textContent = text;
+        kindEl.appendChild(currentSpan);
+        kindEl.dataset.currentText = text;
+        return;
+      }
+
       const oldSpan = document.createElement('span');
       oldSpan.className = 'dp-title__text dp-title__text--old';
-      oldSpan.textContent = shouldAnimate ? (kindEl.dataset.currentText || '') : text;
+      oldSpan.textContent = kindEl.dataset.currentText || '';
 
       const newSpan = document.createElement('span');
       newSpan.className = 'dp-title__text dp-title__text--new';
       newSpan.textContent = text;
-
-      if (!shouldAnimate) {
-        newSpan.classList.add('is-current');
-        kindEl.appendChild(newSpan);
-        kindEl.dataset.currentText = text;
-        return;
-      }
 
       kindEl.appendChild(oldSpan);
       kindEl.appendChild(newSpan);
