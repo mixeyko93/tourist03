@@ -29,7 +29,7 @@
 <script defer src="/static/scroll.js?v=2026-01-10-31"></script>
 
   <!-- Наши стили -->
-<link rel="stylesheet" href="/static/styles.css?v=2026-03-18-01" />
+<link rel="stylesheet" href="/static/styles.css?v=2026-03-18-02" />
 <link rel="stylesheet" href="/static/map-popup-widget/map-popup-widget.css?v=2026-03-17-08" />
 
 
@@ -44,7 +44,7 @@
 <div class="map-ui">
   <!-- Телеграм-emoji (локальные SVG), статично на всех ОС -->
 <!-- Календарь -->
-<button class="map-btn left" id="openBookingFilter" title="Выбрать даты" aria-label="Выбрать даты">
+<button class="map-btn map-btn--filter" id="openBookingFilter" title="Выбрать даты" aria-label="Выбрать даты">
   <span class="map-btn__glyph" aria-hidden="true">
     <svg viewBox="0 0 24 24" fill="none">
       <path d="M8 2v4"/>
@@ -56,35 +56,33 @@
 </button>
 
 <!-- Черновик бронирования (корзина) -->
-<button class="map-btn left draft cart-btn" id="openBookingDraft" title="Корзина бронирования" aria-label="Корзина бронирования">
+<button class="map-btn draft cart-btn map-btn--cart" id="openBookingDraft" title="Корзина бронирования" aria-label="Корзина бронирования">
   <span class="map-btn__glyph" aria-hidden="true">
     <svg viewBox="0 0 24 24" fill="none">
-      <circle cx="8" cy="21" r="1"/>
-      <circle cx="19" cy="21" r="1"/>
-      <path d="M2.05 2.05h2l2.66 12.42A2 2 0 0 0 8.66 16h9.78a2 2 0 0 0 1.95-1.57L23 6H6"/>
+      <circle cx="9" cy="20" r="1"/>
+      <circle cx="18" cy="20" r="1"/>
+      <path d="M3 4h2l2.4 10.2a2 2 0 0 0 2 1.55h7.9a2 2 0 0 0 1.94-1.5L22 7H7.2"/>
     </svg>
   </span>
   <span class="map-badge" id="bookingDraftBadge" aria-hidden="true" style="display:none;">1</span>
 </button>
 
 <!-- Компас -->
-<button class="map-btn right" id="geoBtn" title="Моё местоположение" aria-label="Моё местоположение">
+<button class="map-btn map-btn--geo" id="geoBtn" title="Моё местоположение" aria-label="Моё местоположение">
   <span class="map-btn__glyph" aria-hidden="true">
     <svg viewBox="0 0 24 24" fill="none">
-      <path d="M12 21s-8-6-8-12a8 8 0 1 1 16 0c0 6-8 12-8 12Z"/>
-      <circle cx="12" cy="9" r="3"/>
+      <path d="M12 21s-7-5.5-7-11a7 7 0 1 1 14 0c0 5.5-7 11-7 11Z"/>
+      <circle cx="12" cy="10" r="2.75"/>
     </svg>
   </span>
 </button>
 
 <!-- Обновить карту -->
-<button class="map-btn right text-btn" id="refreshMap" type="button" title="Обновить карту" aria-label="Обновить карту">
+<button class="map-btn text-btn map-btn--refresh" id="refreshMap" type="button" title="Обновить карту" aria-label="Обновить карту">
   <span class="map-btn__glyph" aria-hidden="true">
     <svg viewBox="0 0 24 24" fill="none">
       <path d="M21 2v6h-6"/>
-      <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
-      <path d="M3 22v-6h6"/>
-      <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+      <path d="M20 11a8 8 0 1 1-2.34-5.66L21 8"/>
     </svg>
   </span>
 </button>
@@ -194,9 +192,9 @@
   </div>
 
   <!-- Скрипты -->
-  <script defer src="/static/ui.js?v=2026-03-18-01"></script>
+  <script defer src="/static/ui.js?v=2026-03-18-02"></script>
   <script defer src="/static/map-popup-widget/map-popup-widget.js?v=2026-03-17-08"></script>
-  <script defer src="/static/app.js?v=2026-03-18-01"></script>
+  <script defer src="/static/app.js?v=2026-03-18-02"></script>
 
 </body>
 </html>
