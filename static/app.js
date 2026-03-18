@@ -1051,13 +1051,65 @@ function campPinIcon(camp){
 let lastMapView = null;
 map.on('moveend', () => { lastMapView = { center: map.getCenter(), zoom: map.getZoom() }; });
 
+function overlayPaddingTop(el, mapRect, extra = 24){
+  if (!el || !mapRect) return 0;
+  const rect = el.getBoundingClientRect();
+  if (rect.bottom <= mapRect.top || rect.top >= mapRect.bottom) return 0;
+  return Math.max(0, rect.bottom - mapRect.top + extra);
+}
+
+function overlayPaddingRight(el, mapRect, extra = 24){
+  if (!el || !mapRect) return 0;
+  const rect = el.getBoundingClientRect();
+  if (rect.right <= mapRect.left || rect.left >= mapRect.right) return 0;
+  return Math.max(0, mapRect.right - rect.left + extra);
+}
+
+function overlayPaddingBottom(el, mapRect, extra = 28){
+  if (!el || !mapRect) return 0;
+  const rect = el.getBoundingClientRect();
+  if (rect.bottom <= mapRect.top || rect.top >= mapRect.bottom) return 0;
+  return Math.max(0, mapRect.bottom - rect.top + extra);
+}
+
+function getMapFitPadding(){
+  const mapEl = document.getElementById('map');
+  if (!mapEl) return { paddingTopLeft: [28, 72], paddingBottomRight: [96, 128] };
+
+  const mapRect = mapEl.getBoundingClientRect();
+  const refreshBtn = document.getElementById('refreshMap');
+  const filterBtn = document.getElementById('openBookingFilter');
+  const draftBtn = document.getElementById('openBookingDraft');
+  const geoBtn = document.getElementById('geoBtn');
+
+  const top = Math.max(
+    36,
+    overlayPaddingTop(refreshBtn, mapRect, 26)
+  );
+  const right = Math.max(
+    36,
+    overlayPaddingRight(refreshBtn, mapRect, 24)
+  );
+  const bottom = Math.max(
+    104,
+    overlayPaddingBottom(filterBtn, mapRect, 24),
+    overlayPaddingBottom(draftBtn, mapRect, 24),
+    overlayPaddingBottom(geoBtn, mapRect, 24)
+  );
+
+  return {
+    paddingTopLeft: [36, Math.round(top)],
+    paddingBottomRight: [Math.round(right), Math.round(bottom)],
+  };
+}
+
 function restoreMapView() {
   setTimeout(() => {
     map.invalidateSize();
     if (lastMapView) {
       map.setView(lastMapView.center, lastMapView.zoom, { animate: false });
     } else if (typeof cluster !== 'undefined' && cluster.getLayers && cluster.getLayers().length) {
-      map.fitBounds(cluster.getBounds(), { padding: [20,20] });
+      map.fitBounds(cluster.getBounds(), getMapFitPadding());
     }
   }, 60);
 }
