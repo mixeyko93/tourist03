@@ -2935,10 +2935,10 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   filter:blur(1.5px);
 }
 .dp-title.is-animating .dp-title__text--new{
-  animation:dp-title-pop .32s cubic-bezier(.2,1.15,.24,1) both;
+  animation:dp-title-pop .46s cubic-bezier(.22,.98,.18,1) both;
 }
 .dp-title.is-animating .dp-title__text--old{
-  animation:dp-title-away .24s cubic-bezier(.2,.8,.2,1) both;
+  animation:dp-title-away .34s cubic-bezier(.22,.86,.22,1) both;
 }
 @keyframes dp-title-pulse{
   0%{transform:translateY(0) scale(1);}
@@ -2946,14 +2946,14 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   100%{transform:translateY(0) scale(1);}
 }
 @keyframes dp-title-pop{
-  0%{transform:translateY(16px) scale(.92); opacity:0; filter:blur(2px);}
-  48%{transform:translateY(-8px) scale(1.10); opacity:1; filter:blur(0);}
-  72%{transform:translateY(3px) scale(.985); opacity:1; filter:blur(0);}
+  0%{transform:translateY(14px) scale(.95); opacity:0; filter:blur(1.6px);}
+  42%{transform:translateY(-6px) scale(1.055); opacity:1; filter:blur(0);}
+  72%{transform:translateY(2px) scale(.992); opacity:1; filter:blur(0);}
   100%{transform:translateY(0) scale(1); opacity:1; filter:blur(0);}
 }
 @keyframes dp-title-away{
   0%{transform:translateY(0) scale(1); opacity:1; filter:blur(0);}
-  100%{transform:translateY(-12px) scale(.95); opacity:0; filter:blur(1px);}
+  100%{transform:translateY(-9px) scale(.975); opacity:0; filter:blur(.8px);}
 }
 .dp-top{
   display:grid;
