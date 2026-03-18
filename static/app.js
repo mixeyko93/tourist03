@@ -4324,7 +4324,100 @@ async function loadCamps() {
   }
 }
 
-// === Детали базы (модалка «Подробнее») — стабильные параметры, галерея со стрелками/свайпом ===
+function formatCampDetailCount(value){
+  const num = Number(value);
+  if (!Number.isFinite(num) || num < 0) return '—';
+  return `${num} шт.`;
+}
+
+function titleCaseLabel(value){
+  const text = String(value || '').trim();
+  if (!text) return '';
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function campDetailIconSvg(kind, meta){
+  switch (kind) {
+    case 'units':
+      return meta?.icon || `
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="6" y="5" width="12" height="14"></rect>
+          <path d="M9 8h2M13 8h2M9 11h2M13 11h2M9 14h2M13 14h2"></path>
+          <rect x="10" y="16" width="4" height="3"></rect>
+        </svg>
+      `;
+    case 'water':
+      return `
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 3c2.9 3.42 4.5 5.82 4.5 8.2A4.5 4.5 0 0 1 12 15.7a4.5 4.5 0 0 1-4.5-4.5C7.5 8.82 9.1 6.42 12 3Z"></path>
+          <path d="M5 18c1.5 1.2 3.25 1.8 5.25 1.8S14 19.2 16 18"></path>
+          <path d="M3 21c2.1-1.4 4.45-2.1 7.05-2.1 2.62 0 4.97.7 7.05 2.1"></path>
+        </svg>
+      `;
+    case 'bbq':
+      return `
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M13 3c1.2 1.15 1.56 2.58 1.06 4.3"></path>
+          <path d="M9.5 4.25c.96.94 1.23 2.08.8 3.4"></path>
+          <path d="M15.5 7.2c2.57 1 3.85 2.67 3.85 5 0 2.87-2.32 5.2-5.18 5.2H10.2C7.34 17.4 5 15.07 5 12.2c0-2.22 1.2-3.84 3.6-4.86"></path>
+          <path d="M10 17.4 8.8 21"></path>
+          <path d="M14.2 17.4 15.4 21"></path>
+        </svg>
+      `;
+    case 'bath':
+      return `
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M7 6.5c0-1.38 1.12-2.5 2.5-2.5 1 0 1.9.6 2.3 1.5"></path>
+          <path d="M4.5 12h15"></path>
+          <path d="M6 12v2.4c0 2.1 1.7 3.8 3.8 3.8h4.4c2.1 0 3.8-1.7 3.8-3.8V12"></path>
+          <path d="M8 18.3 7.2 20"></path>
+          <path d="M16 18.3 16.8 20"></path>
+          <path d="M9 8.5v3.5"></path>
+        </svg>
+      `;
+    case 'sauna':
+      return `
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M8 4c.9 1 .9 2.15 0 3.2-.9 1.06-.9 2.2 0 3.3"></path>
+          <path d="M12 4c.9 1 .9 2.15 0 3.2-.9 1.06-.9 2.2 0 3.3"></path>
+          <path d="M16 4c.9 1 .9 2.15 0 3.2-.9 1.06-.9 2.2 0 3.3"></path>
+          <path d="M5.5 14.5h13"></path>
+          <path d="M7 14.5v2.2c0 1.82 1.48 3.3 3.3 3.3h3.4c1.82 0 3.3-1.48 3.3-3.3v-2.2"></path>
+        </svg>
+      `;
+    case 'pool':
+      return `
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 9.5v7"></path>
+          <path d="M5 9.5c0-1.7 1.34-3 3-3h1.5c1.66 0 3 1.3 3 3v7"></path>
+          <path d="M12.5 16.5c1.12.9 2.37 1.35 3.75 1.35S18.87 17.4 20 16.5"></path>
+          <path d="M4 19c1.15.9 2.42 1.35 3.8 1.35S10.45 19.9 11.6 19c1.13-.9 2.4-1.35 3.8-1.35S18.07 18.1 19.2 19"></path>
+        </svg>
+      `;
+    default:
+      return `
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="7"></circle>
+        </svg>
+      `;
+  }
+}
+
+function campDetailFacts(camp, meta){
+  const unitLabel = titleCaseLabel(housingLabelGenPluralWord(camp?.housing_type));
+  return [
+    { label: 'Озеро', value: camp?.lake_name || '—', icon: 'water' },
+    { label: unitLabel || 'Апартаментов', value: camp?.rooms_count ?? '—', icon: 'units' },
+    { label: 'BBQ общая', value: formatCampDetailCount(camp?.bbq_shared_count), icon: 'bbq' },
+    { label: 'BBQ личная', value: formatCampDetailCount(camp?.bbq_count), icon: 'bbq' },
+    { label: 'Баня', value: formatCampDetailCount(camp?.bath_count), icon: 'bath' },
+    { label: 'Сауна', value: formatCampDetailCount(camp?.sauna_count), icon: 'sauna' },
+    { label: 'Бассейн общий', value: formatCampDetailCount(camp?.pools_shared_count), icon: 'pool' },
+    { label: 'Бассейн личный', value: formatCampDetailCount(camp?.pools_private_count), icon: 'pool' },
+  ].map((item) => ({ ...item, iconHtml: campDetailIconSvg(item.icon, meta) }));
+}
+
+// === Детали базы (модалка «Подробнее») — layout и анимации по Figma, данные из реального backend ===
 async function openDetails(campId, opts = {}){
   showMiniLoader();
   try {
@@ -4338,158 +4431,297 @@ async function openDetails(campId, opts = {}){
       window.__campsById ||= {};
       window.__campsById[Number(campId)] = camp;
     } catch(_) {}
-    const pics = (photos && photos.length) ? photos.map(p=>p.url) : (camp.photo_main ? [camp.photo_main] : []);
-    const descHtml = (camp.description || 'Описание пока отсутствует').replace(/\n/g,'<br>');
+    const meta = campMarkerMeta(camp);
+    const pics = ((photos && photos.length) ? photos.map((p) => p?.url) : (camp.photo_main ? [camp.photo_main] : []))
+      .filter(Boolean);
+    const descHtml = escapeHtml(camp.description || 'Описание пока отсутствует').replace(/\n/g,'<br>');
+    const safeName = escapeHtml(camp.name || 'База');
     const ht = normalizeHousingType(camp.housing_type);
-    const housingBtn = housingLabelTitle(ht);
+    const housingBtn = escapeHtml(housingLabelTitle(ht));
+    const facts = campDetailFacts(camp, meta);
+    const leftFacts = facts.slice(0, 4);
+    const rightFacts = facts.slice(4, 8);
+    const showBookInGallery = !(opts && opts.showBookInGallery === false);
 
     let modal = takeoverMiniLoaderAsModal();
     if (!modal) {
       modal = document.createElement('div');
-      modal.className = 'modal show';
+      modal.className = 'modal show camp-detail-overlay';
       modal.style.opacity = '0';
       modal.style.transition = 'opacity .12s ease-out';
       document.body.appendChild(modal);
+    } else {
+      modal.className = 'modal show camp-detail-overlay';
     }
 
     modal.innerHTML = `
-      <div class="modal-card details">
-        <div class="details-title">${camp.name || 'База'}</div>
-        <div class="details-desc">${descHtml}</div>
+      <div class="camp-detail-shell ${meta.isVip ? 'is-vip' : ''}" style="--detail-accent:${meta.color}; --detail-rgb:${meta.rgb};">
+        <div class="modal-card camp-detail-modal">
+          <button type="button" class="camp-detail__close" aria-label="Закрыть">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 6 18 18"></path>
+              <path d="m18 6-12 12"></path>
+            </svg>
+          </button>
 
-        <div class="details-body">
-          <div class="camp-gal">
-            <div class="viewport">${
-              pics.map(u => `
-                <img src="${u}"
-                     alt=""
-                     draggable="false"
-                     loading="eager"
-                     decoding="sync"
-                     fetchpriority="high"
-                     referrerpolicy="no-referrer">
-              `).join('')
-            }</div>
-
-            <div class="gal-arrow left"  id="galPrev">‹</div>
-            <div class="gal-arrow right" id="galNext">›</div>
-            <div class="gal-counter" id="galCounter">1/${Math.max(pics.length,1)} →</div>
+          <div class="camp-detail__ornament" aria-hidden="true">
+            <svg viewBox="0 0 200 200">
+              <circle cx="154" cy="46" r="82"></circle>
+              <circle cx="118" cy="84" r="54"></circle>
+            </svg>
           </div>
 
-          <!-- Сетка 2×4: параметр + значение РЯДОМ, ячейки в два столбца -->
-          <div class="param-list grid2">
-            ${[
-              ['Озеро',                   camp.lake_name || '—'],
-              ['Апартаментов',            camp.rooms_count ?? '—'],
-              ['BBQ общая',              `${camp.bbq_shared_count ?? 0} шт.`],
-              ['BBQ личная',             `${camp.bbq_count ?? 0} шт.`],                // было «индивидуальная»
-              ['Баня',                   `${camp.bath_count ?? 0} шт.`],
-              ['Сауна',                  `${camp.sauna_count ?? 0} шт.`],
-              ['Бассейн общий',          `${camp.pools_shared_count ?? 0} шт.`],
-              ['Бассейн личный',         `${camp.pools_private_count ?? 0} шт.`]      // было «индивидуальный»
-            ].map(([k,v]) => `
-              <div class="param-item">
-                <div class="param-row"><div class="k">${k}</div><div class="v">${v}</div></div>
+          <div class="camp-detail__scroll">
+            <div class="camp-detail__header">
+              <div class="camp-detail__title-row">
+                <h2 class="camp-detail__title">${safeName}</h2>
+                ${meta.isVip ? `
+                  <span class="camp-detail__vip-badge" aria-label="VIP">
+                    <svg viewBox="0 0 20 20" aria-hidden="true">
+                      <path d="M9.05 2.93c.3-.92 1.6-.92 1.9 0l1.07 3.29a1 1 0 0 0 .95.69h3.46c.97 0 1.37 1.24.59 1.81l-2.8 2.03a1 1 0 0 0-.37 1.12l1.07 3.29c.3.92-.75 1.69-1.54 1.12l-2.8-2.04a1 1 0 0 0-1.17 0l-2.8 2.04c-.78.57-1.84-.2-1.54-1.12l1.07-3.29a1 1 0 0 0-.36-1.12L2.98 8.72c-.79-.57-.38-1.81.58-1.81h3.47a1 1 0 0 0 .95-.69l1.07-3.29Z"></path>
+                    </svg>
+                  </span>
+                ` : ''}
               </div>
-            `).join('')}
+              <div class="camp-detail__desc">${descHtml}</div>
+            </div>
+
+            <div class="camp-detail__gallery">
+              <div class="camp-detail__gallery-frame">
+                ${
+                  pics.length
+                    ? `
+                      <div class="camp-detail__gallery-viewport">
+                        <div class="camp-detail__gallery-track">${
+                          pics.map((u, index) => `
+                            <div class="camp-detail__gallery-slide" data-gallery-index="${index}">
+                              <img src="${escapeHtml(String(u))}"
+                                   alt="${safeName} — фото ${index + 1}"
+                                   draggable="false"
+                                   loading="eager"
+                                   decoding="sync"
+                                   fetchpriority="high"
+                                   referrerpolicy="no-referrer">
+                              ${meta.isVip ? '<div class="camp-detail__gallery-shine" aria-hidden="true"></div>' : ''}
+                            </div>
+                          `).join('')
+                        }</div>
+                      </div>
+                    `
+                    : `
+                      <div class="camp-detail__gallery-empty">
+                        <span>Фото скоро появятся</span>
+                      </div>
+                    `
+                }
+
+                ${
+                  pics.length > 1
+                    ? `
+                      <button type="button" class="camp-detail__arrow camp-detail__arrow--prev" aria-label="Предыдущее фото">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>
+                      </button>
+                      <button type="button" class="camp-detail__arrow camp-detail__arrow--next" aria-label="Следующее фото">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg>
+                      </button>
+                    `
+                    : ''
+                }
+
+                ${
+                  pics.length
+                    ? `<div class="camp-detail__counter">1 / ${pics.length}</div>`
+                    : ''
+                }
+
+                ${
+                  pics.length > 1
+                    ? `
+                      <div class="camp-detail__dots" role="tablist" aria-label="Переключение фото">
+                        ${pics.map((_, index) => `
+                          <button type="button" class="camp-detail__dot ${index === 0 ? 'is-active' : ''}" data-gal-index="${index}" aria-label="Фото ${index + 1}"></button>
+                        `).join('')}
+                      </div>
+                    `
+                    : ''
+                }
+              </div>
+            </div>
+
+            <div class="camp-detail__facts">
+              <div class="camp-detail__facts-col">
+                ${leftFacts.map((fact, index) => `
+                  <div class="camp-detail__fact" style="--detail-delay:${320 + index * 55}ms;">
+                    <div class="camp-detail__fact-row">
+                      <span class="camp-detail__fact-icon" aria-hidden="true">${fact.iconHtml}</span>
+                      <span class="camp-detail__fact-label">${escapeHtml(fact.label)}</span>
+                      <span class="camp-detail__fact-value">${escapeHtml(String(fact.value))}</span>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+
+              <div class="camp-detail__facts-col">
+                ${rightFacts.map((fact, index) => `
+                  <div class="camp-detail__fact" style="--detail-delay:${320 + index * 55}ms;">
+                    <div class="camp-detail__fact-row">
+                      <span class="camp-detail__fact-icon" aria-hidden="true">${fact.iconHtml}</span>
+                      <span class="camp-detail__fact-label">${escapeHtml(fact.label)}</span>
+                      <span class="camp-detail__fact-value">${escapeHtml(String(fact.value))}</span>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
           </div>
 
-        </div>
-
-        <div class="actions" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
-          <button class="button" style="background:#22c55e;border-color:#22c55e;color:#fff" onclick="openBookingFilterWithAuth(${campId})">Забронировать</button>
-          <button class="button primary" onclick="openCampHousing(${campId})">${housingBtn}</button>
-          <button class="button ghost" onclick="document.body.removeChild(this.closest('.modal'))">Назад</button>
+          <div class="camp-detail__actions">
+            <button type="button" class="camp-detail__action camp-detail__action--book">Забронировать</button>
+            <button type="button" class="camp-detail__action camp-detail__action--housing">${housingBtn}</button>
+            <button type="button" class="camp-detail__action camp-detail__action--back">Назад</button>
+          </div>
         </div>
       </div>
     `;
 
-    // ---- Мини-галерея (стрелки + свайп, без проскока) ----
-    const vp = modal.querySelector('.camp-gal .viewport');
-    const imgs = vp ? vp.querySelectorAll('img') : [];
-    const btnPrev = modal.querySelector('#galPrev');
-    const btnNext = modal.querySelector('#galNext');
-    const counter = modal.querySelector('#galCounter');
+    let isClosed = false;
+    let onKeyDown = null;
+    const closeDetails = () => {
+      if (isClosed) return;
+      isClosed = true;
+      try { if (onKeyDown) window.removeEventListener('keydown', onKeyDown); } catch (_) {}
+      if (modal && modal.parentNode) modal.parentNode.removeChild(modal);
+    };
 
-    // фикс ленты: ширина = N*100%, каждый кадр занимает 100% окна
-    const N = Math.max(imgs.length, 1);
-    if (vp) {
+    const closeBtn = modal.querySelector('.camp-detail__close');
+    const backBtn = modal.querySelector('.camp-detail__action--back');
+    const bookBtn = modal.querySelector('.camp-detail__action--book');
+    const housingBtnEl = modal.querySelector('.camp-detail__action--housing');
+
+    if (closeBtn) closeBtn.onclick = () => { hapticPulse('light', 10); closeDetails(); };
+    if (backBtn) backBtn.onclick = () => { hapticPulse('light', 10); closeDetails(); };
+    if (bookBtn) bookBtn.onclick = () => { hapticPulse('soft', 14); openBookingFilterWithAuth(campId); };
+    if (housingBtnEl) housingBtnEl.onclick = () => { hapticPulse('light', 12); closeDetails(); openCampHousing(campId); };
+
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal) closeDetails();
+    });
+
+    onKeyDown = (event) => {
+      if (event.key === 'Escape') closeDetails();
+    };
+    window.addEventListener('keydown', onKeyDown);
+
+    const vp = modal.querySelector('.camp-detail__gallery-track');
+    const slides = vp ? Array.from(vp.querySelectorAll('.camp-detail__gallery-slide')) : [];
+    const imgs = slides.map((slide) => slide.querySelector('img')).filter(Boolean);
+    const btnPrev = modal.querySelector('.camp-detail__arrow--prev');
+    const btnNext = modal.querySelector('.camp-detail__arrow--next');
+    const counter = modal.querySelector('.camp-detail__counter');
+    const dots = Array.from(modal.querySelectorAll('.camp-detail__dot'));
+    const N = slides.length;
+
+    if (vp && N) {
       vp.style.width = `${N * 100}%`;
-      imgs.forEach(img => { img.style.width = `${100 / N}%`; });
-    }
-
-    let i = 0;
-    let locked = false;     // защита от «пролёта»
-    function updateUI(){
-      const left  = (i > 0)     ? '← ' : '';
-      const right = (i < N - 1) ? ' →' : '';
-      counter.textContent = `${left}${i+1}/${N}${right}`;
-      btnPrev.classList.toggle('disabled', i === 0);
-      btnNext.classList.toggle('disabled', i === N-1);
-    }
-function go(to){
-  if (!vp || locked) return;
-  const clamped = Math.max(0, Math.min(N-1, to));
-  if (clamped === i) { updateUI(); return; }
-  locked = true;                      // пока идёт анимация — блокируем дальнейшие переходы
-  i = clamped;
-
-  // ВАЖНО: трек шириной N*100%, каждый кадр = 100/N%.
-  // Сдвигаем на долю кадра, а не на 100% всего трека.
-  const step = 100 / N;
-  vp.style.transform = `translateX(${-i * step}%)`;
-
-  // снимем блокировку по окончании CSS-перехода (fallback — таймер)
-  const unlock = ()=>{ locked = false; vp.removeEventListener('transitionend', unlock); updateUI(); };
-  vp.addEventListener('transitionend', unlock);
-  setTimeout(unlock, 350);
-}
-
-    const throttledPrev = throttle(()=> go(i-1), 260);
-    const throttledNext = throttle(()=> go(i+1), 260);
-    if (btnPrev) btnPrev.onclick = () => { hapticPulse('light', 12); throttledPrev(); };
-    if (btnNext) btnNext.onclick = () => { hapticPulse('light', 12); throttledNext(); };
-
-
-    // свайпы
-    if (vp) {
-      let sx = 0, dx = 0, moving = false;
-      const THRESH = 40;
-      vp.addEventListener('touchstart', (e)=>{ if(!e.touches[0])return; sx = e.touches[0].clientX; dx=0; moving=true; }, {passive:true});
-      vp.addEventListener('touchmove',  (e)=>{ if(!moving||!e.touches[0])return; dx = e.touches[0].clientX - sx; }, {passive:true});
-      vp.addEventListener('touchend',   ()=>{
-        if (!moving) return; moving=false;
-        if (Math.abs(dx) > THRESH){
-          if (dx < 0) throttledNext(); else throttledPrev();
-        }
-      }, {passive:true});
-
-      // клик по каждому изображению — открываем полноэкранную галерею с правильным индексом
-      const showBookInGallery = !(opts && opts.showBookInGallery === false);
-      imgs.forEach((img, idx) => {
-        img.addEventListener('click', ()=> openFullscreenGallery(pics, idx, { showBook: showBookInGallery }));
+      slides.forEach((slide) => {
+        slide.style.width = `${100 / N}%`;
       });
     }
 
+    let i = 0;
+    let locked = false;
+    const updateUI = () => {
+      if (counter) counter.textContent = `${i + 1} / ${N}`;
+      if (btnPrev) btnPrev.disabled = i === 0;
+      if (btnNext) btnNext.disabled = i === N - 1;
+      dots.forEach((dot, index) => {
+        dot.classList.toggle('is-active', index === i);
+      });
+    };
+
+    const go = (to) => {
+      if (!vp || !N || locked) return;
+      const clamped = Math.max(0, Math.min(N - 1, to));
+      if (clamped === i) {
         updateUI();
+        return;
+      }
+      locked = true;
+      i = clamped;
 
-	        // Всегда 2 колонки. Подгоняем размеры шрифтов/отступов под ширину карточки.
-	        applyTwoColScale(modal);
+      const step = 100 / N;
+      vp.style.transform = `translateX(${-i * step}%)`;
 
-	        requestAnimationFrame(()=> { modal.style.opacity = '1'; });
-	        return modal;
+      const unlock = () => {
+        locked = false;
+        vp.removeEventListener('transitionend', unlock);
+        updateUI();
+      };
+      vp.addEventListener('transitionend', unlock);
+      setTimeout(unlock, 360);
+    };
 
-	  } catch (e) {
-	    hideMiniLoader();
+    const throttledPrev = throttle(() => go(i - 1), 260);
+    const throttledNext = throttle(() => go(i + 1), 260);
+    if (btnPrev) btnPrev.onclick = () => { hapticPulse('light', 12); throttledPrev(); };
+    if (btnNext) btnNext.onclick = () => { hapticPulse('light', 12); throttledNext(); };
+    dots.forEach((dot) => {
+      dot.addEventListener('click', () => {
+        const nextIndex = Number(dot.dataset.galIndex);
+        if (!Number.isFinite(nextIndex)) return;
+        hapticPulse('selection', 10);
+        go(nextIndex);
+      });
+    });
 
-	    console.error(e);
-	    showModal(`
-	      <div class="card">
-	        <p class="muted">Не удалось загрузить карточку базы.</p>
-	        <div class="actions"><button class="button primary" onclick="closeModal()">OK</button></div>
-	      </div>`);
-	    return null;
-	  }
+    if (vp && N) {
+      let sx = 0;
+      let dx = 0;
+      let moving = false;
+      const THRESH = 40;
+
+      vp.addEventListener('touchstart', (event) => {
+        if (!event.touches[0]) return;
+        sx = event.touches[0].clientX;
+        dx = 0;
+        moving = true;
+      }, { passive: true });
+
+      vp.addEventListener('touchmove', (event) => {
+        if (!moving || !event.touches[0]) return;
+        dx = event.touches[0].clientX - sx;
+      }, { passive: true });
+
+      vp.addEventListener('touchend', () => {
+        if (!moving) return;
+        moving = false;
+        if (Math.abs(dx) > THRESH) {
+          if (dx < 0) throttledNext();
+          else throttledPrev();
+        }
+      }, { passive: true });
+
+      imgs.forEach((img, index) => {
+        img.addEventListener('click', () => openFullscreenGallery(pics, index, { showBook: showBookInGallery }));
+      });
+
+      updateUI();
+    }
+
+    requestAnimationFrame(() => { modal.style.opacity = '1'; });
+    return modal;
+
+  } catch (e) {
+    hideMiniLoader();
+
+    console.error(e);
+    showModal(`
+      <div class="card">
+        <p class="muted">Не удалось загрузить карточку базы.</p>
+        <div class="actions"><button class="button primary" onclick="closeModal()">OK</button></div>
+      </div>`);
+    return null;
+  }
 }
 
 // === Масштабирование «двухколоночной» сетки БЕЗ утечек обработчиков ===
