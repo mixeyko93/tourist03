@@ -46,6 +46,7 @@ backup/
 *.bak
 *.tmp
 *.old
+.deploy.local
 
 # === System files ===
 Thumbs.db
