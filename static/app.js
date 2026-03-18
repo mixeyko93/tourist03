@@ -5199,6 +5199,95 @@ function initTabs(){
 
 
 // === Booking Filter (2×2): кликабельные даты, запоминание значений, применение на карту / бронирование ===
+function buildBookingFilterMarkup({ titleText, hintText, applyText, closeText }) {
+  const chevrons = `
+    <svg class="bk-picker-chevron" viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M6 8l4-4 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
+      <path d="M6 12l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
+    </svg>
+  `;
+  return `
+    <div class="booking-card">
+      <div class="booking-header">
+        <div class="booking-title">${titleText}</div>
+        <div class="booking-hint">${hintText}</div>
+      </div>
+
+      <div class="booking-grid">
+        <label class="bk-field">
+          <span>Заезд</span>
+          <div class="bk-date">
+            <button type="button" class="bk-input is-empty" id="bkShowFrom">—</button>
+            <input type="hidden" id="bkFrom" class="bk-native">
+          </div>
+        </label>
+
+        <label class="bk-field">
+          <span>Выезд</span>
+          <div class="bk-date">
+            <button type="button" class="bk-input is-empty" id="bkShowTo">—</button>
+            <input type="hidden" id="bkTo" class="bk-native">
+          </div>
+        </label>
+
+        <label class="bk-field">
+          <span>Взрослые</span>
+          <div class="bk-picker-field">
+            <button type="button" class="bk-picker-trigger" id="bkAdultsBtn" aria-haspopup="listbox" aria-expanded="false">
+              <span class="bk-picker-value" id="bkAdultsValue">2</span>
+              ${chevrons}
+            </button>
+            <input type="hidden" id="bkAdults" class="bk-hidden-value" value="2">
+          </div>
+        </label>
+
+        <label class="bk-field">
+          <span>Дети</span>
+          <div class="bk-picker-field">
+            <button type="button" class="bk-picker-trigger" id="bkKidsBtn" aria-haspopup="listbox" aria-expanded="false">
+              <span class="bk-picker-value" id="bkKidsValue">0</span>
+              ${chevrons}
+            </button>
+            <input type="hidden" id="bkKids" class="bk-hidden-value" value="0">
+          </div>
+        </label>
+      </div>
+
+      <label class="bk-checkbox-wrapper">
+        <input type="checkbox" id="bkAllowSplit" class="bk-checkbox">
+        <span class="bk-checkbox-box" aria-hidden="true">
+          <svg class="bk-checkbox-icon" viewBox="0 0 16 16">
+            <path d="M3.5 8.5 6.5 11.5 12.5 4.5"></path>
+          </svg>
+        </span>
+        <span class="bk-checkbox-text">Показать варианты заселения в разные номера или дома</span>
+      </label>
+
+      <div class="booking-actions">
+        <button type="button" class="bk-action" id="bkClose">${closeText}</button>
+        <button type="button" class="bk-action" id="bkReset">Сбросить</button>
+        <button type="button" class="bk-action bk-action--primary" id="bkApply">${applyText}</button>
+      </div>
+    </div>
+  `;
+}
+
+function formatBookingFieldDate(value) {
+  if (!value) return '—';
+  const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return '—';
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12, 0, 0);
+  try {
+    const currentYear = new Date().getFullYear();
+    const options = date.getFullYear() === currentYear
+      ? { day: 'numeric', month: 'long' }
+      : { day: 'numeric', month: 'long', year: 'numeric' };
+    return new Intl.DateTimeFormat('ru-RU', options).format(date).replace(/\s?г\.$/, '');
+  } catch (_) {
+    return value;
+  }
+}
+
 function openBookingFilterModal(opts = {}) {
   const dontCloseBackground = opts.dontCloseBackground || false;
   const restoreFilterOnClose = opts.restoreFilterOnClose || false;
@@ -5216,6 +5305,7 @@ function openBookingFilterModal(opts = {}) {
 	  );
   const applyText = String(opts.applyText || (isBooking ? 'К выбору вариантов' : 'Сохранить'));
   const closeText = String(opts.closeText || (isBooking ? 'Назад' : 'Закрыть'));
+  const filterMarkup = buildBookingFilterMarkup({ titleText, hintText, applyText, closeText });
 
   // Если нужно сохранить фоновое окно, создаём отдельное окно для фильтра
   if (dontCloseBackground) {
@@ -5224,72 +5314,19 @@ function openBookingFilterModal(opts = {}) {
     filterModal.id = 'filterModal';
     // Должен быть поверх основного #modal (корзина/подбор), но ниже полноэкранной галереи
     filterModal.style.zIndex = '6600';
-    filterModal.innerHTML = `
-      <div class="modal-scroll">
-        <div class="modal-card booking-shell">
-          <div class="booking-card">
-            <div class="booking-title">${titleText}</div>
-
-            <div class="booking-hint">${hintText}</div>
-
-            <div class="booking-grid">
-              <label class="bk-field">
-                <span>Заезд</span>
-                <div class="bk-date">
-                  <div class="bk-input" id="bkShowFrom">—</div>
-                  <input type="hidden" id="bkFrom" class="bk-native">
-                </div>
-              </label>
-
-              <label class="bk-field">
-                <span>Выезд</span>
-                <div class="bk-date">
-                  <div class="bk-input" id="bkShowTo">—</div>
-                  <input type="hidden" id="bkTo" class="bk-native">
-                </div>
-              </label>
-
-              <label class="bk-field">
-                <span>Взрослые</span>
-                <select id="bkAdults" class="bk-select">
-                  ${Array.from({length:30},(_,i)=>`<option>${i+1}</option>`).join('')}
-                </select>
-              </label>
-
-              <label class="bk-field">
-                <span>Дети</span>
-                <select id="bkKids" class="bk-select">
-                  ${Array.from({length:31},(_,i)=>`<option>${i}</option>`).join('')}
-                </select>
-              </label>
-            </div>
-
-            <label class="bk-checkbox-wrapper">
-              <input type="checkbox" id="bkAllowSplit" class="bk-checkbox">
-              <span>Показать варианты заселения в разные номера или дома</span>
-            </label>
-
-            <div class="booking-actions">
-              <button class="button ghost" id="bkClose">${closeText}</button>
-              <button class="button ghost" id="bkReset">Сбросить</button>
-              <button class="button primary" id="bkApply">${applyText}</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
+    filterModal.innerHTML = `<div class="modal-card booking-shell">${filterMarkup}</div>`;
     document.body.appendChild(filterModal);
 
-    // Клик по фону (scroll wrapper) закрывает фильтр
-    const scrollEl = filterModal.querySelector('.modal-scroll');
-    if (scrollEl) {
-      scrollEl.addEventListener('click', (e) => {
-        if (e.target === scrollEl) {
+    filterModal.addEventListener('click', (e) => {
+      if (e.target === filterModal) {
+        const closeBtn = filterModal.querySelector('#bkClose');
+        if (closeBtn && typeof closeBtn.click === 'function') closeBtn.click();
+        else {
           filterModal.remove();
           if (opts.onClose) opts.onClose();
         }
-      });
-    }
+      }
+    });
 
     // Настраиваем элементы фильтра
     setupBookingFilterElements(filterModal, opts, isBooking, titleText);
@@ -5299,56 +5336,7 @@ function openBookingFilterModal(opts = {}) {
   // Обычная логика - используем основное окно
   closeTransientOverlays({ keepMainModal: true });
 
-  showModal(`
-    <div class="booking-card">
-      <div class="booking-title">${titleText}</div>
-
-      <div class="booking-hint">${hintText}</div>
-
-      <div class="booking-grid">
-        <label class="bk-field">
-          <span>Заезд</span>
-          <div class="bk-date">
-            <div class="bk-input" id="bkShowFrom">—</div>
-            <input type="hidden" id="bkFrom" class="bk-native">
-          </div>
-        </label>
-
-        <label class="bk-field">
-          <span>Выезд</span>
-          <div class="bk-date">
-            <div class="bk-input" id="bkShowTo">—</div>
-            <input type="hidden" id="bkTo" class="bk-native">
-          </div>
-        </label>
-
-        <label class="bk-field">
-          <span>Взрослые</span>
-          <select id="bkAdults" class="bk-select">
-            ${Array.from({length:30},(_,i)=>`<option>${i+1}</option>`).join('')}
-          </select>
-        </label>
-
-        <label class="bk-field">
-          <span>Дети</span>
-          <select id="bkKids" class="bk-select">
-            ${Array.from({length:31},(_,i)=>`<option>${i}</option>`).join('')}
-          </select>
-        </label>
-      </div>
-
-      <label class="bk-checkbox-wrapper">
-        <input type="checkbox" id="bkAllowSplit" class="bk-checkbox">
-        <span>Показать варианты заселения в разные номера или дома</span>
-      </label>
-
-      <div class="booking-actions">
-        <button class="button ghost" id="bkClose">${closeText}</button>
-        <button class="button ghost" id="bkReset">Сбросить</button>
-        <button class="button primary" id="bkApply">${applyText}</button>
-      </div>
-    </div>
-  `);
+  showModal(filterMarkup);
 
   // сужаем внешнюю «прозрачную» оболочку только для окна фильтра
   const shell = document.getElementById('modalCard');
@@ -5367,9 +5355,12 @@ function setupBookingFilterElements(container, opts, isBooking, titleText) {
   const toB   = card.querySelector('#bkShowTo');
   const adSel = card.querySelector('#bkAdults');
   const kdSel = card.querySelector('#bkKids');
+  const adBtn = card.querySelector('#bkAdultsBtn');
+  const kdBtn = card.querySelector('#bkKidsBtn');
+  const adValue = card.querySelector('#bkAdultsValue');
+  const kdValue = card.querySelector('#bkKidsValue');
   const splitChk = card.querySelector('#bkAllowSplit');
   const applyBtn = card.querySelector('#bkApply');
-  const actionsBox = card.querySelector('.booking-actions');
 
   // Сохраняем исходный фильтр если нужна защита от сброса
   const restoreFilterOnClose = opts.restoreFilterOnClose || false;
@@ -5385,30 +5376,57 @@ function setupBookingFilterElements(container, opts, isBooking, titleText) {
   if (F.allowSplitRooms !== undefined) splitChk.checked = F.allowSplitRooms;
 
   // читаемо показываем выбранные даты
-  const fmt  = v => v ? new Date(v).toLocaleDateString('ru-RU') : '—';
-  const sync = () => { fromB.textContent = fmt(fromI.value); toB.textContent = fmt(toI.value); };
+  const sync = () => {
+    const fromLabel = formatBookingFieldDate(fromI.value);
+    const toLabel = formatBookingFieldDate(toI.value);
+    fromB.textContent = fromLabel;
+    toB.textContent = toLabel;
+    fromB.classList.toggle('is-empty', !fromI.value);
+    toB.classList.toggle('is-empty', !toI.value);
+  };
   fromI.addEventListener('change', sync);
   toI.addEventListener('change',   sync);
   sync();
+
+  const defaultAdultsMax = 30;
+  const defaultKidsMax = 30;
+  const clamp = (value, min, max) => Math.max(min, Math.min(value, max));
+  const readNum = (input, fallback) => {
+    const num = Number(input?.value);
+    return Number.isFinite(num) ? num : fallback;
+  };
+  const setHiddenValue = (input, nextValue, emitChange = false) => {
+    if (!input) return;
+    input.value = String(nextValue);
+    if (emitChange) {
+      try { input.dispatchEvent(new Event('change')); } catch (_) {}
+    }
+  };
+  const updateGuestValues = () => {
+    if (adValue) adValue.textContent = String(clamp(readNum(adSel, 2), 1, 999));
+    if (kdValue) kdValue.textContent = String(clamp(readNum(kdSel, 0), 0, 999));
+  };
 
   // Ограничение по вместимости (для фильтра внутри конкретного апартамента)
   const maxGuests = Number(opts.maxGuests);
   const baseApplyText = String(opts.applyText || (applyBtn ? applyBtn.textContent : 'Применить'));
 
-  function setSelectOptions(sel, values, selectedValue) {
-    if (!sel) return;
-    sel.innerHTML = values.map(v => `<option value="${v}">${v}</option>`).join('');
-    if (selectedValue != null) sel.value = String(selectedValue);
-  }
   function applyCapacityConstraints() {
-    if (!Number.isFinite(maxGuests) || maxGuests <= 0) return;
-    const aCur = Number(adSel.value) || 1;
-    const a = Math.max(1, Math.min(aCur, maxGuests));
-    setSelectOptions(adSel, Array.from({ length: maxGuests }, (_, i) => i + 1), a);
-    const kidsMax = Math.max(0, maxGuests - a);
-    const kCur = Number(kdSel.value) || 0;
-    const k = Math.max(0, Math.min(kCur, kidsMax));
-    setSelectOptions(kdSel, Array.from({ length: kidsMax + 1 }, (_, i) => i), k);
+    const adultsMax = Number.isFinite(maxGuests) && maxGuests > 0 ? maxGuests : defaultAdultsMax;
+    const adults = clamp(readNum(adSel, 2), 1, adultsMax);
+    const kidsMax = Number.isFinite(maxGuests) && maxGuests > 0 ? Math.max(0, maxGuests - adults) : defaultKidsMax;
+    const kids = clamp(readNum(kdSel, 0), 0, kidsMax);
+    setHiddenValue(adSel, adults, false);
+    setHiddenValue(kdSel, kids, false);
+    if (adBtn) {
+      adBtn.dataset.min = '1';
+      adBtn.dataset.max = String(adultsMax);
+    }
+    if (kdBtn) {
+      kdBtn.dataset.min = '0';
+      kdBtn.dataset.max = String(kidsMax);
+    }
+    updateGuestValues();
   }
   applyCapacityConstraints();
 
@@ -5553,8 +5571,8 @@ function setupBookingFilterElements(container, opts, isBooking, titleText) {
   function clearBkErrors() {
     try { fromB?.classList?.remove('bk-error'); } catch(_) {}
     try { toB?.classList?.remove('bk-error'); } catch(_) {}
-    try { adSel?.classList?.remove('bk-error'); } catch(_) {}
-    try { kdSel?.classList?.remove('bk-error'); } catch(_) {}
+    try { adBtn?.classList?.remove('bk-error'); } catch(_) {}
+    try { kdBtn?.classList?.remove('bk-error'); } catch(_) {}
     try { splitChk?.classList?.remove('bk-error'); } catch(_) {}
   }
   function markBkError(el) {
@@ -5607,8 +5625,8 @@ function setupBookingFilterElements(container, opts, isBooking, titleText) {
       markBkError(toB);
     }
     if (v.blocked.guests || v.blocked.capacity) {
-      markBkError(adSel);
-      markBkError(kdSel);
+      markBkError(adBtn);
+      markBkError(kdBtn);
     }
   }
   updateApplyUi();
@@ -5616,8 +5634,134 @@ function setupBookingFilterElements(container, opts, isBooking, titleText) {
   // Запоминаем последний просматриваемый месяц календаря, чтобы "Выезд" открывался на том же месяце
   let lastPickerViewY = null;
   let lastPickerViewM = null;
+  let closeWheelPicker = null;
+
+  function destroyWheelPicker() {
+    if (typeof closeWheelPicker === 'function') closeWheelPicker();
+    closeWheelPicker = null;
+    try { adBtn?.setAttribute('aria-expanded', 'false'); } catch (_) {}
+    try { kdBtn?.setAttribute('aria-expanded', 'false'); } catch (_) {}
+  }
+
+  function openWheelPicker(kind) {
+    const trigger = kind === 'adults' ? adBtn : kdBtn;
+    const input = kind === 'adults' ? adSel : kdSel;
+    if (!trigger || !input) return;
+
+    const currentKind = trigger.getAttribute('aria-expanded') === 'true' ? kind : null;
+    if (currentKind === kind) {
+      destroyWheelPicker();
+      return;
+    }
+    destroyWheelPicker();
+
+    const min = Number(trigger.dataset.min ?? (kind === 'adults' ? 1 : 0));
+    const max = Number(trigger.dataset.max ?? defaultKidsMax);
+    if (!Number.isFinite(min) || !Number.isFinite(max) || max < min) return;
+
+    const currentValue = clamp(readNum(input, kind === 'adults' ? 2 : 0), min, max);
+    const itemsMarkup = Array.from({ length: max - min + 1 }, (_, index) => {
+      const value = min + index;
+      return `<div class="bk-wheel-item${value === currentValue ? ' is-active' : ''}" data-value="${value}">${value}</div>`;
+    }).join('');
+
+    const overlay = document.createElement('div');
+    overlay.className = 'bk-wheel-overlay';
+    overlay.innerHTML = `
+      <div class="bk-wheel-dismiss" aria-hidden="true"></div>
+      <div class="bk-wheel" role="listbox" aria-label="${kind === 'adults' ? 'Взрослые' : 'Дети'}">
+        <div class="bk-wheel-fade bk-wheel-fade--top"></div>
+        <div class="bk-wheel-fade bk-wheel-fade--bottom"></div>
+        <div class="bk-wheel-indicator"></div>
+        <div class="bk-wheel-scroll">${itemsMarkup}</div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    trigger.setAttribute('aria-expanded', 'true');
+
+    const wheel = overlay.querySelector('.bk-wheel');
+    const dismiss = overlay.querySelector('.bk-wheel-dismiss');
+    const scroll = overlay.querySelector('.bk-wheel-scroll');
+    const items = Array.from(overlay.querySelectorAll('.bk-wheel-item'));
+    const itemHeight = 48;
+    const gap = 10;
+
+    const placeWheel = () => {
+      const rect = trigger.getBoundingClientRect();
+      const viewportWidth = window.innerWidth || document.documentElement?.clientWidth || 0;
+      const viewportHeight = window.innerHeight || document.documentElement?.clientHeight || 0;
+      const wheelWidth = Math.min(Math.max(Math.round(rect.width * 1.15), 220), viewportWidth - 24);
+      let left = rect.left + (rect.width / 2) - (wheelWidth / 2);
+      left = Math.max(12, Math.min(left, viewportWidth - wheelWidth - 12));
+      let top = rect.bottom + gap;
+      if ((top + 144) > (viewportHeight - 12)) {
+        top = Math.max(12, rect.top - 144 - gap);
+      }
+      wheel.style.width = `${Math.round(wheelWidth)}px`;
+      wheel.style.left = `${Math.round(left)}px`;
+      wheel.style.top = `${Math.round(top)}px`;
+    };
+
+    const updateWheelState = (emitChange = true) => {
+      const maxIndex = items.length - 1;
+      const index = clamp(Math.round((scroll.scrollTop || 0) / itemHeight), 0, maxIndex);
+      const nextValue = min + index;
+      items.forEach((item, itemIndex) => item.classList.toggle('is-active', itemIndex === index));
+      if (String(nextValue) !== String(input.value)) {
+        input.value = String(nextValue);
+        updateGuestValues();
+        if (emitChange) {
+          try { input.dispatchEvent(new Event('change')); } catch (_) {}
+        }
+      }
+    };
+
+    let snapTimer = null;
+    const onScroll = () => {
+      updateWheelState(true);
+      clearTimeout(snapTimer);
+      snapTimer = setTimeout(() => {
+        const index = clamp(Math.round((scroll.scrollTop || 0) / itemHeight), 0, items.length - 1);
+        try {
+          scroll.scrollTo({ top: index * itemHeight, behavior: 'smooth' });
+        } catch (_) {
+          scroll.scrollTop = index * itemHeight;
+        }
+      }, 70);
+    };
+
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') destroyWheelPicker();
+    };
+    const onResize = () => destroyWheelPicker();
+
+    dismiss?.addEventListener('click', destroyWheelPicker);
+    scroll?.addEventListener('scroll', onScroll, { passive: true });
+    document.addEventListener('keydown', onKeyDown);
+    window.addEventListener('resize', onResize, { passive: true });
+
+    requestAnimationFrame(() => {
+      placeWheel();
+      scroll.scrollTop = (currentValue - min) * itemHeight;
+      updateWheelState(false);
+    });
+
+    closeWheelPicker = () => {
+      clearTimeout(snapTimer);
+      try { dismiss?.removeEventListener('click', destroyWheelPicker); } catch (_) {}
+      try { scroll?.removeEventListener('scroll', onScroll); } catch (_) {}
+      try { document.removeEventListener('keydown', onKeyDown); } catch (_) {}
+      try { window.removeEventListener('resize', onResize); } catch (_) {}
+      try { overlay.remove(); } catch (_) {}
+    };
+  }
 
   function openCustomDatePicker({ targetInput, kind }) {
+    destroyWheelPicker();
+    try {
+      document.querySelectorAll('.dp-overlay').forEach(node => { try { node.remove(); } catch (_) {} });
+    } catch (_) {}
+
     const seedFromInput = targetInput.value ? toMidday(targetInput.value) : null;
     const seedFromCheckin = (fromI?.value) ? toMidday(fromI.value) : null;
     const seedFromLast = (lastPickerViewY != null && lastPickerViewM != null) ? new Date(lastPickerViewY, lastPickerViewM, 1, 12, 0, 0) : null;
@@ -5643,20 +5787,36 @@ function setupBookingFilterElements(container, opts, isBooking, titleText) {
     overlay.className = 'dp-overlay';
     overlay.innerHTML = `
       <div class="dp-card" role="dialog" aria-modal="true">
-        <div class="dp-kind" id="dpKind"></div>
+        <div class="dp-title" id="dpKind"></div>
         <div class="dp-top">
-          <button type="button" class="dp-nav" id="dpPrev">‹</button>
+          <button type="button" class="dp-nav" id="dpPrev" aria-label="Предыдущий месяц">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M12.5 4.5 7 10l5.5 5.5"></path></svg>
+          </button>
           <div class="dp-selects">
-            <select class="dp-select" id="dpMonth"></select>
-            <select class="dp-select" id="dpYear"></select>
+            <div class="dp-chip">
+              <select class="dp-select" id="dpMonth"></select>
+              <svg class="dp-chip-icon" viewBox="0 0 20 20" aria-hidden="true">
+                <path d="M6 8l4-4 4 4"></path>
+                <path d="M6 12l4 4 4-4"></path>
+              </svg>
+            </div>
+            <div class="dp-chip">
+              <select class="dp-select" id="dpYear"></select>
+              <svg class="dp-chip-icon" viewBox="0 0 20 20" aria-hidden="true">
+                <path d="M6 8l4-4 4 4"></path>
+                <path d="M6 12l4 4 4-4"></path>
+              </svg>
+            </div>
           </div>
-          <button type="button" class="dp-nav" id="dpNext">›</button>
+          <button type="button" class="dp-nav" id="dpNext" aria-label="Следующий месяц">
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7.5 4.5 13 10l-5.5 5.5"></path></svg>
+          </button>
         </div>
         <div class="dp-grid" id="dpGrid"></div>
         <div class="dp-actions">
-          <button type="button" class="button ghost" id="dpCancel">Отмена</button>
-          <button type="button" class="button ghost" id="dpReset">Сброс</button>
-          <button type="button" class="button primary" id="dpSave" disabled>Сохранить</button>
+          <button type="button" class="dp-action" id="dpCancel">Отмена</button>
+          <button type="button" class="dp-action" id="dpReset">Сброс</button>
+          <button type="button" class="dp-action dp-action--primary" id="dpSave" disabled>Сохранить</button>
         </div>
       </div>
     `;
@@ -5894,15 +6054,18 @@ function setupBookingFilterElements(container, opts, isBooking, titleText) {
   // клики по видимым «кнопкам» — открывают наш календарь (без системного)
   fromB.addEventListener('click', (e) => { try { e.preventDefault(); e.stopPropagation(); } catch(_) {} openCustomDatePicker({ targetInput: fromI, kind: 'from' }); });
   toB.addEventListener('click',   (e) => { try { e.preventDefault(); e.stopPropagation(); } catch(_) {} openCustomDatePicker({ targetInput: toI,   kind: 'to'   }); });
+  adBtn.addEventListener('click', (e) => { try { e.preventDefault(); e.stopPropagation(); } catch (_) {} openWheelPicker('adults'); });
+  kdBtn.addEventListener('click', (e) => { try { e.preventDefault(); e.stopPropagation(); } catch (_) {} openWheelPicker('children'); });
 
-  adSel.addEventListener('change', () => { clearBkErrors(); applyCapacityConstraints(); updateApplyUi(); validateCampDatesOrReset(); });
-  kdSel.addEventListener('change', () => { clearBkErrors(); updateApplyUi(); validateCampDatesOrReset(); });
+  adSel.addEventListener('change', () => { updateGuestValues(); clearBkErrors(); applyCapacityConstraints(); updateApplyUi(); validateCampDatesOrReset(); });
+  kdSel.addEventListener('change', () => { updateGuestValues(); clearBkErrors(); applyCapacityConstraints(); updateApplyUi(); validateCampDatesOrReset(); });
   splitChk.addEventListener('change', () => { clearBkErrors(); updateApplyUi(); validateCampDatesOrReset(); });
   fromI.addEventListener('change', () => { clearBkErrors(); applyCapacityConstraints(); updateApplyUi(); validateCampDatesOrReset(); });
   toI.addEventListener('change', () => { clearBkErrors(); applyCapacityConstraints(); updateApplyUi(); validateCampDatesOrReset(); });
 
   // кнопки
   card.querySelector('#bkClose').onclick = () => {
+    destroyWheelPicker();
     // Если нужно восстановить фильтр при закрытии (например, если сброшен в корзине)
     // но только если не нажимали "Применить"
     if (shouldRestoreOnClose && originalFilter !== null) {
@@ -5936,7 +6099,9 @@ function setupBookingFilterElements(container, opts, isBooking, titleText) {
     closeModal();
   };
   card.querySelector('#bkReset').onclick = ()=>{
+    destroyWheelPicker();
     fromI.value=''; toI.value=''; adSel.value='2'; kdSel.value='0'; splitChk.checked=false; sync();
+    updateGuestValues();
     // сброс — очищаем общий фильтр и перерисовываем всю карту
     window.__bookingFilter = null;
     clearBookingFilter();
@@ -5953,6 +6118,7 @@ function setupBookingFilterElements(container, opts, isBooking, titleText) {
     clearBkErrors();
   };
   card.querySelector('#bkApply').onclick = async ()=>{
+    destroyWheelPicker();
     if (applyBtn && applyBtn.dataset.disabled === '1') { markErrors(); return; }
     const from = fromI.value || '';
     const to   = toI.value   || '';
