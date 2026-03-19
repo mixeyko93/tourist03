@@ -112,13 +112,13 @@
 
 .map-popup-widget__actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(136px, 1fr));
   gap: 12px;
 }
 
 .map-popup-widget__button {
   width: 100%;
-  min-width: 0;
+  min-width: 136px;
   min-height: 40px;
   padding: 0 10px;
   border: 0;
@@ -180,10 +180,12 @@
   }
 
   .map-popup-widget__actions {
+    grid-template-columns: repeat(2, minmax(132px, 1fr));
     gap: 10px;
   }
 
   .map-popup-widget__button {
+    min-width: 132px;
     min-height: 38px;
     padding: 0 8px;
     font-size: 11px;

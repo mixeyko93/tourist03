@@ -1852,7 +1852,7 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 
 /* ====================== CLUSTERS & POPUPS ====================== */
 .camp-popup{
-  min-width:320px;
+  min-width:348px;
   text-align:left;
 }
 .leaflet-popup.camp-popup .leaflet-popup-content-wrapper{
@@ -1864,6 +1864,7 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 }
 .leaflet-popup.camp-popup .leaflet-popup-content{
   margin:0;
+  min-width:348px;
   width:auto !important;
   overflow:visible;
 }

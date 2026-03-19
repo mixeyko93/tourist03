@@ -1167,9 +1167,9 @@ function campPopupPosition(host, camp, marker){
   const hostWidth = Math.max(0, Number(frame?.clientWidth) || 0);
   const hostHeight = Math.max(0, Number(frame?.clientHeight) || 0);
   const isCompactWidth = hostWidth > 0 && hostWidth <= 420;
-  const sidePad = isCompactWidth ? 6 : 10;
-  const minWidth = isCompactWidth ? 332 : 320;
-  const maxWidth = isCompactWidth ? 372 : 360;
+  const sidePad = isCompactWidth ? 4 : 10;
+  const minWidth = isCompactWidth ? 348 : 328;
+  const maxWidth = isCompactWidth ? 388 : 368;
   const availableWidth = Math.max(280, hostWidth - sidePad * 2);
   let width = Math.min(maxWidth, availableWidth);
   if (width >= minWidth) width = Math.max(minWidth, width);
