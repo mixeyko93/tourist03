@@ -4612,10 +4612,12 @@ async function openDetails(campId, opts = {}){
 
     let isClosed = false;
     let onKeyDown = null;
+    let onResize = null;
     const closeDetails = () => {
       if (isClosed) return;
       isClosed = true;
       try { if (onKeyDown) window.removeEventListener('keydown', onKeyDown); } catch (_) {}
+      try { if (onResize) window.removeEventListener('resize', onResize); } catch (_) {}
       if (modal && modal.parentNode) modal.parentNode.removeChild(modal);
     };
 
@@ -4642,6 +4644,7 @@ async function openDetails(campId, opts = {}){
     };
     window.addEventListener('keydown', onKeyDown);
 
+    const galleryViewport = modal.querySelector('.camp-detail__gallery-viewport');
     const vp = modal.querySelector('.camp-detail__gallery-track');
     const slides = vp ? Array.from(vp.querySelectorAll('.camp-detail__gallery-slide')) : [];
     const imgs = slides.map((slide) => slide.querySelector('img')).filter(Boolean);
@@ -4662,6 +4665,28 @@ async function openDetails(campId, opts = {}){
 
     let i = 0;
     let locked = false;
+    const applyActiveGalleryRatio = (index) => {
+      if (!galleryViewport) return;
+      const img = imgs[index];
+      if (!img) return;
+      const updateRatio = () => {
+        const naturalWidth = Number(img.naturalWidth || img.width || 0);
+        const naturalHeight = Number(img.naturalHeight || img.height || 0);
+        if (!naturalWidth || !naturalHeight) return;
+        galleryViewport.style.aspectRatio = `${naturalWidth} / ${naturalHeight}`;
+      };
+      if (img.complete) {
+        updateRatio();
+      } else {
+        img.addEventListener('load', updateRatio, { once: true });
+      }
+    };
+    const syncGalleryOffset = () => {
+      if (!vp || !galleryViewport || !N) return;
+      const viewportWidth = Math.round(galleryViewport.clientWidth || 0);
+      if (!viewportWidth) return;
+      vp.style.transform = `translate3d(${-i * viewportWidth}px, 0, 0)`;
+    };
     const updateUI = () => {
       if (counter) counter.textContent = `${i + 1} / ${N}`;
       if (btnPrev) btnPrev.disabled = i === 0;
@@ -4680,8 +4705,8 @@ async function openDetails(campId, opts = {}){
       }
       locked = true;
       i = clamped;
-
-      vp.style.transform = `translate3d(${-i * 100}%, 0, 0)`;
+      applyActiveGalleryRatio(i);
+      syncGalleryOffset();
 
       const unlock = () => {
         locked = false;
@@ -4736,6 +4761,10 @@ async function openDetails(campId, opts = {}){
         img.addEventListener('click', () => openFullscreenGallery(pics, index, { showBook: showBookInGallery }));
       });
 
+      applyActiveGalleryRatio(i);
+      syncGalleryOffset();
+      onResize = () => syncGalleryOffset();
+      window.addEventListener('resize', onResize);
       updateUI();
     }
 
