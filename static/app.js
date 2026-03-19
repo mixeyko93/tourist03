@@ -4534,7 +4534,7 @@ async function openDetails(campId, opts = {}){
             </div>
 
             <div class="camp-detail__gallery">
-              <div class="camp-detail__gallery-frame">
+              <div class="camp-detail__gallery-frame ${pics.length ? 'is-interactive' : ''}">
                 ${
                   pics.length
                     ? `
@@ -4644,6 +4644,7 @@ async function openDetails(campId, opts = {}){
     };
     window.addEventListener('keydown', onKeyDown);
 
+    const galleryFrame = modal.querySelector('.camp-detail__gallery-frame');
     const galleryViewport = modal.querySelector('.camp-detail__gallery-viewport');
     const vp = modal.querySelector('.camp-detail__gallery-track');
     const slides = vp ? Array.from(vp.querySelectorAll('.camp-detail__gallery-slide')) : [];
@@ -4719,10 +4720,19 @@ async function openDetails(campId, opts = {}){
 
     const throttledPrev = throttle(() => go(i - 1), 260);
     const throttledNext = throttle(() => go(i + 1), 260);
-    if (btnPrev) btnPrev.onclick = () => { hapticPulse('light', 12); throttledPrev(); };
-    if (btnNext) btnNext.onclick = () => { hapticPulse('light', 12); throttledNext(); };
+    if (btnPrev) btnPrev.onclick = (event) => {
+      if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
+      hapticPulse('light', 12);
+      throttledPrev();
+    };
+    if (btnNext) btnNext.onclick = (event) => {
+      if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
+      hapticPulse('light', 12);
+      throttledNext();
+    };
     dots.forEach((dot) => {
-      dot.addEventListener('click', () => {
+      dot.addEventListener('click', (event) => {
+        if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
         const nextIndex = Number(dot.dataset.galIndex);
         if (!Number.isFinite(nextIndex)) return;
         hapticPulse('selection', 10);
@@ -4757,9 +4767,13 @@ async function openDetails(campId, opts = {}){
         }
       }, { passive: true });
 
-      imgs.forEach((img, index) => {
-        img.addEventListener('click', () => openFullscreenGallery(pics, index, { showBook: showBookInGallery }));
-      });
+      if (galleryFrame) {
+        galleryFrame.addEventListener('click', (event) => {
+          if (event.target && event.target.closest && event.target.closest('.camp-detail__arrow, .camp-detail__dot')) return;
+          hapticPulse('light', 10);
+          openFullscreenGallery(pics, i, { showBook: showBookInGallery });
+        });
+      }
 
       applyActiveGalleryRatio(i);
       syncGalleryOffset();
@@ -4828,258 +4842,161 @@ function applyTwoColScale(root){
 function openFullscreenGallery(pics, startIndex=0, opts = {}){
   if (!Array.isArray(pics) || pics.length === 0) return;
   const showBook = opts && opts.showBook === false ? false : true;
+  const safePics = pics.map((u) => escapeHtml(String(u)));
 
   const wrap = document.createElement('div');
   wrap.className = 'fs-modal';
   wrap.innerHTML = `
-    <div class="fs-viewport">
-      <div class="fs-track">
-        ${pics.map(u => `
-          <img src="${u}"
-               alt=""
-               draggable="false"
-               loading="eager"
-               decoding="sync"
-               fetchpriority="high"
-               referrerpolicy="no-referrer">
-        `).join('')}
+    <div class="fs-stage">
+      <div class="fs-viewport">
+        <div class="fs-track">
+          ${safePics.map((u, index) => `
+            <div class="fs-slide" data-fs-index="${index}">
+              <img src="${u}"
+                   alt="Фото ${index + 1}"
+                   draggable="false"
+                   loading="eager"
+                   decoding="sync"
+                   fetchpriority="high"
+                   referrerpolicy="no-referrer">
+            </div>
+          `).join('')}
+        </div>
       </div>
-    </div>
 
-    <!-- Стрелки поверх фото -->
-    <div class="fs-arrow left"  id="fsPrev">‹</div>
-    <div class="fs-arrow right" id="fsNext">›</div>
+      ${pics.length > 1 ? `
+        <button type="button" class="fs-arrow fs-arrow--prev" id="fsPrev" aria-label="Предыдущее фото">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>
+        </button>
+        <button type="button" class="fs-arrow fs-arrow--next" id="fsNext" aria-label="Следующее фото">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg>
+        </button>
+      ` : ''}
 
-    <div class="fs-ui">
-      <div class="fs-counter" id="fsCounter">${Math.min(startIndex+1,pics.length)}/${pics.length}</div>
-      <div class="fs-actions">
-        ${showBook ? `<button class="button" style="background:#22c55e;border-color:#22c55e;color:#fff" id="fsBook">Забронировать</button>` : ''}
-        <button class="button ghost" id="fsBack">Назад</button>
+      <div class="fs-footer">
+        <div class="fs-counter" id="fsCounter">${Math.min(startIndex + 1, pics.length)} / ${pics.length}</div>
+        <div class="fs-actions">
+          ${showBook ? '<button type="button" class="fs-action fs-action--book" id="fsBook">Забронировать</button>' : ''}
+          <button type="button" class="fs-action fs-action--back" id="fsBack">Назад</button>
+        </div>
       </div>
     </div>
   `;
   document.body.appendChild(wrap);
+  requestAnimationFrame(() => wrap.classList.add('is-open'));
 
+  const viewport = wrap.querySelector('.fs-viewport');
   const track = wrap.querySelector('.fs-track');
-  const imgs  = [...wrap.querySelectorAll('.fs-track img')];
-  const cnt   = wrap.querySelector('#fsCounter');
-  const fsPrev = wrap.querySelector('#fsPrev');
-  const fsNext = wrap.querySelector('#fsNext');
+  const slides = Array.from(wrap.querySelectorAll('.fs-slide'));
+  const counter = wrap.querySelector('#fsCounter');
+  const prevBtn = wrap.querySelector('#fsPrev');
+  const nextBtn = wrap.querySelector('#fsNext');
+  const bookBtn = wrap.querySelector('#fsBook');
+  const backBtn = wrap.querySelector('#fsBack');
 
-  // позиции слайдов
-  let i = Math.max(0, Math.min(pics.length-1, startIndex));
-  let locked = false;
+  let i = Math.max(0, Math.min(pics.length - 1, startIndex));
+  let isClosing = false;
+  let onResize = null;
+  let onKeyDown = null;
 
-  // ЗУМ/ПАН состояние ПО-СЛАЙДНО
-  const Z_MIN = 1;
-  const Z_MAX = 3;
-  const zoom = imgs.map(()=>1);          // текущий масштаб
-  const panX = imgs.map(()=>0);          // смещение по X в px
-  const panY = imgs.map(()=>0);          // смещение по Y в px
-
-  function updateCounter(){ cnt.textContent = `${i+1}/${pics.length}`; }
-
-  function slideGo(to, opts = {}){
-    if (locked) return;
-    const n = pics.length;
-    // Circular navigation: wrap around at boundaries
-    const dest = ((to % n) + n) % n;
-    const instant = !!opts.instant || Math.abs(dest - i) > 1;
-
-    locked = true;
-    const applyPos = () => { track.style.transform = `translateX(${-dest*100}vw)`; };
-    if (instant) {
-      const prevTransition = track.style.transition;
-      track.style.transition = 'none';
-      applyPos();
-      void track.offsetHeight;
-      track.style.transition = prevTransition || '';
-    } else {
-      applyPos();
-    }
-    const unlock = ()=>{ locked = false; track.removeEventListener('transitionend', unlock); updateCounter(); };
-    track.addEventListener('transitionend', unlock);
-    setTimeout(unlock, 350);
-
-    i = dest;
-  }
-
-  // Начальная ширина и позиция
-  track.style.width = `${pics.length * 100}vw`;
-  imgs.forEach(el => el.style.width = '100vw');
-  slideGo(i, { instant: true });
-  updateCounter();
-
-  // Антидребезг для стрелок
-  const resetZoomState = (k) => {
-    zoom[k] = 1; panX[k] = 0; panY[k] = 0;
-    applyZoomPan(k);
+  const updateCounter = () => {
+    if (counter) counter.textContent = `${i + 1} / ${pics.length}`;
   };
 
-  const fsThPrev = throttle(() => {
-    if (zoom[i] !== 1) resetZoomState(i); // сбрасываем зум и позволяем листать
-    slideGo(i - 1);
-  }, 260);
-  const fsThNext = throttle(() => {
-    if (zoom[i] !== 1) resetZoomState(i);
-    slideGo(i + 1);
-  }, 260);
-
-if (fsPrev) fsPrev.onclick = () => { hapticPulse('light', 12); fsThPrev(); };
-if (fsNext) fsNext.onclick = () => { hapticPulse('light', 12); fsThNext(); };
-
-
-  // Клавиатура (desktop)
-  document.addEventListener('keydown', fsKeyHandler);
-  function fsKeyHandler(e){
-    if (e.key === 'ArrowLeft')  fsThPrev();
-    if (e.key === 'ArrowRight') fsThNext();
-  }
-
-  // ====== ЗУМ/ПАН на активном слайде ======
-  function applyZoomPan(k){
-    const img = imgs[k];
-    img.style.transition = 'transform .03s linear'; // чуть сгладим пан
-    img.style.transform  = `translate(${panX[k]}px, ${panY[k]}px) scale(${zoom[k]})`;
-  }
-  function clampPanToBounds(k){
-    const z = zoom[k];
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    // при object-fit:contain используем размер вьюпорта
-    const maxX = (vw * (z - 1)) / 2;
-    const maxY = (vh * (z - 1)) / 2;
-    panX[k] = Math.max(-maxX, Math.min(maxX, panX[k]));
-    panY[k] = Math.max(-maxY, Math.min(maxY, panY[k]));
-  }
-  function resetZoomIfSmall(k){
-    if (zoom[k] <= 1.01){
-      zoom[k] = 1; panX[k] = 0; panY[k] = 0;
+  const syncTrack = (instant = false) => {
+    if (!track || !viewport) return;
+    const viewportWidth = Math.round(viewport.clientWidth || window.innerWidth || 0);
+    if (!viewportWidth) return;
+    const prevTransition = track.style.transition;
+    if (instant) track.style.transition = 'none';
+    track.style.transform = `translate3d(${-i * viewportWidth}px, 0, 0)`;
+    if (instant) {
+      void track.offsetHeight;
+      track.style.transition = prevTransition || '';
     }
-  }
+  };
 
-  // Обработчики жестов — ВЕШАЕМ НА КАЖДУЮ КАРТИНКУ
-  imgs.forEach((img, idx) => {
-    let t1x=0, t1y=0, t2x=0, t2y=0;
-    let startDist=0, startZoom=1;
-    let lastX=0, lastY=0;
-    let isPinching=false, isPanning=false;
-    let lastTapTime=0;
+  const go = (nextIndex) => {
+    const total = pics.length;
+    i = ((nextIndex % total) + total) % total;
+    syncTrack();
+    updateCounter();
+  };
 
-    // Touch Start
-    img.addEventListener('touchstart', (e) => {
-      if (e.touches.length === 2){
-        // Pinch start
-        isPinching = true; isPanning = false;
-        const a = e.touches[0], b = e.touches[1];
-        t1x=a.clientX; t1y=a.clientY; t2x=b.clientX; t2y=b.clientY;
-        startDist = Math.hypot(t2x - t1x, t2y - t1y);
-        startZoom = zoom[idx];
-      } else if (e.touches.length === 1){
-        // Pan start (только если уже увеличено)
-        isPinching = false;
-        if (zoom[idx] > 1){
-          isPanning = true;
-          lastX = e.touches[0].clientX;
-          lastY = e.touches[0].clientY;
-        } else {
-          isPanning = false;
-        }
-      }
-    }, { passive: true });
+  const throttledPrev = throttle(() => go(i - 1), 260);
+  const throttledNext = throttle(() => go(i + 1), 260);
 
-    // Touch Move
-    img.addEventListener('touchmove', (e) => {
-      if (isPinching && e.touches.length === 2){
-        const a = e.touches[0], b = e.touches[1];
-        const dist = Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
-        let z = startZoom * (dist / (startDist || 1));
-        z = Math.max(Z_MIN, Math.min(Z_MAX, z));
-        zoom[idx] = z;
-        clampPanToBounds(idx);
-        applyZoomPan(idx);
-      } else if (isPanning && e.touches.length === 1){
-        const cx = e.touches[0].clientX;
-        const cy = e.touches[0].clientY;
-        panX[idx] += (cx - lastX);
-        panY[idx] += (cy - lastY);
-        lastX = cx; lastY = cy;
-        clampPanToBounds(idx);
-        applyZoomPan(idx);
-      }
-    }, { passive: true });
+  const closeFullscreen = () => {
+    if (isClosing) return;
+    isClosing = true;
+    try { if (onResize) window.removeEventListener('resize', onResize); } catch (_) {}
+    try { if (onKeyDown) document.removeEventListener('keydown', onKeyDown); } catch (_) {}
+    wrap.classList.remove('is-open');
+    setTimeout(() => {
+      if (wrap && wrap.parentNode) wrap.parentNode.removeChild(wrap);
+    }, 240);
+  };
 
-    // Touch End
-    img.addEventListener('touchend', (e) => {
-      // Сброс флагов
-      if (e.touches.length === 0){ isPinching = false; isPanning = false; }
-      clampPanToBounds(idx);
-      resetZoomIfSmall(idx);
-      applyZoomPan(idx);
+  if (prevBtn) prevBtn.onclick = (event) => {
+    if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
+    hapticPulse('light', 12);
+    throttledPrev();
+  };
+  if (nextBtn) nextBtn.onclick = (event) => {
+    if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
+    hapticPulse('light', 12);
+    throttledNext();
+  };
+  if (bookBtn) bookBtn.onclick = (event) => {
+    if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
+    hapticPulse('soft', 14);
+    closeFullscreen();
+    openBookingFilterWithAuth(window.__currentCampId);
+  };
+  if (backBtn) backBtn.onclick = (event) => {
+    if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
+    hapticPulse('selection', 10);
+    closeFullscreen();
+  };
 
-      // Двойной тап — зум/откат
-      const now = Date.now();
-      if (now - lastTapTime < 300 && e.changedTouches && e.changedTouches.length === 1){
-        if (zoom[idx] === 1){
-          zoom[idx] = 2.2; panX[idx]=0; panY[idx]=0;
-        } else {
-          zoom[idx] = 1; panX[idx]=0; panY[idx]=0;
-        }
-        applyZoomPan(idx);
-      }
-      lastTapTime = now;
-    }, { passive: true });
+  onKeyDown = (event) => {
+    if (event.key === 'Escape') closeFullscreen();
+    if (event.key === 'ArrowLeft') throttledPrev();
+    if (event.key === 'ArrowRight') throttledNext();
+  };
+  document.addEventListener('keydown', onKeyDown);
 
-    // Колесо мыши — zoom на десктопе
-    img.addEventListener('wheel', (e) => {
-      e.preventDefault();
-      let z = zoom[idx] + (e.deltaY < 0 ? 0.15 : -0.15);
-      z = Math.max(Z_MIN, Math.min(Z_MAX, z));
-      zoom[idx] = z;
-      clampPanToBounds(idx);
-      applyZoomPan(idx);
-    }, { passive: false });
-
-    // Клик мышью — переход между слайдами только если не увеличено
-    img.addEventListener('click', (e) => {
-      if (zoom[idx] > 1.01) return;
-      const rect = track.getBoundingClientRect();
-      const leftHalf = (e.clientX - rect.left) < rect.width/2;
-      if (leftHalf) fsThPrev(); else fsThNext();
-    });
-  });
-
-  // Свайпы по треку (перелистывание) — ТОЛЬКО когда текущий слайд не увеличен
-  let sx = 0, dx = 0, swiping = false;
+  let sx = 0;
+  let dx = 0;
+  let swiping = false;
   const THRESH = 50;
-  const isZoomed = () => (zoom[i] || 1) > 1.01;
-  track.addEventListener('touchstart', (e)=> {
-    if (isZoomed()) return;                 // при зуме перелистывание выключено
-    if (!e.touches[0]) return;
-    swiping = true; sx = e.touches[0].clientX; dx = 0;
-  }, {passive:true});
-  track.addEventListener('touchmove', (e)=> {
-    if (!swiping || !e.touches[0]) return;
-    dx = e.touches[0].clientX - sx;
-  }, {passive:true});
-  track.addEventListener('touchend', ()=> {
-    if (!swiping) return; swiping = false;
-    if (isZoomed()) return;                 // на всякий случай
-    if (Math.abs(dx) > THRESH){
-      if (dx < 0) fsThNext(); else fsThPrev();
-    }
-  }, {passive:true});
+  if (viewport) {
+    viewport.addEventListener('touchstart', (event) => {
+      if (!event.touches[0]) return;
+      swiping = true;
+      sx = event.touches[0].clientX;
+      dx = 0;
+    }, { passive: true });
 
-	  // Кнопки
-	    const bookBtn = wrap.querySelector('#fsBook');
-	    if (bookBtn) bookBtn.onclick = ()=> { hapticPulse('soft', 14); closeFullscreen(); openBookingFilterWithAuth(window.__currentCampId); };
-	    wrap.querySelector('#fsBack').onclick  = ()=> { hapticPulse('selection', 10); closeFullscreen(); };
-	    wrap.addEventListener('click', (e)=>{ if (e.target === wrap) closeFullscreen(); });
+    viewport.addEventListener('touchmove', (event) => {
+      if (!swiping || !event.touches[0]) return;
+      dx = event.touches[0].clientX - sx;
+    }, { passive: true });
 
-  function closeFullscreen(){
-    document.removeEventListener('keydown', fsKeyHandler);
-    if (wrap && wrap.parentNode) wrap.parentNode.removeChild(wrap);
+    viewport.addEventListener('touchend', () => {
+      if (!swiping) return;
+      swiping = false;
+      if (Math.abs(dx) > THRESH) {
+        if (dx < 0) throttledNext();
+        else throttledPrev();
+      }
+    }, { passive: true });
   }
+
+  onResize = () => syncTrack(true);
+  window.addEventListener('resize', onResize);
+  syncTrack(true);
+  updateCounter();
 }
 
 
