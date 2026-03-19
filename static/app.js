@@ -2517,7 +2517,7 @@ function openEmptyBookingConfirmationModal(opts = {}){
     : 'Укажите даты и количество гостей, чтобы продолжить бронирование.';
 
   const shell = document.getElementById('modalCard');
-  if (shell) { shell.classList.remove('booking-shell'); shell.classList.remove('details'); }
+  if (shell) { shell.classList.remove('booking-shell'); shell.classList.remove('details'); shell.classList.remove('accom-shell'); }
 
 	  showModal(`
 	    <div class="alloc-card">
@@ -3309,6 +3309,7 @@ function closeModal(){
 		  card.innerHTML = '';
 		  card.classList.remove('booking-shell');  // снимаем «узкую» оболочку
 		  card.classList.remove('details');       // снимаем «детали», если открывали карточку номера
+      card.classList.remove('accom-shell');
 		 }
   if (shouldDraftToast) {
     showDraftSavedCartToast({ timeoutMs: 1800 });
@@ -5250,7 +5251,7 @@ function openBookingFilterModal(opts = {}) {
 
   // сужаем внешнюю «прозрачную» оболочку только для окна фильтра
   const shell = document.getElementById('modalCard');
-  if (shell) { shell.classList.add('booking-shell'); shell.classList.remove('details'); }
+  if (shell) { shell.classList.add('booking-shell'); shell.classList.remove('details'); shell.classList.remove('accom-shell'); }
 
   // Инициализируем обработчики фильтра
   setupBookingFilterElements(shell || document.body, opts, isBooking, titleText);
@@ -6774,7 +6775,7 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
 	  let autoPickSnapshotIsSingle = false;
 
   const shell = document.getElementById('modalCard');
-  if (shell) { shell.classList.remove('booking-shell'); shell.classList.remove('details'); }
+  if (shell) { shell.classList.remove('booking-shell'); shell.classList.remove('details'); shell.classList.remove('accom-shell'); }
 
   showModal(`
 	      <div class="alloc-card">
@@ -7883,7 +7884,7 @@ function openAllocationModal({ camp, campId, roomsAvailable, selectedRooms, filt
   })();
 
   const shell = document.getElementById('modalCard');
-  if (shell) { shell.classList.remove('booking-shell'); shell.classList.remove('details'); }
+  if (shell) { shell.classList.remove('booking-shell'); shell.classList.remove('details'); shell.classList.remove('accom-shell'); }
 
   showModal(`
     <div class="alloc-card">
@@ -8480,6 +8481,7 @@ function openRoomDetails(room, camp, context) {
   const shell = document.getElementById('modalCard');
   if (shell) {
     shell.classList.remove('booking-shell');
+    shell.classList.remove('accom-shell');
     shell.classList.add('details');
   }
 
@@ -8701,7 +8703,7 @@ async function openCampHousing(campId){
     window.__currentCampId = cid;
     closeTransientOverlays({ keepMainModal: true });
     const shell = document.getElementById('modalCard');
-    if (shell) { shell.classList.remove('booking-shell'); shell.classList.remove('details'); }
+    if (shell) { shell.classList.remove('booking-shell'); shell.classList.remove('details'); shell.classList.add('accom-shell'); }
 
     showModal(`
       <div class="accom-card">
@@ -8709,9 +8711,11 @@ async function openCampHousing(campId){
           <div class="accom-title">Загрузка…</div>
           <div class="accom-sub">Все доступные варианты размещения</div>
         </div>
-        <div class="accom-hint" id="accomHint" style="min-height:22px">Для бронирования укажите даты и количество гостей.</div>
-        <div class="accom-list" id="accomList">
-          <div class="muted">Загружаем информацию о размещении…</div>
+        <div class="accom-body">
+          <div class="accom-hint" id="accomHint" style="min-height:22px">Для бронирования укажите даты и количество гостей.</div>
+          <div class="accom-list" id="accomList">
+            <div class="muted">Загружаем информацию о размещении…</div>
+          </div>
         </div>
         <div class="accom-actions">
           <button class="button ghost" id="accomBack">Назад</button>
@@ -8840,7 +8844,7 @@ async function openCampAccommodations(campId){
   window.__currentCampId = cid;
   closeTransientOverlays({ keepMainModal: true });
   const shell = document.getElementById('modalCard');
-  if (shell) { shell.classList.remove('booking-shell'); shell.classList.remove('details'); }
+  if (shell) { shell.classList.remove('booking-shell'); shell.classList.remove('details'); shell.classList.add('accom-shell'); }
 
   const f = window.__bookingFilter || {};
   if (!f.from || !f.to) { await openCampHousing(cid); return; }
@@ -8852,9 +8856,11 @@ async function openCampAccommodations(campId){
         <div class="accom-title">Загрузка…</div>
         <div class="accom-sub">${fmtDateShortRu(f.from)} → ${fmtDateShortRu(f.to)} • гостей: ${total || '—'}</div>
       </div>
-      <div class="accom-hint" id="accomHint" style="min-height:22px"></div>
-      <div class="accom-list" id="accomList">
-        <div class="muted">Ищем доступные варианты…</div>
+      <div class="accom-body">
+        <div class="accom-hint" id="accomHint" style="min-height:22px"></div>
+        <div class="accom-list" id="accomList">
+          <div class="muted">Ищем доступные варианты…</div>
+        </div>
       </div>
       <div class="accom-actions">
         <button class="button ghost" id="accomBack">Назад</button>
@@ -9032,7 +9038,7 @@ function openRoomCategory(camp, group, filter){
   const priceChild = Number(r.price_child) || 0;
 
   const shell = document.getElementById('modalCard');
-  if (shell) { shell.classList.remove('booking-shell'); shell.classList.add('details'); }
+  if (shell) { shell.classList.remove('booking-shell'); shell.classList.remove('accom-shell'); shell.classList.add('details'); }
 
   showModal(`
     <div class="details-title">${title}</div>
