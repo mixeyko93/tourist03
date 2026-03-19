@@ -4647,9 +4647,11 @@ async function openDetails(campId, opts = {}){
     const N = slides.length;
 
     if (vp && N) {
-      vp.style.width = `${N * 100}%`;
+      vp.style.width = '100%';
       slides.forEach((slide) => {
-        slide.style.width = `${100 / N}%`;
+        slide.style.width = '100%';
+        slide.style.minWidth = '100%';
+        slide.style.flex = '0 0 100%';
       });
     }
 
@@ -4674,8 +4676,7 @@ async function openDetails(campId, opts = {}){
       locked = true;
       i = clamped;
 
-      const step = 100 / N;
-      vp.style.transform = `translateX(${-i * step}%)`;
+      vp.style.transform = `translate3d(${-i * 100}%, 0, 0)`;
 
       const unlock = () => {
         locked = false;
