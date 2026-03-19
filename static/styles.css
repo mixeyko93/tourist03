@@ -3577,8 +3577,7 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 .camp-detail__vip-badge,
 .camp-detail__desc,
 .camp-detail__counter,
-.camp-detail__fact-icon,
-.camp-detail__action--back{
+.camp-detail__fact-icon{
   display:none !important;
 }
 
@@ -3598,7 +3597,7 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 
 .camp-detail__header{
   position:relative;
-  padding:6px 52px 18px 0;
+  padding:6px 0 18px;
 }
 
 .camp-detail__title{
@@ -3806,7 +3805,8 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 }
 
 .camp-detail__actions{
-  display:flex;
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
   gap:12px;
   padding:16px 20px 20px;
 }
@@ -3851,6 +3851,16 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   background:rgba(255,255,255,.15);
 }
 
+.camp-detail__action--back{
+  grid-column:1 / -1;
+  color:#fff;
+  background:rgba(255,255,255,.08);
+}
+
+.camp-detail__action--back:hover{
+  background:rgba(255,255,255,.12);
+}
+
 @keyframes camp-detail-enter{
   from{opacity:0; transform:translateY(18px) scale(.94);}
   to{opacity:1; transform:translateY(0) scale(1);}
@@ -3880,7 +3890,7 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   }
 
   .camp-detail__header{
-    padding-right:48px;
+    padding-right:0;
   }
 
   .camp-detail__title{

@@ -1400,8 +1400,9 @@ function openCampPopupOverlay(camp, marker){
     },
     onClose: () => closeCampPopupOverlay(),
     onDetails: () => {
+      const reopenPopup = () => openCampPopupOverlay(camp, marker);
       closeCampPopupOverlay({ immediate: true });
-      openDetails(camp.id);
+      openDetails(camp.id, { onBack: reopenPopup });
     },
     onBook: () => {
       closeCampPopupOverlay({ immediate: true });
@@ -1458,8 +1459,11 @@ map.on('popupopen', (e) => {
             requestLeafletCampPopupClose(src);
           },
           onDetails: () => {
+            const reopenPopup = () => {
+              try { src.openPopup(); } catch(_) {}
+            };
             try { src.closePopup(); } catch(_) {}
-            openDetails(camp.id);
+            openDetails(camp.id, { onBack: reopenPopup });
           },
           onBook: () => {
             try { src.closePopup(); } catch(_) {}
@@ -4508,6 +4512,7 @@ async function openDetails(campId, opts = {}){
     const safeName = escapeHtml(camp.name || 'База');
     const facts = campDetailFacts(camp);
     const showBookInGallery = !(opts && opts.showBookInGallery === false);
+    const onBack = opts && typeof opts.onBack === 'function' ? opts.onBack : null;
 
     let modal = takeoverMiniLoaderAsModal();
     if (!modal) {
@@ -4523,13 +4528,6 @@ async function openDetails(campId, opts = {}){
     modal.innerHTML = `
       <div class="camp-detail-shell ${meta.isVip ? 'is-vip' : ''}" style="--detail-accent:${meta.color}; --detail-rgb:${meta.rgb};">
         <div class="modal-card camp-detail-modal">
-          <button type="button" class="camp-detail__close" aria-label="Закрыть">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M6 6 18 18"></path>
-              <path d="m18 6-12 12"></path>
-            </svg>
-          </button>
-
           <div class="camp-detail__scroll">
             <div class="camp-detail__header">
               <h2 class="camp-detail__title">${safeName}</h2>
@@ -4606,6 +4604,7 @@ async function openDetails(campId, opts = {}){
           <div class="camp-detail__actions">
             <button type="button" class="camp-detail__action camp-detail__action--housing">Апартаменты</button>
             <button type="button" class="camp-detail__action camp-detail__action--book">Забронировать</button>
+            <button type="button" class="camp-detail__action camp-detail__action--back">Назад</button>
           </div>
         </div>
       </div>
@@ -4620,13 +4619,19 @@ async function openDetails(campId, opts = {}){
       if (modal && modal.parentNode) modal.parentNode.removeChild(modal);
     };
 
-    const closeBtn = modal.querySelector('.camp-detail__close');
     const bookBtn = modal.querySelector('.camp-detail__action--book');
     const housingBtnEl = modal.querySelector('.camp-detail__action--housing');
+    const backBtn = modal.querySelector('.camp-detail__action--back');
 
-    if (closeBtn) closeBtn.onclick = () => { hapticPulse('light', 10); closeDetails(); };
     if (bookBtn) bookBtn.onclick = () => { hapticPulse('soft', 14); openBookingFilterWithAuth(campId); };
     if (housingBtnEl) housingBtnEl.onclick = () => { hapticPulse('light', 12); closeDetails(); openCampHousing(campId); };
+    if (backBtn) backBtn.onclick = () => {
+      hapticPulse('selection', 12);
+      closeDetails();
+      if (onBack) {
+        try { onBack(); } catch(_) {}
+      }
+    };
 
     modal.addEventListener('click', (event) => {
       if (event.target === modal) closeDetails();
