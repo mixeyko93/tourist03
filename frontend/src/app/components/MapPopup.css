@@ -120,11 +120,14 @@
   width: 100%;
   min-width: 0;
   min-height: 40px;
-  padding: 0 14px;
+  padding: 0 10px;
   border: 0;
   border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   line-height: 1;
   letter-spacing: -0.02em;
@@ -173,6 +176,16 @@
   }
 
   .map-popup-widget__body {
-    padding: 20px 18px 18px;
+    padding: 18px 14px 16px;
+  }
+
+  .map-popup-widget__actions {
+    gap: 10px;
+  }
+
+  .map-popup-widget__button {
+    min-height: 38px;
+    padding: 0 8px;
+    font-size: 11px;
   }
 }
