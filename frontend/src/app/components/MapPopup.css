@@ -59,32 +59,6 @@
   pointer-events: auto;
 }
 
-.map-popup-widget__close {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  z-index: 10;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.4);
-  color: #fff;
-  cursor: pointer;
-  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.18);
-  backdrop-filter: blur(12px);
-}
-
-.map-popup-widget__close svg {
-  width: 18px;
-  height: 18px;
-  display: block;
-}
-
 .map-popup-widget__media {
   position: relative;
   width: 100%;
@@ -137,12 +111,14 @@
 }
 
 .map-popup-widget__actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
 .map-popup-widget__button {
-  flex: 1 1 0;
+  width: 100%;
+  min-width: 0;
   min-height: 40px;
   padding: 0 14px;
   border: 0;

@@ -1,6 +1,5 @@
 import { useState, type CSSProperties } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { X } from "lucide-react";
 
 import type { MarkerType } from "./MapMarker";
 
@@ -33,7 +32,6 @@ export interface MapPopupProps {
 
 export function MapPopup({
   isOpen,
-  onClose,
   onDetails,
   onBook,
   data,
@@ -67,17 +65,6 @@ export function MapPopup({
                 transition={{ type: "spring", stiffness: 380, damping: 28 }}
               >
                 <div className="map-popup-widget__card">
-                  <motion.button
-                    type="button"
-                    className="map-popup-widget__close"
-                    whileHover={{ scale: 1.06, rotate: 90 }}
-                    whileTap={{ scale: 0.94 }}
-                    onClick={onClose}
-                    aria-label="Закрыть"
-                  >
-                    <X size={18} strokeWidth={2.3} />
-                  </motion.button>
-
                   <motion.div
                     className="map-popup-widget__media"
                     initial={{ opacity: 0, scale: 1.02 }}
