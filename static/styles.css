@@ -3252,8 +3252,9 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 
 /* ====================== ACCOMMODATIONS LIST (BOOKING FLOW) ====================== */
 .modal-card.accom-shell{
-  width:min(400px, 100%);
+  width:min(400px, calc(100vw - 32px));
   max-height:95vh;
+  margin:0 auto;
   padding:0;
   overflow:hidden;
   display:flex;
@@ -3319,9 +3320,9 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   line-height:1.35;
   padding:14px 16px;
   margin:0 0 14px;
-  border:1px solid rgba(255,255,255,.08);
+  border:1px solid #ef4444;
   border-radius:18px;
-  background:rgba(255,255,255,.05);
+  background:rgba(255,255,255,.03);
   text-align:center;
 }
 /* Smaller font specifically for the "К выбору апартаментов" button */
@@ -3420,6 +3421,7 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 
 @media (max-width:520px){
   .modal-card.accom-shell{
+    width:min(400px, calc(100vw - 24px));
     border-radius:30px;
   }
 
