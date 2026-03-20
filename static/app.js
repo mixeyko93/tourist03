@@ -4904,9 +4904,22 @@ function openFullscreenGallery(pics, startIndex=0, opts = {}){
     if (counter) counter.textContent = `${i + 1} / ${pics.length}`;
   };
 
+  const syncSlideWidths = () => {
+    if (!track || !viewport || !slides.length) return 0;
+    const viewportWidth = Math.round(viewport.getBoundingClientRect().width || viewport.clientWidth || window.innerWidth || 0);
+    if (!viewportWidth) return 0;
+    track.style.width = `${viewportWidth * slides.length}px`;
+    slides.forEach((slide) => {
+      slide.style.width = `${viewportWidth}px`;
+      slide.style.minWidth = `${viewportWidth}px`;
+      slide.style.flex = `0 0 ${viewportWidth}px`;
+    });
+    return viewportWidth;
+  };
+
   const syncTrack = (instant = false) => {
     if (!track || !viewport) return;
-    const viewportWidth = Math.round(viewport.clientWidth || window.innerWidth || 0);
+    const viewportWidth = syncSlideWidths();
     if (!viewportWidth) return;
     const prevTransition = track.style.transition;
     if (instant) track.style.transition = 'none';
