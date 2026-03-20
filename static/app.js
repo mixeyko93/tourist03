@@ -258,27 +258,97 @@ function housingLabelObjectWord(housingType){
   return 'апартамента';
 }
 
-function openAllParamsModal({ title, subtitle, params }) {
-  const rows = Array.isArray(params) ? params : [];
-  const overlay = document.createElement('div');
-  overlay.className = 'modal show';
-  overlay.style.zIndex = '9999';
-  overlay.innerHTML = `
-    <div class="modal-card details">
-      <div class="details-title">${title || 'Параметры'}</div>
-      ${subtitle ? `<div class="details-desc">${subtitle}</div>` : ''}
-      <div class="details-body">
-        <div class="allparams-list">
-          ${rows.map(([k, v]) => `
-            <div class="allparams-row">
-              <div class="allparams-k">${k}</div>
-              <div class="allparams-v">${v}</div>
-            </div>
-          `).join('')}
+function roomFeatureIcon(kind){
+  const attrs = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
+  switch (kind) {
+    case 'users':
+      return `<svg ${attrs}><path d="M16 21v-1.5a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4V21"></path><circle cx="9" cy="7" r="3"></circle><path d="M18 8a3 3 0 1 0 0-6"></path><path d="M22 21v-1.5a4 4 0 0 0-3-3.87"></path></svg>`;
+    case 'home':
+      return `<svg ${attrs}><path d="M3 10.5 12 3l9 7.5"></path><path d="M5 9.5V21h14V9.5"></path><path d="M9 21v-6h6v6"></path></svg>`;
+    case 'bed':
+      return `<svg ${attrs}><path d="M3 20V9"></path><path d="M21 20V14a2 2 0 0 0-2-2H7a4 4 0 0 0-4 4v4"></path><path d="M7 12V8a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v4"></path><path d="M3 20h18"></path></svg>`;
+    case 'utensils':
+      return `<svg ${attrs}><path d="M4 3v8"></path><path d="M7 3v8"></path><path d="M4 7h3"></path><path d="M6 11v10"></path><path d="M14 3v18"></path><path d="M20 3v7a4 4 0 0 1-4 4h-2"></path></svg>`;
+    case 'bath':
+      return `<svg ${attrs}><path d="M4 11h16"></path><path d="M6 11V8a2 2 0 0 1 2-2h2"></path><path d="M7 11v3a4 4 0 0 0 4 4h2a4 4 0 0 0 4-4v-3"></path><path d="M6 19v2"></path><path d="M18 19v2"></path><path d="M16 6a2 2 0 1 0-2-2"></path></svg>`;
+    case 'droplets':
+      return `<svg ${attrs}><path d="M12 2s5 5.2 5 10a5 5 0 1 1-10 0c0-4.8 5-10 5-10z"></path><path d="M9 13c.5 1.5 1.7 2.5 3 3"></path></svg>`;
+    case 'flame':
+      return `<svg ${attrs}><path d="M12 3c1.2 2 1.8 3.7 1.8 5.1 0 2.2-1.2 3.4-2.8 4.9-1.2 1.1-2 2.1-2 3.7a3.5 3.5 0 0 0 7 0c0-2.5-1.1-4.3-2.6-6.1.2 1.8-.6 2.9-1.7 3.8"></path></svg>`;
+    case 'tent':
+      return `<svg ${attrs}><path d="m4 20 8-15 8 15"></path><path d="M12 5v15"></path><path d="M8.5 13h7"></path><path d="M6 20h12"></path></svg>`;
+    case 'wifi':
+      return `<svg ${attrs}><path d="M5 10.5a12 12 0 0 1 14 0"></path><path d="M8 14a7.5 7.5 0 0 1 8 0"></path><path d="M11 17.5a3 3 0 0 1 2 0"></path><circle cx="12" cy="20" r="1"></circle></svg>`;
+    case 'wind':
+      return `<svg ${attrs}><path d="M3 8h10a2 2 0 1 0-2-2"></path><path d="M2 12h15a2.5 2.5 0 1 1-2.5 2.5"></path><path d="M4 16h9a2 2 0 1 1-2 2"></path></svg>`;
+    case 'waves':
+      return `<svg ${attrs}><path d="M2 12c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2 2-2 4-2"></path><path d="M2 16c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2 2-2 4-2"></path></svg>`;
+    case 'door':
+      return `<svg ${attrs}><path d="M6 21V5.5A1.5 1.5 0 0 1 7.5 4H18v17"></path><path d="M6 21h14"></path><path d="M12 13h.01"></path></svg>`;
+    default:
+      return `<svg ${attrs}><circle cx="12" cy="12" r="8"></circle></svg>`;
+  }
+}
+
+function roomFeatureKeyByLabel(label){
+  const s = String(label || '').trim().toLowerCase();
+  if (s.includes('вмест')) return 'users';
+  if (s === 'тип') return 'home';
+  if (s.includes('одномест') || s.includes('двухмест')) return 'bed';
+  if (s.includes('кухня')) return 'utensils';
+  if (s.includes('туалет')) return 'bath';
+  if (s.includes('душ')) return 'droplets';
+  if (s.includes('барбекю') || s === 'bbq') return 'flame';
+  if (s.includes('бесед')) return 'tent';
+  if (s.includes('wi-fi') || s.includes('wifi')) return 'wifi';
+  if (s.includes('конди')) return 'wind';
+  if (s.includes('бассейн')) return 'waves';
+  if (s.includes('балкон') || s.includes('терраса')) return 'door';
+  return 'home';
+}
+
+function normalizeRoomFeatureItems(items){
+  return (Array.isArray(items) ? items : [])
+    .map((item) => Array.isArray(item)
+      ? { label: item[0], value: item[1], icon: roomFeatureKeyByLabel(item[0]) }
+      : { label: item?.label, value: item?.value, icon: item?.icon || roomFeatureKeyByLabel(item?.label) })
+    .filter((item) => item && item.label && item.value != null && String(item.value).trim() !== '');
+}
+
+function renderRoomFeatureCards(items, { all = false } = {}){
+  const list = normalizeRoomFeatureItems(items);
+  return list.map((item, index) => {
+    const wide = all && list.length % 2 !== 0 && index === list.length - 1;
+    return `
+      <div class="room-feature${wide ? ' room-feature--wide' : ''}">
+        <div class="room-feature__iconbox">${roomFeatureIcon(item.icon)}</div>
+        <div class="room-feature__copy">
+          <div class="room-feature__label">${escapeHtml(String(item.label))}</div>
+          <div class="room-feature__value">${escapeHtml(String(item.value))}</div>
         </div>
       </div>
-      <div class="actions" style="display:flex;justify-content:center;">
-        <button class="button ghost" id="allParamsBack">Назад</button>
+    `;
+  }).join('');
+}
+
+function openAllParamsModal({ title, subtitle, params }) {
+  const rows = normalizeRoomFeatureItems(params);
+  const overlay = document.createElement('div');
+  overlay.className = 'modal show room-params-overlay';
+  overlay.style.zIndex = '9999';
+  overlay.innerHTML = `
+    <div class="modal-card room-params-shell">
+      <div class="room-params-shell__header">
+        <div class="room-params-shell__title">${title || 'Параметры'}</div>
+        ${subtitle ? `<div class="room-params-shell__subtitle">${escapeHtml(String(subtitle))}</div>` : ''}
+      </div>
+      <div class="room-params-shell__body">
+        <div class="room-feature-grid room-feature-grid--all">
+          ${renderRoomFeatureCards(rows, { all: true })}
+        </div>
+        <div class="room-params-shell__actions">
+          <button class="button ghost" id="allParamsBack">Назад</button>
+        </div>
       </div>
     </div>
   `;
@@ -6168,10 +6238,22 @@ function formatPriceRub(v){
   try { return n.toLocaleString('ru-RU') + ' ₽'; } catch(_) { return String(n) + ' ₽'; }
 }
 
-function renderRoomPriceBlock(room){
+function renderRoomPriceBlock(room, variant = 'default'){
   const priceAdult = Number(room?.price_adult) || 0;
   const priceChild = Number(room?.price_child) || 0;
   const priceFixed = Number(room?.price) || 0;
+  if (variant === 'room-detail') {
+    const rows = [];
+    if (priceAdult > 0) rows.push(`<div class="price-item"><span class="price-k">Взрослый</span><span class="price-v">${formatPriceRub(priceAdult)}</span></div>`);
+    if (priceChild > 0) rows.push(`<div class="price-item"><span class="price-k">Ребёнок</span><span class="price-v">${formatPriceRub(priceChild)}</span></div>`);
+    if (!rows.length && priceFixed > 0) rows.push(`<div class="price-item total"><span class="price-k">Стоимость</span><span class="price-v">${formatPriceRub(priceFixed)}</span></div>`);
+    if (!rows.length) return '';
+    return `
+      <div class="alloc-price-card alloc-price-card--room-detail${rows.length === 1 ? ' is-single' : ''}">
+        ${rows.join('')}
+      </div>
+    `;
+  }
   const rows = [];
   if (priceAdult > 0) rows.push(`<div class="price-item"><span class="price-k">Взрослый</span><span class="price-v">${formatPriceRub(priceAdult)}</span></div>`);
   if (priceChild > 0) rows.push(`<div class="price-item"><span class="price-k">Ребёнок</span><span class="price-v">${formatPriceRub(priceChild)}</span></div>`);
@@ -8424,10 +8506,6 @@ function openRoomDetails(room, camp, context) {
   const photos = Array.isArray(room.photos) ? room.photos : [];
   const pics = photos.map(p => p.url);
   const cap = roomCapacity(room);
-  const priceAdult = Number(room.price_adult) || 0;
-  const priceChild = Number(room.price_child) || 0;
-  const priceHouse = Number(room.price) || 0;
-  const descHtml = room.description ? room.description.replace(/\n/g, '<br>') : '';
 
   const floors = Number(room.floors) || 0;
   const floor = Number(room.floor) || 0;
@@ -8447,56 +8525,57 @@ function openRoomDetails(room, camp, context) {
   })();
 
   const showFloor = floors > 1 && hasOtherUnitsInBuilding && floor > 0;
-  const bathShort = (() => {
+  const bathValue = (() => {
     const s = String(room?.bath_type || '').trim();
     if (!s) return 'Нет';
+    if (s === 'shower' || s === 'bath' || s === 'both') return 'В номере';
+    if (s === 'shower-shared') return 'Общий';
     return roomParamLabel(s, 'bath');
   })();
-  const wcShort = (() => {
+  const wcValue = (() => {
     const s = String(room?.wc_type || '').trim();
     if (!s) return 'Нет';
+    if (s === 'indiv-split' || s === 'indiv-combined') return 'В номере';
+    if (s === 'shared') return 'Общий';
     return roomParamLabel(s, 'wc');
   })();
-  const shareVal = (v) => {
+  const shareVal = (v, opts = {}) => {
     const s = String(v || '').trim();
-    if (s === 'private') return 'Индивидуальная';
-    if (s === 'shared') return 'Общая';
-    return 'Нет';
-  };
-  const shareValOptional = (v) => {
-    const s = String(v || '').trim();
-    if (s === 'private') return 'Индивидуальная';
-    if (s === 'shared') return 'Общая';
-    return null;
+    const privateText = opts.privateText || 'Своя';
+    const sharedText = opts.sharedText || 'Общая';
+    const noneText = opts.noneText || 'Нет';
+    if (s === 'private') return privateText;
+    if (s === 'shared') return sharedText;
+    return noneText;
   };
 
-  const compactParams = [];
-  compactParams.push(['Вместимость', `до ${cap || '?'} гостей`]);
-  compactParams.push(['Тип', room.room_type || '—']);
-  if (bedsSingle > 0) compactParams.push(['Одноместная 🛏️', String(bedsSingle)]);
-  if (bedsDouble > 0) compactParams.push(['Двухместная 🛏️', String(bedsDouble)]);
-  compactParams.push(['Кухня', shareVal(room.kitchen_type)]);
-  compactParams.push(['Туалет', wcShort]);
+  const compactParams = [
+    { label: 'Вместимость', value: `до ${cap || '?'} гостей`, icon: 'users' },
+    { label: 'Тип', value: room.room_type || '—', icon: 'home' },
+    { label: 'Одноместная', value: String(bedsSingle), icon: 'bed' },
+    { label: 'Двухместная', value: String(bedsDouble), icon: 'bed' },
+    { label: 'Кухня', value: shareVal(room.kitchen_type, { privateText: 'В номере', sharedText: 'Общая' }), icon: 'utensils' },
+    { label: 'Туалет', value: wcValue, icon: 'bath' },
+  ];
 
-  const allParams = [];
-  allParams.push(['Вместимость', `до ${cap || '?'} гостей`]);
-  allParams.push(['Тип', room.room_type || '—']);
-  if (showFloor) allParams.push(['Этаж', floors ? `${floor} / ${floors}` : String(floor)]);
-  if (bedsSingle > 0) allParams.push(['Одноместная 🛏️', String(bedsSingle)]);
-  if (bedsDouble > 0) allParams.push(['Двухместная 🛏️', String(bedsDouble)]);
-  allParams.push(['Душ/Ванна', bathShort]);
-  allParams.push(['Туалет', wcShort]);
-  allParams.push(['Зона барбекю', shareVal(room.bbq_type)]);
-  allParams.push(['Кухня', shareVal(room.kitchen_type)]);
-  const gazebo = shareValOptional(room.gazebo_type);
-  if (gazebo) allParams.push(['Беседка', gazebo]);
-  const terrace = shareValOptional(room.terrace_type);
-  if (terrace) allParams.push(['Терраса', terrace]);
-  const pool = shareValOptional(room.pool_type);
-  if (pool) allParams.push(['Бассейн', pool]);
-  const balcony = shareValOptional(room.balcony_type);
-  if (balcony) allParams.push(['Балкон', balcony]);
-  allParams.push(['Кондиционер', (Number(room.has_ac) || 0) ? 'Есть' : 'Нет']);
+  const allParams = [
+    { label: 'Вместимость', value: `до ${cap || '?'} гостей`, icon: 'users' },
+    { label: 'Тип', value: room.room_type || '—', icon: 'home' },
+    { label: 'Одноместная', value: String(bedsSingle), icon: 'bed' },
+    { label: 'Двухместная', value: String(bedsDouble), icon: 'bed' },
+    { label: 'Кухня', value: shareVal(room.kitchen_type, { privateText: 'В номере', sharedText: 'Общая' }), icon: 'utensils' },
+    { label: 'Туалет', value: wcValue, icon: 'bath' },
+    { label: 'Душ/Ванна', value: bathValue, icon: 'droplets' },
+    { label: 'Зона барбекю', value: shareVal(room.bbq_type, { privateText: 'Своя', sharedText: 'Общая' }), icon: 'flame' },
+    { label: 'Беседка', value: shareVal(room.gazebo_type, { privateText: 'Своя', sharedText: 'Общая' }), icon: 'tent' },
+    { label: 'Терраса', value: shareVal(room.terrace_type, { privateText: 'Своя', sharedText: 'Общая' }), icon: 'door' },
+    { label: 'Бассейн', value: shareVal(room.pool_type, { privateText: 'Свой', sharedText: 'Общий' }), icon: 'waves' },
+    { label: 'Балкон', value: shareVal(room.balcony_type, { privateText: 'Свой', sharedText: 'Общий' }), icon: 'door' },
+    { label: 'Кондиционер', value: (Number(room.has_ac) || 0) ? 'Есть' : 'Нет', icon: 'wind' },
+  ];
+  if (showFloor) {
+    allParams.splice(2, 0, { label: 'Этаж', value: floors ? `${floor} / ${floors}` : String(floor), icon: 'door' });
+  }
 
   // Определяем слово для кнопки на основе типа апартамента (родительный падеж)
   const roomType = String(room.room_type || '').trim().toLowerCase();
@@ -8513,11 +8592,10 @@ function openRoomDetails(room, camp, context) {
   }
 
   showModal(`
-    <div class="details-title">${room.name || 'Апартамент'}</div>
-    ${descHtml ? `<div class="details-desc">${descHtml}</div>` : ''}
+    <div class="room-detail-title">${room.name || 'Апартамент'}</div>
 
-    <div class="details-body">
-      <div class="camp-gal room-gal">
+    <div class="details-body room-detail-body">
+      <div class="camp-gal room-gal room-detail-gallery">
         <div class="viewport">${
           pics.length > 0
             ? pics.map(u => `
@@ -8533,30 +8611,28 @@ function openRoomDetails(room, camp, context) {
         }</div>
 
         ${pics.length > 1 ? `
-          <div class="gal-arrow left"  id="galPrev">‹</div>
-          <div class="gal-arrow right" id="galNext">›</div>
-          <div class="gal-counter" id="galCounter">1/${pics.length} →</div>
+          <button type="button" class="room-gal-arrow room-gal-arrow--prev" id="galPrev" aria-label="Предыдущее фото">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg>
+          </button>
+          <button type="button" class="room-gal-arrow room-gal-arrow--next" id="galNext" aria-label="Следующее фото">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+          </button>
+          <div class="room-gal-counter" id="galCounter">1 / ${pics.length}</div>
         ` : ''}
       </div>
 
-      <div class="room-params-compact">
-        ${compactParams.map(([k,v]) => `
-          <div class="room-param-line">
-            <span class="room-param-k">${k}</span>
-            <span class="room-param-sep">—</span>
-            <span class="room-param-v">${v}</span>
-          </div>
-        `).join('')}
+      <div class="room-feature-grid">
+        ${renderRoomFeatureCards(compactParams)}
       </div>
 
       <button class="button ghost room-toggle-all" id="roomToggleAllParams">Открыть все параметры ${objWord}</button>
 
-      ${renderRoomPriceBlock(room)}
+      ${renderRoomPriceBlock(room, 'room-detail')}
     </div>
 
-    <div class="actions" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
-      <button class="button" style="background:#22c55e;border-color:#22c55e;color:#fff" id="roomDetailBookBtn">Выбрать</button>
-      <button class="button ghost" id="roomDetailsBack">Назад</button>
+    <div class="room-detail-actions">
+      <button class="button primary room-detail-choose" id="roomDetailBookBtn">Выбрать</button>
+      <button class="button ghost room-detail-back" id="roomDetailsBack">Назад</button>
     </div>
   `);
 
@@ -8567,8 +8643,10 @@ function openRoomDetails(room, camp, context) {
 
   // В корзине/режиме просмотра (viewOnly) не показываем кнопки "Выбрать/Забронировать"
   const bookBtn = document.getElementById('roomDetailBookBtn');
+  const actionsWrap = document.querySelector('.room-detail-actions');
   if (viewOnly) {
     if (bookBtn) bookBtn.style.display = 'none';
+    if (actionsWrap) actionsWrap.classList.add('is-view-only');
   } else if (bookBtn) {
     // Обработчик кнопки "Выбрать" — проверяем авторизацию и показываем выбор Вход/Регистрация
     bookBtn.onclick = async () => {
@@ -8659,11 +8737,9 @@ function openRoomDetails(room, camp, context) {
     let locked = false;
     
     function updateUI(){
-      const left  = (i > 0)     ? '← ' : '';
-      const right = (i < N - 1) ? ' →' : '';
-      counter.textContent = `${left}${i+1}/${N}${right}`;
-      if (btnPrev) btnPrev.classList.toggle('disabled', i === 0);
-      if (btnNext) btnNext.classList.toggle('disabled', i === N-1);
+      if (counter) counter.textContent = `${i + 1} / ${N}`;
+      if (btnPrev) btnPrev.disabled = i === 0;
+      if (btnNext) btnNext.disabled = i === N - 1;
     }
     
     function go(to){
