@@ -1260,16 +1260,18 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 }
 
 .fs-track{
-  display:flex;
+  display:grid;
+  grid-auto-flow:column;
+  grid-auto-columns:100%;
+  width:100%;
   height:100%;
   transition:transform .32s cubic-bezier(.22,1,.36,1);
   will-change:transform;
 }
 
 .fs-slide{
-  flex:0 0 100%;
   width:100%;
-  min-width:100%;
+  min-width:0;
   height:100%;
   display:flex;
   align-items:center;

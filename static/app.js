@@ -4905,22 +4905,23 @@ function openFullscreenGallery(pics, startIndex=0, opts = {}){
   };
 
   const syncSlideWidths = () => {
-    if (!track || !slides.length) return;
-    const slideWidthPercent = 100 / slides.length;
-    track.style.width = `${slides.length * 100}%`;
+    if (!track || !viewport || !slides.length) return 0;
+    const viewportWidth = Math.round(viewport.getBoundingClientRect().width || viewport.clientWidth || window.innerWidth || 0);
+    if (!viewportWidth) return 0;
+    track.style.gridAutoColumns = `${viewportWidth}px`;
     slides.forEach((slide) => {
-      slide.style.width = `${slideWidthPercent}%`;
-      slide.style.minWidth = `${slideWidthPercent}%`;
-      slide.style.flex = `0 0 ${slideWidthPercent}%`;
+      slide.style.width = `${viewportWidth}px`;
     });
+    return viewportWidth;
   };
 
   const syncTrack = (instant = false) => {
     if (!track || !slides.length) return;
-    syncSlideWidths();
+    const viewportWidth = syncSlideWidths();
+    if (!viewportWidth) return;
     const prevTransition = track.style.transition;
     if (instant) track.style.transition = 'none';
-    track.style.transform = `translate3d(-${(i * 100) / slides.length}%, 0, 0)`;
+    track.style.transform = `translate3d(${-i * viewportWidth}px, 0, 0)`;
     if (instant) {
       void track.offsetHeight;
       track.style.transition = prevTransition || '';
