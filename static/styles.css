@@ -3948,8 +3948,8 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 }
 
 .modal-card.room-params-shell{
-  width:min(400px, calc(100vw - 32px));
-  max-height:95vh;
+  width:min(392px, calc(100vw - 28px));
+  max-height:min(760px, calc(100dvh - 24px));
   margin:0 auto;
   padding:0;
   overflow:hidden;
@@ -3963,23 +3963,27 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   -webkit-backdrop-filter:blur(28px);
 }
 
+.room-params-overlay{
+  padding:10px 0;
+}
+
 .room-params-shell__header{
-  padding:24px 20px 12px;
+  padding:18px 18px 8px;
   text-align:center;
 }
 
 .room-params-shell__title{
   color:#fff;
-  font-size:24px;
+  font-size:20px;
   line-height:1;
   font-weight:800;
   letter-spacing:-.05em;
 }
 
 .room-params-shell__subtitle{
-  margin-top:8px;
+  margin-top:6px;
   color:rgba(255,255,255,.6);
-  font-size:16px;
+  font-size:14px;
   line-height:1.2;
   font-weight:500;
 }
@@ -3989,8 +3993,8 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   overflow-y:auto;
   display:flex;
   flex-direction:column;
-  gap:14px;
-  padding:0 20px 20px;
+  gap:10px;
+  padding:0 16px 16px;
   scrollbar-width:none;
   -ms-overflow-style:none;
 }
@@ -4000,21 +4004,45 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 }
 
 .room-feature-grid--all .room-feature{
-  min-height:82px;
+  min-height:68px;
+  padding:9px 10px;
+  gap:8px;
+  border-radius:14px;
+}
+
+.room-feature-grid--all .room-feature__iconbox{
+  width:34px;
+  height:34px;
+  border-radius:12px;
+}
+
+.room-feature-grid--all .room-feature__iconbox svg{
+  width:16px;
+  height:16px;
+}
+
+.room-feature-grid--all .room-feature__label{
+  font-size:8px;
+  letter-spacing:.08em;
+}
+
+.room-feature-grid--all .room-feature__value{
+  font-size:11px;
+  line-height:1.05;
 }
 
 .room-params-shell__actions{
-  padding-top:8px;
+  padding-top:4px;
 }
 
 .room-params-shell__actions .button.ghost{
   width:100%;
-  min-height:56px;
-  border-radius:16px;
+  min-height:48px;
+  border-radius:14px;
   border-color:rgba(255,255,255,.14);
   background:rgba(255,255,255,.08);
   color:#fff;
-  font-size:14px;
+  font-size:13px;
   font-weight:800;
 }
 
@@ -4091,11 +4119,11 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   }
 
   .room-params-shell__title{
-    font-size:22px;
+    font-size:18px;
   }
 
   .room-params-shell__subtitle{
-    font-size:15px;
+    font-size:13px;
   }
 }
 

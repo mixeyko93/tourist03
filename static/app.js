@@ -332,7 +332,10 @@ function renderRoomFeatureCards(items, { all = false } = {}){
 }
 
 function openAllParamsModal({ title, subtitle, params }) {
-  const rows = normalizeRoomFeatureItems(params);
+  const rows = normalizeRoomFeatureItems(params).filter((item) => {
+    const value = String(item?.value || '').trim().toLowerCase();
+    return value !== 'нет' && value !== '—';
+  });
   const overlay = document.createElement('div');
   overlay.className = 'modal show room-params-overlay';
   overlay.style.zIndex = '9999';
