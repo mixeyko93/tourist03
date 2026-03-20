@@ -2587,7 +2587,7 @@ function openEmptyBookingConfirmationModal(opts = {}){
     : 'Укажите даты и количество гостей, чтобы продолжить бронирование.';
 
   const shell = document.getElementById('modalCard');
-  if (shell) { shell.classList.remove('booking-shell'); shell.classList.remove('details'); shell.classList.remove('accom-shell'); }
+  if (shell) { shell.classList.remove('booking-shell'); shell.classList.remove('details'); shell.classList.remove('accom-shell'); shell.classList.remove('room-detail-shell'); }
 
 	  showModal(`
 	    <div class="alloc-card">
@@ -3380,6 +3380,7 @@ function closeModal(){
 		  card.classList.remove('booking-shell');  // снимаем «узкую» оболочку
 		  card.classList.remove('details');       // снимаем «детали», если открывали карточку номера
       card.classList.remove('accom-shell');
+      card.classList.remove('room-detail-shell');
 		 }
   if (shouldDraftToast) {
     showDraftSavedCartToast({ timeoutMs: 1800 });
@@ -5332,7 +5333,7 @@ function openBookingFilterModal(opts = {}) {
 
   // сужаем внешнюю «прозрачную» оболочку только для окна фильтра
   const shell = document.getElementById('modalCard');
-  if (shell) { shell.classList.add('booking-shell'); shell.classList.remove('details'); shell.classList.remove('accom-shell'); }
+  if (shell) { shell.classList.add('booking-shell'); shell.classList.remove('details'); shell.classList.remove('accom-shell'); shell.classList.remove('room-detail-shell'); }
 
   // Инициализируем обработчики фильтра
   setupBookingFilterElements(shell || document.body, opts, isBooking, titleText);
@@ -6868,7 +6869,7 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
 	  let autoPickSnapshotIsSingle = false;
 
   const shell = document.getElementById('modalCard');
-  if (shell) { shell.classList.remove('booking-shell'); shell.classList.remove('details'); shell.classList.remove('accom-shell'); }
+  if (shell) { shell.classList.remove('booking-shell'); shell.classList.remove('details'); shell.classList.remove('accom-shell'); shell.classList.remove('room-detail-shell'); }
 
   showModal(`
 	      <div class="alloc-card">
@@ -8589,6 +8590,7 @@ function openRoomDetails(room, camp, context) {
     shell.classList.remove('booking-shell');
     shell.classList.remove('accom-shell');
     shell.classList.add('details');
+    shell.classList.add('room-detail-shell');
   }
 
   showModal(`
@@ -8947,7 +8949,7 @@ async function openCampAccommodations(campId){
   window.__currentCampId = cid;
   closeTransientOverlays({ keepMainModal: true });
   const shell = document.getElementById('modalCard');
-  if (shell) { shell.classList.remove('booking-shell'); shell.classList.remove('details'); shell.classList.add('accom-shell'); }
+  if (shell) { shell.classList.remove('booking-shell'); shell.classList.remove('details'); shell.classList.add('accom-shell'); shell.classList.remove('room-detail-shell'); }
 
   const f = window.__bookingFilter || {};
   if (!f.from || !f.to) { await openCampHousing(cid); return; }

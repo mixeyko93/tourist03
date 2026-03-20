@@ -3655,12 +3655,19 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 .accom-actions .button:only-child{grid-column:1/-1;}
 
 /* ====================== ROOM DETAILS / ROOM PARAMS ====================== */
+.modal-card.details.room-detail-shell{
+  width:min(400px, calc(100vw - 32px));
+  max-height:95vh;
+  padding:24px 24px 20px;
+  gap:14px;
+  grid-template-rows:auto minmax(0,1fr) auto;
+}
+
 .room-detail-title{
   grid-row:1;
   margin:0;
-  padding-top:8px;
   color:#fff;
-  font-size:clamp(28px, 5.8vw, 36px);
+  font-size:24px;
   line-height:1;
   font-weight:800;
   letter-spacing:-.05em;
@@ -3669,10 +3676,10 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 }
 
 .room-detail-body{
-  grid-row:3;
+  grid-row:2;
   overflow-y:auto;
   display:grid;
-  gap:14px;
+  gap:12px;
   padding-right:2px;
 }
 
@@ -3687,8 +3694,8 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 .room-detail-gallery .viewport{
   display:flex;
   width:100%;
+  height:220px;
   min-height:220px;
-  aspect-ratio:16/10;
   transition:transform .32s cubic-bezier(.22,1,.36,1);
   will-change:transform;
 }
@@ -3711,11 +3718,11 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   display:flex;
   align-items:center;
   justify-content:center;
-  width:66px;
-  height:66px;
+  width:44px;
+  height:44px;
   padding:0;
   border:none;
-  border-radius:24px;
+  border-radius:16px;
   color:#fff;
   background:rgba(0,0,0,.4);
   box-shadow:0 10px 24px rgba(0,0,0,.18);
@@ -3743,8 +3750,8 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 .room-gal-arrow--next{ right:16px; }
 
 .room-gal-arrow svg{
-  width:28px;
-  height:28px;
+  width:20px;
+  height:20px;
   fill:none;
   stroke:currentColor;
   stroke-width:1.9;
@@ -3758,13 +3765,13 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   bottom:18px;
   z-index:3;
   transform:translateX(-50%);
-  min-width:82px;
-  padding:12px 16px;
-  border-radius:18px;
+  min-width:56px;
+  padding:6px 10px;
+  border-radius:12px;
   background:rgba(15,15,18,.74);
   color:#fff;
   text-align:center;
-  font-size:18px;
+  font-size:12px;
   line-height:1;
   font-weight:800;
   backdrop-filter:blur(14px);
@@ -3780,11 +3787,11 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 .room-feature{
   display:flex;
   align-items:center;
-  gap:12px;
+  gap:10px;
   min-width:0;
-  min-height:98px;
-  padding:14px 16px;
-  border-radius:22px;
+  min-height:82px;
+  padding:12px;
+  border-radius:16px;
   border:1px solid rgba(255,255,255,.1);
   background:linear-gradient(160deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
   transition:border-color .18s ease, background .18s ease, transform .18s ease;
@@ -3805,9 +3812,9 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   display:flex;
   align-items:center;
   justify-content:center;
-  width:52px;
-  height:52px;
-  border-radius:18px;
+  width:40px;
+  height:40px;
+  border-radius:14px;
   background:rgba(0,0,0,.42);
   border:1px solid rgba(255,255,255,.05);
   color:#e5d3b3;
@@ -3815,8 +3822,8 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 }
 
 .room-feature__iconbox svg{
-  width:24px;
-  height:24px;
+  width:18px;
+  height:18px;
 }
 
 .room-feature__copy{
@@ -3829,7 +3836,7 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 
 .room-feature__label{
   color:#a9a7b0;
-  font-size:11px;
+  font-size:10px;
   line-height:1;
   font-weight:800;
   letter-spacing:.1em;
@@ -3838,7 +3845,7 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 
 .room-feature__value{
   color:#fff;
-  font-size:18px;
+  font-size:14px;
   line-height:1.05;
   font-weight:800;
   letter-spacing:-.03em;
@@ -3847,15 +3854,15 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 
 .room-toggle-all{
   width:100%;
-  min-height:76px;
-  border-radius:24px;
+  min-height:56px;
+  border-radius:16px;
 }
 
 .room-toggle-all.button.ghost{
   border:1px solid rgba(255,255,255,.14);
   background:rgba(255,255,255,.05);
   color:#fff;
-  font-size:18px;
+  font-size:14px;
   font-weight:700;
   box-shadow:none;
 }
@@ -3868,11 +3875,11 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 .alloc-price-card--room-detail{
   max-width:none;
   margin:2px 0 0;
-  padding:18px 20px;
-  border-radius:24px;
+  padding:16px;
+  border-radius:20px;
   border-color:rgba(255,255,255,.1);
   background:rgba(255,255,255,.05);
-  gap:18px;
+  gap:16px;
 }
 
 .alloc-price-card--room-detail .price-item{
@@ -3886,23 +3893,23 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 
 .alloc-price-card--room-detail .price-k{
   color:rgba(255,255,255,.62);
-  font-size:18px;
+  font-size:14px;
   font-weight:500;
 }
 
 .alloc-price-card--room-detail .price-v{
   color:#e5d3b3;
-  font-size:clamp(20px, 4.8vw, 24px);
+  font-size:16px;
   font-weight:800;
   letter-spacing:-.03em;
 }
 
 .room-detail-actions{
-  grid-row:4;
+  grid-row:3;
   display:grid;
   grid-template-columns:repeat(2, minmax(0, 1fr));
-  gap:14px;
-  margin-top:16px;
+  gap:12px;
+  margin-top:8px;
 }
 
 .room-detail-actions.is-view-only{
@@ -3911,10 +3918,10 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 
 .room-detail-actions .button{
   min-width:0;
-  min-height:72px;
-  padding:0 18px;
-  border-radius:24px;
-  font-size:18px;
+  min-height:56px;
+  padding:0 16px;
+  border-radius:16px;
+  font-size:14px;
   font-weight:800;
   letter-spacing:-.02em;
 }
@@ -3957,22 +3964,22 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 }
 
 .room-params-shell__header{
-  padding:28px 22px 14px;
+  padding:24px 20px 12px;
   text-align:center;
 }
 
 .room-params-shell__title{
   color:#fff;
-  font-size:clamp(30px, 6.4vw, 48px);
+  font-size:24px;
   line-height:1;
   font-weight:800;
   letter-spacing:-.05em;
 }
 
 .room-params-shell__subtitle{
-  margin-top:10px;
+  margin-top:8px;
   color:rgba(255,255,255,.6);
-  font-size:18px;
+  font-size:16px;
   line-height:1.2;
   font-weight:500;
 }
@@ -3982,7 +3989,7 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   overflow-y:auto;
   display:flex;
   flex-direction:column;
-  gap:18px;
+  gap:14px;
   padding:0 20px 20px;
   scrollbar-width:none;
   -ms-overflow-style:none;
@@ -3993,7 +4000,7 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 }
 
 .room-feature-grid--all .room-feature{
-  min-height:94px;
+  min-height:82px;
 }
 
 .room-params-shell__actions{
@@ -4002,12 +4009,12 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 
 .room-params-shell__actions .button.ghost{
   width:100%;
-  min-height:76px;
-  border-radius:24px;
+  min-height:56px;
+  border-radius:16px;
   border-color:rgba(255,255,255,.14);
   background:rgba(255,255,255,.08);
   color:#fff;
-  font-size:18px;
+  font-size:14px;
   font-weight:800;
 }
 
@@ -4016,72 +4023,79 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 }
 
 @media (max-width: 520px){
+  .modal-card.details.room-detail-shell{
+    width:min(400px, calc(100vw - 24px));
+    padding:20px 20px 18px;
+    gap:12px;
+  }
+
   .room-detail-title{
-    font-size:clamp(24px, 8vw, 32px);
+    font-size:22px;
   }
 
   .room-detail-gallery .viewport{
     min-height:200px;
+    height:200px;
   }
 
   .room-gal-arrow{
-    width:58px;
-    height:58px;
-    border-radius:22px;
+    width:40px;
+    height:40px;
+    border-radius:14px;
   }
 
   .room-gal-arrow svg{
-    width:24px;
-    height:24px;
+    width:18px;
+    height:18px;
   }
 
   .room-gal-counter{
-    min-width:74px;
-    padding:10px 14px;
-    font-size:16px;
+    min-width:52px;
+    padding:6px 9px;
+    font-size:12px;
   }
 
   .room-feature{
-    min-height:88px;
-    padding:12px 13px;
-    gap:10px;
+    min-height:78px;
+    padding:10px;
+    gap:8px;
   }
 
   .room-feature__iconbox{
-    width:48px;
-    height:48px;
-    border-radius:16px;
+    width:38px;
+    height:38px;
+    border-radius:12px;
   }
 
   .room-feature__value{
-    font-size:16px;
+    font-size:13px;
   }
 
   .room-toggle-all,
   .room-params-shell__actions .button.ghost,
   .room-detail-actions .button{
-    min-height:68px;
-    font-size:16px;
+    min-height:52px;
+    font-size:13px;
   }
 
   .alloc-price-card--room-detail{
-    padding:16px 18px;
+    padding:14px 16px;
   }
 
   .alloc-price-card--room-detail .price-k{
-    font-size:16px;
+    font-size:13px;
   }
 
   .alloc-price-card--room-detail .price-v{
-    font-size:clamp(18px, 5vw, 22px);
+    font-size:15px;
   }
 
   .room-params-shell__title{
-    font-size:clamp(24px, 8.6vw, 40px);
+    font-size:22px;
   }
 
   .room-params-shell__subtitle{
-    font-size:16px;
+    font-size:15px;
   }
 }
 
