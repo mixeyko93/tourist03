@@ -7558,13 +7558,21 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
             openRoomDetailsFromCart(room, campData, { rooms: g.rooms });
           } else {
             // Если несколько вариантов - показываем их список
+            const shell = document.getElementById('modalCard');
+            if (shell) {
+              shell.classList.remove('booking-shell');
+              shell.classList.remove('details');
+              shell.classList.add('accom-shell');
+            }
             showModal(`
               <div class="accom-card">
                 <div class="accom-head">
                   <div class="accom-title">${campData.name || 'База'} • ${g.class || g.name || 'Апартаменты'}</div>
-                  <div class="accom-sub">Выберите конкретный вариант</div>
+                  <div class="accom-sub">Выберите конкретный вариант для подробностей</div>
                 </div>
-                <div class="accom-list" id="addRoomVariants"></div>
+                <div class="accom-body">
+                  <div class="accom-list" id="addRoomVariants"></div>
+                </div>
                 <div class="accom-actions">
                   <button class="button ghost" id="addRoomBackVariants">Назад</button>
                 </div>
@@ -7591,8 +7599,8 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
                 const priceText = price > 0 ? `${price.toLocaleString('ru-RU')} ₽` : '—';
                 
                 return `
-                  <button class="accom-item" data-room-id="${room.id}" style="display:grid;grid-template-columns:64px 1fr auto;gap:12px;align-items:center;text-align:left">
-                    <img class="accom-thumb" src="${thumbUrl}" alt="" style="width:64px;height:64px;border-radius:10px;object-fit:cover">
+                  <button class="accom-item" data-room-id="${room.id}">
+                    <img class="accom-thumb" src="${thumbUrl}" alt="">
                     <div class="accom-main">
                       <div class="accom-name">${room.name || 'Апартамент'}</div>
                       <div class="accom-meta">до ${roomCapacity(room)} гостей</div>
@@ -8248,6 +8256,12 @@ function popNavStack() {
 function openRoomsList(campId, typeName, rooms, camp) {
   const cid = Number(campId);
   const ht = normalizeHousingType(camp?.housing_type || 'apartments');
+  const shell = document.getElementById('modalCard');
+  if (shell) {
+    shell.classList.remove('booking-shell');
+    shell.classList.remove('details');
+    shell.classList.add('accom-shell');
+  }
   
   showModal(`
     <div class="accom-card">
@@ -8255,7 +8269,9 @@ function openRoomsList(campId, typeName, rooms, camp) {
         <div class="accom-title">${camp?.name || 'База'} • ${typeName}</div>
         <div class="accom-sub">Выберите конкретный вариант для подробностей</div>
       </div>
-      <div class="accom-list" id="roomsDetailList"></div>
+      <div class="accom-body">
+        <div class="accom-list" id="roomsDetailList"></div>
+      </div>
       <div class="accom-actions">
         <button class="button ghost" id="roomsListBack">Назад</button>
         ${(Array.isArray(rooms) && rooms.length > 1) ? '' : `<button class="button primary" id="roomsListBook">Забронировать</button>`}
