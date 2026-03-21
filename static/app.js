@@ -259,26 +259,26 @@ function housingLabelObjectWord(housingType){
 }
 
 function roomFeatureIcon(kind){
-  const attrs = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
+  const attrs = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
   switch (kind) {
     case 'users':
-      return `<svg ${attrs}><path d="M16 21v-1.5a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4V21"></path><circle cx="9" cy="7" r="3"></circle><path d="M18 8a3 3 0 1 0 0-6"></path><path d="M22 21v-1.5a4 4 0 0 0-3-3.87"></path></svg>`;
+      return `<svg ${attrs}><path d="M15 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>`;
     case 'home':
-      return `<svg ${attrs}><path d="M3 10.5 12 3l9 7.5"></path><path d="M5 9.5V21h14V9.5"></path><path d="M9 21v-6h6v6"></path></svg>`;
+      return `<svg ${attrs}><path d="M3 10l9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V10z"></path><path d="M9 22V12h6v10"></path></svg>`;
     case 'bed':
-      return `<svg ${attrs}><path d="M3 20V9"></path><path d="M21 20V14a2 2 0 0 0-2-2H7a4 4 0 0 0-4 4v4"></path><path d="M7 12V8a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v4"></path><path d="M3 20h18"></path></svg>`;
+      return `<svg ${attrs}><path d="M4 5v14"></path><path d="M4 15h16v-5a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v5"></path><path d="M20 15v4"></path><path d="M4 11h16"></path></svg>`;
     case 'utensils':
-      return `<svg ${attrs}><path d="M4 3v8"></path><path d="M7 3v8"></path><path d="M4 7h3"></path><path d="M6 11v10"></path><path d="M14 3v18"></path><path d="M20 3v7a4 4 0 0 1-4 4h-2"></path></svg>`;
+      return `<svg ${attrs}><path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"></path><path d="M7 2v20"></path><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"></path></svg>`;
     case 'bath':
-      return `<svg ${attrs}><path d="M4 11h16"></path><path d="M6 11V8a2 2 0 0 1 2-2h2"></path><path d="M7 11v3a4 4 0 0 0 4 4h2a4 4 0 0 0 4-4v-3"></path><path d="M6 19v2"></path><path d="M18 19v2"></path><path d="M16 6a2 2 0 1 0-2-2"></path></svg>`;
+      return `<svg ${attrs}><path d="M4 11h16v4a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4v-4z"></path><path d="M6 19v2"></path><path d="M18 19v2"></path><path d="M2 11h20"></path><path d="M18 11V5a2 2 0 0 0-2-2h-3"></path><path d="M13 2h2"></path><path d="M13 5h2"></path></svg>`;
     case 'droplets':
-      return `<svg ${attrs}><path d="M12 2s5 5.2 5 10a5 5 0 1 1-10 0c0-4.8 5-10 5-10z"></path><path d="M9 13c.5 1.5 1.7 2.5 3 3"></path></svg>`;
+      return `<svg ${attrs}><path d="M7 16.3c-1.5 0-2.5-1.2-2.5-2.7 0-2 2.5-5.3 2.5-5.3s2.5 3.3 2.5 5.3c0 1.5-1.1 2.7-2.5 2.7z"></path><path d="M15 21c-2 0-3.5-1.5-3.5-3.5 0-2.5 3.5-7 3.5-7s3.5 4.5 3.5 7c0 2-1.5 3.5-3.5 3.5z"></path><path d="M19 12.5c-1 0-1.5-.5-1.5-1.5 0-1.5 1.5-3.5 1.5-3.5s1.5 2 1.5 3.5c0 1-.5 1.5-1.5 1.5z"></path></svg>`;
     case 'flame':
-      return `<svg ${attrs}><path d="M12 3c1.2 2 1.8 3.7 1.8 5.1 0 2.2-1.2 3.4-2.8 4.9-1.2 1.1-2 2.1-2 3.7a3.5 3.5 0 0 0 7 0c0-2.5-1.1-4.3-2.6-6.1.2 1.8-.6 2.9-1.7 3.8"></path></svg>`;
+      return `<svg ${attrs}><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path></svg>`;
     case 'tent':
-      return `<svg ${attrs}><path d="m4 20 8-15 8 15"></path><path d="M12 5v15"></path><path d="M8.5 13h7"></path><path d="M6 20h12"></path></svg>`;
+      return `<svg ${attrs}><path d="M12 4L3 20h18z"></path><path d="M12 4v16"></path><path d="M8 20l4-5"></path><path d="M16 20l-4-5"></path></svg>`;
     case 'wifi':
-      return `<svg ${attrs}><path d="M5 10.5a12 12 0 0 1 14 0"></path><path d="M8 14a7.5 7.5 0 0 1 8 0"></path><path d="M11 17.5a3 3 0 0 1 2 0"></path><circle cx="12" cy="20" r="1"></circle></svg>`;
+      return `<svg ${attrs}><path d="M5 13a10 10 0 0 1 14 0"></path><path d="M8.5 16.5a5 5 0 0 1 7 0"></path><path d="M2 9.5a15 15 0 0 1 20 0"></path><circle cx="12" cy="20" r="1.5" fill="currentColor" stroke="none"></circle></svg>`;
     case 'wind':
       return `<svg ${attrs}><path d="M3 8h10a2 2 0 1 0-2-2"></path><path d="M2 12h15a2.5 2.5 0 1 1-2.5 2.5"></path><path d="M4 16h9a2 2 0 1 1-2 2"></path></svg>`;
     case 'waves':
