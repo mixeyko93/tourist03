@@ -3701,7 +3701,7 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 }
 
 .room-detail-gallery .viewport img{
-  flex:0 0 100%;
+  flex:0 0 auto;
   width:100%;
   height:100%;
   display:block;

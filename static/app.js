@@ -8735,7 +8735,10 @@ function openRoomDetails(room, camp, context) {
     const N = imgs.length;
     if (vp) {
       vp.style.width = `${N * 100}%`;
-      imgs.forEach(img => { img.style.width = `${100 / N}%`; });
+      imgs.forEach(img => {
+        img.style.flex = '0 0 auto';
+        img.style.width = `${100 / N}%`;
+      });
     }
 
     let i = 0;
