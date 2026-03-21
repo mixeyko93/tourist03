@@ -1775,14 +1775,40 @@ function closeAllWindowsAndShowMap(){
   } catch (_) {}
 }
 
+function syncViewportCssVars(){
+  try {
+    const vv = window.visualViewport;
+    const vh = vv && Number.isFinite(vv.height) ? vv.height : (window.innerHeight || document.documentElement?.clientHeight || 0);
+    const vw = vv && Number.isFinite(vv.width) ? vv.width : (window.innerWidth || document.documentElement?.clientWidth || 0);
+    const root = document.documentElement;
+    if (!root) return;
+    if (vh > 0) root.style.setProperty('--app-vh', `${Math.round(vh)}px`);
+    if (vw > 0) root.style.setProperty('--app-vw', `${Math.round(vw)}px`);
+  } catch (_) {}
+}
+
 function updateModalTallClass(){
   if (!modal || !modalCard) return;
-  const vh = window.innerHeight || document.documentElement?.clientHeight || 0;
+  syncViewportCssVars();
+  const vv = window.visualViewport;
+  const vh = vv && Number.isFinite(vv.height) ? vv.height : (window.innerHeight || document.documentElement?.clientHeight || 0);
   if (!vh) return;
-  // modal has vertical padding (top+bottom) in CSS
-  const available = vh - 36;
+  const available = Math.max(0, vh - 24);
   const h = modalCard.scrollHeight || 0;
   modal.classList.toggle('is-tall', h > available);
+}
+
+if (!window.__viewportVarsBound) {
+  window.__viewportVarsBound = true;
+  try {
+    syncViewportCssVars();
+    window.addEventListener('resize', syncViewportCssVars, { passive: true });
+    window.addEventListener('orientationchange', syncViewportCssVars, { passive: true });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', syncViewportCssVars, { passive: true });
+      window.visualViewport.addEventListener('scroll', syncViewportCssVars, { passive: true });
+    }
+  } catch (_) {}
 }
 
 // Fix WebView scroll edge detection - ensure scroll container is never exactly at boundary

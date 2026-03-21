@@ -38,6 +38,11 @@
 
   --modal-overlay: rgba(0,0,0,0.62);
   --modal-bg: rgba(17,19,23,.92);
+  --app-vh: 100dvh;
+  --app-vw: 100vw;
+  --modal-safe-top: max(12px, env(safe-area-inset-top));
+  --modal-safe-bottom: max(12px, env(safe-area-inset-bottom));
+  --modal-available-height: calc(var(--app-vh) - var(--modal-safe-top) - var(--modal-safe-bottom));
   --modal-border: rgba(255,255,255,0.10);
 
   --field-bg: rgba(255,255,255,0.08);
@@ -427,9 +432,11 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   overflow-y:auto;
   -webkit-overflow-scrolling:touch;
   overscroll-behavior:contain;
-  padding:18px 0;
+  min-height:var(--app-vh);
+  padding:var(--modal-safe-top) 0 var(--modal-safe-bottom);
   align-items:center;
   justify-content:center;
+  box-sizing:border-box;
 }
 .modal.show{display:flex; animation:fadeIn .15s ease;}
 .modal.is-tall{ align-items:flex-start; }
@@ -441,8 +448,8 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   background:var(--modal-bg);
   border:1px solid var(--modal-border); border-radius:20px;
   padding:20px;
-  width:min(440px, 92vw);
-  max-height:none;
+  width:min(440px, calc(var(--app-vw) - 24px));
+  max-height:var(--modal-available-height);
   overflow:visible;
   box-shadow:0 6px 25px rgba(0,0,0,.4);
   box-sizing:border-box;
@@ -453,8 +460,8 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 
 /* Карточка «Подробнее»: всегда помещается в окно, кнопки видны без прокрутки */
 .modal-card.details{
-  width:min(520px, 92vw);              /* меньше, чтобы точно входило в окно */
-  max-height:92vh;
+  width:min(520px, calc(var(--app-vw) - 24px));              /* меньше, чтобы точно входило в окно */
+  max-height:var(--modal-available-height);
   display:grid;
   grid-template-rows: auto auto 1fr auto;
   gap:10px;
@@ -3254,8 +3261,8 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 
 /* ====================== ACCOMMODATIONS LIST (BOOKING FLOW) ====================== */
 .modal-card.accom-shell{
-  width:min(400px, calc(100vw - 32px));
-  max-height:95vh;
+  width:min(400px, calc(var(--app-vw) - 24px));
+  max-height:var(--modal-available-height);
   margin:0 auto;
   padding:0;
   overflow:hidden;
@@ -3656,8 +3663,8 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 
 /* ====================== ROOM DETAILS / ROOM PARAMS ====================== */
 .modal-card.details.room-detail-shell{
-  width:min(400px, calc(100vw - 32px));
-  max-height:95vh;
+  width:min(400px, calc(var(--app-vw) - 24px));
+  max-height:var(--modal-available-height);
   padding:24px 24px 20px;
   gap:14px;
   grid-template-rows:auto minmax(0,1fr) auto;
@@ -3948,8 +3955,8 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 }
 
 .modal-card.room-params-shell{
-  width:min(392px, calc(100vw - 28px));
-  max-height:min(760px, calc(100dvh - 24px));
+  width:min(392px, calc(var(--app-vw) - 24px));
+  max-height:min(760px, var(--modal-available-height));
   margin:0 auto;
   padding:0;
   overflow:hidden;
@@ -4124,6 +4131,156 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 
   .room-params-shell__subtitle{
     font-size:13px;
+  }
+}
+
+@media (max-height: 780px){
+  .modal{
+    padding:max(8px, env(safe-area-inset-top)) 0 max(8px, env(safe-area-inset-bottom));
+  }
+
+  .modal-card.accom-shell{
+    border-radius:28px;
+  }
+
+  .modal-card.details.room-detail-shell{
+    padding:16px 16px 14px;
+    gap:10px;
+    border-radius:28px;
+  }
+
+  .room-detail-title{
+    font-size:20px;
+  }
+
+  .room-detail-gallery{
+    border-radius:22px;
+  }
+
+  .room-detail-gallery .viewport{
+    height:170px;
+    min-height:170px;
+  }
+
+  .room-feature-grid{
+    gap:8px;
+  }
+
+  .room-feature{
+    min-height:68px;
+    padding:9px;
+    gap:8px;
+    border-radius:14px;
+  }
+
+  .room-feature__iconbox{
+    width:34px;
+    height:34px;
+    border-radius:12px;
+  }
+
+  .room-feature__iconbox svg{
+    width:16px;
+    height:16px;
+  }
+
+  .room-feature__label{
+    font-size:8px;
+  }
+
+  .room-feature__value{
+    font-size:12px;
+  }
+
+  .room-toggle-all{
+    min-height:46px;
+    border-radius:14px;
+  }
+
+  .room-toggle-all.button.ghost{
+    font-size:12px;
+  }
+
+  .alloc-price-card--room-detail{
+    padding:12px 14px;
+    border-radius:16px;
+    gap:10px;
+  }
+
+  .alloc-price-card--room-detail .price-k{
+    font-size:12px;
+  }
+
+  .alloc-price-card--room-detail .price-v{
+    font-size:14px;
+  }
+
+  .room-detail-actions{
+    gap:10px;
+    margin-top:4px;
+  }
+
+  .room-detail-actions .button{
+    min-height:46px;
+    border-radius:14px;
+    font-size:12px;
+  }
+
+  .modal-card.room-params-shell{
+    border-radius:28px;
+  }
+
+  .room-params-shell__header{
+    padding:14px 14px 6px;
+  }
+
+  .room-params-shell__title{
+    font-size:18px;
+  }
+
+  .room-params-shell__subtitle{
+    font-size:12px;
+  }
+
+  .room-params-shell__body{
+    gap:8px;
+    padding:0 12px 12px;
+  }
+
+  .room-feature-grid--all{
+    gap:8px;
+  }
+
+  .room-feature-grid--all .room-feature{
+    min-height:60px;
+    padding:8px;
+    gap:7px;
+    border-radius:12px;
+  }
+
+  .room-feature-grid--all .room-feature__iconbox{
+    width:30px;
+    height:30px;
+    border-radius:10px;
+  }
+
+  .room-feature-grid--all .room-feature__iconbox svg{
+    width:14px;
+    height:14px;
+  }
+
+  .room-feature-grid--all .room-feature__label{
+    font-size:7px;
+  }
+
+  .room-feature-grid--all .room-feature__value{
+    font-size:10px;
+  }
+
+  .room-params-shell__actions .button.ghost{
+    min-height:42px;
+    border-radius:12px;
+    font-size:12px;
   }
 }
 
