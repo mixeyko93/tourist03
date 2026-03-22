@@ -251,6 +251,7 @@ html, body{
   width:min(408px, calc(var(--app-vw) - 24px));
   max-height:var(--modal-available-height);
   margin:0 auto;
+  min-height:0;
   padding:0;
   overflow:hidden;
   display:flex;
@@ -270,10 +271,17 @@ html, body{
 .auth-card{
   display:flex;
   flex-direction:column;
+  flex:1 1 auto;
   min-height:0;
   gap:14px;
   padding:24px 20px 20px;
   color:#fff;
+  overflow-y:auto;
+  scrollbar-width:none;
+  -ms-overflow-style:none;
+}
+.auth-card::-webkit-scrollbar{
+  display:none;
 }
 .auth-card--compact{
   padding-top:20px;
@@ -368,17 +376,28 @@ html, body{
   transition: background-color 9999s ease-in-out 0s;
 }
 .auth-field input::placeholder{
-  color:rgba(255,255,255,.24);
+  color:rgba(255,255,255,.09);
   opacity:1;
+  transition:color .16s ease, opacity .16s ease;
 }
 .auth-field input.auth-code::placeholder{
-  color:rgba(255,255,255,.18);
+  color:rgba(255,255,255,.11);
+}
+.auth-field textarea::placeholder{
+  color:rgba(255,255,255,.09);
+  opacity:1;
+  transition:color .16s ease, opacity .16s ease;
 }
 .auth-field input.auth-code{
   text-align:center;
   letter-spacing:.24em;
   font-size:24px;
   font-weight:800;
+}
+.auth-field input:focus::placeholder,
+.auth-field textarea:focus::placeholder{
+  color:transparent;
+  opacity:0;
 }
 .auth-field:focus-within{
   border-color:rgba(229,211,179,.28);
@@ -674,6 +693,14 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 .modal.show{display:flex;}
 .modal.show.modal-animate-in{animation:modalOverlayIn var(--modal-overlay-enter-duration) var(--modal-enter-ease);}
 .modal.is-tall{ align-items:flex-start; }
+.modal.is-tall .modal-scroll{
+  align-items:flex-start;
+  padding-top:6px;
+  padding-bottom:6px;
+}
+.modal.is-tall .modal-card.auth-shell{
+  max-height:calc(var(--modal-available-height) - 12px);
+}
 .modal.auth-modal{z-index:7200 !important;}
 #modal{z-index:6500;}
 

@@ -1808,15 +1808,25 @@ function updateModalTallClass(){
   modal.classList.toggle('is-tall', h > available);
 }
 
+function handleViewportGeometryChange(){
+  try { syncViewportCssVars(); } catch (_) {}
+  try {
+    if (modal && modal.classList.contains('show')) {
+      updateModalTallClass();
+      requestAnimationFrame(() => fixScrollEdge(modal));
+    }
+  } catch (_) {}
+}
+
 if (!window.__viewportVarsBound) {
   window.__viewportVarsBound = true;
   try {
-    syncViewportCssVars();
-    window.addEventListener('resize', syncViewportCssVars, { passive: true });
-    window.addEventListener('orientationchange', syncViewportCssVars, { passive: true });
+    handleViewportGeometryChange();
+    window.addEventListener('resize', handleViewportGeometryChange, { passive: true });
+    window.addEventListener('orientationchange', handleViewportGeometryChange, { passive: true });
     if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', syncViewportCssVars, { passive: true });
-      window.visualViewport.addEventListener('scroll', syncViewportCssVars, { passive: true });
+      window.visualViewport.addEventListener('resize', handleViewportGeometryChange, { passive: true });
+      window.visualViewport.addEventListener('scroll', handleViewportGeometryChange, { passive: true });
     }
   } catch (_) {}
 }
@@ -1985,6 +1995,20 @@ if (modal) {
     if (scrollTimeout) clearTimeout(scrollTimeout);
     scrollTimeout = setTimeout(() => fixScrollEdge(modal), 150);
   }, { passive: true });
+  modal.addEventListener('focusin', (e) => {
+    const target = e.target;
+    if (!(target instanceof HTMLElement)) return;
+    if (!target.matches('.auth-field input, .auth-field textarea')) return;
+    setTimeout(() => {
+      try { handleViewportGeometryChange(); } catch (_) {}
+      try {
+        const field = target.closest('.auth-field');
+        if (field && typeof field.scrollIntoView === 'function') {
+          field.scrollIntoView({ block: 'center', inline: 'nearest' });
+        }
+      } catch (_) {}
+    }, 180);
+  }, true);
 }
 function showAuthChoiceModal({ title = 'Необходима авторизация', subtitle = '', onCancel, onLogin, onRegister } = {}){
   const prev = document.getElementById('authChoiceModal');
