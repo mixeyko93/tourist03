@@ -1826,12 +1826,24 @@ function fixScrollEdge(scrollEl){
   }
 }
 
-function restartModalOpenAnimation(targetModal){
+function restartModalOpenAnimation(targetModal, targetCard){
   if (!targetModal) return;
   try {
+    const cards = targetCard
+      ? [targetCard]
+      : Array.from(targetModal.querySelectorAll('.modal-card'));
+    cards.forEach((card) => {
+      try { card.classList.remove('modal-card-animate-in'); } catch (_) {}
+    });
     targetModal.classList.remove('modal-animate-in');
     void targetModal.offsetWidth;
     targetModal.classList.add('modal-animate-in');
+    cards.forEach((card) => {
+      try {
+        void card.offsetWidth;
+        card.classList.add('modal-card-animate-in');
+      } catch (_) {}
+    });
   } catch (_) {}
 }
 
@@ -1841,7 +1853,7 @@ function showModal(html){
   modalCard.innerHTML = html;
   modal.style.display = 'flex';
   try { modal.classList.add('show'); } catch (_) {}
-  restartModalOpenAnimation(modal);
+  restartModalOpenAnimation(modal, modalCard);
   // Reset scroll position
   try { modal.scrollTop = 0; } catch (_) {}
   try {
@@ -1874,7 +1886,7 @@ function showAuthModal(html){
   modal.style.display = 'flex'; 
   modal.classList.add('auth-modal');
   try { modal.classList.add('show'); } catch (_) {}
-  restartModalOpenAnimation(modal);
+  restartModalOpenAnimation(modal, modalCard);
   // Reset scroll position
   try { modal.scrollTop = 0; } catch (_) {}
   try {
@@ -3417,6 +3429,7 @@ function closeModal(){
         card.__onResize = null;
       }
 		  try { delete card.dataset.view; } catch(_) {}
+      card.classList.remove('modal-card-animate-in');
 		  card.innerHTML = '';
 		  card.classList.remove('booking-shell');  // снимаем «узкую» оболочку
 		  card.classList.remove('details');       // снимаем «детали», если открывали карточку номера
@@ -4726,26 +4739,49 @@ async function openDetails(campId, opts = {}){
     let isClosed = false;
     let onKeyDown = null;
     let onResize = null;
-    const closeDetails = () => {
+    const closeDetails = (afterClose) => {
       if (isClosed) return;
       isClosed = true;
       try { if (onKeyDown) window.removeEventListener('keydown', onKeyDown); } catch (_) {}
       try { if (onResize) window.removeEventListener('resize', onResize); } catch (_) {}
-      if (modal && modal.parentNode) modal.parentNode.removeChild(modal);
+      const shell = modal ? modal.querySelector('.camp-detail-shell') : null;
+      let finished = false;
+      const finishClose = () => {
+        if (finished) return;
+        finished = true;
+        try {
+          if (modal && modal.parentNode) modal.parentNode.removeChild(modal);
+        } catch (_) {}
+        if (typeof afterClose === 'function') {
+          try { afterClose(); } catch (_) {}
+        }
+      };
+      try {
+        modal.classList.add('is-closing');
+        if (shell) shell.classList.add('is-closing');
+      } catch (_) {}
+      window.setTimeout(finishClose, 240);
     };
 
     const bookBtn = modal.querySelector('.camp-detail__action--book');
     const housingBtnEl = modal.querySelector('.camp-detail__action--housing');
     const backBtn = modal.querySelector('.camp-detail__action--back');
 
-    if (bookBtn) bookBtn.onclick = () => { hapticPulse('soft', 14); openBookingFilterWithAuth(campId); };
-    if (housingBtnEl) housingBtnEl.onclick = () => { hapticPulse('light', 12); closeDetails(); openCampHousing(campId); };
+    if (bookBtn) bookBtn.onclick = () => {
+      hapticPulse('soft', 14);
+      closeDetails(() => { openBookingFilterWithAuth(campId); });
+    };
+    if (housingBtnEl) housingBtnEl.onclick = () => {
+      hapticPulse('light', 12);
+      closeDetails(() => { openCampHousing(campId); });
+    };
     if (backBtn) backBtn.onclick = () => {
       hapticPulse('selection', 12);
-      closeDetails();
-      if (onBack) {
-        try { onBack(); } catch(_) {}
-      }
+      closeDetails(() => {
+        if (onBack) {
+          try { onBack(); } catch(_) {}
+        }
+      });
     };
 
     modal.addEventListener('click', (event) => {

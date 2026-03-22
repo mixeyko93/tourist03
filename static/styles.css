@@ -458,7 +458,8 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 }
 
 .modal.show.modal-animate-in > .modal-card:not(.camp-detail-modal),
-.modal.show.modal-animate-in > .modal-scroll > .modal-card:not(.camp-detail-modal){
+.modal.show.modal-animate-in > .modal-scroll > .modal-card:not(.camp-detail-modal),
+.modal-card.modal-card-animate-in:not(.camp-detail-modal){
   animation:modalCardEnter var(--modal-card-enter-duration) var(--modal-enter-ease);
 }
 
@@ -490,6 +491,40 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   to{
     opacity:1;
     transform:translateY(0) scale(1);
+  }
+}
+
+.modal-card.modal-card-animate-in .accom-head,
+.modal-card.modal-card-animate-in .room-params-shell__header,
+.modal-card.modal-card-animate-in .details-title,
+.modal-card.modal-card-animate-in .details-desc,
+.modal-card.modal-card-animate-in .room-detail-title{
+  animation:modalSectionFadeUp .34s var(--modal-enter-ease) both;
+}
+
+.modal-card.modal-card-animate-in .accom-body,
+.modal-card.modal-card-animate-in .room-params-shell__body,
+.modal-card.modal-card-animate-in .details-body,
+.modal-card.modal-card-animate-in .room-detail-body,
+.modal-card.modal-card-animate-in .booking-card{
+  animation:modalSectionFadeUp .38s var(--modal-enter-ease) both .05s;
+}
+
+.modal-card.modal-card-animate-in .accom-actions,
+.modal-card.modal-card-animate-in .room-params-shell__actions,
+.modal-card.modal-card-animate-in .room-detail-actions,
+.modal-card.modal-card-animate-in .actions{
+  animation:modalSectionFadeUp .42s var(--modal-enter-ease) both .1s;
+}
+
+@keyframes modalSectionFadeUp{
+  from{
+    opacity:0;
+    transform:translateY(14px);
+  }
+  to{
+    opacity:1;
+    transform:translateY(0);
   }
 }
 
@@ -4377,6 +4412,10 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   overflow:hidden;
 }
 
+.camp-detail-overlay.is-closing{
+  animation:campDetailOverlayOut .22s cubic-bezier(.22,.86,.22,1) both;
+}
+
 .camp-detail-shell{
   position:relative;
   width:min(400px, 100%);
@@ -4411,6 +4450,10 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   box-shadow:0 28px 70px rgba(0,0,0,.4);
   backdrop-filter:blur(28px);
   animation:camp-detail-enter .42s cubic-bezier(.22,1,.36,1);
+}
+
+.camp-detail-shell.is-closing .camp-detail-modal{
+  animation:camp-detail-exit .22s cubic-bezier(.22,.86,.22,1) both;
 }
 
 .camp-detail__close{
@@ -4770,9 +4813,19 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   to{opacity:1; transform:translateY(0) scale(1);}
 }
 
+@keyframes camp-detail-exit{
+  from{opacity:1; transform:translateY(0) scale(1);}
+  to{opacity:0; transform:translateY(14px) scale(.97);}
+}
+
 @keyframes camp-detail-fade-up{
   from{opacity:0; transform:translateY(10px);}
   to{opacity:1; transform:translateY(0);}
+}
+
+@keyframes campDetailOverlayOut{
+  from{opacity:1}
+  to{opacity:0}
 }
 
 @keyframes camp-detail-image-shine{
