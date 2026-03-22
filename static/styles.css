@@ -44,6 +44,9 @@
   --modal-safe-bottom: max(12px, env(safe-area-inset-bottom));
   --modal-available-height: calc(var(--app-vh) - var(--modal-safe-top) - var(--modal-safe-bottom));
   --modal-border: rgba(255,255,255,0.10);
+  --modal-enter-ease: cubic-bezier(.22,1,.36,1);
+  --modal-overlay-enter-duration: .24s;
+  --modal-card-enter-duration: .42s;
 
   --field-bg: rgba(255,255,255,0.08);
   --field-placeholder: rgba(255,255,255,0.40);
@@ -438,11 +441,31 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   justify-content:center;
   box-sizing:border-box;
 }
-.modal.show{display:flex; animation:fadeIn .15s ease;}
+.modal.show{display:flex;}
+.modal.show.modal-animate-in{animation:modalOverlayIn var(--modal-overlay-enter-duration) var(--modal-enter-ease);}
 .modal.is-tall{ align-items:flex-start; }
 .modal.auth-modal{z-index:7200 !important;}
 #modal{z-index:6500;}
-@keyframes fadeIn{from{opacity:0} to{opacity:1}}
+
+.modal-scroll{
+  width:100%;
+  min-height:var(--modal-available-height);
+  display:flex;
+  align-items:inherit;
+  justify-content:inherit;
+  padding:0 12px;
+  box-sizing:border-box;
+}
+
+.modal.show.modal-animate-in > .modal-card:not(.camp-detail-modal),
+.modal.show.modal-animate-in > .modal-scroll > .modal-card:not(.camp-detail-modal){
+  animation:modalCardEnter var(--modal-card-enter-duration) var(--modal-enter-ease);
+}
+
+@keyframes modalOverlayIn{
+  from{opacity:0}
+  to{opacity:1}
+}
 
 .modal-card{
   background:var(--modal-bg);
@@ -455,8 +478,20 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
   box-sizing:border-box;
   /* Prevent card from shrinking */
   flex-shrink:0;
+  transform-origin:center bottom;
+  will-change:transform, opacity;
 }
-@keyframes scaleIn{to{transform:scale(1)}}
+
+@keyframes modalCardEnter{
+  from{
+    opacity:0;
+    transform:translateY(28px) scale(.96);
+  }
+  to{
+    opacity:1;
+    transform:translateY(0) scale(1);
+  }
+}
 
 /* Карточка «Подробнее»: всегда помещается в окно, кнопки видны без прокрутки */
 .modal-card.details{

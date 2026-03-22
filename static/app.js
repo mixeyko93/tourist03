@@ -69,7 +69,7 @@ function showMiniLoader() {
   if (__miniLoader) { startMiniEmojiLoop(); return; }
 
   __miniLoader = document.createElement('div');
-  __miniLoader.className = 'modal show';           // перекрывает всё
+  __miniLoader.className = 'modal show modal-animate-in';           // перекрывает всё
   __miniLoader.id = 't03-mini-loader';
 
   // полностью прозрачная карточка, по центру только крупное эмодзи
@@ -521,7 +521,7 @@ async function openCampDetails(campId) {
   const em = emojis[Math.floor(Math.random() * emojis.length)];
 
   const loading = document.createElement('div');
-  loading.className = 'modal show';
+  loading.className = 'modal show modal-animate-in';
   loading.innerHTML = `
     <div class="modal-card" style="text-align:center;padding:20px">
       <div style="font-weight:600;font-size:16px;">Загрузка ${em}</div>
@@ -548,7 +548,7 @@ async function openCampDetails(campId) {
     const ph = photos.length ? photos.map(p=>p.url) : (camp.photo_main ? [camp.photo_main] : []);
 
     const modal = document.createElement('div');
-    modal.className = 'modal show';
+    modal.className = 'modal show modal-animate-in';
     modal.innerHTML = `
       <div class="modal-card auth">
         <div class="title" style="text-align:center;">${camp.name || 'База'}</div>
@@ -1826,12 +1826,22 @@ function fixScrollEdge(scrollEl){
   }
 }
 
+function restartModalOpenAnimation(targetModal){
+  if (!targetModal) return;
+  try {
+    targetModal.classList.remove('modal-animate-in');
+    void targetModal.offsetWidth;
+    targetModal.classList.add('modal-animate-in');
+  } catch (_) {}
+}
+
 function showModal(html){
   try { delete modalCard.dataset.view; } catch (_) {}
   try { modal.classList.remove('auth-modal'); } catch (_) {}
   modalCard.innerHTML = html;
   modal.style.display = 'flex';
   try { modal.classList.add('show'); } catch (_) {}
+  restartModalOpenAnimation(modal);
   // Reset scroll position
   try { modal.scrollTop = 0; } catch (_) {}
   try {
@@ -1864,6 +1874,7 @@ function showAuthModal(html){
   modal.style.display = 'flex'; 
   modal.classList.add('auth-modal');
   try { modal.classList.add('show'); } catch (_) {}
+  restartModalOpenAnimation(modal);
   // Reset scroll position
   try { modal.scrollTop = 0; } catch (_) {}
   try {
@@ -1906,7 +1917,7 @@ function showAuthChoiceModal({ title = 'Необходима авторизац�
   if (prev) prev.remove();
   const wrap = document.createElement('div');
   wrap.id = 'authChoiceModal';
-  wrap.className = 'modal show';
+  wrap.className = 'modal show modal-animate-in';
   wrap.style.zIndex = '9999';
   wrap.innerHTML = `
     <div class="modal-scroll">
@@ -1953,7 +1964,7 @@ function showConfirmModal({
 
     const wrap = document.createElement('div');
     wrap.id = 'appConfirmModal';
-    wrap.className = 'modal show';
+    wrap.className = 'modal show modal-animate-in';
     wrap.style.zIndex = '10000';
     wrap.innerHTML = `
       <div class="modal-scroll">
@@ -3388,10 +3399,11 @@ function closeModal(){
   const card  = document.getElementById('modalCard');
   const view = card?.dataset?.view || '';
   const shouldDraftToast = view === 'booking-confirmation' && !!(window.__bookingDraft || loadBookingDraft()) && !window.__suppressDraftToastOnce;
-	if (modal) {
+  if (modal) {
     modal.style.display = 'none';
     modal.classList.remove('auth-modal');
     modal.classList.remove('show');
+    modal.classList.remove('modal-animate-in');
     modal.classList.remove('is-tall');
   }
 	if (card) {
@@ -5332,7 +5344,7 @@ function openBookingFilterModal(opts = {}) {
   // Если нужно сохранить фоновое окно, создаём отдельное окно для фильтра
   if (dontCloseBackground) {
     const filterModal = document.createElement('div');
-    filterModal.className = 'modal show';
+    filterModal.className = 'modal show modal-animate-in';
     filterModal.id = 'filterModal';
     // Должен быть поверх основного #modal (корзина/подбор), но ниже полноэкранной галереи
     filterModal.style.zIndex = '6600';
@@ -6465,7 +6477,7 @@ function showBookingSuccessNotification(result, opts = {}) {
       : `№${(bookingIds && bookingIds[0]) || '—'}`);
   
   const modal = document.createElement('div');
-  modal.className = 'modal show';
+  modal.className = 'modal show modal-animate-in';
   modal.style.zIndex = '9999';
   
   modal.innerHTML = `
@@ -7128,7 +7140,7 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
 	    const fixedRateText = (!adultRateText && !childRateText && priceFixed > 0) ? `${formatPriceRub(priceFixed)}/сутки (за дом)` : '';
 
 	    const sheet = document.createElement('div');
-	    sheet.className = 'modal show';
+	    sheet.className = 'modal show modal-animate-in';
 	    // Должно быть поверх #modal (корзина), но ниже auth/fullscreen
 	    sheet.style.zIndex = '6800';
 
