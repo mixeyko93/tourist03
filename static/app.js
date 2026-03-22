@@ -1989,6 +1989,7 @@ if (modal) {
 function showAuthChoiceModal({ title = 'Необходима авторизация', subtitle = '', onCancel, onLogin, onRegister } = {}){
   const prev = document.getElementById('authChoiceModal');
   if (prev) prev.remove();
+  const message = String(subtitle || title || 'Необходима авторизация');
   const wrap = document.createElement('div');
   wrap.id = 'authChoiceModal';
   wrap.className = 'modal show';
@@ -1997,10 +1998,7 @@ function showAuthChoiceModal({ title = 'Необходима авторизац�
     <div class="modal-scroll">
       <div class="modal-card auth-shell">
         <div class="auth-card auth-card--center auth-card--compact">
-          <div class="auth-head">
-            <div class="auth-title">${escapeHtml(title)}</div>
-          </div>
-          ${subtitle ? `<div class="auth-subtitle">${escapeHtml(subtitle)}</div>` : ''}
+          <div class="auth-subtitle">${escapeHtml(message)}</div>
           <div class="auth-actions">
             <button class="button ghost" id="authChoiceLogin">Вход</button>
             <button class="button primary" id="authChoiceRegister">Регистрация</button>
