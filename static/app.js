@@ -521,19 +521,29 @@ async function openCampDetails(campId) {
   const em = emojis[Math.floor(Math.random() * emojis.length)];
 
   const loading = document.createElement('div');
-  loading.className = 'modal show modal-animate-in';
+  loading.className = 'modal show';
   loading.innerHTML = `
-    <div class="modal-card" style="text-align:center;padding:20px">
-      <div style="font-weight:600;font-size:16px;">Загрузка ${em}</div>
+    <div class="modal-card auth-shell">
+      <div class="auth-card auth-card--center auth-card--compact">
+        <div class="auth-badge">${em}</div>
+        <div class="auth-head">
+          <div class="auth-title">Загрузка</div>
+        </div>
+        <div class="auth-subtitle" id="campDetailsLoadingText">Подготавливаем карточку базы.</div>
+      </div>
     </div>`;
   document.body.appendChild(loading);
+  restartModalOpenAnimation(loading, loading.querySelector('.modal-card'));
 
   let spin = true;
   const symbols = ['🏖️','⛺','🏕️','🏔️','🌊','🚣‍♀️','🗺️','🌞','🌲','🔥'];
   let idx = 0;
   const interval = setInterval(() => {
     idx = (idx + 1) % symbols.length;
-    if (loading.querySelector('div')) loading.querySelector('div').innerHTML = `Загрузка ${symbols[idx]}`;
+    const badge = loading.querySelector('.auth-badge');
+    const text = loading.querySelector('#campDetailsLoadingText');
+    if (badge) badge.textContent = symbols[idx];
+    if (text) text.textContent = 'Подготавливаем карточку базы.';
   }, 500);
 
   try {
@@ -1888,9 +1898,19 @@ function restartModalOpenAnimation(targetModal, targetCard){
   } catch (_) {}
 }
 
+function syncAuthShellForMarkup(markup){
+  try {
+    if (!modalCard) return;
+    const html = String(markup || '');
+    const isAuthCard = /\bauth-card\b/.test(html);
+    modalCard.classList.toggle('auth-shell', isAuthCard);
+  } catch (_) {}
+}
+
 function showModal(html){
   try { delete modalCard.dataset.view; } catch (_) {}
   try { modal.classList.remove('auth-modal'); } catch (_) {}
+  syncAuthShellForMarkup(html);
   modalCard.innerHTML = html;
   modal.style.display = 'flex';
   try { modal.classList.add('show'); } catch (_) {}
@@ -1923,6 +1943,7 @@ function showModal(html){
   } catch (_) {}
 }
 function showAuthModal(html){ 
+  syncAuthShellForMarkup(html || '<div class="auth-card"></div>');
   modalCard.innerHTML = html; 
   modal.style.display = 'flex'; 
   modal.classList.add('auth-modal');
@@ -1970,26 +1991,29 @@ function showAuthChoiceModal({ title = 'Необходима авторизац�
   if (prev) prev.remove();
   const wrap = document.createElement('div');
   wrap.id = 'authChoiceModal';
-  wrap.className = 'modal show modal-animate-in';
+  wrap.className = 'modal show';
   wrap.style.zIndex = '9999';
   wrap.innerHTML = `
     <div class="modal-scroll">
-      <div class="modal-card auth">
-        <div class="auth-card" style="text-align:center">
-          <div class="auth-head" style="justify-content:center">
+      <div class="modal-card auth-shell">
+        <div class="auth-card auth-card--center auth-card--compact">
+          <div class="auth-head">
             <div class="auth-title">${escapeHtml(title)}</div>
           </div>
-          ${subtitle ? `<div class="auth-subtitle" style="color:#fff;margin:12px 0 16px;line-height:1.5;font-size:15px">${escapeHtml(subtitle)}</div>` : ''}
-          <div class="auth-actions" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-            <button class="button primary" id="authChoiceLogin" style="background:#2a9df4;border-color:#2a9df4">Вход</button>
-            <button class="button primary" id="authChoiceRegister" style="background:#22c55e;border-color:#22c55e">Регистрация</button>
+          ${subtitle ? `<div class="auth-subtitle">${escapeHtml(subtitle)}</div>` : ''}
+          <div class="auth-actions">
+            <button class="button ghost" id="authChoiceLogin">Вход</button>
+            <button class="button primary" id="authChoiceRegister">Регистрация</button>
           </div>
-          <button class="button ghost" id="authChoiceCancel" style="width:100%">Отмена</button>
+          <div class="auth-actions auth-actions--single">
+            <button class="button ghost" id="authChoiceCancel">Отмена</button>
+          </div>
         </div>
       </div>
     </div>
   `;
   document.body.appendChild(wrap);
+  restartModalOpenAnimation(wrap, wrap.querySelector('.modal-card'));
 
   const scrollEl = wrap.querySelector('.modal-scroll');
   const close = () => { try { wrap.remove(); } catch (_) {} };
@@ -2017,17 +2041,17 @@ function showConfirmModal({
 
     const wrap = document.createElement('div');
     wrap.id = 'appConfirmModal';
-    wrap.className = 'modal show modal-animate-in';
+    wrap.className = 'modal show';
     wrap.style.zIndex = '10000';
     wrap.innerHTML = `
       <div class="modal-scroll">
-        <div class="modal-card">
-          <div class="auth-card" style="text-align:center">
-            <div class="auth-head" style="justify-content:center">
+        <div class="modal-card auth-shell">
+          <div class="auth-card auth-card--center auth-card--compact">
+            <div class="auth-head">
               <div class="auth-title">${escapeHtml(title)}</div>
             </div>
-            ${message ? `<div class="auth-subtitle" style="margin:8px 0 6px">${escapeHtml(message)}</div>` : ''}
-            <div class="auth-actions" style="grid-template-columns: 1fr 1fr;">
+            ${message ? `<div class="auth-subtitle">${escapeHtml(message)}</div>` : ''}
+            <div class="auth-actions">
               <button type="button" class="button ghost" id="appConfirmNo">${escapeHtml(cancelText)}</button>
               <button type="button" class="button ${danger ? 'danger' : 'primary'}" id="appConfirmYes">${escapeHtml(confirmText)}</button>
             </div>
@@ -2036,6 +2060,7 @@ function showConfirmModal({
       </div>
     `;
     document.body.appendChild(wrap);
+    restartModalOpenAnimation(wrap, wrap.querySelector('.modal-card'));
 
     const scrollEl = wrap.querySelector('.modal-scroll');
     const close = (val) => {
@@ -3489,6 +3514,7 @@ function closeModal(){
 		  card.classList.remove('details');       // снимаем «детали», если открывали карточку номера
       card.classList.remove('accom-shell');
       card.classList.remove('room-detail-shell');
+      card.classList.remove('auth-shell');
 		 }
   if (shouldDraftToast) {
     showDraftSavedCartToast({ timeoutMs: 1800 });
@@ -3638,7 +3664,7 @@ function openTerms(draft){
         <div class="auth-title">Пользовательское соглашение</div>
       </div>
       <div class="auth-subtitle">Прочитайте условия перед регистрацией.</div>
-      <div id="terms_text" style="white-space:pre-wrap;max-height:55vh;overflow:auto;border:1px solid var(--border-color);border-radius:14px;padding:12px;background:rgba(255,255,255,0.03);font-size:13px;line-height:1.45;"></div>
+      <div id="terms_text" class="auth-scroll-panel"></div>
       <div class="auth-actions">
         <button class="button ghost" id="terms_back">Назад</button>
         <button class="button primary" id="terms_ok">Согласен</button>
@@ -4302,7 +4328,9 @@ async function openAccountProfile(){
         <button class="button ghost" id="pf_back">Назад</button>
         <button class="button primary" id="pf_save" disabled>Сохранить</button>
       </div>
-      <button class="button" id="pf_logout_btn" style="width:100%;margin-top:12px;background:transparent;border:2px solid #ef4444;color:#ef4444;font-weight:700;">Выйти из аккаунта</button>
+      <div class="auth-actions auth-actions--single">
+        <button class="button danger" id="pf_logout_btn">Выйти из аккаунта</button>
+      </div>
       <div class="auth-note">Для тестов код подтверждения: ${TEST_VERIFY_CODE}</div>
     </div>
   `);
@@ -4993,9 +5021,14 @@ async function openDetails(campId, opts = {}){
 
     console.error(e);
     showModal(`
-      <div class="card">
-        <p class="muted">Не удалось загрузить карточку базы.</p>
-        <div class="actions"><button class="button primary" onclick="closeModal()">OK</button></div>
+      <div class="auth-card auth-card--center auth-card--compact">
+        <div class="auth-head">
+          <div class="auth-title">Не удалось открыть базу</div>
+        </div>
+        <div class="auth-subtitle">Не удалось загрузить карточку базы. Попробуйте открыть её ещё раз.</div>
+        <div class="auth-actions auth-actions--single">
+          <button class="button primary" onclick="closeModal()">Понятно</button>
+        </div>
       </div>`);
     return null;
   }
@@ -6567,28 +6600,35 @@ function showBookingSuccessNotification(result, opts = {}) {
       : `№${(bookingIds && bookingIds[0]) || '—'}`);
   
   const modal = document.createElement('div');
-  modal.className = 'modal show modal-animate-in';
+  modal.className = 'modal show';
   modal.style.zIndex = '9999';
   
   modal.innerHTML = `
-    <div class="modal-card" style="max-width:400px;text-align:center;padding:24px">
-      <div style="font-size:48px;margin-bottom:16px">✅</div>
-      <div style="font-size:20px;font-weight:600;margin-bottom:12px;color:#22c55e">Заявка отправлена!</div>
-      <div style="font-size:14px;line-height:1.5;color:#e5e7eb;margin-bottom:16px">
+    <div class="modal-card auth-shell">
+      <div class="auth-card auth-card--center auth-card--compact">
+        <div class="auth-badge auth-badge--success">✓</div>
+        <div class="auth-head">
+          <div class="auth-title">Заявка отправлена!</div>
+        </div>
+        <div class="auth-subtitle">
         Ваша заявка на бронирование ${idsText} успешно создана.
-      </div>
-      <div style="font-size:13px;line-height:1.6;color:#9ca3af;margin-bottom:20px">
+        </div>
+        <div class="auth-note auth-note--success">
         Администратор проверит данные и подтвердит бронь. Вы получите уведомление о статусе заявки.
         <br><br>
         Вы также можете следить за статусом брони в личном кабинете.
         <br><br>
-        <strong style="color:#22c55e">Приятного отдыха! 🏖️</strong>
+        Приятного отдыха.
+        </div>
+        <div class="auth-actions auth-actions--single">
+          <button class="button primary" id="successOkBtn">Понятно</button>
+        </div>
       </div>
-      <button class="button primary" id="successOkBtn" style="width:100%">Понятно</button>
     </div>
   `;
   
   document.body.appendChild(modal);
+  restartModalOpenAnimation(modal, modal.querySelector('.modal-card'));
   const onDone = (opts && typeof opts.onDone === 'function') ? opts.onDone : null;
   
   const okBtn = modal.querySelector('#successOkBtn');
@@ -7230,40 +7270,46 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
 	    const fixedRateText = (!adultRateText && !childRateText && priceFixed > 0) ? `${formatPriceRub(priceFixed)}/сутки (за дом)` : '';
 
 	    const sheet = document.createElement('div');
-	    sheet.className = 'modal show modal-animate-in';
+	    sheet.className = 'modal show';
 	    // Должно быть поверх #modal (корзина), но ниже auth/fullscreen
 	    sheet.style.zIndex = '6800';
 
 	    sheet.innerHTML = `
-	      <div class="modal-card" style="width:92vw;max-width:380px;margin:0 auto;border-radius:18px">
-	        <div style="font-size:18px;font-weight:700;margin-bottom:12px;text-align:center">Распределение гостей</div>
-	        <div style="font-size:13px;color:#9ca3af;margin-bottom:${bedsInfo ? '8px' : '16px'};text-align:center">
-	          ${room.name || room.room_type || 'Апартамент'} (до ${cap} гостей)
-	        </div>
-	        ${bedsInfo ? `<div style="font-size:12px;color:#9ca3af;margin-bottom:16px;text-align:center">Спальные места: ${bedsInfo}</div>` : ''}
+	      <div class="modal-card auth-shell guest-picker-shell">
+          <div class="auth-card auth-card--center auth-card--compact">
+            <div class="auth-head">
+              <div class="auth-title">Распределение гостей</div>
+            </div>
+            <div class="auth-subtitle">
+              ${room.name || room.room_type || 'Апартамент'} • до ${cap} гостей
+            </div>
+            ${bedsInfo ? `<div class="auth-note">Спальные места: ${bedsInfo}</div>` : ''}
 
-	        <div style="display:grid;gap:12px;margin-bottom:18px">
-	          <div class="bk-field" style="display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:12px">
-	            <span style="color:#9aa3af;font-size:13px">Взрослые</span>
-	            <span class="muted" style="margin:0;font-size:12px;justify-self:end">${adultRateText || fixedRateText || '&nbsp;'}</span>
-	            <select id="guestAdults" class="bk-select" style="width:100px"></select>
+	        <div class="auth-picker-grid">
+	          <div class="auth-picker-row">
+	            <span class="auth-picker-label">Взрослые</span>
+	            <span class="auth-picker-meta">${adultRateText || fixedRateText || '&nbsp;'}</span>
+	            <select id="guestAdults" class="auth-picker-select"></select>
 	          </div>
-	          <div class="bk-field" style="display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:12px">
-	            <span style="color:#9aa3af;font-size:13px">Дети</span>
-	            <span class="muted" style="margin:0;font-size:12px;justify-self:end">${childRateText || '&nbsp;'}</span>
-	            <select id="guestKids" class="bk-select" style="width:100px"></select>
+	          <div class="auth-picker-row">
+	            <span class="auth-picker-label">Дети</span>
+	            <span class="auth-picker-meta">${childRateText || '&nbsp;'}</span>
+	            <select id="guestKids" class="auth-picker-select"></select>
 	          </div>
-	          <div class="muted" style="text-align:center;font-size:12px">Дети размещаются только с минимум одним взрослым</div>
+	          <div class="auth-note">Дети размещаются только с минимум одним взрослым.</div>
 	        </div>
 
-        <div style="display:grid;gap:10px">
-          <button class="button primary" id="guestApply" style="width:100%">Применить</button>
-          <button class="button ghost" id="guestCancel" style="width:100%">Отмена</button>
+        <div class="auth-actions auth-actions--single">
+          <button class="button primary" id="guestApply">Применить</button>
         </div>
-      </div>
+        <div class="auth-actions auth-actions--single">
+          <button class="button ghost" id="guestCancel">Отмена</button>
+        </div>
+          </div>
+        </div>
     `;
-
     document.body.appendChild(sheet);
+    restartModalOpenAnimation(sheet, sheet.querySelector('.modal-card'));
 
     const applyBtn = sheet.querySelector('#guestApply');
     const cancelBtn = sheet.querySelector('#guestCancel');
