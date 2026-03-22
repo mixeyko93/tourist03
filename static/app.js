@@ -1832,17 +1832,58 @@ function restartModalOpenAnimation(targetModal, targetCard){
     const cards = targetCard
       ? [targetCard]
       : Array.from(targetModal.querySelectorAll('.modal-card'));
+    if (targetModal.__entryAnimationFrame) {
+      try { cancelAnimationFrame(targetModal.__entryAnimationFrame); } catch (_) {}
+      targetModal.__entryAnimationFrame = null;
+    }
+    if (targetModal.__entryAnimationTimer) {
+      try { clearTimeout(targetModal.__entryAnimationTimer); } catch (_) {}
+      targetModal.__entryAnimationTimer = null;
+    }
     cards.forEach((card) => {
       try { card.classList.remove('modal-card-animate-in'); } catch (_) {}
+      try {
+        card.style.transition = 'none';
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(32px) scale(0.96)';
+      } catch (_) {}
     });
     targetModal.classList.remove('modal-animate-in');
+    try {
+      targetModal.style.transition = 'none';
+      targetModal.style.opacity = '0';
+    } catch (_) {}
     void targetModal.offsetWidth;
-    targetModal.classList.add('modal-animate-in');
-    cards.forEach((card) => {
+    cards.forEach((card) => { try { void card.offsetWidth; } catch (_) {} });
+    targetModal.__entryAnimationFrame = requestAnimationFrame(() => {
+      targetModal.classList.add('modal-animate-in');
       try {
-        void card.offsetWidth;
-        card.classList.add('modal-card-animate-in');
+        targetModal.style.transition = 'opacity .24s cubic-bezier(.22,1,.36,1)';
+        targetModal.style.opacity = '1';
       } catch (_) {}
+      cards.forEach((card) => {
+        try {
+          card.classList.add('modal-card-animate-in');
+          card.style.transition = 'transform .42s cubic-bezier(.22,1,.36,1), opacity .42s cubic-bezier(.22,1,.36,1)';
+          card.style.opacity = '1';
+          card.style.transform = 'translateY(0) scale(1)';
+        } catch (_) {}
+      });
+      targetModal.__entryAnimationTimer = setTimeout(() => {
+        try {
+          targetModal.style.transition = '';
+          targetModal.style.opacity = '';
+        } catch (_) {}
+        cards.forEach((card) => {
+          try {
+            card.style.transition = '';
+            card.style.opacity = '';
+            card.style.transform = '';
+          } catch (_) {}
+        });
+        targetModal.__entryAnimationTimer = null;
+      }, 520);
+      targetModal.__entryAnimationFrame = null;
     });
   } catch (_) {}
 }
@@ -3412,7 +3453,17 @@ function closeModal(){
   const view = card?.dataset?.view || '';
   const shouldDraftToast = view === 'booking-confirmation' && !!(window.__bookingDraft || loadBookingDraft()) && !window.__suppressDraftToastOnce;
   if (modal) {
+    if (modal.__entryAnimationFrame) {
+      try { cancelAnimationFrame(modal.__entryAnimationFrame); } catch (_) {}
+      modal.__entryAnimationFrame = null;
+    }
+    if (modal.__entryAnimationTimer) {
+      try { clearTimeout(modal.__entryAnimationTimer); } catch (_) {}
+      modal.__entryAnimationTimer = null;
+    }
     modal.style.display = 'none';
+    modal.style.transition = '';
+    modal.style.opacity = '';
     modal.classList.remove('auth-modal');
     modal.classList.remove('show');
     modal.classList.remove('modal-animate-in');
@@ -3430,6 +3481,9 @@ function closeModal(){
       }
 		  try { delete card.dataset.view; } catch(_) {}
       card.classList.remove('modal-card-animate-in');
+      card.style.transition = '';
+      card.style.opacity = '';
+      card.style.transform = '';
 		  card.innerHTML = '';
 		  card.classList.remove('booking-shell');  // снимаем «узкую» оболочку
 		  card.classList.remove('details');       // снимаем «детали», если открывали карточку номера
