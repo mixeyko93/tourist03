@@ -1,5 +1,8 @@
+import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
+
 import type { BookingFilter } from "../lib/booking";
+import { windowCardMotion, windowOverlayMotion } from "../lib/windowMotion";
 
 type BookingFilterSheetProps = {
   open: boolean;
@@ -34,8 +37,6 @@ export function BookingFilterSheet({ open, value, onClose, onApply }: BookingFil
     setError(null);
   }, [open, value]);
 
-  if (!open) return null;
-
   const totalGuests = draft.adults + draft.kids;
 
   function applyFilter() {
@@ -65,98 +66,102 @@ export function BookingFilterSheet({ open, value, onClose, onApply }: BookingFil
   }
 
   return (
-    <div className="sheet-backdrop" onClick={onClose}>
-      <div className="sheet-card" onClick={(event) => event.stopPropagation()}>
-        <div className="sheet-card__kicker">Фильтр бронирования</div>
-        <h2>Выберите даты и гостей</h2>
-        <p>
-          После применения карта покажет только те базы, где реально можно
-          разместить выбранный состав гостей на нужные даты.
-        </p>
+    <AnimatePresence>
+      {open ? (
+        <motion.div className="sheet-backdrop" onClick={onClose} {...windowOverlayMotion}>
+          <motion.div className="sheet-card" onClick={(event) => event.stopPropagation()} {...windowCardMotion}>
+            <div className="sheet-card__kicker">Фильтр бронирования</div>
+            <h2>Выберите даты и гостей</h2>
+            <p>
+              После применения карта покажет только те базы, где реально можно
+              разместить выбранный состав гостей на нужные даты.
+            </p>
 
-        <div className="sheet-grid">
-          <label className="sheet-field">
-            <span>Заезд</span>
-            <input
-              type="date"
-              value={draft.from}
-              onChange={(event) => setDraft((current) => ({ ...current, from: event.target.value }))}
-            />
-          </label>
+            <div className="sheet-grid">
+              <label className="sheet-field">
+                <span>Заезд</span>
+                <input
+                  type="date"
+                  value={draft.from}
+                  onChange={(event) => setDraft((current) => ({ ...current, from: event.target.value }))}
+                />
+              </label>
 
-          <label className="sheet-field">
-            <span>Выезд</span>
-            <input
-              type="date"
-              value={draft.to}
-              onChange={(event) => setDraft((current) => ({ ...current, to: event.target.value }))}
-            />
-          </label>
+              <label className="sheet-field">
+                <span>Выезд</span>
+                <input
+                  type="date"
+                  value={draft.to}
+                  onChange={(event) => setDraft((current) => ({ ...current, to: event.target.value }))}
+                />
+              </label>
 
-          <label className="sheet-field">
-            <span>Взрослые</span>
-            <select
-              value={draft.adults}
-              onChange={(event) => setDraft((current) => ({ ...current, adults: Number(event.target.value) || 1 }))}
-            >
-              {Array.from({ length: 30 }, (_, index) => index + 1).map((valueOption) => (
-                <option key={valueOption} value={valueOption}>
-                  {valueOption}
-                </option>
-              ))}
-            </select>
-          </label>
+              <label className="sheet-field">
+                <span>Взрослые</span>
+                <select
+                  value={draft.adults}
+                  onChange={(event) => setDraft((current) => ({ ...current, adults: Number(event.target.value) || 1 }))}
+                >
+                  {Array.from({ length: 30 }, (_, index) => index + 1).map((valueOption) => (
+                    <option key={valueOption} value={valueOption}>
+                      {valueOption}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-          <label className="sheet-field">
-            <span>Дети</span>
-            <select
-              value={draft.kids}
-              onChange={(event) => setDraft((current) => ({ ...current, kids: Number(event.target.value) || 0 }))}
-            >
-              {Array.from({ length: 31 }, (_, index) => index).map((valueOption) => (
-                <option key={valueOption} value={valueOption}>
-                  {valueOption}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
+              <label className="sheet-field">
+                <span>Дети</span>
+                <select
+                  value={draft.kids}
+                  onChange={(event) => setDraft((current) => ({ ...current, kids: Number(event.target.value) || 0 }))}
+                >
+                  {Array.from({ length: 31 }, (_, index) => index).map((valueOption) => (
+                    <option key={valueOption} value={valueOption}>
+                      {valueOption}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
 
-        <label className="sheet-checkbox">
-          <input
-            type="checkbox"
-            checked={draft.allowSplitRooms}
-            onChange={(event) =>
-              setDraft((current) => ({
-                ...current,
-                allowSplitRooms: event.target.checked,
-              }))
-            }
-          />
-          <span>Показывать варианты с размещением в несколько номеров или домов</span>
-        </label>
+            <label className="sheet-checkbox">
+              <input
+                type="checkbox"
+                checked={draft.allowSplitRooms}
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    allowSplitRooms: event.target.checked,
+                  }))
+                }
+              />
+              <span>Показывать варианты с размещением в несколько номеров или домов</span>
+            </label>
 
-        <div className="sheet-summary">
-          <strong>{totalGuests}</strong> гостей
-          <span>
-            {draft.adults} взрослых{draft.kids ? `, ${draft.kids} детей` : ""}
-          </span>
-        </div>
+            <div className="sheet-summary">
+              <strong>{totalGuests}</strong> гостей
+              <span>
+                {draft.adults} взрослых{draft.kids ? `, ${draft.kids} детей` : ""}
+              </span>
+            </div>
 
-        {error ? <div className="sheet-error">{error}</div> : null}
+            {error ? <div className="sheet-error">{error}</div> : null}
 
-        <div className="sheet-actions">
-          <button type="button" className="sheet-button sheet-button--ghost" onClick={onClose}>
-            Закрыть
-          </button>
-          <button type="button" className="sheet-button sheet-button--ghost" onClick={() => onApply(null)}>
-            Сбросить
-          </button>
-          <button type="button" className="sheet-button" onClick={applyFilter}>
-            Применить
-          </button>
-        </div>
-      </div>
-    </div>
+            <div className="sheet-actions">
+              <button type="button" className="sheet-button sheet-button--ghost" onClick={onClose}>
+                Закрыть
+              </button>
+              <button type="button" className="sheet-button sheet-button--ghost" onClick={() => onApply(null)}>
+                Сбросить
+              </button>
+              <button type="button" className="sheet-button" onClick={applyFilter}>
+                Применить
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
   );
 }

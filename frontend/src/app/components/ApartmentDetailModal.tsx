@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
 
+import { windowCardMotion, windowOverlayMotion } from "../../lib/windowMotion";
 import { FacilityIcon, type FacilityIconName } from "./FacilityIcons";
 import "./ApartmentModals.css";
 
@@ -81,16 +82,11 @@ export function ApartmentDetailModal({
       {isOpen ? (
         <motion.div
           className="apartment-modal-overlay"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
+          {...windowOverlayMotion}
         >
           <motion.div
             className="apartment-modal-card"
-            initial={{ opacity: 0, y: 28, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.96 }}
-            transition={{ type: "spring", stiffness: 280, damping: 28 }}
+            {...windowCardMotion}
           >
             <div className="apartment-modal-scroller">
               <header className="apartment-modal-header">

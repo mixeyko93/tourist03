@@ -651,6 +651,8 @@ select {
   background: rgba(255, 251, 244, 0.96);
   border: 1px solid rgba(28, 33, 28, 0.08);
   box-shadow: 0 26px 60px rgba(20, 25, 21, 0.22);
+  transform-origin: center bottom;
+  will-change: transform, opacity;
 }
 
 .sheet-card--narrow {

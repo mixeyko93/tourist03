@@ -1,5 +1,8 @@
+import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
+
 import type { StoredAuth } from "../lib/auth";
+import { windowCardMotion, windowOverlayMotion } from "../lib/windowMotion";
 import type { AuthTokenUserResponse } from "../types/auth";
 
 type AuthSheetProps = {
@@ -21,8 +24,6 @@ export function AuthSheet({ open, onClose, onSuccess }: AuthSheetProps) {
     setError(null);
     setCode("");
   }, [open]);
-
-  if (!open) return null;
 
   async function startLogin() {
     setIsLoading(true);
@@ -74,63 +75,71 @@ export function AuthSheet({ open, onClose, onSuccess }: AuthSheetProps) {
   }
 
   return (
-    <div className="sheet-backdrop" onClick={onClose}>
-      <div className="sheet-card sheet-card--narrow" onClick={(event) => event.stopPropagation()}>
-        <div className="sheet-card__kicker">Вход для бронирования</div>
-        <h2>Войдите по номеру телефона</h2>
-        <p>
-          Новый экран уже использует тот же auth API. Для бронирования нужен
-          существующий аккаунт пользователя.
-        </p>
+    <AnimatePresence>
+      {open ? (
+        <motion.div className="sheet-backdrop" onClick={onClose} {...windowOverlayMotion}>
+          <motion.div
+            className="sheet-card sheet-card--narrow"
+            onClick={(event) => event.stopPropagation()}
+            {...windowCardMotion}
+          >
+            <div className="sheet-card__kicker">Вход для бронирования</div>
+            <h2>Войдите по номеру телефона</h2>
+            <p>
+              Новый экран уже использует тот же auth API. Для бронирования нужен
+              существующий аккаунт пользователя.
+            </p>
 
-        <label className="sheet-field">
-          <span>Телефон</span>
-          <input
-            type="tel"
-            placeholder="+7 900 000 00 00"
-            value={phone}
-            onChange={(event) => setPhone(event.target.value)}
-          />
-        </label>
+            <label className="sheet-field">
+              <span>Телефон</span>
+              <input
+                type="tel"
+                placeholder="+7 900 000 00 00"
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+              />
+            </label>
 
-        {step === "code" ? (
-          <label className="sheet-field">
-            <span>Код подтверждения</span>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={code}
-              onChange={(event) => setCode(event.target.value)}
-            />
-          </label>
-        ) : null}
+            {step === "code" ? (
+              <label className="sheet-field">
+                <span>Код подтверждения</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={code}
+                  onChange={(event) => setCode(event.target.value)}
+                />
+              </label>
+            ) : null}
 
-        {error ? <div className="sheet-error">{error}</div> : null}
+            {error ? <div className="sheet-error">{error}</div> : null}
 
-        <div className="sheet-actions">
-          <button type="button" className="sheet-button sheet-button--ghost" onClick={onClose}>
-            Закрыть
-          </button>
-          {step === "phone" ? (
-            <button type="button" className="sheet-button" onClick={() => void startLogin()} disabled={isLoading || !phone.trim()}>
-              {isLoading ? "Отправка..." : "Получить код"}
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="sheet-button"
-              onClick={() => void verifyLogin()}
-              disabled={isLoading || !phone.trim() || !code.trim()}
-            >
-              {isLoading ? "Проверка..." : "Войти"}
-            </button>
-          )}
-        </div>
+            <div className="sheet-actions">
+              <button type="button" className="sheet-button sheet-button--ghost" onClick={onClose}>
+                Закрыть
+              </button>
+              {step === "phone" ? (
+                <button type="button" className="sheet-button" onClick={() => void startLogin()} disabled={isLoading || !phone.trim()}>
+                  {isLoading ? "Отправка..." : "Получить код"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="sheet-button"
+                  onClick={() => void verifyLogin()}
+                  disabled={isLoading || !phone.trim() || !code.trim()}
+                >
+                  {isLoading ? "Проверка..." : "Войти"}
+                </button>
+              )}
+            </div>
 
-        <div className="sheet-note">
-          Если аккаунта ещё нет, регистрацию пока нужно пройти в старом пользовательском экране.
-        </div>
-      </div>
-    </div>
+            <div className="sheet-note">
+              Если аккаунта ещё нет, регистрацию пока нужно пройти в старом пользовательском экране.
+            </div>
+          </motion.div>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
   );
 }
