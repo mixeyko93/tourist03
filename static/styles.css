@@ -3900,6 +3900,13 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 .alloc-card{display:grid; gap:12px; overflow-x:hidden; max-width:100%;}
 .confirm-sheet-camp{justify-content:center;}
 .alloc-hint{min-height:18px; font-size:13px; line-height:1.35; text-align:center;}
+.alloc-hint--panel{
+  padding:14px 16px;
+  border-radius:18px;
+  border:1px solid rgba(255,255,255,.08);
+  background:rgba(255,255,255,.04);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.02);
+}
 .alloc-hint.ok{color:#22c55e;}
 .alloc-hint.warn{color:#f59e0b;}
 .alloc-hint.err{color:#ef4444;}
@@ -3992,18 +3999,70 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 }
 .alloc-summary{
   border:1px solid rgba(255,255,255,0.08);
-  border-radius:12px;
-  background:rgba(255,255,255,0.03);
-  padding:10px 12px;
+  border-radius:18px;
+  background:rgba(255,255,255,0.04);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.02);
+  padding:14px 16px;
   display:grid;
-  gap:6px;
+  gap:10px;
 }
 .alloc-summary:empty{display:none;}
 .alloc-row{display:flex; justify-content:space-between; gap:10px; align-items:center;}
+.alloc-row--total{
+  font-weight:700;
+  font-size:16px;
+}
 .alloc-val{font-weight:900; color:var(--tg-text); white-space:nowrap;}
 .alloc-actions{display:grid; grid-template-columns:1fr; gap:10px;}
 .alloc-actions .button{height:42px; border-radius:12px; min-width:0; width:100%;}
 .alloc-actions.is-row{grid-template-columns:1fr 1fr;}
+.alloc-actions .alloc-cta,
+.alloc-pick-actions .alloc-cta{
+  height:54px;
+}
+.alloc-cta{
+  min-height:54px;
+  width:100%;
+  border-radius:18px !important;
+  font-weight:800 !important;
+  letter-spacing:-.02em;
+  transition:transform .18s ease, border-color .18s ease, background .18s ease, box-shadow .18s ease, opacity .18s ease;
+}
+.alloc-cta:hover{
+  transform:translateY(-1px);
+}
+.alloc-cta:active{
+  transform:translateY(0) scale(.98);
+}
+.alloc-cta--ghost{
+  border-color:rgba(255,255,255,.10) !important;
+  background:rgba(255,255,255,.03) !important;
+  color:#fff !important;
+}
+.alloc-cta--soft{
+  border-color:rgba(96,165,250,.22) !important;
+  background:rgba(59,130,246,.10) !important;
+  color:rgba(219,234,254,.96) !important;
+  box-shadow:0 0 0 1px rgba(96,165,250,.10), 0 16px 28px rgba(15,23,42,.12);
+}
+.alloc-cta--danger{
+  border-color:rgba(248,113,113,.24) !important;
+  background:rgba(127,29,29,.16) !important;
+  color:#fecaca !important;
+}
+.alloc-cta--primary{
+  border-color:#22c55e !important;
+  background:linear-gradient(180deg, #2bcc6a 0%, #22c55e 100%) !important;
+  color:#fff !important;
+  box-shadow:0 18px 34px rgba(34,197,94,.22);
+}
+.alloc-cta.is-disabled,
+.alloc-cta[aria-disabled="true"],
+.alloc-cta:disabled{
+  opacity:.55;
+  box-shadow:none;
+  transform:none;
+}
 
 .alloc-pick-actions{
   display:flex;
@@ -4045,6 +4104,28 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 }
 .alloc-pick-actions.is-full .pick-main{
   max-width:1000px;
+}
+.alloc-comment-input{
+  width:100%;
+  min-height:128px;
+  resize:none;
+  border-radius:18px;
+  border:1px solid rgba(255,255,255,.08);
+  background:rgba(255,255,255,.04);
+  color:var(--tg-text);
+  padding:14px 16px;
+  box-sizing:border-box;
+  outline:none;
+  font:inherit;
+  line-height:1.5;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.02);
+}
+.alloc-comment-input::placeholder{
+  color:rgba(255,255,255,.34);
+}
+.alloc-comment-input:focus{
+  border-color:rgba(96,165,250,.28);
+  box-shadow:0 0 0 1px rgba(96,165,250,.14), inset 0 1px 0 rgba(255,255,255,.02);
 }
 
 /* price block inside details */

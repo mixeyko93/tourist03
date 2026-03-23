@@ -2740,18 +2740,18 @@ function openEmptyBookingConfirmationModal(opts = {}){
         <span class="confirm-dates-hint">Нажмите, чтобы изменить даты</span>
       </button>
 
-      <div class="alloc-hint muted" id="confirmHint" style="text-align:center;">${hintText}</div>
+      <div class="alloc-hint alloc-hint--panel muted" id="confirmHint">${hintText}</div>
 
       <div class="alloc-list" id="confirmList"></div>
 
-      <button class="button ghost alloc-autopick" id="confirmAutoPick" style="width:100%;margin-top:12px;">Подбор апартаментов для вас</button>
+      <button class="button alloc-cta alloc-cta--soft alloc-autopick" id="confirmAutoPick">Подбор апартаментов для вас</button>
 
-		      <div class="alloc-actions is-row">
-		        <button class="button ghost" id="confirmBack">Закрыть корзину</button>
-		        <button class="button is-disabled" style="background:#22c55e;border-color:#22c55e;color:#fff;font-weight:600" id="confirmSubmit" aria-disabled="true">БРОНИРУЮ!</button>
-		      </div>
-		    </div>
-		  `);
+      <div class="alloc-actions is-row">
+        <button class="button ghost alloc-cta alloc-cta--ghost" id="confirmBack">Закрыть корзину</button>
+        <button class="button alloc-cta alloc-cta--primary is-disabled" id="confirmSubmit" aria-disabled="true">БРОНИРУЮ!</button>
+      </div>
+    </div>
+  `);
 
 	  const hintEl = document.getElementById('confirmHint');
 	  const editDatesBtn = document.getElementById('confirmEditDates');
@@ -2958,14 +2958,14 @@ async function openBookingCompareListModal({ filter } = {}){
         </div>
       </div>
 
-      <div class="alloc-hint muted" style="text-align:center;">${hintText}</div>
+      <div class="alloc-hint alloc-hint--panel muted">${hintText}</div>
       <div class="compare-list" id="compareCampsList">
         <div class="muted" style="text-align:center;padding:18px 0;">Подбираем варианты…</div>
       </div>
 
       <div class="alloc-actions">
-        <button class="button ghost" id="compareBack">Назад</button>
-        <button class="button primary" id="compareGoCart" disabled>Перейти в корзину</button>
+        <button class="button ghost alloc-cta alloc-cta--ghost" id="compareBack">Назад</button>
+        <button class="button alloc-cta alloc-cta--primary" id="compareGoCart" disabled>Перейти в корзину</button>
       </div>
     </div>
   `);
@@ -6679,13 +6679,14 @@ function openBookingCommentModal({ initialValue = '', onBack, onSubmit } = {}){
         <div class="accom-sub muted">Необязательно</div>
       </div>
 
-      <textarea id="orderComment"
-        style="width:100%;min-height:120px;resize:none;border-radius:14px;border:1px solid var(--border-color);background:rgba(255,255,255,0.03);color:var(--tg-text);padding:12px;box-sizing:border-box;outline:none;"
+      <textarea
+        id="orderComment"
+        class="alloc-comment-input"
         placeholder="Например:\n— Приедем поздно вечером\n— Нужны раздельные кровати\n— Будем с ребёнком\n— Нужны отчётные документы"></textarea>
 
       <div class="alloc-actions is-row">
-        <button class="button ghost" id="orderCommentBack">Назад</button>
-        <button class="button" style="background:#22c55e;border-color:#22c55e;color:#fff;font-weight:600" id="orderCommentSubmit">БРОНИРУЮ!</button>
+        <button class="button ghost alloc-cta alloc-cta--ghost" id="orderCommentBack">Назад</button>
+        <button class="button alloc-cta alloc-cta--primary" id="orderCommentSubmit">БРОНИРУЮ!</button>
       </div>
     </div>
   `);
@@ -7078,29 +7079,29 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
           <span class="confirm-dates-hint">Нажмите, чтобы изменить даты</span>
         </button>
 
-      <div class="alloc-hint muted" id="confirmHint">Проверьте данные бронирования и распределите гостей.</div>
+      <div class="alloc-hint alloc-hint--panel muted" id="confirmHint">Проверьте данные бронирования и распределите гостей.</div>
 
       <div class="alloc-list" id="confirmList"></div>
       
-      <button class="button ghost" id="confirmAddRoom" style="width:100%">+ Добавить ${addWord}</button>
+      <button class="button alloc-cta alloc-cta--soft" id="confirmAddRoom">+ Добавить ${addWord}</button>
 
-		      <div class="alloc-summary" id="confirmSummary" style="display:none"></div>
+      <div class="alloc-summary" id="confirmSummary" style="display:none"></div>
 	      
-		      <div class="alloc-pick-actions is-full" id="confirmPickActions">
-		        <div class="pick-col pick-main">
-		          <button class="button ghost alloc-autopick" id="confirmAutoPick">Подбор в этой базе</button>
-		        </div>
-		        <div class="pick-col pick-cancel">
-		          <button class="button ghost" id="confirmCancelPick" style="border-color:#ef4444;color:#ef4444">Отменить подбор</button>
-		        </div>
-		      </div>
+      <div class="alloc-pick-actions is-full" id="confirmPickActions">
+        <div class="pick-col pick-main">
+          <button class="button alloc-cta alloc-cta--soft alloc-autopick" id="confirmAutoPick">Подбор в этой базе</button>
+        </div>
+        <div class="pick-col pick-cancel">
+          <button class="button alloc-cta alloc-cta--danger" id="confirmCancelPick">Отменить подбор</button>
+        </div>
+      </div>
 
-		      <div class="alloc-actions is-row">
-		        <button class="button ghost" id="confirmBack">Закрыть корзину</button>
-		        <button class="button" style="background:#22c55e;border-color:#22c55e;color:#fff;font-weight:600" id="confirmSubmit">БРОНИРУЮ!</button>
-		      </div>
-		    </div>
-		  `);
+      <div class="alloc-actions is-row">
+        <button class="button ghost alloc-cta alloc-cta--ghost" id="confirmBack">Закрыть корзину</button>
+        <button class="button alloc-cta alloc-cta--primary" id="confirmSubmit">БРОНИРУЮ!</button>
+      </div>
+    </div>
+  `);
   try { document.getElementById('modalCard').dataset.view = 'booking-confirmation'; } catch (_) {}
 
   const listEl = document.getElementById('confirmList');
@@ -7890,7 +7891,7 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
 	        if (needKids > 0) {
 	          rows.push(`<div class="alloc-row"><div class="muted">Дети (${v.sumKids})</div><div class="alloc-val">${formatPriceRub(kidsCost)}</div></div>`);
 	        }
-	        rows.push(`<div class="alloc-row" style="font-weight:600;font-size:16px"><div>${totalLabel}</div><div class="alloc-val">${priceText}</div></div>`);
+	        rows.push(`<div class="alloc-row alloc-row--total"><div>${totalLabel}</div><div class="alloc-val">${priceText}</div></div>`);
 	        summaryEl.innerHTML = rows.join('');
 	        summaryEl.style.display = '';
 	      } else {
