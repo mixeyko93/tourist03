@@ -4950,14 +4950,12 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 }
 .alloc-guest-btn{
   grid-area:guests;
-  display:flex;
-  align-items:flex-start;
-  justify-content:space-between;
-  flex-wrap:wrap;
+  display:grid;
+  grid-template-columns:minmax(0, 1fr) auto;
+  align-items:center;
   gap:12px;
-  row-gap:8px;
   padding:clamp(12px, 3.6vw, 14px) clamp(12px, 4vw, 16px);
-  min-height:clamp(74px, 22vw, 84px);
+  min-height:clamp(68px, 20vw, 78px);
   border-radius:18px;
   border:1px solid rgba(96,165,250,.14);
   background:#0f1216;
@@ -4977,17 +4975,17 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 .alloc-guest-btn__value{
   min-width:0;
   display:grid;
-  gap:4px;
+  gap:2px;
   color:#fff;
   font-size:clamp(14px, 4vw, 15px);
-  line-height:1.25;
+  line-height:1.18;
   font-weight:700;
 }
 .alloc-guest-line{
   display:block;
 }
 .alloc-inline-hint{
-  margin-left:auto;
+  align-self:center;
 }
 .alloc-guest-btn:hover .alloc-inline-hint{
   background:rgba(59,130,246,.16);
