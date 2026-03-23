@@ -5338,7 +5338,22 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   }
 
   .alloc-guest-btn{
+    grid-template-columns:1fr;
+    align-items:start;
+    gap:8px;
+    min-height:auto;
+    padding:10px 12px;
     border-radius:16px;
+  }
+
+  .alloc-guest-btn__value{
+    font-size:13px;
+    line-height:1.16;
+  }
+
+  .alloc-inline-hint{
+    justify-self:end;
+    align-self:end;
   }
 
   .alloc-card-actions{
