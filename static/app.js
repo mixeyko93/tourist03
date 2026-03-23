@@ -1817,6 +1817,7 @@ function updateModalTallClass(){
   const vv = window.visualViewport;
   const vh = vv && Number.isFinite(vv.height) ? vv.height : (window.innerHeight || document.documentElement?.clientHeight || 0);
   if (!vh) return;
+  try { applyBookingModalFit(modalCard); } catch (_) {}
   const available = Math.max(0, vh - 24);
   const h = modalCard.scrollHeight || 0;
   modal.classList.toggle('is-tall', h > available);
@@ -1858,6 +1859,51 @@ function fixScrollEdge(scrollEl){
   else if (scrollEl.scrollTop >= maxScroll) {
     scrollEl.scrollTop = maxScroll - 1;
   }
+}
+
+function applyBookingModalFit(card){
+  if (!card) return;
+  const view = String(card.dataset?.view || '');
+  const isBookingView = view === 'booking-confirmation' || view === 'booking-comment';
+  if (!isBookingView) {
+    try {
+      card.style.removeProperty('--booking-fit-scale');
+      card.classList.remove('booking-fit-scroll');
+    } catch (_) {}
+    return;
+  }
+  try {
+    const vv = window.visualViewport;
+    const vh = vv && Number.isFinite(vv.height) ? vv.height : (window.innerHeight || document.documentElement?.clientHeight || 0);
+    const vw = vv && Number.isFinite(vv.width) ? vv.width : (window.innerWidth || document.documentElement?.clientWidth || 0);
+    const availableH = Math.max(0, vh - 24);
+    const availableW = Math.max(0, vw - 24);
+    if (!availableH || !availableW) return;
+
+    let scale = 1;
+    card.classList.remove('booking-fit-scroll');
+    card.style.setProperty('--booking-fit-scale', '1');
+
+    for (let i = 0; i < 3; i += 1) {
+      const h = card.scrollHeight || card.offsetHeight || 0;
+      const w = card.offsetWidth || 0;
+      if (!h || !w) break;
+      const next = Math.min(1, availableH / h, availableW / w);
+      const clamped = Math.max(0.74, Math.min(1, next));
+      if (Math.abs(clamped - scale) < 0.01) {
+        scale = clamped;
+        break;
+      }
+      scale = clamped;
+      card.style.setProperty('--booking-fit-scale', String(scale));
+    }
+
+    card.style.setProperty('--booking-fit-scale', scale.toFixed(4));
+
+    const finalHeight = card.scrollHeight || card.offsetHeight || 0;
+    const stillTooTall = finalHeight > availableH + 1;
+    card.classList.toggle('booking-fit-scroll', stillTooTall);
+  } catch (_) {}
 }
 
 function restartModalOpenAnimation(targetModal, targetCard){
@@ -2767,6 +2813,7 @@ function openEmptyBookingConfirmationModal(opts = {}){
     </div>
   `);
   try { document.getElementById('modalCard').dataset.view = 'booking-confirmation'; } catch (_) {}
+  try { updateModalTallClass(); requestAnimationFrame(() => fixScrollEdge(modal)); } catch (_) {}
 
 	  const hintEl = document.getElementById('confirmHint');
 	  const editDatesBtn = document.getElementById('confirmEditDates');
@@ -6709,6 +6756,7 @@ function openBookingCommentModal({ initialValue = '', onBack, onSubmit } = {}){
     </div>
   `);
   try { document.getElementById('modalCard').dataset.view = 'booking-comment'; } catch (_) {}
+  try { updateModalTallClass(); requestAnimationFrame(() => fixScrollEdge(modal)); } catch (_) {}
 
   const ta = document.getElementById('orderComment');
   if (ta) {
@@ -7121,6 +7169,7 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
     </div>
   `);
   try { document.getElementById('modalCard').dataset.view = 'booking-confirmation'; } catch (_) {}
+  try { updateModalTallClass(); requestAnimationFrame(() => fixScrollEdge(modal)); } catch (_) {}
 
   const listEl = document.getElementById('confirmList');
   const hintEl = document.getElementById('confirmHint');
