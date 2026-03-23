@@ -1869,6 +1869,8 @@ function applyBookingModalFit(card){
     try {
       card.style.removeProperty('--booking-fit-scale');
       card.classList.remove('booking-fit-scroll');
+      card.classList.remove('booking-fit-compact');
+      card.classList.remove('booking-fit-tight');
     } catch (_) {}
     return;
   }
@@ -1881,7 +1883,11 @@ function applyBookingModalFit(card){
     if (!availableH || !availableW) return;
 
     let scale = 1;
+    const compactByViewport = availableH < 860 || availableW < 390;
+    const tightByViewport = availableH < 760 || availableW < 360;
     card.classList.remove('booking-fit-scroll');
+    card.classList.toggle('booking-fit-compact', compactByViewport);
+    card.classList.toggle('booking-fit-tight', tightByViewport);
     card.style.setProperty('--booking-fit-scale', '1');
 
     for (let i = 0; i < 3; i += 1) {
@@ -1889,7 +1895,7 @@ function applyBookingModalFit(card){
       const w = card.offsetWidth || 0;
       if (!h || !w) break;
       const next = Math.min(1, availableH / h, availableW / w);
-      const clamped = Math.max(0.74, Math.min(1, next));
+      const clamped = Math.max(0.58, Math.min(1, next));
       if (Math.abs(clamped - scale) < 0.01) {
         scale = clamped;
         break;
@@ -1898,9 +1904,21 @@ function applyBookingModalFit(card){
       card.style.setProperty('--booking-fit-scale', String(scale));
     }
 
+    const compact = compactByViewport || scale < 0.94;
+    const tight = tightByViewport || scale < 0.84;
+    card.classList.toggle('booking-fit-compact', compact);
+    card.classList.toggle('booking-fit-tight', tight);
     card.style.setProperty('--booking-fit-scale', scale.toFixed(4));
 
-    const finalHeight = card.scrollHeight || card.offsetHeight || 0;
+    let finalHeight = card.scrollHeight || card.offsetHeight || 0;
+    if (finalHeight > availableH + 1 && scale > 0.58) {
+      const refined = Math.max(0.58, Math.min(scale, availableH / finalHeight));
+      if (refined < scale - 0.005) {
+        scale = refined;
+        card.style.setProperty('--booking-fit-scale', scale.toFixed(4));
+        finalHeight = card.scrollHeight || card.offsetHeight || 0;
+      }
+    }
     const stillTooTall = finalHeight > availableH + 1;
     card.classList.toggle('booking-fit-scroll', stillTooTall);
   } catch (_) {}

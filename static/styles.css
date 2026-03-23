@@ -4342,6 +4342,18 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   --alloc-theme-danger-text:#f1c5bb;
 }
 
+#modalCard[data-view="booking-confirmation"].booking-fit-compact,
+#modalCard[data-view="booking-comment"].booking-fit-compact{
+  width:min(392px, calc(var(--app-vw) - 20px));
+  border-radius:28px;
+}
+
+#modalCard[data-view="booking-confirmation"].booking-fit-tight,
+#modalCard[data-view="booking-comment"].booking-fit-tight{
+  width:min(372px, calc(var(--app-vw) - 18px));
+  border-radius:24px;
+}
+
 #modalCard[data-view="booking-confirmation"] .alloc-card,
 #modalCard[data-view="booking-comment"] .alloc-card{
   flex:1 1 auto;
@@ -4349,6 +4361,18 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   gap:calc(14px * var(--booking-fit-scale));
   padding:calc(24px * var(--booking-fit-scale)) calc(20px * var(--booking-fit-scale)) calc(20px * var(--booking-fit-scale));
   overflow:visible;
+}
+
+#modalCard[data-view="booking-confirmation"].booking-fit-compact .alloc-card,
+#modalCard[data-view="booking-comment"].booking-fit-compact .alloc-card{
+  gap:calc(10px * var(--booking-fit-scale));
+  padding:calc(18px * var(--booking-fit-scale)) calc(16px * var(--booking-fit-scale)) calc(16px * var(--booking-fit-scale));
+}
+
+#modalCard[data-view="booking-confirmation"].booking-fit-tight .alloc-card,
+#modalCard[data-view="booking-comment"].booking-fit-tight .alloc-card{
+  gap:calc(8px * var(--booking-fit-scale));
+  padding:calc(15px * var(--booking-fit-scale)) calc(14px * var(--booking-fit-scale)) calc(14px * var(--booking-fit-scale));
 }
 
 #modalCard[data-view="booking-confirmation"].booking-fit-scroll .alloc-card,
@@ -4374,10 +4398,30 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   font-size:calc(28px * var(--booking-fit-scale));
 }
 
+#modalCard[data-view="booking-confirmation"].booking-fit-compact .accom-title,
+#modalCard[data-view="booking-comment"].booking-fit-compact .accom-title{
+  font-size:calc(24px * var(--booking-fit-scale));
+}
+
+#modalCard[data-view="booking-confirmation"].booking-fit-tight .accom-title,
+#modalCard[data-view="booking-comment"].booking-fit-tight .accom-title{
+  font-size:calc(22px * var(--booking-fit-scale));
+}
+
 #modalCard[data-view="booking-confirmation"] .confirm-sheet-camp,
 #modalCard[data-view="booking-comment"] .accom-sub{
   font-size:calc(18px * var(--booking-fit-scale));
   color:rgba(229,211,179,.84);
+}
+
+#modalCard[data-view="booking-confirmation"].booking-fit-compact .confirm-sheet-camp,
+#modalCard[data-view="booking-comment"].booking-fit-compact .accom-sub{
+  font-size:calc(15px * var(--booking-fit-scale));
+}
+
+#modalCard[data-view="booking-confirmation"].booking-fit-tight .confirm-sheet-camp,
+#modalCard[data-view="booking-comment"].booking-fit-tight .accom-sub{
+  font-size:calc(14px * var(--booking-fit-scale));
 }
 
 #modalCard[data-view="booking-confirmation"] .confirm-dates-btn{
@@ -4390,6 +4434,18 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
     inset 0 1px 0 rgba(255,255,255,.04),
     0 0 0 1px rgba(229,211,179,.08),
     0 18px 32px rgba(0,0,0,.14);
+}
+
+#modalCard[data-view="booking-confirmation"].booking-fit-compact .confirm-dates-btn{
+  width:min(calc(304px * var(--booking-fit-scale)), 100%);
+  min-height:calc(50px * var(--booking-fit-scale));
+  padding:calc(11px * var(--booking-fit-scale)) calc(13px * var(--booking-fit-scale));
+}
+
+#modalCard[data-view="booking-confirmation"].booking-fit-tight .confirm-dates-btn{
+  width:min(calc(284px * var(--booking-fit-scale)), 100%);
+  min-height:calc(45px * var(--booking-fit-scale));
+  padding:calc(10px * var(--booking-fit-scale)) calc(12px * var(--booking-fit-scale));
 }
 
 #modalCard[data-view="booking-confirmation"] .confirm-dates-btn:hover,
@@ -4442,14 +4498,36 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   box-shadow:inset 0 1px 0 rgba(255,255,255,.02);
 }
 
+#modalCard[data-view="booking-confirmation"].booking-fit-compact .alloc-item-new{
+  grid-template-columns:calc(78px * var(--booking-fit-scale)) minmax(0, 1fr);
+  gap:calc(7px * var(--booking-fit-scale)) calc(11px * var(--booking-fit-scale));
+  padding:calc(9px * var(--booking-fit-scale));
+  border-radius:calc(18px * var(--booking-fit-scale));
+}
+
+#modalCard[data-view="booking-confirmation"].booking-fit-tight .alloc-item-new{
+  grid-template-columns:calc(70px * var(--booking-fit-scale)) minmax(0, 1fr);
+  gap:calc(6px * var(--booking-fit-scale)) calc(9px * var(--booking-fit-scale));
+  padding:calc(8px * var(--booking-fit-scale));
+  border-radius:calc(16px * var(--booking-fit-scale));
+}
+
 #modalCard[data-view="booking-confirmation"] .alloc-photo-stack{
   gap:calc(8px * var(--booking-fit-scale));
+}
+
+#modalCard[data-view="booking-confirmation"].booking-fit-compact .alloc-photo-stack{
+  gap:calc(6px * var(--booking-fit-scale));
 }
 
 #modalCard[data-view="booking-confirmation"] .alloc-photo-frame{
   border-radius:calc(16px * var(--booking-fit-scale));
   border-color:rgba(255,255,255,.08);
   background:rgba(255,255,255,.03);
+}
+
+#modalCard[data-view="booking-confirmation"].booking-fit-compact .alloc-photo-frame{
+  border-radius:calc(13px * var(--booking-fit-scale));
 }
 
 #modalCard[data-view="booking-confirmation"] .alloc-main-new{
@@ -4464,16 +4542,35 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   font-size:calc(12px * var(--booking-fit-scale));
 }
 
+#modalCard[data-view="booking-confirmation"].booking-fit-compact .alloc-main-new .alloc-meta{
+  font-size:calc(11px * var(--booking-fit-scale));
+  line-height:1.24;
+}
+
 #modalCard[data-view="booking-confirmation"] .alloc-guest-btn{
-  grid-template-columns:1fr;
-  align-items:start;
-  gap:calc(8px * var(--booking-fit-scale));
-  padding:calc(11px * var(--booking-fit-scale)) calc(12px * var(--booking-fit-scale));
-  min-height:auto;
+  grid-template-columns:minmax(0, 1fr) auto;
+  align-items:center;
+  gap:calc(10px * var(--booking-fit-scale));
+  padding:calc(9px * var(--booking-fit-scale)) calc(11px * var(--booking-fit-scale));
+  min-height:calc(56px * var(--booking-fit-scale));
   border-radius:calc(18px * var(--booking-fit-scale));
   border-color:var(--alloc-theme-panel-border);
   background:var(--alloc-theme-panel);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.02);
+}
+
+#modalCard[data-view="booking-confirmation"].booking-fit-compact .alloc-guest-btn{
+  gap:calc(8px * var(--booking-fit-scale));
+  min-height:calc(50px * var(--booking-fit-scale));
+  padding:calc(8px * var(--booking-fit-scale)) calc(10px * var(--booking-fit-scale));
+  border-radius:calc(16px * var(--booking-fit-scale));
+}
+
+#modalCard[data-view="booking-confirmation"].booking-fit-tight .alloc-guest-btn{
+  gap:calc(7px * var(--booking-fit-scale));
+  min-height:calc(46px * var(--booking-fit-scale));
+  padding:calc(7px * var(--booking-fit-scale)) calc(9px * var(--booking-fit-scale));
+  border-radius:calc(14px * var(--booking-fit-scale));
 }
 
 #modalCard[data-view="booking-confirmation"] .alloc-guest-btn:hover{
@@ -4493,11 +4590,13 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   padding:calc(5px * var(--booking-fit-scale)) calc(8px * var(--booking-fit-scale));
   font-size:calc(10px * var(--booking-fit-scale));
   justify-self:end;
-  align-self:end;
+  align-self:center;
+  white-space:nowrap;
 }
 
 #modalCard[data-view="booking-confirmation"] .alloc-guest-btn__value{
   font-size:calc(15px * var(--booking-fit-scale));
+  line-height:1.08;
 }
 
 #modalCard[data-view="booking-confirmation"] .alloc-card-actions{
@@ -4584,6 +4683,28 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 #modalCard[data-view="booking-confirmation"] .alloc-cta{
   min-height:calc(54px * var(--booking-fit-scale));
   border-radius:calc(18px * var(--booking-fit-scale)) !important;
+}
+
+#modalCard[data-view="booking-confirmation"].booking-fit-compact .alloc-summary{
+  gap:calc(8px * var(--booking-fit-scale));
+}
+
+#modalCard[data-view="booking-confirmation"].booking-fit-tight .alloc-actions,
+#modalCard[data-view="booking-confirmation"].booking-fit-tight .alloc-pick-actions{
+  gap:calc(8px * var(--booking-fit-scale));
+}
+
+@media (max-width: 340px){
+  #modalCard[data-view="booking-confirmation"] .alloc-guest-btn{
+    grid-template-columns:1fr;
+    align-items:start;
+    min-height:auto;
+  }
+
+  #modalCard[data-view="booking-confirmation"] .alloc-inline-hint{
+    justify-self:end;
+    align-self:end;
+  }
 }
 
 /* price block inside details */
@@ -5496,109 +5617,109 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   }
 
   #modalCard[data-view="booking-confirmation"] .alloc-card{
-    gap:12px;
-    padding:18px 18px 18px;
+    gap:calc(12px * var(--booking-fit-scale));
+    padding:calc(18px * var(--booking-fit-scale)) calc(18px * var(--booking-fit-scale)) calc(18px * var(--booking-fit-scale));
   }
 
   #modalCard[data-view="booking-confirmation"] .accom-head--booking{
     gap:2px;
-    padding:6px 4px 0;
+    padding:calc(6px * var(--booking-fit-scale)) calc(4px * var(--booking-fit-scale)) 0;
   }
 
   #modalCard[data-view="booking-confirmation"] .accom-title{
-    font-size:26px;
+    font-size:calc(26px * var(--booking-fit-scale));
   }
 
   #modalCard[data-view="booking-confirmation"] .confirm-sheet-camp{
-    font-size:16px;
+    font-size:calc(16px * var(--booking-fit-scale));
   }
 
   #modalCard[data-view="booking-confirmation"] .confirm-dates-btn{
-    width:min(304px, 100%);
-    min-height:50px;
-    padding:12px 14px;
-    gap:3px;
+    width:min(calc(304px * var(--booking-fit-scale)), 100%);
+    min-height:calc(50px * var(--booking-fit-scale));
+    padding:calc(12px * var(--booking-fit-scale)) calc(14px * var(--booking-fit-scale));
+    gap:calc(3px * var(--booking-fit-scale));
   }
 
   #modalCard[data-view="booking-confirmation"] .confirm-dates-value{
-    font-size:16px;
+    font-size:calc(16px * var(--booking-fit-scale));
   }
 
   #modalCard[data-view="booking-confirmation"] .confirm-dates-hint{
-    font-size:9px;
+    font-size:calc(9px * var(--booking-fit-scale));
   }
 
   #modalCard[data-view="booking-confirmation"] .alloc-hint--panel{
-    padding:12px 14px;
+    padding:calc(12px * var(--booking-fit-scale)) calc(14px * var(--booking-fit-scale));
   }
 
   #modalCard[data-view="booking-confirmation"] .alloc-item-new{
-    grid-template-columns:112px minmax(0, 1fr);
-    gap:10px 14px;
-    padding:12px;
+    grid-template-columns:calc(112px * var(--booking-fit-scale)) minmax(0, 1fr);
+    gap:calc(10px * var(--booking-fit-scale)) calc(14px * var(--booking-fit-scale));
+    padding:calc(12px * var(--booking-fit-scale));
   }
 
   #modalCard[data-view="booking-confirmation"] .alloc-photo-frame{
     aspect-ratio:4 / 3;
-    border-radius:14px;
+    border-radius:calc(14px * var(--booking-fit-scale));
   }
 
   #modalCard[data-view="booking-confirmation"] .alloc-main-new{
-    gap:6px;
+    gap:calc(6px * var(--booking-fit-scale));
   }
 
   #modalCard[data-view="booking-confirmation"] .alloc-main-new .alloc-meta{
-    font-size:12px;
+    font-size:calc(12px * var(--booking-fit-scale));
     line-height:1.3;
   }
 
   #modalCard[data-view="booking-confirmation"] .alloc-guest-btn{
     min-height:auto;
-    padding:11px 12px;
+    padding:calc(9px * var(--booking-fit-scale)) calc(11px * var(--booking-fit-scale));
   }
 
   #modalCard[data-view="booking-confirmation"] .alloc-guest-btn__value{
-    font-size:14px;
+    font-size:calc(14px * var(--booking-fit-scale));
     line-height:1.14;
   }
 
   #modalCard[data-view="booking-confirmation"] .alloc-inline-hint{
-    padding:6px 10px;
-    font-size:11px;
+    padding:calc(6px * var(--booking-fit-scale)) calc(10px * var(--booking-fit-scale));
+    font-size:calc(11px * var(--booking-fit-scale));
   }
 
   #modalCard[data-view="booking-confirmation"] .alloc-card-actions{
-    gap:8px;
+    gap:calc(8px * var(--booking-fit-scale));
   }
 
   #modalCard[data-view="booking-confirmation"] .alloc-action-btn{
-    min-height:44px;
-    border-radius:14px;
-    font-size:11px;
+    min-height:calc(44px * var(--booking-fit-scale));
+    border-radius:calc(14px * var(--booking-fit-scale));
+    font-size:calc(11px * var(--booking-fit-scale));
   }
 
   #modalCard[data-view="booking-confirmation"] .alloc-summary{
-    gap:8px;
-    padding:12px 14px;
+    gap:calc(8px * var(--booking-fit-scale));
+    padding:calc(12px * var(--booking-fit-scale)) calc(14px * var(--booking-fit-scale));
   }
 
   #modalCard[data-view="booking-confirmation"] .alloc-row--total{
-    font-size:15px;
+    font-size:calc(15px * var(--booking-fit-scale));
   }
 
   #modalCard[data-view="booking-confirmation"] .alloc-pick-actions{
-    margin-top:8px;
-    gap:8px;
+    margin-top:calc(8px * var(--booking-fit-scale));
+    gap:calc(8px * var(--booking-fit-scale));
   }
 
   #modalCard[data-view="booking-confirmation"] .alloc-actions .alloc-cta,
   #modalCard[data-view="booking-confirmation"] .alloc-pick-actions .alloc-cta{
-    height:48px;
+    height:calc(48px * var(--booking-fit-scale));
   }
 
   #modalCard[data-view="booking-confirmation"] .alloc-cta{
-    min-height:48px;
-    border-radius:16px !important;
+    min-height:calc(48px * var(--booking-fit-scale));
+    border-radius:calc(16px * var(--booking-fit-scale)) !important;
   }
 }
 
