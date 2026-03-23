@@ -1717,26 +1717,37 @@ function renderAccount(){
   if (!guest || !user) { return; } // защита: новой разметки может не быть
   guest.style.display = profile ? 'none' : 'block';
   user.style.display  = profile ? 'block' : 'none';
+  user.style.visibility = profile ? 'visible' : 'hidden';
   if (actions) actions.style.display = profile ? 'block' : 'none';
   if (data) data.style.display = 'none';
-
-  const setGreetingTitle = (text, emoji) => {
-    if (!title) return;
-    title.classList.add('greet-title');
-    title.innerHTML = `<span class="greet-core">${escapeHtml(text)}<span class="greet-emoji" aria-hidden="true">${escapeHtml(emoji)}</span></span>`;
-  };
+  if (title) {
+    title.classList.remove('greet-title');
+    title.textContent = 'Личный кабинет';
+  }
 
   if (profile) {
-    const name = profile.user?.name?.split(' ')[0] || 'гость';
-    const hr = new Date().getHours();
-    const phrase = hr < 6 ? 'Доброй ночи' : hr < 12 ? 'Доброе утро' : hr < 18 ? 'Добрый день' : 'Добрый вечер';
-    const emoji  = hr < 6 ? '🌙' : hr < 12 ? '☀️' : hr < 18 ? '🌤️' : '🌙';
-    setGreetingTitle(`${phrase}, ${name}!`, emoji);
+    const me = profile.user || {};
+    const name = String(me.name || 'Пользователь');
+    const phone = me.phone ? formatPhoneRu(me.phone) : 'Не указан';
+    const email = me.email ? String(me.email) : 'Не указан';
+    user.innerHTML = `
+      <div class="account-user-head">
+        <div class="account-user-title">${escapeHtml(name)}</div>
+        <div class="account-user-subtitle">Профиль и управление бронированиями</div>
+      </div>
+      <div class="account-summary">
+        <div class="account-summary-row">
+          <div class="account-summary-label">Телефон</div>
+          <div class="account-summary-value">${escapeHtml(phone)}</div>
+        </div>
+        <div class="account-summary-row">
+          <div class="account-summary-label">Email</div>
+          <div class="account-summary-value">${escapeHtml(email)}</div>
+        </div>
+      </div>
+    `;
   } else {
-    const hr = new Date().getHours();
-    const phrase = hr < 6 ? 'Доброй ночи' : hr < 12 ? 'Доброе утро' : hr < 18 ? 'Добрый день' : 'Добрый вечер';
-    const emoji  = hr < 6 ? '🌙' : hr < 12 ? '☀️' : hr < 18 ? '🌤️' : '🌙';
-    setGreetingTitle(`${phrase}!`, emoji);
+    user.innerHTML = '';
   }
 }
 

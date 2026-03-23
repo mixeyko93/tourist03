@@ -25,7 +25,7 @@
 <script defer src="/static/scroll.js?v=2026-01-10-31"></script>
 
   <!-- Наши стили -->
-<link rel="stylesheet" href="/static/styles.css?v=2026-03-23-12" />
+<link rel="stylesheet" href="/static/styles.css?v=2026-03-23-13" />
 <link rel="stylesheet" href="/static/map-popup-widget/map-popup-widget.css?v=2026-03-19-04" />
 
 
@@ -94,7 +94,7 @@
 
       <div class="account-shell">
         <!-- Блок гостя (покажется, когда не авторизован) -->
-        <div class="card account-card" id="accountGuest">
+        <div class="card account-card account-card--guest" id="accountGuest">
           <p class="muted">Для входа в личный кабинет и бронирования необходимо авторизоваться.</p>
           <div class="account-actions">
             <button class="button primary" id="btnLoginOpen">Вход</button>
@@ -103,10 +103,10 @@
         </div>
 
         <!-- Блок пользователя (скрыт по умолчанию; отрисует app.js) -->
-        <div class="card account-card" id="accountUser" style="display:none; visibility:hidden;">
+        <div class="card account-card account-card--user" id="accountUser" style="display:none;">
         </div>
 
-        <div class="card account-card" id="accountActions" style="display:none;">
+        <div class="card account-card account-card--actions" id="accountActions" style="display:none;">
           <div class="account-actions stack">
             <button class="button ghost" id="btnAccountActive">Активные бронирования</button>
             <button class="button ghost" id="btnAccountHistory">История бронирований</button>
@@ -150,7 +150,7 @@
         <path d="M4 20c0-4 4-6 8-6s8 2 8 6"/>
       </svg>
     </div>
-    <div class="label">Личный кабинет</div>
+    <div class="label">Кабинет</div>
   </div>
 
   <div class="tab" data-target="tab-services">
@@ -190,7 +190,7 @@
   <!-- Скрипты -->
   <script defer src="/static/ui.js?v=2026-03-18-02"></script>
 <script defer src="/static/map-popup-widget/map-popup-widget.js?v=2026-03-19-04"></script>
-<script defer src="/static/app.js?v=2026-03-23-11"></script>
+<script defer src="/static/app.js?v=2026-03-23-13"></script>
 
 </body>
 </html>
