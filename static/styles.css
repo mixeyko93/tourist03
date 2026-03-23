@@ -895,6 +895,10 @@ body.tab-transition .tg-app{transition:opacity .25s ease; opacity:.93;}
 .modal.is-tall .modal-card.auth-shell{
   max-height:calc(var(--modal-available-height) - 12px);
 }
+.modal.is-tall #modalCard[data-view="booking-confirmation"],
+.modal.is-tall #modalCard[data-view="booking-comment"]{
+  max-height:calc(var(--modal-available-height) - 12px);
+}
 .modal.auth-modal{z-index:7200 !important;}
 #modal{z-index:6500;}
 
@@ -4311,8 +4315,11 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 #modalCard[data-view="booking-confirmation"],
 #modalCard[data-view="booking-comment"]{
   width:min(408px, calc(var(--app-vw) - 24px));
+  max-height:calc(var(--modal-available-height) - 8px);
   padding:0;
   overflow:hidden;
+  display:flex;
+  flex-direction:column;
   border-radius:32px;
   border:1px solid rgba(255,255,255,.10);
   background:rgba(26,26,26,.94);
@@ -4336,8 +4343,19 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 
 #modalCard[data-view="booking-confirmation"] .alloc-card,
 #modalCard[data-view="booking-comment"] .alloc-card{
+  flex:1 1 auto;
+  min-height:0;
   gap:14px;
   padding:24px 20px 20px;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  scrollbar-width:none;
+  -ms-overflow-style:none;
+}
+
+#modalCard[data-view="booking-confirmation"] .alloc-card::-webkit-scrollbar,
+#modalCard[data-view="booking-comment"] .alloc-card::-webkit-scrollbar{
+  display:none;
 }
 
 #modalCard[data-view="booking-confirmation"] .accom-head,
@@ -4404,6 +4422,11 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 }
 
 #modalCard[data-view="booking-confirmation"] .alloc-guest-btn{
+  grid-template-columns:1fr;
+  align-items:start;
+  gap:8px;
+  padding:11px 12px;
+  min-height:auto;
   border-color:var(--alloc-theme-panel-border);
   background:var(--alloc-theme-panel);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.02);
@@ -4420,6 +4443,11 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   border-color:var(--alloc-theme-accent-border);
   background:var(--alloc-theme-accent-bg);
   color:var(--alloc-theme-accent);
+}
+
+#modalCard[data-view="booking-confirmation"] .alloc-inline-hint{
+  justify-self:end;
+  align-self:end;
 }
 
 #modalCard[data-view="booking-confirmation"] .alloc-action-btn:hover{
@@ -5440,8 +5468,8 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   }
 
   #modalCard[data-view="booking-confirmation"] .alloc-guest-btn{
-    min-height:72px;
-    padding:12px 14px;
+    min-height:auto;
+    padding:11px 12px;
   }
 
   #modalCard[data-view="booking-confirmation"] .alloc-guest-btn__value{
