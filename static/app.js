@@ -7587,7 +7587,7 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
         .map(photo => (photo && typeof photo === 'object') ? photo.url : photo)
         .filter(Boolean)
         .map(url => String(url));
-      const desiredFrameCount = ((campCover && roomPhotoUrls.length >= 2) || (!campCover && roomPhotoUrls.length >= 3)) ? 3 : 2;
+      const desiredFrameCount = 2;
       const frameUrls = [];
       if (campCover) frameUrls.push(campCover);
       for (const url of roomPhotoUrls) {
