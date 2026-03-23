@@ -2733,10 +2733,12 @@ function openEmptyBookingConfirmationModal(opts = {}){
 	    <div class="alloc-card">
       <div class="accom-head">
         <div class="accom-title">Лист бронирования</div>
-        <div class="accom-sub">
-          <button type="button" class="bk-input bk-input-inline" id="confirmEditDates">${dateText}</button>
-        </div>
       </div>
+
+      <button type="button" class="bk-input bk-input-inline confirm-dates-btn" id="confirmEditDates">
+        <span class="confirm-dates-value">${dateText}</span>
+        <span class="confirm-dates-hint">Нажмите, чтобы изменить даты</span>
+      </button>
 
       <div class="alloc-hint muted" id="confirmHint" style="text-align:center;">${hintText}</div>
 
@@ -7068,11 +7070,13 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
 	      <div class="alloc-card">
 	      <div class="accom-head">
 	        <div class="accom-title">Лист бронирования</div>
-	        <div class="accom-sub">
-	          ${camp?.name ? `${camp.name} • ` : ''}
-	          <button type="button" class="bk-input bk-input-inline" id="confirmEditDates">${fmtDateRu(f.from)} → ${fmtDateRu(f.to)}</button>
-	        </div>
+          ${camp?.name ? `<div class="accom-sub confirm-sheet-camp">${escapeHtml(String(camp.name))}</div>` : ''}
 	      </div>
+
+        <button type="button" class="bk-input bk-input-inline confirm-dates-btn" id="confirmEditDates">
+          <span class="confirm-dates-value">${fmtDateRu(f.from)} → ${fmtDateRu(f.to)}</span>
+          <span class="confirm-dates-hint">Нажмите, чтобы изменить даты</span>
+        </button>
 
       <div class="alloc-hint muted" id="confirmHint">Проверьте данные бронирования и распределите гостей.</div>
 
@@ -7402,10 +7406,16 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
 	    const nights = bookingNightsFromFilter(f);
 	    listEl.innerHTML = items.map((it, idx) => {
 	      const room = it.room || {};
+	      const roomTitle = String(room.name || room.room_type || 'Апартамент');
 	      const cap = roomCapacity(room);
       const photos = Array.isArray(room.photos) ? room.photos : [];
 	      const cover = photos.find(p => p && p.cover) || photos[0];
-	      const thumb = cover?.url ? `<img class="alloc-thumb" src="${cover.url}" alt="" data-idx="${idx}" style="cursor:pointer">` : `<div class="alloc-thumb ph"></div>`;
+	      const thumb = cover?.url
+          ? `<button class="alloc-thumb-button" data-idx="${idx}" type="button" aria-label="Открыть фото">
+              <img class="alloc-thumb" src="${cover.url}" alt="${escapeHtml(roomTitle)}">
+              <span class="alloc-action-badge">Фото</span>
+            </button>`
+          : `<div class="alloc-thumb ph"></div>`;
 	      const sub = calcRoomSubtotal(room, it.adults, it.kids);
 	      const subText = (sub == null) ? '—' : formatPriceRub(sub * nights);
 	      const total = (Number(it.adults) || 0) + (Number(it.kids) || 0);
@@ -7416,14 +7426,18 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
         <div class="alloc-item-new" data-idx="${idx}">
           ${thumb}
           <div class="alloc-main-new">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-              <div class="alloc-name" data-idx="${idx}" style="cursor:pointer">${room.name || room.room_type || 'Апартамент'}</div>
+            <div class="alloc-name-row">
+              <button class="alloc-name-action" data-idx="${idx}" type="button" aria-label="Открыть информацию об апартаменте">
+                <span class="alloc-name-text">${escapeHtml(roomTitle)}</span>
+                <span class="alloc-inline-hint">Подробнее</span>
+              </button>
               <button class="alloc-remove-btn" data-idx="${idx}" type="button" title="Удалить">🗑️</button>
             </div>
             <div class="alloc-meta muted">до ${cap} гостей • ${subText}</div>
             ${bedsLine}
-            <button class="alloc-guest-btn" data-idx="${idx}" type="button">
-              Гостей: ${total} (взр: ${it.adults || 0}, дети: ${it.kids || 0})
+            <button class="alloc-guest-btn alloc-guest-btn--action" data-idx="${idx}" type="button" aria-label="Изменить распределение гостей">
+              <span class="alloc-guest-btn__value">Гостей: ${total} (взр: ${it.adults || 0}, дети: ${it.kids || 0})</span>
+              <span class="alloc-inline-hint">Изменить</span>
             </button>
           </div>
         </div>
@@ -7439,10 +7453,10 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
     });
 
     // Обработчики кликов по фото — открываем точно так же, как в карточке апартамента (полноэкранка)
-    listEl.querySelectorAll('.alloc-thumb[data-idx]').forEach(img => {
-      img.onclick = (e) => {
+    listEl.querySelectorAll('.alloc-thumb-button[data-idx]').forEach(btn => {
+      btn.onclick = (e) => {
         try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
-        const idx = Number(img.getAttribute('data-idx'));
+        const idx = Number(btn.getAttribute('data-idx'));
         if (!Number.isFinite(idx) || !items[idx]) return;
         const room = items[idx].room || {};
         const photos = Array.isArray(room.photos) ? room.photos : [];
@@ -7452,7 +7466,7 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
     });
 
     // Обработчики кликов по названию (открытие деталей)
-    listEl.querySelectorAll('.alloc-name[data-idx]').forEach(nameEl => {
+    listEl.querySelectorAll('.alloc-name-action[data-idx]').forEach(nameEl => {
       nameEl.onclick = () => {
         const idx = Number(nameEl.getAttribute('data-idx'));
         if (Number.isFinite(idx) && items[idx]) {
