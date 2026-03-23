@@ -2729,7 +2729,7 @@ function openEmptyBookingConfirmationModal(opts = {}){
   const shell = document.getElementById('modalCard');
   if (shell) { shell.classList.remove('booking-shell'); shell.classList.remove('details'); shell.classList.remove('accom-shell'); shell.classList.remove('room-detail-shell'); }
 
-	  showModal(`
+  showModal(`
 	    <div class="alloc-card">
       <div class="accom-head">
         <div class="accom-title">Лист бронирования</div>
@@ -2752,6 +2752,7 @@ function openEmptyBookingConfirmationModal(opts = {}){
       </div>
     </div>
   `);
+  try { document.getElementById('modalCard').dataset.view = 'booking-confirmation'; } catch (_) {}
 
 	  const hintEl = document.getElementById('confirmHint');
 	  const editDatesBtn = document.getElementById('confirmEditDates');

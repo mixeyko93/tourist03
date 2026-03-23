@@ -4149,6 +4149,172 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   box-shadow:0 0 0 1px rgba(96,165,250,.14), inset 0 1px 0 rgba(255,255,255,.02);
 }
 
+/* Updated warm palette for booking cart screens */
+#modalCard[data-view="booking-confirmation"],
+#modalCard[data-view="booking-comment"]{
+  width:min(408px, calc(var(--app-vw) - 24px));
+  padding:0;
+  overflow:hidden;
+  border-radius:32px;
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(26,26,26,.94);
+  box-shadow:0 28px 70px rgba(0,0,0,.4);
+  backdrop-filter:blur(28px);
+  -webkit-backdrop-filter:blur(28px);
+  --alloc-theme-accent:#e5d3b3;
+  --alloc-theme-accent-strong:#d8c5a3;
+  --alloc-theme-accent-bg:rgba(229,211,179,.12);
+  --alloc-theme-accent-border:rgba(229,211,179,.24);
+  --alloc-theme-accent-shadow:0 18px 32px rgba(0,0,0,.16);
+  --alloc-theme-surface:rgba(255,255,255,.05);
+  --alloc-theme-surface-strong:rgba(255,255,255,.08);
+  --alloc-theme-panel:#101317;
+  --alloc-theme-panel-hover:#151a20;
+  --alloc-theme-panel-border:rgba(229,211,179,.16);
+  --alloc-theme-danger-bg:rgba(101,46,38,.24);
+  --alloc-theme-danger-border:rgba(214,143,132,.22);
+  --alloc-theme-danger-text:#f1c5bb;
+}
+
+#modalCard[data-view="booking-confirmation"] .alloc-card,
+#modalCard[data-view="booking-comment"] .alloc-card{
+  gap:14px;
+  padding:24px 20px 20px;
+}
+
+#modalCard[data-view="booking-confirmation"] .accom-head,
+#modalCard[data-view="booking-comment"] .accom-head{
+  gap:6px;
+}
+
+#modalCard[data-view="booking-confirmation"] .confirm-sheet-camp,
+#modalCard[data-view="booking-comment"] .accom-sub{
+  color:rgba(229,211,179,.84);
+}
+
+#modalCard[data-view="booking-confirmation"] .confirm-dates-btn{
+  background:rgba(255,255,255,.06);
+  border-color:var(--alloc-theme-accent-border);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.04),
+    0 0 0 1px rgba(229,211,179,.08),
+    0 18px 32px rgba(0,0,0,.14);
+}
+
+#modalCard[data-view="booking-confirmation"] .confirm-dates-btn:hover,
+#modalCard[data-view="booking-confirmation"] .confirm-dates-btn:focus-visible{
+  background:rgba(255,255,255,.08);
+  border-color:rgba(229,211,179,.34);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.05),
+    0 0 0 1px rgba(229,211,179,.12),
+    0 20px 36px rgba(0,0,0,.16);
+}
+
+#modalCard[data-view="booking-confirmation"] .confirm-dates-hint{
+  color:rgba(229,211,179,.82);
+}
+
+#modalCard[data-view="booking-confirmation"] .alloc-hint--panel,
+#modalCard[data-view="booking-confirmation"] .alloc-summary,
+#modalCard[data-view="booking-comment"] .alloc-comment-input{
+  border-color:rgba(255,255,255,.08);
+  background:var(--alloc-theme-surface);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.02);
+}
+
+#modalCard[data-view="booking-comment"] .alloc-comment-input::placeholder{
+  color:rgba(255,255,255,.28);
+}
+
+#modalCard[data-view="booking-comment"] .alloc-comment-input:focus{
+  border-color:var(--alloc-theme-accent-border);
+  box-shadow:
+    0 0 0 1px rgba(229,211,179,.12),
+    inset 0 1px 0 rgba(255,255,255,.02);
+}
+
+#modalCard[data-view="booking-confirmation"] .alloc-item-new{
+  border-color:rgba(255,255,255,.08);
+  background:rgba(255,255,255,.04);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.02);
+}
+
+#modalCard[data-view="booking-confirmation"] .alloc-photo-frame{
+  border-color:rgba(255,255,255,.08);
+  background:rgba(255,255,255,.03);
+}
+
+#modalCard[data-view="booking-confirmation"] .alloc-guest-btn{
+  border-color:var(--alloc-theme-panel-border);
+  background:var(--alloc-theme-panel);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.02);
+}
+
+#modalCard[data-view="booking-confirmation"] .alloc-guest-btn:hover{
+  background:var(--alloc-theme-panel-hover);
+  border-color:rgba(229,211,179,.26);
+  box-shadow:0 0 0 1px rgba(229,211,179,.08);
+}
+
+#modalCard[data-view="booking-confirmation"] .alloc-inline-hint,
+#modalCard[data-view="booking-confirmation"] .alloc-action-btn{
+  border-color:var(--alloc-theme-accent-border);
+  background:var(--alloc-theme-accent-bg);
+  color:var(--alloc-theme-accent);
+}
+
+#modalCard[data-view="booking-confirmation"] .alloc-action-btn:hover{
+  background:rgba(229,211,179,.18);
+  border-color:rgba(229,211,179,.34);
+  box-shadow:var(--alloc-theme-accent-shadow);
+}
+
+#modalCard[data-view="booking-confirmation"] .alloc-action-btn--danger{
+  border-color:var(--alloc-theme-danger-border);
+  background:var(--alloc-theme-danger-bg);
+  color:var(--alloc-theme-danger-text);
+}
+
+#modalCard[data-view="booking-confirmation"] .alloc-action-btn--danger:hover{
+  background:rgba(101,46,38,.34);
+  border-color:rgba(214,143,132,.32);
+}
+
+#modalCard[data-view="booking-confirmation"] .alloc-cta--ghost,
+#modalCard[data-view="booking-comment"] .alloc-cta--ghost{
+  border-color:rgba(255,255,255,.10) !important;
+  background:rgba(255,255,255,.06) !important;
+  color:#fff !important;
+}
+
+#modalCard[data-view="booking-confirmation"] .alloc-cta--soft,
+#modalCard[data-view="booking-comment"] .alloc-cta--soft{
+  border-color:var(--alloc-theme-accent-border) !important;
+  background:var(--alloc-theme-accent-bg) !important;
+  color:var(--alloc-theme-accent) !important;
+  box-shadow:0 0 0 1px rgba(229,211,179,.08), 0 16px 28px rgba(0,0,0,.12);
+}
+
+#modalCard[data-view="booking-confirmation"] .alloc-cta--danger{
+  border-color:var(--alloc-theme-danger-border) !important;
+  background:var(--alloc-theme-danger-bg) !important;
+  color:var(--alloc-theme-danger-text) !important;
+}
+
+#modalCard[data-view="booking-confirmation"] .alloc-cta--primary,
+#modalCard[data-view="booking-comment"] .alloc-cta--primary{
+  border-color:transparent !important;
+  background:var(--alloc-theme-accent) !important;
+  color:#1a1a1a !important;
+  box-shadow:0 0 20px rgba(229,211,179,.16);
+}
+
+#modalCard[data-view="booking-confirmation"] .alloc-row--total,
+#modalCard[data-view="booking-confirmation"] .alloc-row--total .alloc-val{
+  color:var(--alloc-theme-accent);
+}
+
 /* price block inside details */
 .alloc-price-card{
   border:1px solid rgba(255,255,255,0.12);
