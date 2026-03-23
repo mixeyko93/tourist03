@@ -1709,12 +1709,14 @@ function clearAuth(){
 
 function renderAccount(){
   const profile = getAuth();
+  const shell = document.querySelector('#tab-account .account-shell');
   const guest = document.getElementById('accountGuest');
   const user  = document.getElementById('accountUser');
   const actions = document.getElementById('accountActions');
   const title = document.getElementById('accountTitle');
   const data  = document.getElementById('yourData');
   if (!guest || !user) { return; } // защита: новой разметки может не быть
+  if (shell) shell.classList.toggle('is-guest', !profile);
   guest.style.display = profile ? 'none' : 'block';
   user.style.display  = profile ? 'block' : 'none';
   user.style.visibility = profile ? 'visible' : 'hidden';
@@ -1722,7 +1724,8 @@ function renderAccount(){
   if (data) data.style.display = 'none';
   if (title) {
     title.classList.remove('greet-title');
-    title.textContent = 'Личный кабинет';
+    title.textContent = 'Профиль';
+    title.style.display = profile ? '' : 'none';
   }
 
   if (profile) {

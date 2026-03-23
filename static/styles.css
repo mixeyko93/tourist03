@@ -229,6 +229,10 @@ html, body{
   margin:0 auto;
   padding:6px 18px 0;
 }
+.account-shell.is-guest{
+  justify-content:center;
+  padding-top:0;
+}
 .account-card{
   width:100%;
   margin:0;
@@ -250,6 +254,9 @@ html, body{
   width:calc(100% - 36px);
   max-width:456px;
   margin:18px auto 6px;
+}
+#accountTitle[style*="display:none"]{
+  display:none !important;
 }
 .account-actions{
   display:grid;
@@ -2518,6 +2525,10 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 
   .account-shell{
     padding:4px 14px 0;
+  }
+
+  .account-shell.is-guest{
+    padding-top:0;
   }
 
   #accountTitle{
