@@ -4983,6 +4983,7 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 }
 .alloc-guest-line{
   display:block;
+  white-space:nowrap;
 }
 .alloc-inline-hint{
   align-self:center;
