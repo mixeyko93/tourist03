@@ -526,30 +526,89 @@ html, body{
 
 .auth-picker-grid{
   display:grid;
-  gap:12px;
+  gap:14px;
 }
 .auth-picker-row{
   display:grid;
-  grid-template-columns:1fr auto auto;
-  align-items:center;
-  gap:12px;
-  padding:14px 16px;
+  grid-template-columns:minmax(0, 1fr) 144px;
+  align-items:stretch;
+  gap:14px;
+  padding:16px 18px;
   border-radius:20px;
   border:1px solid rgba(255,255,255,.08);
   background:rgba(255,255,255,.05);
+}
+.auth-picker-copy{
+  min-width:0;
+  display:grid;
+  align-content:center;
+  gap:6px;
+  text-align:left;
 }
 .auth-picker-label{
   min-width:0;
   text-align:left;
   color:#fff;
-  font-size:14px;
-  font-weight:700;
+  font-size:15px;
+  font-weight:800;
+  line-height:1.1;
 }
 .auth-picker-meta{
   color:rgba(255,255,255,.52);
   font-size:12px;
   line-height:1.3;
-  text-align:right;
+  text-align:left;
+}
+.auth-picker-field .bk-picker-trigger{
+  min-height:100%;
+  padding:0 16px;
+  border-radius:18px;
+  border-color:rgba(255,255,255,.08);
+  background:rgba(12,16,22,.78);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
+}
+.auth-picker-field .bk-picker-trigger.is-empty{
+  color:rgba(255,255,255,.44);
+}
+.auth-picker-field .bk-picker-value{
+  font-size:24px;
+  font-weight:800;
+  letter-spacing:-0.04em;
+}
+.auth-picker-field .bk-picker-trigger.is-empty .bk-picker-value{
+  color:rgba(255,255,255,.34);
+}
+.auth-rule-note{
+  display:flex;
+  align-items:flex-start;
+  gap:12px;
+  padding:14px 16px;
+  border-radius:20px;
+  border:1px solid rgba(245,158,11,.24);
+  background:rgba(245,158,11,.10);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.02);
+}
+.auth-rule-icon{
+  width:24px;
+  height:24px;
+  flex:0 0 24px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:999px;
+  background:#facc15;
+  color:#231300;
+  font-size:15px;
+  line-height:1;
+  font-weight:900;
+  box-shadow:0 10px 24px rgba(250,204,21,.18);
+}
+.auth-rule-text{
+  color:#f8e8b9;
+  font-size:13px;
+  line-height:1.45;
+  font-weight:700;
+  text-align:left;
 }
 .auth-picker-select{
   width:104px;
@@ -617,11 +676,14 @@ html, body{
 
   .auth-picker-row{
     grid-template-columns:1fr;
-    justify-items:stretch;
   }
 
   .auth-picker-meta{
     text-align:left;
+  }
+
+  .auth-picker-field .bk-picker-trigger{
+    min-height:54px;
   }
 
   .auth-picker-select{
@@ -3084,7 +3146,7 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   vertical-align:middle;
 }
 .confirm-dates-btn{
-  width:100%;
+  width:min(328px, 100%);
   min-height:68px;
   justify-content:center;
   align-items:center;
@@ -4661,8 +4723,8 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 /* ====================== NEW BOOKING CONFIRMATION STYLES ====================== */
 .alloc-item-new{
   display:grid;
-  grid-template-columns: 74px 1fr;
-  gap:10px;
+  grid-template-columns:94px 1fr;
+  gap:14px;
   width:100%;
   border:1px solid rgba(255,255,255,0.08);
   border-radius:20px;
@@ -4670,82 +4732,104 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   padding:14px;
   box-sizing:border-box;
 }
-.alloc-name-row{
-  display:flex;
-  justify-content:space-between;
-  align-items:flex-start;
-  gap:12px;
-  margin-bottom:6px;
+.alloc-photo-stack{
+  display:grid;
+  gap:8px;
+  align-content:start;
 }
-.alloc-thumb-button{
+.alloc-photo-frame{
   position:relative;
-  width:74px;
-  height:64px;
-  padding:0;
-  border:1px solid rgba(96,165,250,.16);
-  border-radius:18px;
-  background:transparent;
-  cursor:pointer;
-  box-shadow:0 0 0 1px rgba(96,165,250,.06);
+  width:94px;
+  height:58px;
   overflow:hidden;
-  transition:transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+  border-radius:16px;
+  border:1px solid rgba(255,255,255,.08);
+  background:rgba(255,255,255,.04);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.03);
 }
-.alloc-thumb-button:hover{
-  transform:translateY(-1px);
-  border-color:rgba(96,165,250,.3);
-  box-shadow:0 0 0 1px rgba(96,165,250,.12), 0 12px 24px rgba(15,23,42,.16);
-}
-.alloc-thumb-button .alloc-thumb{
+.alloc-photo-frame .alloc-thumb{
   width:100%;
   height:100%;
   border:none;
   border-radius:0;
 }
-.alloc-action-badge{
+.alloc-photo-frame--placeholder{
+  display:flex;
+  align-items:flex-end;
+  justify-content:flex-start;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.06), rgba(255,255,255,.02)),
+    rgba(255,255,255,.03);
+}
+.alloc-photo-badge{
   position:absolute;
-  left:6px;
-  bottom:6px;
+  left:7px;
+  bottom:7px;
   padding:4px 7px;
   border-radius:999px;
-  border:1px solid rgba(96,165,250,.18);
-  background:rgba(7,12,18,.84);
-  color:rgba(191,219,254,.92);
+  background:rgba(7,12,18,.80);
+  border:1px solid rgba(255,255,255,.10);
+  color:rgba(255,255,255,.86);
   font-size:9px;
   line-height:1;
   font-weight:800;
   letter-spacing:.08em;
   text-transform:uppercase;
-  pointer-events:none;
+}
+.alloc-name-row{
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
 }
 .alloc-main-new{
   min-width:0;
   display:grid;
-  gap:6px;
-}
-.alloc-name-action{
-  appearance:none;
-  border:0;
-  background:transparent;
-  padding:0;
-  margin:0;
-  flex:1 1 auto;
-  min-width:0;
-  display:flex;
-  align-items:center;
+  align-content:start;
   gap:8px;
-  cursor:pointer;
-  text-align:left;
-  color:#fff;
 }
 .alloc-name-text{
-  flex:1 1 auto;
-  min-width:0;
-  overflow:hidden;
-  text-overflow:ellipsis;
-  white-space:nowrap;
   font-weight:800;
   font-size:18px;
   line-height:1.1;
+  color:#fff;
+}
+.alloc-card-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+.alloc-action-btn{
+  min-height:34px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:0 14px;
+  border-radius:999px;
+  border:1px solid rgba(96,165,250,.18);
+  background:rgba(59,130,246,.10);
+  color:rgba(191,219,254,.9);
+  font-size:11px;
+  line-height:1;
+  font-weight:800;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  cursor:pointer;
+  transition:transform .18s ease, background .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+.alloc-action-btn:hover{
+  transform:translateY(-1px);
+  background:rgba(59,130,246,.16);
+  border-color:rgba(96,165,250,.30);
+  box-shadow:0 10px 24px rgba(15,23,42,.14);
+}
+.alloc-action-btn--danger{
+  border-color:rgba(248,113,113,.20);
+  background:rgba(127,29,29,.16);
+  color:#fecaca;
+}
+.alloc-action-btn--danger:hover{
+  background:rgba(127,29,29,.26);
+  border-color:rgba(248,113,113,.32);
 }
 .alloc-inline-hint{
   flex:none;
@@ -4789,23 +4873,9 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   line-height:1.25;
   font-weight:700;
 }
-.alloc-name-action:hover .alloc-inline-hint,
 .alloc-guest-btn:hover .alloc-inline-hint{
   background:rgba(59,130,246,.16);
   border-color:rgba(96,165,250,.26);
-}
-.alloc-remove-btn{
-  border:none;
-  background:transparent;
-  font-size:18px;
-  cursor:pointer;
-  padding:4px;
-  line-height:1;
-  border-radius:8px;
-  transition:background 0.2s;
-}
-.alloc-remove-btn:hover{
-  background:rgba(239,68,68,0.1);
 }
 
 /* ===== Figma dark popup/detail overrides ===== */

@@ -7283,108 +7283,271 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
   };
 
   // Функция открытия выбора гостей (центр, стилистика фильтра + ограничения)
-	  function openGuestPicker(idx) {
-	    const it = items[idx];
-	    const room = it.room || {};
-	    const cap = roomCapacity(room);
-	    const bedsInfo = formatBedsInfo(room);
-	    const priceAdult = Number(room.price_adult) || 0;
-	    const priceChild = Number(room.price_child) || 0;
-	    const priceFixed = Number(room.price) || 0;
-	    const adultRateText = priceAdult > 0 ? `${formatPriceRub(priceAdult)}/сутки` : '';
-	    const childRateText = priceChild > 0 ? `${formatPriceRub(priceChild)}/сутки` : '';
-	    const fixedRateText = (!adultRateText && !childRateText && priceFixed > 0) ? `${formatPriceRub(priceFixed)}/сутки (за дом)` : '';
+  function openGuestPicker(idx) {
+    const it = items[idx];
+    const room = it.room || {};
+    const cap = roomCapacity(room);
+    const bedsInfo = formatBedsInfo(room);
+    const priceAdult = Number(room.price_adult) || 0;
+    const priceChild = Number(room.price_child) || 0;
+    const priceFixed = Number(room.price) || 0;
+    const adultRateText = priceAdult > 0 ? `${formatPriceRub(priceAdult)}/сутки` : '';
+    const childRateText = priceChild > 0 ? `${formatPriceRub(priceChild)}/сутки` : '';
+    const fixedRateText = (!adultRateText && !childRateText && priceFixed > 0) ? `${formatPriceRub(priceFixed)}/сутки (за дом)` : '';
+    const chevrons = `
+      <svg class="bk-picker-chevron" viewBox="0 0 20 20" aria-hidden="true">
+        <path d="M6 8l4-4 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
+        <path d="M6 12l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"></path>
+      </svg>
+    `;
 
-	    const sheet = document.createElement('div');
-	    sheet.className = 'modal show';
-	    // Должно быть поверх #modal (корзина), но ниже auth/fullscreen
-	    sheet.style.zIndex = '6800';
+    const sheet = document.createElement('div');
+    sheet.className = 'modal show';
+    sheet.style.zIndex = '6800';
+    sheet.innerHTML = `
+      <div class="modal-card auth-shell guest-picker-shell">
+        <div class="auth-card auth-card--center auth-card--compact">
+          <div class="auth-head">
+            <div class="auth-title">Распределение гостей</div>
+          </div>
+          <div class="auth-subtitle">
+            ${room.name || room.room_type || 'Апартамент'} • до ${cap} гостей
+          </div>
+          ${bedsInfo ? `<div class="auth-note">Спальные места: ${bedsInfo}</div>` : ''}
 
-	    sheet.innerHTML = `
-	      <div class="modal-card auth-shell guest-picker-shell">
-          <div class="auth-card auth-card--center auth-card--compact">
-            <div class="auth-head">
-              <div class="auth-title">Распределение гостей</div>
+          <div class="auth-picker-grid">
+            <div class="auth-picker-row">
+              <div class="auth-picker-copy">
+                <span class="auth-picker-label">Взрослые</span>
+                <span class="auth-picker-meta">${adultRateText || fixedRateText || '&nbsp;'}</span>
+              </div>
+              <div class="bk-picker-field auth-picker-field">
+                <button type="button" class="bk-picker-trigger" id="guestAdultsBtn" aria-haspopup="listbox" aria-expanded="false">
+                  <span class="bk-picker-value" id="guestAdultsValue">0</span>
+                  ${chevrons}
+                </button>
+                <input type="hidden" id="guestAdults" class="bk-hidden-value" value="${Math.max(0, Number(it.adults) || 0)}">
+              </div>
             </div>
-            <div class="auth-subtitle">
-              ${room.name || room.room_type || 'Апартамент'} • до ${cap} гостей
+
+            <div class="auth-picker-row">
+              <div class="auth-picker-copy">
+                <span class="auth-picker-label">Дети</span>
+                <span class="auth-picker-meta">${childRateText || '&nbsp;'}</span>
+              </div>
+              <div class="bk-picker-field auth-picker-field">
+                <button type="button" class="bk-picker-trigger" id="guestKidsBtn" aria-haspopup="listbox" aria-expanded="false">
+                  <span class="bk-picker-value" id="guestKidsValue">0</span>
+                  ${chevrons}
+                </button>
+                <input type="hidden" id="guestKids" class="bk-hidden-value" value="${Math.max(0, Number(it.kids) || 0)}">
+              </div>
             </div>
-            ${bedsInfo ? `<div class="auth-note">Спальные места: ${bedsInfo}</div>` : ''}
 
-	        <div class="auth-picker-grid">
-	          <div class="auth-picker-row">
-	            <span class="auth-picker-label">Взрослые</span>
-	            <span class="auth-picker-meta">${adultRateText || fixedRateText || '&nbsp;'}</span>
-	            <select id="guestAdults" class="auth-picker-select"></select>
-	          </div>
-	          <div class="auth-picker-row">
-	            <span class="auth-picker-label">Дети</span>
-	            <span class="auth-picker-meta">${childRateText || '&nbsp;'}</span>
-	            <select id="guestKids" class="auth-picker-select"></select>
-	          </div>
-	          <div class="auth-note">Дети размещаются только с минимум одним взрослым.</div>
-	        </div>
+            <div class="auth-rule-note" role="note" aria-label="Важное правило размещения">
+              <span class="auth-rule-icon" aria-hidden="true">!</span>
+              <span class="auth-rule-text">Дети размещаются только с минимум одним взрослым.</span>
+            </div>
+          </div>
 
-        <div class="auth-actions auth-actions--single">
-          <button class="button primary" id="guestApply">Применить</button>
-        </div>
-        <div class="auth-actions auth-actions--single">
-          <button class="button ghost" id="guestCancel">Отмена</button>
-        </div>
+          <div class="auth-actions auth-actions--single">
+            <button class="button primary" id="guestApply">Применить</button>
+          </div>
+          <div class="auth-actions auth-actions--single">
+            <button class="button ghost" id="guestCancel">Отмена</button>
           </div>
         </div>
+      </div>
     `;
     document.body.appendChild(sheet);
     restartModalOpenAnimation(sheet, sheet.querySelector('.modal-card'));
 
-    const applyBtn = sheet.querySelector('#guestApply');
-    const cancelBtn = sheet.querySelector('#guestCancel');
-    const adultsSelect = sheet.querySelector('#guestAdults');
-    const kidsSelect = sheet.querySelector('#guestKids');
-
-    // Заполняем селекты с учётом текущих значений
-    const fillAdults = () => {
-      adultsSelect.innerHTML = Array.from({ length: cap + 1 }, (_, i) => `
-        <option value="${i}" ${i === it.adults ? 'selected' : ''}>${i}</option>
-      `).join('');
+    const clamp = (value, min, max) => Math.max(min, Math.min(value, max));
+    const readNum = (input, fallback) => {
+      const num = Number(input?.value);
+      return Number.isFinite(num) ? num : fallback;
     };
 
-    const fillKids = (maxKids) => {
-      const currentVal = kidsSelect.value;
-      const current = currentVal !== '' ? Math.max(0, parseInt(currentVal, 10) || 0) : (it.kids || 0);
-      kidsSelect.innerHTML = Array.from({ length: maxKids + 1 }, (_, i) => `
-        <option value="${i}" ${i === current ? 'selected' : ''}>${i}</option>
-      `).join('');
+    const applyBtn = sheet.querySelector('#guestApply');
+    const cancelBtn = sheet.querySelector('#guestCancel');
+    const adultsInput = sheet.querySelector('#guestAdults');
+    const kidsInput = sheet.querySelector('#guestKids');
+    const adultsBtn = sheet.querySelector('#guestAdultsBtn');
+    const kidsBtn = sheet.querySelector('#guestKidsBtn');
+    const adultsValue = sheet.querySelector('#guestAdultsValue');
+    const kidsValue = sheet.querySelector('#guestKidsValue');
+
+    let closeGuestWheelPicker = null;
+
+    const updateGuestValues = () => {
+      if (adultsValue) adultsValue.textContent = String(clamp(readNum(adultsInput, 0), 0, Math.max(0, cap)));
+      if (kidsValue) kidsValue.textContent = String(clamp(readNum(kidsInput, 0), 0, Math.max(0, cap)));
+    };
+
+    const destroyGuestWheelPicker = () => {
+      if (typeof closeGuestWheelPicker === 'function') closeGuestWheelPicker();
+      closeGuestWheelPicker = null;
+      try { adultsBtn?.setAttribute('aria-expanded', 'false'); } catch (_) {}
+      try { kidsBtn?.setAttribute('aria-expanded', 'false'); } catch (_) {}
     };
 
     const recalcOptions = () => {
-      const adults = Number(adultsSelect.value) || 0;
-      // Дети только если есть минимум 1 взрослый
+      const adults = clamp(readNum(adultsInput, 0), 0, Math.max(0, cap));
       const maxKids = adults > 0 ? Math.max(0, cap - adults) : 0;
-      fillKids(maxKids);
-      const kids = Number(kidsSelect.value) || 0;
-      // Общая валидация: не превышаем вместимость и дети не без взрослого
+      const kids = clamp(readNum(kidsInput, 0), 0, maxKids);
+
+      adultsInput.value = String(adults);
+      kidsInput.value = String(kids);
+
+      if (adultsBtn) {
+        adultsBtn.dataset.min = '0';
+        adultsBtn.dataset.max = String(Math.max(0, cap));
+      }
+      if (kidsBtn) {
+        kidsBtn.dataset.min = '0';
+        kidsBtn.dataset.max = String(maxKids);
+        kidsBtn.classList.toggle('is-empty', maxKids === 0 && adults === 0);
+      }
+
+      updateGuestValues();
+
       const total = adults + kids;
-      const validAdults = kids === 0 || adults > 0;
-      const withinCap = total <= cap;
-      const ok = validAdults && withinCap;
+      const ok = total <= cap && (kids === 0 || adults > 0);
       applyBtn.disabled = !ok;
       applyBtn.style.opacity = ok ? '1' : '0.55';
     };
 
-    fillAdults();
-    fillKids(Math.max(0, cap - (it.adults || 0 || 0)));
+    const openGuestWheelPicker = (kind) => {
+      const trigger = kind === 'adults' ? adultsBtn : kidsBtn;
+      const input = kind === 'adults' ? adultsInput : kidsInput;
+      if (!trigger || !input) return;
+
+      if (trigger.getAttribute('aria-expanded') === 'true') {
+        destroyGuestWheelPicker();
+        return;
+      }
+      destroyGuestWheelPicker();
+
+      const min = Number(trigger.dataset.min ?? 0);
+      const max = Number(trigger.dataset.max ?? 0);
+      if (!Number.isFinite(min) || !Number.isFinite(max) || max < min) return;
+
+      const currentValue = clamp(readNum(input, 0), min, max);
+      const itemsMarkup = Array.from({ length: max - min + 1 }, (_, offset) => {
+        const value = min + offset;
+        return `<div class="bk-wheel-item${value === currentValue ? ' is-active' : ''}" data-value="${value}">${value}</div>`;
+      }).join('');
+
+      const overlay = document.createElement('div');
+      overlay.className = 'bk-wheel-overlay';
+      overlay.innerHTML = `
+        <div class="bk-wheel-dismiss" aria-hidden="true"></div>
+        <div class="bk-wheel" role="listbox" aria-label="${kind === 'adults' ? 'Взрослые' : 'Дети'}">
+          <div class="bk-wheel-fade bk-wheel-fade--top"></div>
+          <div class="bk-wheel-fade bk-wheel-fade--bottom"></div>
+          <div class="bk-wheel-indicator"></div>
+          <div class="bk-wheel-scroll">${itemsMarkup}</div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      trigger.setAttribute('aria-expanded', 'true');
+
+      const wheel = overlay.querySelector('.bk-wheel');
+      const dismiss = overlay.querySelector('.bk-wheel-dismiss');
+      const scroll = overlay.querySelector('.bk-wheel-scroll');
+      const wheelItems = Array.from(overlay.querySelectorAll('.bk-wheel-item'));
+      const itemHeight = 48;
+      const gap = 10;
+
+      const placeWheel = () => {
+        const rect = trigger.getBoundingClientRect();
+        const viewportWidth = window.innerWidth || document.documentElement?.clientWidth || 0;
+        const viewportHeight = window.innerHeight || document.documentElement?.clientHeight || 0;
+        const wheelWidth = Math.min(Math.max(Math.round(rect.width * 1.14), 216), viewportWidth - 24);
+        let left = rect.left + (rect.width / 2) - (wheelWidth / 2);
+        left = Math.max(12, Math.min(left, viewportWidth - wheelWidth - 12));
+        let top = rect.bottom + gap;
+        if ((top + 144) > (viewportHeight - 12)) {
+          top = Math.max(12, rect.top - 144 - gap);
+        }
+        wheel.style.width = `${Math.round(wheelWidth)}px`;
+        wheel.style.left = `${Math.round(left)}px`;
+        wheel.style.top = `${Math.round(top)}px`;
+      };
+
+      const updateWheelState = (emitChange = true) => {
+        const maxIndex = wheelItems.length - 1;
+        const index = clamp(Math.round((scroll.scrollTop || 0) / itemHeight), 0, maxIndex);
+        const nextValue = min + index;
+        wheelItems.forEach((item, itemIndex) => item.classList.toggle('is-active', itemIndex === index));
+        if (String(nextValue) !== String(input.value)) {
+          input.value = String(nextValue);
+          updateGuestValues();
+          if (emitChange) {
+            try { input.dispatchEvent(new Event('change')); } catch (_) {}
+          }
+        }
+      };
+
+      let snapTimer = null;
+      const onScroll = () => {
+        updateWheelState(true);
+        clearTimeout(snapTimer);
+        snapTimer = setTimeout(() => {
+          const index = clamp(Math.round((scroll.scrollTop || 0) / itemHeight), 0, wheelItems.length - 1);
+          try {
+            scroll.scrollTo({ top: index * itemHeight, behavior: 'smooth' });
+          } catch (_) {
+            scroll.scrollTop = index * itemHeight;
+          }
+        }, 70);
+      };
+
+      const onKeyDown = (event) => {
+        if (event.key === 'Escape') destroyGuestWheelPicker();
+      };
+      const onResize = () => destroyGuestWheelPicker();
+
+      dismiss?.addEventListener('click', destroyGuestWheelPicker);
+      scroll?.addEventListener('scroll', onScroll, { passive: true });
+      document.addEventListener('keydown', onKeyDown);
+      window.addEventListener('resize', onResize, { passive: true });
+
+      requestAnimationFrame(() => {
+        placeWheel();
+        try {
+          scroll.scrollTop = (currentValue - min) * itemHeight;
+        } catch (_) {}
+        updateWheelState(false);
+      });
+
+      closeGuestWheelPicker = () => {
+        clearTimeout(snapTimer);
+        document.removeEventListener('keydown', onKeyDown);
+        window.removeEventListener('resize', onResize);
+        try { overlay.remove(); } catch (_) {}
+        try { trigger.setAttribute('aria-expanded', 'false'); } catch (_) {}
+      };
+    };
+
     recalcOptions();
 
-    adultsSelect.addEventListener('change', recalcOptions);
-    kidsSelect.addEventListener('change', recalcOptions);
+    adultsInput.addEventListener('change', recalcOptions);
+    kidsInput.addEventListener('change', recalcOptions);
+    adultsBtn?.addEventListener('click', (e) => {
+      try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+      openGuestWheelPicker('adults');
+    });
+    kidsBtn?.addEventListener('click', (e) => {
+      try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+      openGuestWheelPicker('kids');
+    });
 
     applyBtn.onclick = () => {
-      let adults = Number(adultsSelect.value) || 0;
-      let kids = Number(kidsSelect.value) || 0;
-      // Автоправка: если дети есть, но взрослых 0 — ставим 1 взрослого
+      destroyGuestWheelPicker();
+      let adults = Number(adultsInput.value) || 0;
+      let kids = Number(kidsInput.value) || 0;
       if (kids > 0 && adults === 0) adults = 1;
-      // Доп. защита: дети не больше остатка вместимости
       const maxKids = Math.max(0, cap - adults);
       if (kids > maxKids) kids = maxKids;
 
@@ -7395,46 +7558,69 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
       updateSummary();
     };
 
-    cancelBtn.onclick = () => sheet.remove();
+    cancelBtn.onclick = () => {
+      destroyGuestWheelPicker();
+      sheet.remove();
+    };
     sheet.addEventListener('click', (e) => {
-      if (e.target === sheet) sheet.remove();
+      if (e.target === sheet) {
+        destroyGuestWheelPicker();
+        sheet.remove();
+      }
     });
   }
 
-	  function render() {
-	    if (!listEl) return;
-	    const nights = bookingNightsFromFilter(f);
-	    listEl.innerHTML = items.map((it, idx) => {
-	      const room = it.room || {};
-	      const roomTitle = String(room.name || room.room_type || 'Апартамент');
-	      const cap = roomCapacity(room);
+  function render() {
+    if (!listEl) return;
+    const nights = bookingNightsFromFilter(f);
+    listEl.innerHTML = items.map((it, idx) => {
+      const room = it.room || {};
+      const roomTitle = String(room.name || room.room_type || 'Апартамент');
+      const cap = roomCapacity(room);
       const photos = Array.isArray(room.photos) ? room.photos : [];
-	      const cover = photos.find(p => p && p.cover) || photos[0];
-	      const thumb = cover?.url
-          ? `<button class="alloc-thumb-button" data-idx="${idx}" type="button" aria-label="Открыть фото">
-              <img class="alloc-thumb" src="${cover.url}" alt="${escapeHtml(roomTitle)}">
-              <span class="alloc-action-badge">Фото</span>
-            </button>`
-          : `<div class="alloc-thumb ph"></div>`;
-	      const sub = calcRoomSubtotal(room, it.adults, it.kids);
-	      const subText = (sub == null) ? '—' : formatPriceRub(sub * nights);
-	      const total = (Number(it.adults) || 0) + (Number(it.kids) || 0);
-	      const bedsInfo = formatBedsInfo(room);
-	      const bedsLine = bedsInfo ? `<div class="alloc-meta muted">${bedsInfo}</div>` : '';
-      
+      const roomCover = photos.find(p => p && p.cover) || photos[0];
+      const roomCoverUrl = (roomCover && typeof roomCover === 'object') ? roomCover.url : roomCover;
+      const campCover = camp?.photo_main ? String(camp.photo_main) : '';
+      const buildPhotoFrame = (url, label, alt) => {
+        if (!url) {
+          return `
+            <div class="alloc-photo-frame alloc-photo-frame--placeholder">
+              <span class="alloc-photo-badge">${label}</span>
+            </div>
+          `;
+        }
+        return `
+          <div class="alloc-photo-frame">
+            <img class="alloc-thumb" src="${escapeHtml(String(url))}" alt="${escapeHtml(String(alt || label))}">
+            <span class="alloc-photo-badge">${label}</span>
+          </div>
+        `;
+      };
+      const thumb = `
+        <div class="alloc-photo-stack" aria-hidden="true">
+          ${buildPhotoFrame(campCover, 'База', camp?.name || 'База отдыха')}
+          ${buildPhotoFrame(roomCoverUrl, 'Апарт.', roomTitle)}
+        </div>
+      `;
+      const sub = calcRoomSubtotal(room, it.adults, it.kids);
+      const subText = (sub == null) ? '—' : formatPriceRub(sub * nights);
+      const total = (Number(it.adults) || 0) + (Number(it.kids) || 0);
+      const bedsInfo = formatBedsInfo(room);
+      const bedsLine = bedsInfo ? `<div class="alloc-meta muted">${bedsInfo}</div>` : '';
+
       return `
         <div class="alloc-item-new" data-idx="${idx}">
           ${thumb}
           <div class="alloc-main-new">
             <div class="alloc-name-row">
-              <button class="alloc-name-action" data-idx="${idx}" type="button" aria-label="Открыть информацию об апартаменте">
-                <span class="alloc-name-text">${escapeHtml(roomTitle)}</span>
-                <span class="alloc-inline-hint">Подробнее</span>
-              </button>
-              <button class="alloc-remove-btn" data-idx="${idx}" type="button" title="Удалить">🗑️</button>
+              <div class="alloc-name-text">${escapeHtml(roomTitle)}</div>
             </div>
             <div class="alloc-meta muted">до ${cap} гостей • ${subText}</div>
             ${bedsLine}
+            <div class="alloc-card-actions">
+              <button class="alloc-action-btn alloc-action-btn--info" data-idx="${idx}" type="button" aria-label="Открыть информацию об апартаменте">Подробнее</button>
+              <button class="alloc-action-btn alloc-action-btn--danger" data-idx="${idx}" type="button" aria-label="Удалить апартамент из корзины">Удалить</button>
+            </div>
             <button class="alloc-guest-btn alloc-guest-btn--action" data-idx="${idx}" type="button" aria-label="Изменить распределение гостей">
               <span class="alloc-guest-btn__value">Гостей: ${total} (взр: ${it.adults || 0}, дети: ${it.kids || 0})</span>
               <span class="alloc-inline-hint">Изменить</span>
@@ -7452,23 +7638,10 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
       };
     });
 
-    // Обработчики кликов по фото — открываем точно так же, как в карточке апартамента (полноэкранка)
-    listEl.querySelectorAll('.alloc-thumb-button[data-idx]').forEach(btn => {
-      btn.onclick = (e) => {
-        try { e.preventDefault(); e.stopPropagation(); } catch (_) {}
+    // Обработчики кликов по кнопке "Подробнее"
+    listEl.querySelectorAll('.alloc-action-btn--info[data-idx]').forEach(btn => {
+      btn.onclick = () => {
         const idx = Number(btn.getAttribute('data-idx'));
-        if (!Number.isFinite(idx) || !items[idx]) return;
-        const room = items[idx].room || {};
-        const photos = Array.isArray(room.photos) ? room.photos : [];
-        const pics = photos.map(p => (p && typeof p === 'object') ? p.url : p).filter(Boolean);
-        if (pics.length > 0) openFullscreenGallery(pics, 0, { showBook: false });
-      };
-    });
-
-    // Обработчики кликов по названию (открытие деталей)
-    listEl.querySelectorAll('.alloc-name-action[data-idx]').forEach(nameEl => {
-      nameEl.onclick = () => {
-        const idx = Number(nameEl.getAttribute('data-idx'));
         if (Number.isFinite(idx) && items[idx]) {
           const room = items[idx].room || {};
           openRoomDetails(room, camp, {
@@ -7485,34 +7658,34 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
       };
     });
     
-	    // Обработчики кнопок удаления
-		    listEl.querySelectorAll('.alloc-remove-btn').forEach(btn => {
-		      btn.onclick = async (e) => {
-		        e.stopPropagation();
-		        const idx = Number(btn.getAttribute('data-idx'));
-		        if (Number.isFinite(idx)) {
-		          const name = (items[idx]?.room?.class || items[idx]?.room?.name || items[idx]?.room?.room_type || 'апартамент').toString();
-		          const ok = await showConfirmModal({
-		            title: 'Удалить из корзины?',
-		            message: `Удалить «${name}» из корзины?`,
-		            confirmText: 'Удалить',
-		            cancelText: 'Отмена',
-		            danger: true,
-		          });
-		          if (!ok) return;
-		          autoPickActive = false;
-		          autoPickIndex = 0;
-		          items.splice(idx, 1);
-	          // Если удалили последний апартамент, показываем пустую корзину (фильтр сохраняем)
-			          if (items.length === 0) {
-			            // Удаляем корзину этой базы из мульти-корзины
-			            removeBookingMultiCart(cid);
-			            // Также очищаем одиночный черновик если он от этой базы
-			            const d = window.__bookingDraft || loadBookingDraft();
-		            if (d && Number(d.campId) === cid) {
-		              try { localStorage.removeItem(BOOKING_DRAFT_KEY); } catch (_) {}
-		              window.__bookingDraft = null;
-		            }
+    // Обработчики кнопок удаления
+    listEl.querySelectorAll('.alloc-action-btn--danger[data-idx]').forEach(btn => {
+      btn.onclick = async (e) => {
+        e.stopPropagation();
+        const idx = Number(btn.getAttribute('data-idx'));
+        if (Number.isFinite(idx)) {
+          const name = (items[idx]?.room?.class || items[idx]?.room?.name || items[idx]?.room?.room_type || 'апартамент').toString();
+          const ok = await showConfirmModal({
+            title: 'Удалить из корзины?',
+            message: `Удалить «${name}» из корзины?`,
+            confirmText: 'Удалить',
+            cancelText: 'Отмена',
+            danger: true,
+          });
+          if (!ok) return;
+          autoPickActive = false;
+          autoPickIndex = 0;
+          items.splice(idx, 1);
+          // Если удалили последний апартамент, показываем пустую корзину (фильтр сохраняем)
+          if (items.length === 0) {
+            // Удаляем корзину этой базы из мульти-корзины
+            removeBookingMultiCart(cid);
+            // Также очищаем одиночный черновик если он от этой базы
+            const d = window.__bookingDraft || loadBookingDraft();
+            if (d && Number(d.campId) === cid) {
+              try { localStorage.removeItem(BOOKING_DRAFT_KEY); } catch (_) {}
+              window.__bookingDraft = null;
+            }
 			            updateBookingDraftUi();
 			            openEmptyBookingConfirmationModal({ filter: f });
 			            return;
