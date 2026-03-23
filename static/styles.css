@@ -3147,12 +3147,12 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 }
 .confirm-dates-btn{
   width:min(328px, 100%);
-  min-height:68px;
+  min-height:56px;
   justify-content:center;
   align-items:center;
   flex-direction:column;
-  gap:6px;
-  margin:0 auto;
+  gap:4px;
+  margin:-2px auto 0;
   text-align:center;
   border-color:rgba(96,165,250,.24);
   box-shadow:
@@ -3161,7 +3161,7 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 }
 .confirm-dates-value{
   color:#fff;
-  font-size:18px;
+  font-size:17px;
   line-height:1;
   font-weight:800;
   letter-spacing:-.03em;
@@ -3171,7 +3171,7 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 }
 .confirm-dates-hint{
   color:rgba(147,197,253,.76);
-  font-size:11px;
+  font-size:10px;
   line-height:1;
   font-weight:800;
   letter-spacing:.08em;
@@ -3869,8 +3869,17 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
     padding:20px 18px 14px;
   }
 
+  .accom-head--booking{
+    padding:20px 18px 8px;
+    gap:3px;
+  }
+
   .accom-title{
     font-size:24px;
+  }
+
+  .confirm-sheet-camp{
+    font-size:17px;
   }
 
   .accom-body{
@@ -3898,7 +3907,19 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 
 /* ====================== GUEST ALLOCATION (MANUAL SPLIT) ====================== */
 .alloc-card{display:grid; gap:12px; overflow-x:hidden; max-width:100%;}
-.confirm-sheet-camp{justify-content:center;}
+.accom-head--booking{
+  gap:4px;
+  padding:22px 20px 8px;
+}
+.confirm-sheet-camp{
+  justify-content:center;
+  color:rgba(255,255,255,.76);
+  font-size:18px;
+  line-height:1.1;
+  font-weight:700;
+  letter-spacing:-.02em;
+  margin-top:-2px;
+}
 .alloc-hint{min-height:18px; font-size:13px; line-height:1.35; text-align:center;}
 .alloc-hint--panel{
   padding:14px 16px;
@@ -4804,24 +4825,33 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 /* ====================== NEW BOOKING CONFIRMATION STYLES ====================== */
 .alloc-item-new{
   display:grid;
-  grid-template-columns:94px 1fr;
-  gap:14px;
+  grid-template-columns:112px minmax(0, 1fr);
+  grid-template-areas:
+    "photos main"
+    "photos guests"
+    "actions actions";
+  gap:10px 14px;
   width:100%;
   border:1px solid rgba(255,255,255,0.08);
   border-radius:20px;
   background:rgba(255,255,255,0.04);
   padding:14px;
   box-sizing:border-box;
+  align-items:stretch;
 }
 .alloc-photo-stack{
+  grid-area:photos;
   display:grid;
+  grid-template-rows:repeat(var(--stack-count, 2), minmax(0, 1fr));
   gap:8px;
-  align-content:start;
+  align-self:stretch;
+  height:100%;
+  min-height:100%;
 }
 .alloc-photo-frame{
   position:relative;
-  width:94px;
-  height:58px;
+  width:100%;
+  min-height:0;
   overflow:hidden;
   border-radius:16px;
   border:1px solid rgba(255,255,255,.08);
@@ -4842,31 +4872,22 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
     linear-gradient(135deg, rgba(255,255,255,.06), rgba(255,255,255,.02)),
     rgba(255,255,255,.03);
 }
-.alloc-photo-badge{
-  position:absolute;
-  left:7px;
-  bottom:7px;
-  padding:4px 7px;
-  border-radius:999px;
-  background:rgba(7,12,18,.80);
-  border:1px solid rgba(255,255,255,.10);
-  color:rgba(255,255,255,.86);
-  font-size:9px;
-  line-height:1;
-  font-weight:800;
-  letter-spacing:.08em;
-  text-transform:uppercase;
-}
 .alloc-name-row{
   display:flex;
   align-items:flex-start;
   gap:10px;
 }
 .alloc-main-new{
+  grid-area:main;
   min-width:0;
   display:grid;
   align-content:start;
   gap:8px;
+}
+.alloc-main-new .alloc-meta{
+  white-space:normal;
+  overflow:visible;
+  text-overflow:clip;
 }
 .alloc-name-text{
   font-weight:800;
@@ -4875,21 +4896,23 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   color:#fff;
 }
 .alloc-card-actions{
-  display:flex;
-  flex-wrap:wrap;
-  gap:8px;
+  grid-area:actions;
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:10px;
 }
 .alloc-action-btn{
-  min-height:34px;
-  display:inline-flex;
+  min-height:46px;
+  width:100%;
+  display:flex;
   align-items:center;
   justify-content:center;
-  padding:0 14px;
-  border-radius:999px;
+  padding:0 12px;
+  border-radius:16px;
   border:1px solid rgba(96,165,250,.18);
   background:rgba(59,130,246,.10);
   color:rgba(191,219,254,.9);
-  font-size:11px;
+  font-size:12px;
   line-height:1;
   font-weight:800;
   letter-spacing:.08em;
@@ -4926,12 +4949,14 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
   text-transform:uppercase;
 }
 .alloc-guest-btn{
+  grid-area:guests;
   display:flex;
   align-items:center;
   justify-content:space-between;
   gap:12px;
-  padding:12px 14px;
-  border-radius:14px;
+  padding:14px 16px;
+  min-height:84px;
+  border-radius:18px;
   border:1px solid rgba(96,165,250,.14);
   background:#0f1216;
   color:#e5e7eb;
@@ -4949,10 +4974,15 @@ html, body, .tg-app, .modal, .modal-card, .alloc-card{overflow-x:hidden !importa
 }
 .alloc-guest-btn__value{
   min-width:0;
+  display:grid;
+  gap:4px;
   color:#fff;
-  font-size:13px;
+  font-size:15px;
   line-height:1.25;
   font-weight:700;
+}
+.alloc-guest-line{
+  display:block;
 }
 .alloc-guest-btn:hover .alloc-inline-hint{
   background:rgba(59,130,246,.16);
