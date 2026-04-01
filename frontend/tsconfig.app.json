@@ -12,9 +12,6 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "paths": {
-      "motion/react": ["src/shims/motion-react.ts"]
-    },
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,

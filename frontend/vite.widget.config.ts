@@ -7,11 +7,6 @@ export default defineConfig({
   define: {
     "process.env.NODE_ENV": JSON.stringify("production"),
   },
-  resolve: {
-    alias: {
-      "motion/react": fileURLToPath(new URL("./src/shims/motion-react.ts", import.meta.url)),
-    },
-  },
   build: {
     outDir: "../static/map-popup-widget",
     emptyOutDir: true,

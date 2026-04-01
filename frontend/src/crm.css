@@ -1,0 +1,176 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+@source "./**/*.{ts,tsx}";
+
+@font-face {
+  font-family: "Manrope";
+  src: url("/static/fonts/manrope/manrope-regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Manrope";
+  src: url("/static/fonts/manrope/manrope-medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Manrope";
+  src: url("/static/fonts/manrope/manrope-semibold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Manrope";
+  src: url("/static/fonts/manrope/manrope-bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Manrope";
+  src: url("/static/fonts/manrope/manrope-extrabold.woff2") format("woff2");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --background: oklch(0.982 0.006 95);
+  --foreground: oklch(0.192 0.012 264);
+  --card: oklch(1 0 0 / 0.82);
+  --card-foreground: oklch(0.192 0.012 264);
+  --popover: oklch(1 0 0 / 0.92);
+  --popover-foreground: oklch(0.192 0.012 264);
+  --primary: oklch(0.228 0.017 262);
+  --primary-foreground: oklch(0.982 0.006 95);
+  --secondary: oklch(0.955 0.01 95);
+  --secondary-foreground: oklch(0.22 0.015 264);
+  --muted: oklch(0.968 0.006 95);
+  --muted-foreground: oklch(0.52 0.015 264);
+  --accent: oklch(0.952 0.011 95);
+  --accent-foreground: oklch(0.2 0.015 264);
+  --destructive: oklch(0.62 0.22 25);
+  --destructive-foreground: oklch(0.982 0.006 95);
+  --border: oklch(0.87 0.01 95 / 0.78);
+  --input: oklch(0.9 0.008 95 / 0.8);
+  --ring: oklch(0.82 0.05 85);
+  --brand-shadow: 0 28px 80px rgba(20, 18, 13, 0.12);
+}
+
+.dark {
+  --background: oklch(0.16 0.015 264);
+  --foreground: oklch(0.97 0.005 95);
+  --card: oklch(0.22 0.018 264 / 0.74);
+  --card-foreground: oklch(0.97 0.005 95);
+  --popover: oklch(0.2 0.018 264 / 0.9);
+  --popover-foreground: oklch(0.97 0.005 95);
+  --primary: oklch(0.97 0.005 95);
+  --primary-foreground: oklch(0.16 0.015 264);
+  --secondary: oklch(0.26 0.018 264 / 0.9);
+  --secondary-foreground: oklch(0.97 0.005 95);
+  --muted: oklch(0.24 0.018 264 / 0.92);
+  --muted-foreground: oklch(0.72 0.012 264);
+  --accent: oklch(0.28 0.018 264 / 0.96);
+  --accent-foreground: oklch(0.97 0.005 95);
+  --destructive: oklch(0.62 0.22 25);
+  --destructive-foreground: oklch(0.97 0.005 95);
+  --border: oklch(0.36 0.02 264 / 0.7);
+  --input: oklch(0.32 0.02 264 / 0.84);
+  --ring: oklch(0.8 0.05 85);
+  --brand-shadow: 0 28px 90px rgba(0, 0, 0, 0.42);
+}
+
+@theme inline {
+  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+  --radius-3xl: 1.75rem;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+}
+
+@layer components {
+  .crm-ambient {
+    background:
+      radial-gradient(circle at top, rgba(229, 211, 179, 0.13), transparent 24%),
+      radial-gradient(circle at bottom right, rgba(96, 165, 250, 0.12), transparent 30%);
+  }
+
+  .glass-card {
+    @apply rounded-3xl border border-border bg-card/82 shadow-xl backdrop-blur-xl;
+    box-shadow: var(--brand-shadow);
+  }
+
+  .soft-input {
+    @apply w-full rounded-2xl border border-input bg-background/80 px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground transition focus:border-[#E5D3B3]/55 focus:outline-none focus:ring-2 focus:ring-[#E5D3B3]/35;
+  }
+
+  .soft-button {
+    @apply inline-flex items-center justify-center rounded-2xl border border-border bg-background/75 px-4 py-3 text-sm font-medium text-foreground transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5D3B3]/60 active:scale-[0.99];
+  }
+
+  .brand-button {
+    @apply inline-flex items-center justify-center rounded-2xl bg-foreground px-5 py-3 text-sm font-semibold text-background transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5D3B3]/60 active:scale-[0.99];
+  }
+
+  .brand-outline {
+    @apply inline-flex items-center justify-center rounded-2xl border border-[#E5D3B3]/30 bg-[#E5D3B3]/10 px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-[#E5D3B3]/16 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5D3B3]/60;
+  }
+
+  .legacy-map-shell {
+    min-height: 100vh;
+    background:
+      radial-gradient(circle at top left, rgba(255, 255, 255, 0.55), transparent 22%),
+      linear-gradient(180deg, #f8f2e7 0%, #efe5d7 100%);
+  }
+}
