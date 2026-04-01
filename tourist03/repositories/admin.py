@@ -1,6 +1,7 @@
 from datetime import date
 from typing import Optional
 
+from tourist03.repositories import catalog as catalog_repo
 from tourist03.booking_db_errors import translate_booking_integrity_error
 from tourist03.db import _db_conn
 
@@ -63,6 +64,280 @@ def list_admin_calendar_rooms(camp_ids: list[int], camp_id: Optional[int]):
             tuple(params),
         )
         return [dict(row) for row in cur.fetchall()]
+
+
+def get_admin_camp_profile(camp_id: int):
+    camp = catalog_repo.get_camp(camp_id)
+    if not camp:
+        return None
+    photos = catalog_repo.list_camp_photos(camp_id)
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT
+                camp_id,
+                time_zone,
+                booking_hold_hours,
+                night_release_after_shift_minutes,
+                escalation_step_minutes,
+                escalation_repeats_before_manager,
+                check_in_time,
+                check_out_time,
+                cancellation_policy,
+                arrival_instructions,
+                payment_instructions,
+                admin_contact_phone,
+                support_whatsapp,
+                support_telegram,
+                notifications_enabled
+            FROM crm.camp_settings
+            WHERE camp_id = %s
+            """,
+            (camp_id,),
+        )
+        settings = dict(cur.fetchone() or {})
+    return {"camp": camp, "settings": settings, "photos": photos}
+
+
+def list_admin_camp_rooms(camp_id: int):
+    context = catalog_repo.get_camp_room_listing_context(camp_id)
+    return context.get("rooms") or []
+
+
+def save_admin_camp_profile(camp_id: int, payload: dict):
+    with _db_conn("catalog") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE catalog.camps
+            SET name = %s,
+                lake_name = %s,
+                address = %s,
+                phone = %s,
+                site_url = %s,
+                description = %s
+            WHERE id = %s
+            """,
+            (
+                payload.get("name"),
+                payload.get("lake_name"),
+                payload.get("address"),
+                payload.get("phone"),
+                payload.get("site_url"),
+                payload.get("description"),
+                camp_id,
+            ),
+        )
+        changed = cur.rowcount > 0
+        conn.commit()
+
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO crm.camp_settings (
+                camp_id,
+                time_zone,
+                check_in_time,
+                check_out_time,
+                cancellation_policy,
+                arrival_instructions,
+                payment_instructions,
+                admin_contact_phone,
+                support_whatsapp,
+                support_telegram,
+                notifications_enabled
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (camp_id) DO UPDATE SET
+                time_zone = EXCLUDED.time_zone,
+                check_in_time = EXCLUDED.check_in_time,
+                check_out_time = EXCLUDED.check_out_time,
+                cancellation_policy = EXCLUDED.cancellation_policy,
+                arrival_instructions = EXCLUDED.arrival_instructions,
+                payment_instructions = EXCLUDED.payment_instructions,
+                admin_contact_phone = EXCLUDED.admin_contact_phone,
+                support_whatsapp = EXCLUDED.support_whatsapp,
+                support_telegram = EXCLUDED.support_telegram,
+                notifications_enabled = EXCLUDED.notifications_enabled,
+                updated_at = NOW()
+            """,
+            (
+                camp_id,
+                payload.get("time_zone") or "Asia/Irkutsk",
+                payload.get("check_in_time"),
+                payload.get("check_out_time"),
+                payload.get("cancellation_policy"),
+                payload.get("arrival_instructions"),
+                payload.get("payment_instructions"),
+                payload.get("admin_contact_phone"),
+                payload.get("support_whatsapp"),
+                payload.get("support_telegram"),
+                bool(payload.get("notifications_enabled", True)),
+            ),
+        )
+        conn.commit()
+
+    return changed
+
+
+def create_admin_room(camp_id: int, payload: dict) -> int:
+    with _db_conn("catalog") as conn:
+        cur = conn.cursor()
+        beds_single = int(payload.get("beds_single") or 0)
+        beds_double = int(payload.get("beds_double") or 0)
+        capacity = beds_single + beds_double * 2
+        cur.execute(
+            """
+            INSERT INTO catalog.rooms(
+                camp_id, name, room_type, floors, floor,
+                beds_single, beds_double, bath_type, wc_type,
+                bbq_type, kitchen_type, gazebo_type, terrace_type, pool_type, balcony_type, has_ac,
+                capacity, price_adult, price_child, price, discount_pct, discount_from_nights, description, photo_main, photos_json
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (
+                camp_id,
+                payload.get("name"),
+                payload.get("room_type"),
+                payload.get("floors"),
+                payload.get("floor"),
+                beds_single,
+                beds_double,
+                payload.get("bath_type"),
+                payload.get("wc_type"),
+                payload.get("bbq_type"),
+                payload.get("kitchen_type"),
+                payload.get("gazebo_type"),
+                payload.get("terrace_type"),
+                payload.get("pool_type"),
+                payload.get("balcony_type"),
+                1 if payload.get("has_ac") else 0,
+                capacity,
+                payload.get("price_adult"),
+                payload.get("price_child"),
+                payload.get("price"),
+                payload.get("discount_pct"),
+                payload.get("discount_from_nights"),
+                payload.get("description"),
+                None,
+                "[]",
+            ),
+        )
+        room_id = cur.fetchone()["id"]
+        conn.commit()
+        return int(room_id)
+
+
+def update_admin_room(camp_id: int, room_id: int, payload: dict) -> bool:
+    with _db_conn("catalog") as conn:
+        cur = conn.cursor()
+        beds_single = int(payload.get("beds_single") or 0)
+        beds_double = int(payload.get("beds_double") or 0)
+        capacity = beds_single + beds_double * 2
+        cur.execute(
+            """
+            UPDATE catalog.rooms
+            SET name = %s,
+                room_type = %s,
+                floors = %s,
+                floor = %s,
+                beds_single = %s,
+                beds_double = %s,
+                bath_type = %s,
+                wc_type = %s,
+                bbq_type = %s,
+                kitchen_type = %s,
+                gazebo_type = %s,
+                terrace_type = %s,
+                pool_type = %s,
+                balcony_type = %s,
+                has_ac = %s,
+                capacity = %s,
+                price_adult = %s,
+                price_child = %s,
+                price = %s,
+                discount_pct = %s,
+                discount_from_nights = %s,
+                description = %s
+            WHERE id = %s
+              AND camp_id = %s
+            """,
+            (
+                payload.get("name"),
+                payload.get("room_type"),
+                payload.get("floors"),
+                payload.get("floor"),
+                beds_single,
+                beds_double,
+                payload.get("bath_type"),
+                payload.get("wc_type"),
+                payload.get("bbq_type"),
+                payload.get("kitchen_type"),
+                payload.get("gazebo_type"),
+                payload.get("terrace_type"),
+                payload.get("pool_type"),
+                payload.get("balcony_type"),
+                1 if payload.get("has_ac") else 0,
+                capacity,
+                payload.get("price_adult"),
+                payload.get("price_child"),
+                payload.get("price"),
+                payload.get("discount_pct"),
+                payload.get("discount_from_nights"),
+                payload.get("description"),
+                room_id,
+                camp_id,
+            ),
+        )
+        changed = cur.rowcount > 0
+        conn.commit()
+        return changed
+
+
+def get_admin_room(camp_id: int, room_id: int):
+    with _db_conn("catalog") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT *
+            FROM catalog.rooms
+            WHERE id = %s
+              AND camp_id = %s
+            """,
+            (room_id, camp_id),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+
+def room_has_any_booking(camp_id: int, room_id: int) -> bool:
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT 1
+            FROM crm.bookings
+            WHERE camp_id = %s
+              AND room_id = %s
+            LIMIT 1
+            """,
+            (camp_id, room_id),
+        )
+        return bool(cur.fetchone())
+
+
+def delete_admin_room(camp_id: int, room_id: int) -> bool:
+    with _db_conn("catalog") as conn:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM catalog.room_photos WHERE camp_id = %s AND room_id = %s", (camp_id, room_id))
+        cur.execute("DELETE FROM catalog.rooms WHERE camp_id = %s AND id = %s", (camp_id, room_id))
+        changed = cur.rowcount > 0
+        conn.commit()
+        return changed
 
 
 def list_admin_bookings(camp_ids: list[int], camp_id: Optional[int], date_from: Optional[date], date_to: Optional[date]):

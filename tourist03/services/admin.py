@@ -6,9 +6,21 @@ from fastapi import Depends, HTTPException, Request, status
 from tourist03.booking_db_errors import BookingConflictError, BookingValidationError
 from tourist03.domain import bookings as booking_domain
 from tourist03.repositories import admin as admin_repo
-from tourist03.schemas import AdminCreateBookingRequest, AdminLoginRequest, BookingAdminUpdateRequest
+from tourist03.schemas import (
+    AdminCampProfileUpdateRequest,
+    AdminCreateBookingRequest,
+    AdminLoginRequest,
+    AdminRoomUpsertRequest,
+    BookingAdminUpdateRequest,
+)
 from tourist03.serializers import bookings as booking_serializers
-from tourist03.security import _get_admin_camp_ids, get_current_admin, log_user_event, verify_password
+from tourist03.security import (
+    _get_admin_camp_ids,
+    get_current_admin,
+    log_crm_audit_event,
+    log_user_event,
+    verify_password,
+)
 
 
 def _raise_booking_write_http_error(exc: Exception):
@@ -17,6 +29,15 @@ def _raise_booking_write_http_error(exc: Exception):
     if isinstance(exc, BookingValidationError):
         raise HTTPException(status_code=400, detail=exc.detail) from exc
     raise exc
+
+
+def _ensure_admin_camp_access(admin: dict, camp_id: int) -> list[int]:
+    camp_ids = _get_admin_camp_ids(admin["id"])
+    if not camp_ids:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа")
+    if camp_id not in camp_ids:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа к выбранной базе")
+    return camp_ids
 
 
 def admin_login(req: AdminLoginRequest, request: Request):
@@ -363,3 +384,123 @@ def api_admin_calendar_feed(
         "date_to": range_end.isoformat(),
         "rooms": list(room_map.values()),
     }
+
+
+def api_admin_camp_profile(camp_id: int, admin: dict = Depends(get_current_admin)):
+    _ensure_admin_camp_access(admin, camp_id)
+    payload = admin_repo.get_admin_camp_profile(camp_id)
+    if not payload:
+        raise HTTPException(status_code=404, detail="База не найдена")
+    return payload
+
+
+def api_admin_update_camp_profile(
+    camp_id: int,
+    payload: AdminCampProfileUpdateRequest,
+    admin: dict = Depends(get_current_admin),
+):
+    _ensure_admin_camp_access(admin, camp_id)
+    before = admin_repo.get_admin_camp_profile(camp_id)
+    if not before:
+        raise HTTPException(status_code=404, detail="База не найдена")
+    admin_repo.save_admin_camp_profile(camp_id, payload.model_dump())
+    after = admin_repo.get_admin_camp_profile(camp_id)
+    log_crm_audit_event(
+        actor_type="camp_admin",
+        actor_id=admin.get("id"),
+        actor_display=admin.get("display_name"),
+        camp_id=camp_id,
+        target_type="camp_profile",
+        target_id=camp_id,
+        action_type="camp_profile_update",
+        action_label="Обновил профиль базы",
+        old_value=before,
+        new_value=after,
+        was_auto_applied=True,
+    )
+    return {"ok": True, "item": after}
+
+
+def api_admin_camp_rooms(camp_id: int, admin: dict = Depends(get_current_admin)):
+    _ensure_admin_camp_access(admin, camp_id)
+    return admin_repo.list_admin_camp_rooms(camp_id)
+
+
+def api_admin_create_room(
+    camp_id: int,
+    payload: AdminRoomUpsertRequest,
+    admin: dict = Depends(get_current_admin),
+):
+    _ensure_admin_camp_access(admin, camp_id)
+    room_id = admin_repo.create_admin_room(camp_id, payload.model_dump())
+    room = admin_repo.get_admin_room(camp_id, room_id)
+    log_crm_audit_event(
+        actor_type="camp_admin",
+        actor_id=admin.get("id"),
+        actor_display=admin.get("display_name"),
+        camp_id=camp_id,
+        target_type="room",
+        target_id=room_id,
+        action_type="room_create",
+        action_label="Создал апартамент",
+        new_value=room,
+        is_sensitive=True,
+        was_auto_applied=True,
+    )
+    return {"ok": True, "id": room_id}
+
+
+def api_admin_update_room(
+    camp_id: int,
+    room_id: int,
+    payload: AdminRoomUpsertRequest,
+    admin: dict = Depends(get_current_admin),
+):
+    _ensure_admin_camp_access(admin, camp_id)
+    before = admin_repo.get_admin_room(camp_id, room_id)
+    if not before:
+        raise HTTPException(status_code=404, detail="Апартамент не найден")
+    changed = admin_repo.update_admin_room(camp_id, room_id, payload.model_dump())
+    if not changed:
+        raise HTTPException(status_code=404, detail="Апартамент не найден")
+    after = admin_repo.get_admin_room(camp_id, room_id)
+    log_crm_audit_event(
+        actor_type="camp_admin",
+        actor_id=admin.get("id"),
+        actor_display=admin.get("display_name"),
+        camp_id=camp_id,
+        target_type="room",
+        target_id=room_id,
+        action_type="room_update",
+        action_label="Обновил апартамент",
+        old_value=before,
+        new_value=after,
+        is_sensitive=True,
+        was_auto_applied=True,
+    )
+    return {"ok": True}
+
+
+def api_admin_delete_room(camp_id: int, room_id: int, admin: dict = Depends(get_current_admin)):
+    _ensure_admin_camp_access(admin, camp_id)
+    before = admin_repo.get_admin_room(camp_id, room_id)
+    if not before:
+        raise HTTPException(status_code=404, detail="Апартамент не найден")
+    if admin_repo.room_has_any_booking(camp_id, room_id):
+        raise HTTPException(status_code=409, detail="Нельзя удалить апартамент, по нему уже есть бронирования")
+    if not admin_repo.delete_admin_room(camp_id, room_id):
+        raise HTTPException(status_code=404, detail="Апартамент не найден")
+    log_crm_audit_event(
+        actor_type="camp_admin",
+        actor_id=admin.get("id"),
+        actor_display=admin.get("display_name"),
+        camp_id=camp_id,
+        target_type="room",
+        target_id=room_id,
+        action_type="room_delete",
+        action_label="Удалил апартамент",
+        old_value=before,
+        is_sensitive=True,
+        was_auto_applied=True,
+    )
+    return {"ok": True}

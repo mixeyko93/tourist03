@@ -134,3 +134,46 @@ class AdminCreateBookingRequest(BaseModel):
     guest_phone: Optional[str] = None
     guest_email: Optional[EmailStr] = None
     comment: Optional[str] = None
+
+
+class AdminCampProfileUpdateRequest(BaseModel):
+    name: str
+    lake_name: Optional[str] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    site_url: Optional[str] = None
+    description: Optional[str] = None
+    time_zone: Optional[str] = None
+    check_in_time: Optional[str] = None
+    check_out_time: Optional[str] = None
+    cancellation_policy: Optional[str] = None
+    arrival_instructions: Optional[str] = None
+    payment_instructions: Optional[str] = None
+    admin_contact_phone: Optional[str] = None
+    support_whatsapp: Optional[str] = None
+    support_telegram: Optional[str] = None
+    notifications_enabled: bool = True
+
+
+class AdminRoomUpsertRequest(BaseModel):
+    name: str
+    room_type: Optional[str] = None
+    floors: int = 1
+    floor: int = 1
+    beds_single: int = 0
+    beds_double: int = 0
+    bath_type: Optional[str] = None
+    wc_type: Optional[str] = None
+    bbq_type: Optional[str] = None
+    kitchen_type: Optional[str] = None
+    gazebo_type: Optional[str] = None
+    terrace_type: Optional[str] = None
+    pool_type: Optional[str] = None
+    balcony_type: Optional[str] = None
+    has_ac: bool = False
+    price_adult: int = 0
+    price_child: int = 0
+    price: int = 0
+    discount_pct: int = 0
+    discount_from_nights: int = 0
+    description: Optional[str] = None

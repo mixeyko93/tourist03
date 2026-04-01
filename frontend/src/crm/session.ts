@@ -74,8 +74,28 @@ export type CrmRoomOption = {
   camp_id: number | null;
   name: string | null;
   room_type: string | null;
+  floors?: number | null;
+  floor?: number | null;
+  beds_single?: number | null;
+  beds_double?: number | null;
+  bath_type?: string | null;
+  wc_type?: string | null;
+  bbq_type?: string | null;
+  kitchen_type?: string | null;
+  gazebo_type?: string | null;
+  terrace_type?: string | null;
+  pool_type?: string | null;
+  balcony_type?: string | null;
+  has_ac?: number | null;
   capacity: number | null;
   price: number | null;
+  price_adult?: number | null;
+  price_child?: number | null;
+  discount_pct?: number | null;
+  discount_from_nights?: number | null;
+  description?: string | null;
+  photo_main?: string | null;
+  photos?: Array<{ url: string; cover: boolean; sort: number }>;
 };
 
 export type CrmCreateBookingPayload = {
@@ -91,6 +111,74 @@ export type CrmCreateBookingPayload = {
   guest_phone?: string;
   guest_email?: string;
   comment?: string;
+};
+
+export type CrmCampProfile = {
+  camp: {
+    id: number;
+    name: string | null;
+    lake_name?: string | null;
+    address?: string | null;
+    phone?: string | null;
+    site_url?: string | null;
+    description?: string | null;
+  };
+  settings: {
+    time_zone?: string | null;
+    check_in_time?: string | null;
+    check_out_time?: string | null;
+    cancellation_policy?: string | null;
+    arrival_instructions?: string | null;
+    payment_instructions?: string | null;
+    admin_contact_phone?: string | null;
+    support_whatsapp?: string | null;
+    support_telegram?: string | null;
+    notifications_enabled?: boolean;
+  };
+  photos: Array<{ id?: number; url: string; cover?: number; sort?: number }>;
+};
+
+export type CrmCampProfileUpdatePayload = {
+  name: string;
+  lake_name?: string;
+  address?: string;
+  phone?: string;
+  site_url?: string;
+  description?: string;
+  time_zone?: string;
+  check_in_time?: string;
+  check_out_time?: string;
+  cancellation_policy?: string;
+  arrival_instructions?: string;
+  payment_instructions?: string;
+  admin_contact_phone?: string;
+  support_whatsapp?: string;
+  support_telegram?: string;
+  notifications_enabled: boolean;
+};
+
+export type CrmRoomUpsertPayload = {
+  name: string;
+  room_type?: string;
+  floors: number;
+  floor: number;
+  beds_single: number;
+  beds_double: number;
+  bath_type?: string;
+  wc_type?: string;
+  bbq_type?: string;
+  kitchen_type?: string;
+  gazebo_type?: string;
+  terrace_type?: string;
+  pool_type?: string;
+  balcony_type?: string;
+  has_ac: boolean;
+  price_adult: number;
+  price_child: number;
+  price: number;
+  discount_pct: number;
+  discount_from_nights: number;
+  description?: string;
 };
 
 type AdminSessionPayload = {
@@ -219,7 +307,7 @@ export async function fetchCrmBookings(
 }
 
 export async function fetchCrmCampRooms(campId: number, signal?: AbortSignal): Promise<CrmRoomOption[]> {
-  const response = await fetch(`/api/rooms?camp_id=${campId}`, {
+  const response = await fetch(`/api/admin/camps/${campId}/rooms`, {
     credentials: "same-origin",
     signal,
   });
@@ -238,4 +326,61 @@ export async function createCrmBooking(payload: CrmCreateBookingPayload) {
   });
   await assertOk(response);
   return (await response.json()) as { ok: boolean; id: number };
+}
+
+export async function fetchCrmCampProfile(campId: number, signal?: AbortSignal): Promise<CrmCampProfile> {
+  const response = await fetch(`/api/admin/camps/${campId}/profile`, {
+    credentials: "same-origin",
+    signal,
+  });
+  await assertOk(response);
+  return (await response.json()) as CrmCampProfile;
+}
+
+export async function saveCrmCampProfile(campId: number, payload: CrmCampProfileUpdatePayload) {
+  const response = await fetch(`/api/admin/camps/${campId}/profile`, {
+    method: "PUT",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  await assertOk(response);
+  return (await response.json()) as { ok: boolean; item: CrmCampProfile };
+}
+
+export async function createCrmRoom(campId: number, payload: CrmRoomUpsertPayload) {
+  const response = await fetch(`/api/admin/camps/${campId}/rooms`, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  await assertOk(response);
+  return (await response.json()) as { ok: boolean; id: number };
+}
+
+export async function updateCrmRoom(campId: number, roomId: number, payload: CrmRoomUpsertPayload) {
+  const response = await fetch(`/api/admin/camps/${campId}/rooms/${roomId}`, {
+    method: "PUT",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  await assertOk(response);
+  return (await response.json()) as { ok: boolean };
+}
+
+export async function deleteCrmRoom(campId: number, roomId: number) {
+  const response = await fetch(`/api/admin/camps/${campId}/rooms/${roomId}`, {
+    method: "DELETE",
+    credentials: "same-origin",
+  });
+  await assertOk(response);
+  return (await response.json()) as { ok: boolean };
 }

@@ -64,3 +64,39 @@ router.add_api_route(
     methods=["GET"],
     responses=error_responses(401, 403, 422, 500),
 )
+router.add_api_route(
+    "/api/admin/camps/{camp_id}/profile",
+    admin_service.api_admin_camp_profile,
+    methods=["GET"],
+    responses=error_responses(401, 403, 404, 422, 500),
+)
+router.add_api_route(
+    "/api/admin/camps/{camp_id}/profile",
+    admin_service.api_admin_update_camp_profile,
+    methods=["PUT"],
+    responses=error_responses(400, 401, 403, 404, 422, 500),
+)
+router.add_api_route(
+    "/api/admin/camps/{camp_id}/rooms",
+    admin_service.api_admin_camp_rooms,
+    methods=["GET"],
+    responses=error_responses(401, 403, 404, 422, 500),
+)
+router.add_api_route(
+    "/api/admin/camps/{camp_id}/rooms",
+    admin_service.api_admin_create_room,
+    methods=["POST"],
+    responses=error_responses(400, 401, 403, 404, 422, 500),
+)
+router.add_api_route(
+    "/api/admin/camps/{camp_id}/rooms/{room_id}",
+    admin_service.api_admin_update_room,
+    methods=["PUT"],
+    responses=error_responses(400, 401, 403, 404, 422, 500),
+)
+router.add_api_route(
+    "/api/admin/camps/{camp_id}/rooms/{room_id}",
+    admin_service.api_admin_delete_room,
+    methods=["DELETE"],
+    responses=error_responses(401, 403, 404, 409, 422, 500),
+)
