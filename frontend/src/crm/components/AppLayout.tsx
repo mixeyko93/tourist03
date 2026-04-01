@@ -1,13 +1,14 @@
-import { Menu, MoonStar, SunMedium, UserCircle2 } from "lucide-react";
+import { BellRing, Menu, MoonStar, SunMedium, UserCircle2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router";
 import { useTheme } from "next-themes";
-import { fetchCrmSession, logoutCrmSession, type CrmSession } from "../session";
+import { fetchCrmEventCenterSummary, fetchCrmSession, logoutCrmSession, type CrmSession } from "../session";
 import { crmPath } from "../paths";
 
 const navItems = [
   { label: "Календарь", path: "/calendar" },
   { label: "Смены", path: "/shifts" },
+  { label: "События", path: "/events" },
   { label: "Сводка", path: "/dashboard" },
   { label: "Брони", path: "/bookings" },
   { label: "Номера и цены", path: "/rooms" },
@@ -27,6 +28,7 @@ export default function AppLayout() {
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [authError, setAuthError] = useState("");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [eventNewCount, setEventNewCount] = useState(0);
   const calendarPath = crmPath("/calendar");
 
   useEffect(() => {
@@ -65,6 +67,47 @@ export default function AppLayout() {
 
     return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    if (!session) {
+      setEventNewCount(0);
+      return;
+    }
+
+    let active = true;
+    const controller = new AbortController();
+
+    const loadSummary = async () => {
+      try {
+        const summary = await fetchCrmEventCenterSummary(undefined, controller.signal);
+        if (active) {
+          setEventNewCount(Number(summary.new_count || 0));
+        }
+      } catch {
+        if (active) {
+          setEventNewCount(0);
+        }
+      }
+    };
+
+    void loadSummary();
+
+    const handleRefresh = () => {
+      void loadSummary();
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("crm-events-changed", handleRefresh);
+    }
+
+    return () => {
+      active = false;
+      controller.abort();
+      if (typeof window !== "undefined") {
+        window.removeEventListener("crm-events-changed", handleRefresh);
+      }
+    };
+  }, [session, location.pathname]);
 
   const loginPath = crmPath("/login");
   const navLinks = navItems.map((item) => ({
@@ -158,6 +201,26 @@ export default function AppLayout() {
               {theme === "dark" ? <SunMedium className="h-5 w-5" /> : <MoonStar className="h-5 w-5" />}
             </button>
           ) : null}
+
+          <NavLink
+            to={crmPath("/events")}
+            className={({ isActive }) =>
+              [
+                "relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5D3B3]/60",
+                isActive
+                  ? "border-[#E5D3B3]/30 bg-[#E5D3B3]/10 text-foreground"
+                  : "border-border bg-background/70 text-muted-foreground hover:bg-accent hover:text-foreground",
+              ].join(" ")
+            }
+            aria-label="Открыть центр событий"
+          >
+            <BellRing className="h-5 w-5" />
+            {eventNewCount > 0 ? (
+              <span className="absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
+                {eventNewCount > 99 ? "99+" : eventNewCount}
+              </span>
+            ) : null}
+          </NavLink>
 
           <div className="hidden items-center gap-3 rounded-2xl border border-border bg-background/70 px-3 py-2 sm:flex">
             <UserCircle2 className="h-5 w-5 text-[#E5D3B3]" />

@@ -1330,6 +1330,228 @@ def list_admin_audit_log(
         return [dict(row) for row in cur.fetchall()]
 
 
+def list_admin_notification_events(
+    admin_id: int,
+    camp_ids: list[int],
+    *,
+    camp_id: Optional[int] = None,
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+    severity: Optional[str] = None,
+    limit: int = 200,
+):
+    if not camp_ids and not admin_id:
+        return []
+
+    conditions = [
+        "e.recipient_scope = 'crm'",
+        "e.channel = 'in_app'",
+        """
+        (
+            e.recipient_admin_id = %s
+            OR (
+                e.recipient_admin_id IS NULL
+                AND (
+                    e.camp_id IS NULL
+                    OR e.camp_id = ANY(%s)
+                )
+            )
+        )
+        """,
+    ]
+    params: list = [admin_id, camp_ids]
+
+    if camp_id:
+        conditions.append("e.camp_id = %s")
+        params.append(camp_id)
+
+    normalized_search = (search or "").strip()
+    if normalized_search:
+        pattern = f"%{normalized_search}%"
+        conditions.append(
+            """
+            (
+                coalesce(c.name, '') ILIKE %s OR
+                coalesce(e.title, '') ILIKE %s OR
+                coalesce(e.body, '') ILIKE %s OR
+                coalesce(e.event_type, '') ILIKE %s
+            )
+            """
+        )
+        params.extend([pattern, pattern, pattern, pattern])
+
+    if status:
+        conditions.append("e.status = %s")
+        params.append(status)
+    if severity:
+        conditions.append("e.severity = %s")
+        params.append(severity)
+
+    safe_limit = max(1, min(int(limit or 200), 500))
+    params.append(safe_limit)
+
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT
+                e.id,
+                e.camp_id,
+                c.name AS camp_name,
+                e.recipient_scope,
+                e.recipient_admin_id,
+                e.recipient_role_key,
+                e.channel,
+                e.event_type,
+                e.title,
+                e.body,
+                e.action_url,
+                e.action_payload,
+                e.severity,
+                e.status,
+                e.metadata,
+                e.created_at,
+                e.read_at,
+                e.closed_at
+            FROM crm.notification_events e
+            LEFT JOIN catalog.camps c ON c.id = e.camp_id
+            WHERE {' AND '.join(conditions)}
+            ORDER BY e.created_at DESC, e.id DESC
+            LIMIT %s
+            """,
+            tuple(params),
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+
+def get_admin_notification_summary(
+    admin_id: int,
+    camp_ids: list[int],
+    *,
+    camp_id: Optional[int] = None,
+):
+    conditions = [
+        "recipient_scope = 'crm'",
+        "channel = 'in_app'",
+        """
+        (
+            recipient_admin_id = %s
+            OR (
+                recipient_admin_id IS NULL
+                AND (
+                    camp_id IS NULL
+                    OR camp_id = ANY(%s)
+                )
+            )
+        )
+        """,
+    ]
+    params: list = [admin_id, camp_ids]
+    if camp_id:
+        conditions.append("camp_id = %s")
+        params.append(camp_id)
+
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT
+                COUNT(*) AS total_count,
+                COUNT(*) FILTER (WHERE status = 'new') AS new_count,
+                COUNT(*) FILTER (WHERE status = 'viewed') AS viewed_count,
+                COUNT(*) FILTER (WHERE status = 'in_progress') AS in_progress_count,
+                COUNT(*) FILTER (WHERE status = 'closed') AS closed_count,
+                COUNT(*) FILTER (WHERE severity = 'warning') AS warning_count,
+                COUNT(*) FILTER (WHERE severity = 'critical') AS critical_count
+            FROM crm.notification_events
+            WHERE {' AND '.join(conditions)}
+            """,
+            tuple(params),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else {
+            "total_count": 0,
+            "new_count": 0,
+            "viewed_count": 0,
+            "in_progress_count": 0,
+            "closed_count": 0,
+            "warning_count": 0,
+            "critical_count": 0,
+        }
+
+
+def get_admin_notification_event(event_id: int, admin_id: int, camp_ids: list[int]):
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT
+                e.id,
+                e.camp_id,
+                c.name AS camp_name,
+                e.recipient_scope,
+                e.recipient_admin_id,
+                e.recipient_role_key,
+                e.channel,
+                e.event_type,
+                e.title,
+                e.body,
+                e.action_url,
+                e.action_payload,
+                e.severity,
+                e.status,
+                e.metadata,
+                e.created_at,
+                e.read_at,
+                e.closed_at
+            FROM crm.notification_events e
+            LEFT JOIN catalog.camps c ON c.id = e.camp_id
+            WHERE e.id = %s
+              AND e.recipient_scope = 'crm'
+              AND e.channel = 'in_app'
+              AND (
+                    e.recipient_admin_id = %s
+                    OR (
+                        e.recipient_admin_id IS NULL
+                        AND (
+                            e.camp_id IS NULL
+                            OR e.camp_id = ANY(%s)
+                        )
+                    )
+              )
+            LIMIT 1
+            """,
+            (event_id, admin_id, camp_ids),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+
+def update_admin_notification_status(event_id: int, status: str) -> bool:
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE crm.notification_events
+            SET status = %s,
+                read_at = CASE
+                    WHEN %s IN ('viewed', 'in_progress', 'closed') AND read_at IS NULL THEN NOW()
+                    ELSE read_at
+                END,
+                closed_at = CASE
+                    WHEN %s = 'closed' THEN NOW()
+                    WHEN %s <> 'closed' THEN NULL
+                    ELSE closed_at
+                END
+            WHERE id = %s
+            """,
+            (status, status, status, status, event_id),
+        )
+        changed = cur.rowcount > 0
+        conn.commit()
+        return changed
+
+
 def room_exists_for_camp(room_id: int, camp_id: int) -> bool:
     with _db_conn("catalog") as conn:
         cur = conn.cursor()

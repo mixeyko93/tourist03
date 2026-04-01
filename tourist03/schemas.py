@@ -229,3 +229,7 @@ class AdminShiftRuleUpsertRequest(BaseModel):
     is_night_shift: bool = False
     is_active: bool = True
     comment: Optional[str] = None
+
+
+class AdminNotificationStatusUpdateRequest(BaseModel):
+    status: str

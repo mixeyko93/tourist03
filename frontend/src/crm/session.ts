@@ -302,6 +302,37 @@ export type CrmShiftOverview = {
   upcoming_windows: CrmShiftOccurrence[];
 };
 
+export type CrmEventCenterItem = {
+  id: number;
+  camp_id: number | null;
+  camp_name: string | null;
+  recipient_scope: string;
+  recipient_admin_id: number | null;
+  recipient_role_key: string | null;
+  channel: string;
+  event_type: string;
+  title: string;
+  body: string;
+  action_url: string | null;
+  action_payload: Record<string, unknown> | null;
+  severity: "info" | "warning" | "critical" | string;
+  status: "new" | "viewed" | "in_progress" | "closed" | string;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+  read_at: string | null;
+  closed_at: string | null;
+};
+
+export type CrmEventCenterSummary = {
+  total_count: number;
+  new_count: number;
+  viewed_count: number;
+  in_progress_count: number;
+  closed_count: number;
+  warning_count: number;
+  critical_count: number;
+};
+
 export type CrmCampProfileUpdatePayload = {
   name: string;
   lake_name?: string;
@@ -392,6 +423,10 @@ export type CrmShiftRuleUpsertPayload = {
   is_night_shift: boolean;
   is_active: boolean;
   comment?: string;
+};
+
+export type CrmEventStatusUpdatePayload = {
+  status: "new" | "viewed" | "in_progress" | "closed";
 };
 
 type AdminSessionPayload = {
@@ -517,6 +552,70 @@ export async function fetchCrmBookings(
   });
   await assertOk(response);
   return (await response.json()) as CrmBooking[];
+}
+
+export async function fetchCrmEventCenter(
+  params: {
+    campId?: number | null;
+    search?: string;
+    status?: string;
+    severity?: string;
+    limit?: number;
+  },
+  signal?: AbortSignal,
+): Promise<{ items: CrmEventCenterItem[]; summary: CrmEventCenterSummary }> {
+  const query = new URLSearchParams();
+  if (params.campId) {
+    query.set("camp_id", String(params.campId));
+  }
+  if (params.search) {
+    query.set("search", params.search);
+  }
+  if (params.status) {
+    query.set("event_status", params.status);
+  }
+  if (params.severity) {
+    query.set("severity", params.severity);
+  }
+  if (params.limit) {
+    query.set("limit", String(params.limit));
+  }
+  const response = await fetch(`/api/admin/events?${query.toString()}`, {
+    credentials: "same-origin",
+    signal,
+  });
+  await assertOk(response);
+  return (await response.json()) as { items: CrmEventCenterItem[]; summary: CrmEventCenterSummary };
+}
+
+export async function fetchCrmEventCenterSummary(
+  params?: { campId?: number | null },
+  signal?: AbortSignal,
+): Promise<CrmEventCenterSummary> {
+  const query = new URLSearchParams();
+  if (params?.campId) {
+    query.set("camp_id", String(params.campId));
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  const response = await fetch(`/api/admin/events/summary${suffix}`, {
+    credentials: "same-origin",
+    signal,
+  });
+  await assertOk(response);
+  return (await response.json()) as CrmEventCenterSummary;
+}
+
+export async function updateCrmEventStatus(eventId: number, payload: CrmEventStatusUpdatePayload) {
+  const response = await fetch(`/api/admin/events/${eventId}`, {
+    method: "PATCH",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  await assertOk(response);
+  return (await response.json()) as { ok: boolean; item: CrmEventCenterItem };
 }
 
 export async function fetchCrmGuests(

@@ -25,6 +25,24 @@ router.add_api_route(
     responses=error_responses(401, 500),
 )
 router.add_api_route(
+    "/api/admin/events",
+    admin_service.api_admin_events,
+    methods=["GET"],
+    responses=error_responses(400, 401, 403, 422, 500),
+)
+router.add_api_route(
+    "/api/admin/events/summary",
+    admin_service.api_admin_event_summary,
+    methods=["GET"],
+    responses=error_responses(401, 403, 422, 500),
+)
+router.add_api_route(
+    "/api/admin/events/{event_id}",
+    admin_service.api_admin_update_event_status,
+    methods=["PATCH"],
+    responses=error_responses(400, 401, 403, 404, 422, 500),
+)
+router.add_api_route(
     "/api/admin/bookings",
     admin_service.api_admin_bookings,
     methods=["GET"],

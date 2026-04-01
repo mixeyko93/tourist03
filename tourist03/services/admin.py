@@ -12,6 +12,7 @@ from tourist03.schemas import (
     AdminCampProfileUpdateRequest,
     AdminCreateBookingRequest,
     AdminLoginRequest,
+    AdminNotificationStatusUpdateRequest,
     AdminRoomUpsertRequest,
     AdminShiftRuleUpsertRequest,
     AdminShiftSettingsUpdateRequest,
@@ -23,6 +24,7 @@ from tourist03.serializers import bookings as booking_serializers
 from tourist03.security import (
     _get_admin_camp_ids,
     _normalize_phone,
+    create_notification_event,
     get_current_admin,
     hash_password,
     issue_admin_telegram_link_code,
@@ -215,6 +217,48 @@ def _normalize_staff_permission_keys(permission_keys: list[str]) -> list[str]:
     return result
 
 
+def _booking_status_label(status_value: Optional[str]) -> str:
+    return crm_domain.BOOKING_STATUS_UI_LABELS.get((status_value or "").strip().lower(), (status_value or "").strip() or "Без статуса")
+
+
+def _payment_status_label(status_value: Optional[str]) -> str:
+    return crm_domain.PAYMENT_STATUS_UI_LABELS.get((status_value or "").strip().lower(), (status_value or "").strip() or "Без статуса")
+
+
+def _publish_crm_event(
+    *,
+    camp_id: Optional[int],
+    admin: Optional[dict],
+    event_type: str,
+    title: str,
+    body: str,
+    severity: str = "info",
+    action_url: Optional[str] = None,
+    action_payload: Optional[dict] = None,
+    recipient_admin_id: Optional[int] = None,
+    metadata: Optional[dict] = None,
+) -> None:
+    actor_id = int(admin["id"]) if admin and admin.get("id") is not None else None
+    actor_name = (admin or {}).get("display_name") if admin else None
+    create_notification_event(
+        event_type=event_type,
+        title=title,
+        body=body,
+        channel="in_app",
+        recipient_scope="crm",
+        recipient_admin_id=recipient_admin_id,
+        camp_id=camp_id,
+        action_url=action_url,
+        action_payload=action_payload,
+        severity=severity,
+        metadata={
+            "actor_id": actor_id,
+            "actor_display": actor_name,
+            **(metadata or {}),
+        },
+    )
+
+
 def _parse_shift_time(value: str) -> time:
     raw = str(value or "").strip()
     try:
@@ -344,6 +388,70 @@ def api_admin_my_camps(admin: dict = Depends(get_current_admin)):
     return response
 
 
+def api_admin_events(
+    camp_id: Optional[int] = None,
+    search: Optional[str] = None,
+    event_status: Optional[str] = None,
+    severity: Optional[str] = None,
+    limit: int = 200,
+    admin: dict = Depends(get_current_admin),
+):
+    camp_ids = _get_admin_camp_ids(admin["id"])
+    if camp_id and camp_id not in camp_ids:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа к выбранной базе")
+
+    normalized_status = (event_status or "").strip().lower() or None
+    if normalized_status and normalized_status not in crm_domain.EVENT_CENTER_STATUS_KEYS:
+        raise HTTPException(status_code=400, detail="Некорректный статус события")
+
+    normalized_severity = (severity or "").strip().lower() or None
+    if normalized_severity and normalized_severity not in {"info", "warning", "critical"}:
+        raise HTTPException(status_code=400, detail="Некорректный приоритет события")
+
+    items = admin_repo.list_admin_notification_events(
+        int(admin["id"]),
+        camp_ids,
+        camp_id=camp_id,
+        search=search,
+        status=normalized_status,
+        severity=normalized_severity,
+        limit=limit,
+    )
+    summary = admin_repo.get_admin_notification_summary(int(admin["id"]), camp_ids, camp_id=camp_id)
+    return {
+        "items": items,
+        "summary": summary,
+    }
+
+
+def api_admin_event_summary(
+    camp_id: Optional[int] = None,
+    admin: dict = Depends(get_current_admin),
+):
+    camp_ids = _get_admin_camp_ids(admin["id"])
+    if camp_id and camp_id not in camp_ids:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа к выбранной базе")
+    return admin_repo.get_admin_notification_summary(int(admin["id"]), camp_ids, camp_id=camp_id)
+
+
+def api_admin_update_event_status(
+    event_id: int,
+    payload: AdminNotificationStatusUpdateRequest,
+    admin: dict = Depends(get_current_admin),
+):
+    camp_ids = _get_admin_camp_ids(admin["id"])
+    normalized_status = (payload.status or "").strip().lower()
+    if normalized_status not in crm_domain.EVENT_CENTER_STATUS_KEYS:
+        raise HTTPException(status_code=400, detail="Некорректный статус события")
+    event_item = admin_repo.get_admin_notification_event(event_id, int(admin["id"]), camp_ids)
+    if not event_item:
+        raise HTTPException(status_code=404, detail="Событие не найдено")
+    if not admin_repo.update_admin_notification_status(event_id, normalized_status):
+        raise HTTPException(status_code=404, detail="Событие не найдено")
+    updated = admin_repo.get_admin_notification_event(event_id, int(admin["id"]), camp_ids)
+    return {"ok": True, "item": updated}
+
+
 def api_admin_bookings(
     camp_id: Optional[int] = None,
     date_from: Optional[date] = None,
@@ -413,6 +521,21 @@ def api_admin_create_booking(payload: AdminCreateBookingRequest, admin: dict = D
         )
     except Exception as exc:
         _raise_booking_write_http_error(exc)
+    guest_label = guest_name or guest_phone or guest_email or f"Бронь #{booking_id}"
+    _publish_crm_event(
+        camp_id=payload.camp_id,
+        admin=admin,
+        event_type="booking_created",
+        title="В CRM создана новая бронь",
+        body=(
+            f"{guest_label} · {payload.check_in.isoformat()} → {payload.check_out.isoformat()} · "
+            f"статус: {_booking_status_label(booking_status)}."
+        ),
+        severity="warning",
+        action_url="/bookings",
+        action_payload={"booking_id": booking_id, "camp_id": payload.camp_id},
+        metadata={"booking_id": booking_id, "room_id": room_id},
+    )
     return {"ok": True, "id": booking_id}
 
 
@@ -464,6 +587,22 @@ def api_admin_update_booking(
                 "admin_id": admin.get("id"),
             },
         )
+    next_status = new_status or booking.get("status")
+    next_payment_status = payment_status or booking.get("payment_status")
+    _publish_crm_event(
+        camp_id=booking.get("camp_id"),
+        admin=admin,
+        event_type="booking_updated",
+        title=f"Бронь #{booking_id} обновлена",
+        body=(
+            f"Статус: {_booking_status_label(next_status)}. "
+            f"Оплата: {_payment_status_label(next_payment_status)}."
+        ),
+        severity="info",
+        action_url="/bookings",
+        action_payload={"booking_id": booking_id, "camp_id": booking.get("camp_id")},
+        metadata={"booking_id": booking_id},
+    )
     return {"ok": True}
 
 
@@ -737,6 +876,19 @@ def api_admin_update_shift_settings(
         is_sensitive=True,
         was_auto_applied=True,
     )
+    _publish_crm_event(
+        camp_id=camp_id,
+        admin=admin,
+        event_type="shift_settings_updated",
+        title="Параметры смен изменены",
+        body=(
+            f"{admin.get('display_name') or 'Сотрудник'} обновил SLA заявок, "
+            f"ночной резерв и интервалы эскалации."
+        ),
+        severity="warning",
+        action_url="/shifts",
+        action_payload={"camp_id": camp_id},
+    )
     return {"ok": True, "item": after}
 
 
@@ -766,6 +918,17 @@ def api_admin_create_shift_rule(
         new_value=rule,
         is_sensitive=True,
         was_auto_applied=True,
+    )
+    _publish_crm_event(
+        camp_id=camp_id,
+        admin=admin,
+        event_type="shift_rule_created",
+        title="Добавлено новое правило смены",
+        body=f"{rule.get('admin_name') or 'Сотрудник'} · {_weekday_label(payload.weekday)} · {payload.starts_at} → {payload.ends_at}.",
+        severity="warning",
+        action_url="/shifts",
+        action_payload={"camp_id": camp_id, "rule_id": rule_id},
+        metadata={"rule_id": rule_id},
     )
     return {"ok": True, "id": rule_id, "item": rule}
 
@@ -804,6 +967,17 @@ def api_admin_update_shift_rule(
         is_sensitive=True,
         was_auto_applied=True,
     )
+    _publish_crm_event(
+        camp_id=camp_id,
+        admin=admin,
+        event_type="shift_rule_updated",
+        title="Правило смены обновлено",
+        body=f"{after.get('admin_name') or 'Сотрудник'} · {_weekday_label(payload.weekday)} · {payload.starts_at} → {payload.ends_at}.",
+        severity="warning",
+        action_url="/shifts",
+        action_payload={"camp_id": camp_id, "rule_id": rule_id},
+        metadata={"rule_id": rule_id},
+    )
     return {"ok": True, "item": after}
 
 
@@ -826,6 +1000,21 @@ def api_admin_delete_shift_rule(camp_id: int, rule_id: int, admin: dict = Depend
         old_value=before,
         is_sensitive=True,
         was_auto_applied=True,
+    )
+    _publish_crm_event(
+        camp_id=camp_id,
+        admin=admin,
+        event_type="shift_rule_deleted",
+        title="Правило смены удалено",
+        body=(
+            f"{before.get('admin_name') or 'Сотрудник'} · "
+            f"{_weekday_label(before.get('weekday') or 0)} · "
+            f"{str(before.get('starts_at') or '')[:5]} → {str(before.get('ends_at') or '')[:5]}."
+        ),
+        severity="warning",
+        action_url="/shifts",
+        action_payload={"camp_id": camp_id},
+        metadata={"rule_id": rule_id},
     )
     return {"ok": True}
 
@@ -853,6 +1042,16 @@ def api_admin_update_camp_profile(
         old_value=before,
         new_value=after,
         was_auto_applied=True,
+    )
+    _publish_crm_event(
+        camp_id=camp_id,
+        admin=admin,
+        event_type="camp_profile_updated",
+        title="Профиль базы обновлён",
+        body=f"{admin.get('display_name') or 'Сотрудник'} изменил карточку базы и контактные данные.",
+        severity="info",
+        action_url="/settings",
+        action_payload={"camp_id": camp_id, "tab": "profile"},
     )
     return {"ok": True, "item": after}
 
@@ -934,6 +1133,17 @@ def api_admin_create_staff(
         is_sensitive=True,
         was_auto_applied=True,
     )
+    _publish_crm_event(
+        camp_id=camp_id,
+        admin=admin,
+        event_type="staff_created",
+        title="В команду базы добавлен сотрудник",
+        body=f"{staff.get('display_name') or staff.get('email') or 'Новый сотрудник'} · роль: {staff.get('role_label') or 'Не указана'}.",
+        severity="warning",
+        action_url="/settings",
+        action_payload={"camp_id": camp_id, "tab": "team", "staff_id": staff_id},
+        metadata={"staff_id": staff_id},
+    )
     return {"ok": True, "id": staff_id, "item": staff}
 
 
@@ -995,6 +1205,17 @@ def api_admin_update_staff(
         new_value=after,
         is_sensitive=True,
         was_auto_applied=True,
+    )
+    _publish_crm_event(
+        camp_id=camp_id,
+        admin=admin,
+        event_type="staff_updated",
+        title="Учётка сотрудника обновлена",
+        body=f"{after.get('display_name') or after.get('email') or 'Сотрудник'} · роль: {after.get('role_label') or 'Не указана'}.",
+        severity="warning",
+        action_url="/settings",
+        action_payload={"camp_id": camp_id, "tab": "team", "staff_id": staff_id},
+        metadata={"staff_id": staff_id},
     )
     return {"ok": True, "item": after}
 
@@ -1092,6 +1313,17 @@ def api_admin_create_room(
         is_sensitive=True,
         was_auto_applied=True,
     )
+    _publish_crm_event(
+        camp_id=camp_id,
+        admin=admin,
+        event_type="room_created",
+        title="Добавлен новый апартамент",
+        body=f"{room.get('name') or 'Апартамент'} теперь доступен в номерном фонде базы.",
+        severity="info",
+        action_url="/rooms",
+        action_payload={"camp_id": camp_id, "room_id": room_id},
+        metadata={"room_id": room_id},
+    )
     return {"ok": True, "id": room_id}
 
 
@@ -1123,6 +1355,17 @@ def api_admin_update_room(
         is_sensitive=True,
         was_auto_applied=True,
     )
+    _publish_crm_event(
+        camp_id=camp_id,
+        admin=admin,
+        event_type="room_updated",
+        title="Апартамент обновлён",
+        body=f"{after.get('name') or 'Апартамент'} изменён в CRM.",
+        severity="info",
+        action_url="/rooms",
+        action_payload={"camp_id": camp_id, "room_id": room_id},
+        metadata={"room_id": room_id},
+    )
     return {"ok": True}
 
 
@@ -1147,6 +1390,17 @@ def api_admin_delete_room(camp_id: int, room_id: int, admin: dict = Depends(get_
         old_value=before,
         is_sensitive=True,
         was_auto_applied=True,
+    )
+    _publish_crm_event(
+        camp_id=camp_id,
+        admin=admin,
+        event_type="room_deleted",
+        title="Апартамент удалён",
+        body=f"{before.get('name') or 'Апартамент'} удалён из номерного фонда.",
+        severity="warning",
+        action_url="/rooms",
+        action_payload={"camp_id": camp_id},
+        metadata={"room_id": room_id},
     )
     return {"ok": True}
 
@@ -1175,6 +1429,17 @@ def api_admin_create_service(
         new_value=service,
         is_sensitive=False,
         was_auto_applied=True,
+    )
+    _publish_crm_event(
+        camp_id=camp_id,
+        admin=admin,
+        event_type="service_created",
+        title="Создана новая услуга",
+        body=f"{service.get('name') or 'Услуга'} добавлена в каталог базы.",
+        severity="info",
+        action_url="/services",
+        action_payload={"camp_id": camp_id, "service_id": service_id},
+        metadata={"service_id": service_id},
     )
     return {"ok": True, "id": service_id}
 
@@ -1211,6 +1476,17 @@ def api_admin_update_service(
         is_sensitive=False,
         was_auto_applied=True,
     )
+    _publish_crm_event(
+        camp_id=camp_id,
+        admin=admin,
+        event_type="service_updated",
+        title="Услуга обновлена",
+        body=f"{after.get('name') or 'Услуга'} изменена в CRM.",
+        severity="info",
+        action_url="/services",
+        action_payload={"camp_id": camp_id, "service_id": service_id},
+        metadata={"service_id": service_id},
+    )
     return {"ok": True}
 
 
@@ -1233,5 +1509,16 @@ def api_admin_delete_service(camp_id: int, service_id: int, admin: dict = Depend
         old_value=before,
         is_sensitive=False,
         was_auto_applied=True,
+    )
+    _publish_crm_event(
+        camp_id=camp_id,
+        admin=admin,
+        event_type="service_archived",
+        title="Услуга отправлена в архив",
+        body=f"{before.get('name') or 'Услуга'} больше не показывается в активном каталоге.",
+        severity="warning",
+        action_url="/services",
+        action_payload={"camp_id": camp_id},
+        metadata={"service_id": service_id},
     )
     return {"ok": True}
