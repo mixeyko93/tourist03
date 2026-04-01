@@ -58,3 +58,9 @@ router.add_api_route(
     response_model=list[AdminBookingDTO],
     responses=error_responses(401, 403, 422, 500),
 )
+router.add_api_route(
+    "/api/admin/calendar-feed",
+    admin_service.api_admin_calendar_feed,
+    methods=["GET"],
+    responses=error_responses(401, 403, 422, 500),
+)

@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from typing import Optional
 
 from fastapi import Depends, HTTPException, Request, status
@@ -34,6 +34,70 @@ def admin_logout(request: Request):
 
 def admin_me(admin: dict = Depends(get_current_admin)):
     return admin
+
+
+def _month_start(day: date) -> date:
+    return date(day.year, day.month, 1)
+
+
+def _month_end(day: date) -> date:
+    if day.month == 12:
+        return date(day.year + 1, 1, 1) - timedelta(days=1)
+    return date(day.year, day.month + 1, 1) - timedelta(days=1)
+
+
+def _resolve_calendar_range(date_from: Optional[date], date_to: Optional[date]) -> tuple[date, date]:
+    today = date.today()
+    start = date_from or _month_start(today)
+    end = date_to or _month_end(start)
+    if end < start:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Некорректный диапазон дат")
+    return start, end
+
+
+def _calendar_status(status: Optional[str]) -> str:
+    normalized = (status or "").strip().lower()
+    if normalized in {
+        "confirmed",
+        "подтверждена",
+        "подтверждено",
+        "checked_in",
+        "заселён",
+        "заселен",
+        "ожидает оплаты",
+        "awaiting_payment",
+    }:
+        return "confirmed"
+    if normalized in {"completed", "завершена", "завершено"}:
+        return "completed"
+    if normalized in {
+        "cancelled",
+        "cancelled_by_user",
+        "cancelled_by_base",
+        "отменена",
+        "отменена гостем",
+        "отменена базой",
+        "rejected",
+        "отклонена",
+        "expired_pending",
+        "просрочена без ответа",
+        "no_show",
+        "не заехал",
+    }:
+        return "cancelled"
+    return "processing"
+
+
+def _calendar_booking_label(row: dict) -> str:
+    guest = (
+        (row.get("guest_name") or "").strip()
+        or (row.get("user_name") or "").strip()
+        or (row.get("guest_phone") or "").strip()
+        or (row.get("user_phone") or "").strip()
+    )
+    if guest:
+        return guest
+    return f"Бронь #{row.get('id')}"
 
 
 def api_admin_my_camps(admin: dict = Depends(get_current_admin)):
@@ -208,3 +272,94 @@ def api_admin_bookings_calendar(
     return booking_serializers.serialize_admin_booking_list(
         admin_repo.list_admin_bookings_calendar(camp_ids, camp_id, date_from, date_to)
     )
+
+
+def api_admin_calendar_feed(
+    camp_id: Optional[int] = None,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    admin: dict = Depends(get_current_admin),
+):
+    camp_ids = _get_admin_camp_ids(admin["id"])
+    if not camp_ids:
+        return {"date_from": None, "date_to": None, "rooms": []}
+    if camp_id and camp_id not in camp_ids:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа к выбранной базе")
+
+    range_start, range_end = _resolve_calendar_range(date_from, date_to)
+    rooms = admin_repo.list_admin_calendar_rooms(camp_ids, camp_id)
+    bookings = admin_repo.list_admin_bookings_calendar(camp_ids, camp_id, range_start, range_end + timedelta(days=1))
+
+    room_map: dict[str, dict] = {}
+    for row in rooms:
+        room_key = str(row["id"])
+        room_map[room_key] = {
+            "id": room_key,
+            "room_id": row["id"],
+            "camp_id": row["camp_id"],
+            "camp_name": row.get("camp_name") or "",
+            "title": row.get("name") or "Без названия",
+            "category": (row.get("room_type") or "").strip() or "Апартамент",
+            "bookings": [],
+        }
+
+    visible_range_end = range_end + timedelta(days=1)
+    for booking in bookings:
+        booking_start = booking.get("check_in")
+        booking_end = booking.get("check_out")
+        if booking_start is None or booking_end is None:
+            continue
+
+        display_start = max(booking_start, range_start)
+        display_end = min(booking_end, visible_range_end)
+        if display_end <= display_start:
+            continue
+
+        booking_room_id = booking.get("room_id")
+        if booking_room_id is None:
+            room_key = f"camp-{booking.get('camp_id')}-unassigned"
+            room_entry = room_map.setdefault(
+                room_key,
+                {
+                    "id": room_key,
+                    "room_id": None,
+                    "camp_id": booking.get("camp_id"),
+                    "camp_name": booking.get("camp_name") or "",
+                    "title": "Без назначенного апартамента",
+                    "category": "Требует распределения",
+                    "bookings": [],
+                },
+            )
+        else:
+            room_key = str(booking_room_id)
+            room_entry = room_map.get(room_key)
+            if room_entry is None:
+                room_entry = {
+                    "id": room_key,
+                    "room_id": booking_room_id,
+                    "camp_id": booking.get("camp_id"),
+                    "camp_name": booking.get("camp_name") or "",
+                    "title": booking.get("room_name") or "Апартамент",
+                    "category": "Апартамент",
+                    "bookings": [],
+                }
+                room_map[room_key] = room_entry
+
+        room_entry["bookings"].append(
+            {
+                "id": booking.get("id"),
+                "label": _calendar_booking_label(booking),
+                "status": _calendar_status(booking.get("status")),
+                "start_day": (display_start - range_start).days + 1,
+                "span_days": max((display_end - display_start).days, 1),
+                "check_in": booking_start.isoformat(),
+                "check_out": booking_end.isoformat(),
+                "source": booking.get("source") or "",
+            }
+        )
+
+    return {
+        "date_from": range_start.isoformat(),
+        "date_to": range_end.isoformat(),
+        "rooms": list(room_map.values()),
+    }

@@ -2,7 +2,7 @@ import { Menu, MoonStar, SunMedium, UserCircle2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router";
 import { useTheme } from "next-themes";
-import { clearCrmSession, getCrmSession } from "../session";
+import { fetchCrmSession, logoutCrmSession, type CrmSession } from "../session";
 import { crmPath } from "../paths";
 
 const navItems = [
@@ -22,7 +22,10 @@ export default function AppLayout() {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const session = getCrmSession();
+  const [session, setSession] = useState<CrmSession | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState("");
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const calendarPath = crmPath("/calendar");
 
   useEffect(() => {
@@ -38,14 +41,69 @@ export default function AppLayout() {
     }
   }, [location.pathname]);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    setIsAuthLoading(true);
+    setAuthError("");
+
+    fetchCrmSession(controller.signal)
+      .then((nextSession) => {
+        setSession(nextSession);
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+        setAuthError(error instanceof Error ? error.message : "Не удалось загрузить профиль CRM");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setIsAuthLoading(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, []);
+
   const loginPath = crmPath("/login");
   const navLinks = navItems.map((item) => ({
     ...item,
     to: crmPath(item.path),
   }));
 
+  if (isAuthLoading) {
+    return (
+      <div className="crm-ambient flex min-h-screen items-center justify-center bg-background px-4 text-foreground">
+        <div className="glass-card w-full max-w-md rounded-3xl p-8 text-center">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#E5D3B3]">Tourist_03 CRM</p>
+          <h1 className="mt-3 text-2xl font-semibold tracking-[-0.05em] text-foreground">Загружаем рабочее пространство</h1>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">Проверяем сессию и права доступа к вашим базам.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (authError) {
+    return (
+      <div className="crm-ambient flex min-h-screen items-center justify-center bg-background px-4 text-foreground">
+        <div className="glass-card w-full max-w-md rounded-3xl p-8 text-center">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#E5D3B3]">Tourist_03 CRM</p>
+          <h1 className="mt-3 text-2xl font-semibold tracking-[-0.05em] text-foreground">CRM временно недоступен</h1>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">{authError}</p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="brand-button mt-6 w-full justify-center"
+          >
+            Повторить попытку
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (!session) {
-    return <Navigate to={loginPath} replace state={{ from: location.pathname }} />;
+    return <Navigate to={loginPath} replace state={{ from: `${location.pathname}${location.search}` }} />;
   }
 
   const navContent = (
@@ -110,13 +168,21 @@ export default function AppLayout() {
 
           <button
             type="button"
-            onClick={() => {
-              clearCrmSession();
-              navigate(loginPath, { replace: true });
+            disabled={isLoggingOut}
+            onClick={async () => {
+              try {
+                setIsLoggingOut(true);
+                await logoutCrmSession();
+              } catch {
+                // Даже при сетевой ошибке локально выходим из защищённого контура.
+              } finally {
+                setSession(null);
+                navigate(loginPath, { replace: true });
+              }
             }}
             className="rounded-2xl border border-border bg-background/70 px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5D3B3]/60"
           >
-            Выйти
+            {isLoggingOut ? "Выходим..." : "Выйти"}
           </button>
         </div>
       </header>

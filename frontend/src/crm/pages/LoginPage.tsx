@@ -1,8 +1,8 @@
 import { ArrowRight, LockKeyhole, Mail, Mountain, ShieldCheck } from "lucide-react";
-import { useState, type FormEvent } from "react";
-import { Navigate, useLocation, useNavigate } from "react-router";
+import { useEffect, useState, type FormEvent } from "react";
+import { useLocation, useNavigate } from "react-router";
 import { motion } from "motion/react";
-import { getCrmSession, saveCrmSession } from "../session";
+import { fetchCrmSession, loginCrmSession } from "../session";
 import { crmPath } from "../paths";
 
 export default function LoginPage() {
@@ -10,25 +10,51 @@ export default function LoginPage() {
   const location = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const session = getCrmSession();
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
   const homePath = crmPath("/calendar");
-
-  if (session) {
-    return <Navigate to={homePath} replace />;
-  }
 
   const nextPath =
     typeof (location.state as { from?: unknown } | null)?.from === "string"
       ? (location.state as { from: string }).from
       : homePath;
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchCrmSession(controller.signal)
+      .then((session) => {
+        if (session) {
+          navigate(homePath, { replace: true });
+        }
+      })
+      .catch(() => {
+        // Ошибку проверки сессии здесь не показываем, чтобы не блокировать форму входа.
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setIsCheckingSession(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, [homePath, navigate]);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    saveCrmSession({
-      email,
-      name: "Управляющий базы",
-    });
-    navigate(nextPath, { replace: true });
+    try {
+      setIsSubmitting(true);
+      setErrorMessage("");
+      await loginCrmSession({
+        email,
+        password,
+      });
+      navigate(nextPath, { replace: true });
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Не удалось открыть рабочее пространство");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -95,6 +121,12 @@ export default function LoginPage() {
                 </div>
 
                 <form onSubmit={handleSubmit} className="mt-8 space-y-4">
+                  {errorMessage ? (
+                    <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+                      {errorMessage}
+                    </div>
+                  ) : null}
+
                   <label className="block space-y-2">
                     <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Email</span>
                     <div className="relative">
@@ -105,6 +137,7 @@ export default function LoginPage() {
                         placeholder="email@company.ru"
                         value={email}
                         onChange={(event) => setEmail(event.target.value)}
+                        disabled={isSubmitting || isCheckingSession}
                         required
                       />
                     </div>
@@ -120,13 +153,14 @@ export default function LoginPage() {
                         placeholder="Введите пароль"
                         value={password}
                         onChange={(event) => setPassword(event.target.value)}
+                        disabled={isSubmitting || isCheckingSession}
                         required
                       />
                     </div>
                   </label>
 
-                  <button type="submit" className="brand-button w-full gap-2">
-                    Войти в CRM
+                  <button type="submit" disabled={isSubmitting || isCheckingSession} className="brand-button w-full gap-2 disabled:cursor-not-allowed disabled:opacity-60">
+                    {isCheckingSession ? "Проверяем доступ..." : isSubmitting ? "Открываем CRM..." : "Войти в CRM"}
                     <ArrowRight className="h-4 w-4" />
                   </button>
                 </form>

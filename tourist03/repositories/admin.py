@@ -35,6 +35,36 @@ def list_admin_camps(camp_ids: list[int]):
         return [dict(row) for row in cur.fetchall()]
 
 
+def list_admin_calendar_rooms(camp_ids: list[int], camp_id: Optional[int]):
+    conditions = []
+    params: list = []
+    if camp_id:
+        conditions.append("r.camp_id = %s")
+        params.append(camp_id)
+    else:
+        conditions.append("r.camp_id = ANY(%s)")
+        params.append(camp_ids)
+    where_clause = " AND ".join(conditions) if conditions else "TRUE"
+    with _db_conn("catalog") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT
+                r.id,
+                r.camp_id,
+                r.name,
+                r.room_type,
+                c.name AS camp_name
+            FROM catalog.rooms r
+            LEFT JOIN catalog.camps c ON c.id = r.camp_id
+            WHERE {where_clause}
+            ORDER BY c.name ASC, r.room_type ASC NULLS LAST, r.name ASC, r.id ASC
+            """,
+            tuple(params),
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+
 def list_admin_bookings(camp_ids: list[int], camp_id: Optional[int], date_from: Optional[date], date_to: Optional[date]):
     conditions = []
     params: list = []
