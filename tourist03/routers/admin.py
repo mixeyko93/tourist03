@@ -89,8 +89,20 @@ router.add_api_route(
     responses=error_responses(401, 403, 404, 422, 500),
 )
 router.add_api_route(
+    "/api/admin/camps/{camp_id}/services",
+    admin_service.api_admin_camp_services,
+    methods=["GET"],
+    responses=error_responses(401, 403, 404, 422, 500),
+)
+router.add_api_route(
     "/api/admin/camps/{camp_id}/rooms",
     admin_service.api_admin_create_room,
+    methods=["POST"],
+    responses=error_responses(400, 401, 403, 404, 422, 500),
+)
+router.add_api_route(
+    "/api/admin/camps/{camp_id}/services",
+    admin_service.api_admin_create_service,
     methods=["POST"],
     responses=error_responses(400, 401, 403, 404, 422, 500),
 )
@@ -101,8 +113,20 @@ router.add_api_route(
     responses=error_responses(400, 401, 403, 404, 422, 500),
 )
 router.add_api_route(
+    "/api/admin/camps/{camp_id}/services/{service_id}",
+    admin_service.api_admin_update_service,
+    methods=["PUT"],
+    responses=error_responses(400, 401, 403, 404, 422, 500),
+)
+router.add_api_route(
     "/api/admin/camps/{camp_id}/rooms/{room_id}",
     admin_service.api_admin_delete_room,
+    methods=["DELETE"],
+    responses=error_responses(401, 403, 404, 409, 422, 500),
+)
+router.add_api_route(
+    "/api/admin/camps/{camp_id}/services/{service_id}",
+    admin_service.api_admin_delete_service,
     methods=["DELETE"],
     responses=error_responses(401, 403, 404, 409, 422, 500),
 )

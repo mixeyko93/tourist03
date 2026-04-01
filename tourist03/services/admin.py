@@ -11,6 +11,7 @@ from tourist03.schemas import (
     AdminCreateBookingRequest,
     AdminLoginRequest,
     AdminRoomUpsertRequest,
+    AdminServiceUpsertRequest,
     BookingAdminUpdateRequest,
 )
 from tourist03.serializers import bookings as booking_serializers
@@ -134,6 +135,14 @@ def _guest_status(visits_count: int) -> str:
     if visits_count >= 2:
         return "Постоянный"
     return "Новый"
+
+
+def _normalize_service_status(status_value: Optional[str]) -> str:
+    normalized = (status_value or "").strip().lower()
+    allowed = {"draft", "active", "hidden", "sold_out", "paused", "archived"}
+    if normalized in allowed:
+        return normalized
+    return "draft"
 
 
 def api_admin_my_camps(admin: dict = Depends(get_current_admin)):
@@ -526,6 +535,11 @@ def api_admin_camp_rooms(camp_id: int, admin: dict = Depends(get_current_admin))
     return admin_repo.list_admin_camp_rooms(camp_id)
 
 
+def api_admin_camp_services(camp_id: int, admin: dict = Depends(get_current_admin)):
+    _ensure_admin_camp_access(admin, camp_id)
+    return admin_repo.list_admin_services(camp_id)
+
+
 def api_admin_create_room(
     camp_id: int,
     payload: AdminRoomUpsertRequest,
@@ -601,6 +615,92 @@ def api_admin_delete_room(camp_id: int, room_id: int, admin: dict = Depends(get_
         action_label="Удалил апартамент",
         old_value=before,
         is_sensitive=True,
+        was_auto_applied=True,
+    )
+    return {"ok": True}
+
+
+def api_admin_create_service(
+    camp_id: int,
+    payload: AdminServiceUpsertRequest,
+    admin: dict = Depends(get_current_admin),
+):
+    _ensure_admin_camp_access(admin, camp_id)
+    normalized_payload = payload.model_dump()
+    normalized_payload["status"] = _normalize_service_status(payload.status)
+    if normalized_payload["requires_booking"]:
+        normalized_payload["allows_standalone"] = False
+    service_id = admin_repo.create_admin_service(camp_id, normalized_payload, int(admin.get("id")))
+    service = admin_repo.get_admin_service(camp_id, service_id)
+    log_crm_audit_event(
+        actor_type="camp_admin",
+        actor_id=admin.get("id"),
+        actor_display=admin.get("display_name"),
+        camp_id=camp_id,
+        target_type="service",
+        target_id=service_id,
+        action_type="service_create",
+        action_label="Создал услугу",
+        new_value=service,
+        is_sensitive=False,
+        was_auto_applied=True,
+    )
+    return {"ok": True, "id": service_id}
+
+
+def api_admin_update_service(
+    camp_id: int,
+    service_id: int,
+    payload: AdminServiceUpsertRequest,
+    admin: dict = Depends(get_current_admin),
+):
+    _ensure_admin_camp_access(admin, camp_id)
+    before = admin_repo.get_admin_service(camp_id, service_id)
+    if not before:
+        raise HTTPException(status_code=404, detail="Услуга не найдена")
+    normalized_payload = payload.model_dump()
+    normalized_payload["status"] = _normalize_service_status(payload.status)
+    if normalized_payload["requires_booking"]:
+        normalized_payload["allows_standalone"] = False
+    changed = admin_repo.update_admin_service(camp_id, service_id, normalized_payload, int(admin.get("id")))
+    if not changed:
+        raise HTTPException(status_code=404, detail="Услуга не найдена")
+    after = admin_repo.get_admin_service(camp_id, service_id)
+    log_crm_audit_event(
+        actor_type="camp_admin",
+        actor_id=admin.get("id"),
+        actor_display=admin.get("display_name"),
+        camp_id=camp_id,
+        target_type="service",
+        target_id=service_id,
+        action_type="service_update",
+        action_label="Обновил услугу",
+        old_value=before,
+        new_value=after,
+        is_sensitive=False,
+        was_auto_applied=True,
+    )
+    return {"ok": True}
+
+
+def api_admin_delete_service(camp_id: int, service_id: int, admin: dict = Depends(get_current_admin)):
+    _ensure_admin_camp_access(admin, camp_id)
+    before = admin_repo.get_admin_service(camp_id, service_id)
+    if not before:
+        raise HTTPException(status_code=404, detail="Услуга не найдена")
+    if not admin_repo.archive_admin_service(camp_id, service_id, int(admin.get("id"))):
+        raise HTTPException(status_code=404, detail="Услуга не найдена")
+    log_crm_audit_event(
+        actor_type="camp_admin",
+        actor_id=admin.get("id"),
+        actor_display=admin.get("display_name"),
+        camp_id=camp_id,
+        target_type="service",
+        target_id=service_id,
+        action_type="service_archive",
+        action_label="Отправил услугу в архив",
+        old_value=before,
+        is_sensitive=False,
         was_auto_applied=True,
     )
     return {"ok": True}

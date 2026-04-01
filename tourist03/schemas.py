@@ -177,3 +177,21 @@ class AdminRoomUpsertRequest(BaseModel):
     discount_pct: int = 0
     discount_from_nights: int = 0
     description: Optional[str] = None
+
+
+class AdminServiceUpsertRequest(BaseModel):
+    category_name: Optional[str] = None
+    provider_name: Optional[str] = None
+    provider_contact_phone: Optional[str] = None
+    provider_contact_telegram: Optional[str] = None
+    responsible_scope: str = "shift_admins"
+    responsible_admin_id: Optional[int] = None
+    name: str
+    description: Optional[str] = None
+    status: str = "draft"
+    requires_booking: bool = False
+    allows_standalone: bool = True
+    location_hint: Optional[str] = None
+    duration_minutes: Optional[int] = None
+    cover_photo_url: Optional[str] = None
+    cover_video_url: Optional[str] = None

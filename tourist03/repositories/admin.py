@@ -441,6 +441,274 @@ def list_admin_guest_rows(camp_ids: list[int], camp_id: Optional[int]):
         return [dict(row) for row in cur.fetchall()]
 
 
+def _resolve_service_category(cur, camp_id: int, category_name: Optional[str]):
+    normalized = (category_name or "").strip()
+    if not normalized:
+        return None
+    cur.execute(
+        """
+        SELECT id
+        FROM crm.service_categories
+        WHERE camp_id = %s
+          AND lower(name) = lower(%s)
+        LIMIT 1
+        """,
+        (camp_id, normalized),
+    )
+    row = cur.fetchone()
+    if row:
+        return row["id"]
+    cur.execute(
+        """
+        INSERT INTO crm.service_categories(camp_id, name)
+        VALUES (%s, %s)
+        RETURNING id
+        """,
+        (camp_id, normalized),
+    )
+    return cur.fetchone()["id"]
+
+
+def list_admin_services(camp_id: int):
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT
+                s.id,
+                s.camp_id,
+                s.category_id,
+                cat.name AS category_name,
+                s.provider_name,
+                s.provider_contact_phone,
+                s.provider_contact_telegram,
+                s.responsible_scope,
+                s.responsible_admin_id,
+                staff.display_name AS responsible_admin_name,
+                s.name,
+                s.description,
+                s.status,
+                s.requires_booking,
+                s.allows_standalone,
+                s.location_hint,
+                s.duration_minutes,
+                s.cover_photo_url,
+                s.cover_video_url,
+                s.media_json,
+                s.created_at,
+                s.updated_at,
+                COUNT(sl.id) AS slots_count,
+                COUNT(sl.id) FILTER (WHERE sl.is_active) AS active_slots_count,
+                MIN(sl.price) FILTER (WHERE sl.is_active AND sl.price IS NOT NULL) AS min_price
+            FROM crm.services s
+            LEFT JOIN crm.service_categories cat ON cat.id = s.category_id
+            LEFT JOIN auth.camp_admin_accounts staff ON staff.id = s.responsible_admin_id
+            LEFT JOIN crm.service_slots sl ON sl.service_id = s.id
+            WHERE s.camp_id = %s
+              AND s.archived_at IS NULL
+            GROUP BY
+                s.id,
+                s.camp_id,
+                s.category_id,
+                cat.name,
+                s.provider_name,
+                s.provider_contact_phone,
+                s.provider_contact_telegram,
+                s.responsible_scope,
+                s.responsible_admin_id,
+                staff.display_name,
+                s.name,
+                s.description,
+                s.status,
+                s.requires_booking,
+                s.allows_standalone,
+                s.location_hint,
+                s.duration_minutes,
+                s.cover_photo_url,
+                s.cover_video_url,
+                s.media_json,
+                s.created_at,
+                s.updated_at,
+                cat.sort_order
+            ORDER BY cat.sort_order ASC NULLS LAST, cat.name ASC NULLS LAST, s.created_at DESC, s.id DESC
+            """,
+            (camp_id,),
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+
+def get_admin_service(camp_id: int, service_id: int):
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT
+                s.id,
+                s.camp_id,
+                s.category_id,
+                cat.name AS category_name,
+                s.provider_name,
+                s.provider_contact_phone,
+                s.provider_contact_telegram,
+                s.responsible_scope,
+                s.responsible_admin_id,
+                staff.display_name AS responsible_admin_name,
+                s.name,
+                s.description,
+                s.status,
+                s.requires_booking,
+                s.allows_standalone,
+                s.location_hint,
+                s.duration_minutes,
+                s.cover_photo_url,
+                s.cover_video_url,
+                s.media_json,
+                s.created_at,
+                s.updated_at
+            FROM crm.services s
+            LEFT JOIN crm.service_categories cat ON cat.id = s.category_id
+            LEFT JOIN auth.camp_admin_accounts staff ON staff.id = s.responsible_admin_id
+            WHERE s.camp_id = %s
+              AND s.id = %s
+              AND s.archived_at IS NULL
+            LIMIT 1
+            """,
+            (camp_id, service_id),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+
+def create_admin_service(camp_id: int, payload: dict, actor_admin_id: int) -> int:
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        category_id = _resolve_service_category(cur, camp_id, payload.get("category_name"))
+        cur.execute(
+            """
+            INSERT INTO crm.services(
+                camp_id,
+                category_id,
+                provider_name,
+                provider_contact_phone,
+                provider_contact_telegram,
+                responsible_scope,
+                responsible_admin_id,
+                name,
+                description,
+                status,
+                requires_booking,
+                allows_standalone,
+                location_hint,
+                duration_minutes,
+                cover_photo_url,
+                cover_video_url,
+                created_by_admin_id,
+                updated_by_admin_id
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (
+                camp_id,
+                category_id,
+                payload.get("provider_name"),
+                payload.get("provider_contact_phone"),
+                payload.get("provider_contact_telegram"),
+                payload.get("responsible_scope") or "shift_admins",
+                payload.get("responsible_admin_id"),
+                payload.get("name"),
+                payload.get("description"),
+                payload.get("status") or "draft",
+                bool(payload.get("requires_booking")),
+                bool(payload.get("allows_standalone", True)),
+                payload.get("location_hint"),
+                payload.get("duration_minutes"),
+                payload.get("cover_photo_url"),
+                payload.get("cover_video_url"),
+                actor_admin_id,
+                actor_admin_id,
+            ),
+        )
+        service_id = cur.fetchone()["id"]
+        conn.commit()
+        return int(service_id)
+
+
+def update_admin_service(camp_id: int, service_id: int, payload: dict, actor_admin_id: int) -> bool:
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        category_id = _resolve_service_category(cur, camp_id, payload.get("category_name"))
+        cur.execute(
+            """
+            UPDATE crm.services
+            SET category_id = %s,
+                provider_name = %s,
+                provider_contact_phone = %s,
+                provider_contact_telegram = %s,
+                responsible_scope = %s,
+                responsible_admin_id = %s,
+                name = %s,
+                description = %s,
+                status = %s,
+                requires_booking = %s,
+                allows_standalone = %s,
+                location_hint = %s,
+                duration_minutes = %s,
+                cover_photo_url = %s,
+                cover_video_url = %s,
+                updated_by_admin_id = %s,
+                updated_at = NOW()
+            WHERE camp_id = %s
+              AND id = %s
+              AND archived_at IS NULL
+            """,
+            (
+                category_id,
+                payload.get("provider_name"),
+                payload.get("provider_contact_phone"),
+                payload.get("provider_contact_telegram"),
+                payload.get("responsible_scope") or "shift_admins",
+                payload.get("responsible_admin_id"),
+                payload.get("name"),
+                payload.get("description"),
+                payload.get("status") or "draft",
+                bool(payload.get("requires_booking")),
+                bool(payload.get("allows_standalone", True)),
+                payload.get("location_hint"),
+                payload.get("duration_minutes"),
+                payload.get("cover_photo_url"),
+                payload.get("cover_video_url"),
+                actor_admin_id,
+                camp_id,
+                service_id,
+            ),
+        )
+        changed = cur.rowcount > 0
+        conn.commit()
+        return changed
+
+
+def archive_admin_service(camp_id: int, service_id: int, actor_admin_id: int) -> bool:
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE crm.services
+            SET status = 'archived',
+                archived_at = NOW(),
+                updated_by_admin_id = %s,
+                updated_at = NOW()
+            WHERE camp_id = %s
+              AND id = %s
+              AND archived_at IS NULL
+            """,
+            (actor_admin_id, camp_id, service_id),
+        )
+        changed = cur.rowcount > 0
+        conn.commit()
+        return changed
+
+
 def room_exists_for_camp(room_id: int, camp_id: int) -> bool:
     with _db_conn("catalog") as conn:
         cur = conn.cursor()
