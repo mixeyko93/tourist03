@@ -56,7 +56,8 @@ def superadmin_page():
 
 
 def admin_camps_page(request: Request):
-    return templates.TemplateResponse("admin-camps.html", {"request": request})
+    _ = request
+    return react_map_page()
 
 
 def react_map_page():

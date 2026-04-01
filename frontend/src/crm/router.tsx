@@ -10,6 +10,21 @@ import GuestsPage from "./pages/GuestsPage";
 import ServicesPage from "./pages/ServicesPage";
 import SettingsPage from "./pages/SettingsPage";
 
+function detectBasename() {
+  if (typeof window === "undefined") {
+    return "/admincamps";
+  }
+
+  const { pathname } = window.location;
+  if (pathname === "/react-map" || pathname.startsWith("/react-map/")) {
+    return "/react-map";
+  }
+  if (pathname === "/admincamps" || pathname.startsWith("/admincamps/")) {
+    return "/admincamps";
+  }
+  return "/admincamps";
+}
+
 export const router = createBrowserRouter(
   [
     {
@@ -35,6 +50,6 @@ export const router = createBrowserRouter(
     },
   ],
   {
-    basename: "/react-map",
+    basename: detectBasename(),
   },
 );

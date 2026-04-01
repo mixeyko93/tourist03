@@ -236,46 +236,33 @@ class UiSmokeTests(unittest.TestCase):
             errors, responses = self._collect_client_issues(page)
 
             page.goto(f"{self.base_url}/admincamps", wait_until="networkidle", timeout=20000)
-            page.wait_for_selector("#crm-login-view:not(.hidden)", timeout=5000)
-            page.fill('form#crm-login-form input[name="email"]', self.smoke_email)
-            page.fill('form#crm-login-form input[name="password"]', self.smoke_password)
-            page.click('form#crm-login-form button[type="submit"]')
-            page.wait_for_selector("#crm-app-view:not(.hidden)", timeout=10000)
-            page.wait_for_function(
-                "document.querySelectorAll('#crm-dashboard-camp-select option').length > 0",
-                timeout=10000,
-            )
+            page.wait_for_selector('input[type="email"]', timeout=10000)
+            page.fill('input[type="email"]', self.smoke_email)
+            page.fill('input[type="password"]', self.smoke_password)
+            page.click('button[type="submit"]')
+            page.wait_for_url(f"{self.base_url}/admincamps", timeout=10000)
+            page.wait_for_selector('text="Сводка по базе"', timeout=10000)
+            page.wait_for_selector('text="Панель управления базой отдыха"', timeout=10000)
 
-            admin_name = page.locator("#crm-admin-name").inner_text().strip()
-            self.assertIn(self.smoke_display_name, admin_name)
-            self.assertGreater(page.locator("#crm-dashboard-camp-select option").count(), 0)
+            page.click('a[href="/admincamps/bookings"]')
+            page.wait_for_url(f"{self.base_url}/admincamps/bookings", timeout=10000)
+            page.wait_for_selector('text="Управление бронями"', timeout=10000)
+            self.assertTrue(page.locator("tbody").inner_text().strip())
 
-            page.click('.crm-nav-btn[data-crm-target="bookings"]')
-            page.wait_for_timeout(1200)
-            self.assertTrue(page.locator("#crm-bookings-body").inner_text().strip())
+            page.click('a[href="/admincamps/calendar"]')
+            page.wait_for_url(f"{self.base_url}/admincamps/calendar", timeout=10000)
+            page.wait_for_selector('text="Календарь размещения"', timeout=10000)
+            calendar_cells = page.locator('text="Март 2026"').count()
+            self.assertGreater(calendar_cells, 0)
 
-            page.click('.crm-nav-btn[data-crm-target="calendar"]')
-            page.wait_for_timeout(1200)
-            calendar_cells = page.locator("#crm-cal-grid > *").count()
-            calendar_note = page.locator("#crm-cal-note").inner_text().strip()
-            self.assertTrue(calendar_cells > 0 or bool(calendar_note))
-
-            page.click("#crm-logout-btn")
-            page.wait_for_selector("#crm-login-view:not(.hidden)", timeout=10000)
+            page.click('button:has-text("Выйти")')
+            page.wait_for_url(f"{self.base_url}/admincamps/login", timeout=10000)
+            page.wait_for_selector('text="Вход в систему"', timeout=10000)
             browser.close()
 
-        unexpected_responses = []
-        for status, url in responses:
-            if status == 401 and url.endswith("/api/admin/me"):
-                continue
-            unexpected_responses.append((status, url))
-        unexpected_errors = []
-        for error in errors:
-            if "Failed to load resource: the server responded with a status of 401 (Unauthorized)" in error:
-                continue
-            unexpected_errors.append(error)
+        unexpected_responses = [(status, url) for status, url in responses if status >= 400]
         self.assertEqual(unexpected_responses, [], f"Unexpected admincamps responses: {unexpected_responses}")
-        self.assertEqual(unexpected_errors, [], f"Unexpected admincamps browser errors: {unexpected_errors}")
+        self.assertEqual(errors, [], f"Unexpected admincamps browser errors: {errors}")
 
     def test_map_popup_layout_contract(self):
         measure_js = """
