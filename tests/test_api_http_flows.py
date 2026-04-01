@@ -235,6 +235,23 @@ class ApiHttpFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(users_response.status_code, 401)
         self.assertEqual(users_response.json(), {"detail": "Нет доступа"})
 
+    async def test_superadmin_session_requires_login_and_password_when_configured(self):
+        with ExitStack() as stack:
+            stack.enter_context(patch("tourist03.security.SUPERADMIN_API_KEY", "super-key"))
+            stack.enter_context(patch("tourist03.security.SUPERADMIN_LOGIN", "admin"))
+            stack.enter_context(patch("tourist03.security.SUPERADMIN_PASSWORD", "super-pass"))
+
+            missing_creds = await self.client.post("/api/superadmin/session", json={"key": "super-key"})
+            valid_creds = await self.client.post(
+                "/api/superadmin/session",
+                json={"key": "super-key", "login": "admin", "password": "super-pass"},
+            )
+
+        self.assertEqual(missing_creds.status_code, 401)
+        self.assertEqual(missing_creds.json(), {"detail": "Нет доступа"})
+        self.assertEqual(valid_creds.status_code, 200)
+        self.assertEqual(valid_creds.json(), {"ok": True, "authenticated": True})
+
     async def test_catalog_available_rooms_marks_booked_rooms(self):
         with ExitStack() as stack:
             stack.enter_context(

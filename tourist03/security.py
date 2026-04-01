@@ -6,7 +6,7 @@ from typing import Optional
 from fastapi import HTTPException, Request, status
 from passlib.context import CryptContext
 
-from tourist03.config import SUPERADMIN_API_KEY, logger
+from tourist03.config import SUPERADMIN_API_KEY, SUPERADMIN_LOGIN, SUPERADMIN_PASSWORD, logger
 from tourist03.db import _db_conn
 
 
@@ -204,6 +204,27 @@ def is_valid_superadmin_key(token: str) -> bool:
     return bool(SUPERADMIN_API_KEY and candidate and secrets.compare_digest(candidate, SUPERADMIN_API_KEY))
 
 
+def superadmin_credentials_required() -> bool:
+    return bool((SUPERADMIN_LOGIN or "").strip() or (SUPERADMIN_PASSWORD or ""))
+
+
+def is_valid_superadmin_credentials(login: str, password: str) -> bool:
+    expected_login = (SUPERADMIN_LOGIN or "").strip()
+    expected_password = SUPERADMIN_PASSWORD or ""
+    if not superadmin_credentials_required():
+        return True
+
+    candidate_login = (login or "").strip()
+    candidate_password = password or ""
+    return bool(
+        expected_login
+        and expected_password
+        and candidate_login
+        and secrets.compare_digest(candidate_login, expected_login)
+        and secrets.compare_digest(candidate_password, expected_password)
+    )
+
+
 def is_local_superadmin_bypass(request: Request) -> bool:
     if SUPERADMIN_API_KEY:
         return False
@@ -238,6 +259,8 @@ __all__ = [
     "get_current_admin",
     "get_current_user",
     "get_superadmin",
+    "is_valid_superadmin_credentials",
+    "superadmin_credentials_required",
     "hash_password",
     "extract_superadmin_header_token",
     "is_valid_superadmin_key",

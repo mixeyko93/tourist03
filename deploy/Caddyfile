@@ -12,23 +12,21 @@ http://45.153.71.21 {
 }
 
 {$DOMAIN_SUPERADMIN} {
-  basicauth {
-    {$ADMIN_USER} {$ADMIN_PASS_HASH}
-  }
-
   @root path /
-  rewrite @root /superadmin
+  redir @root /admin/login 302
+
+  @login path /login
+  redir @login /admin/login 302
+
+  @legacy_superadmin path /superadmin /superadmin/*
+  redir @legacy_superadmin /admin/login 302
 
   reverse_proxy app:8000
 }
 
 {$DOMAIN_CRM} {
-  basicauth {
-    {$ADMIN_USER} {$ADMIN_PASS_HASH}
-  }
-
   @root path /
-  redir @root /admincamps 302
+  redir @root /login 302
 
   reverse_proxy app:8000
 }

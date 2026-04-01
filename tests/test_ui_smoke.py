@@ -34,6 +34,8 @@ def _allocate_port() -> int:
 class UiSmokeTests(unittest.TestCase):
     server_process = None
     base_url = ""
+    superadmin_login = "admin"
+    superadmin_password = "SmokeSuperAdmin123!"
     superadmin_key = "smoke-superadmin-key"
     session_secret = "smoke-session-secret"
     smoke_email = "smoke-ui-admin@example.com"
@@ -65,6 +67,8 @@ class UiSmokeTests(unittest.TestCase):
         port = _allocate_port()
         cls.base_url = f"http://127.0.0.1:{port}"
         env = os.environ.copy()
+        env["SUPERADMIN_LOGIN"] = cls.superadmin_login
+        env["SUPERADMIN_PASSWORD"] = cls.superadmin_password
         env["SUPERADMIN_API_KEY"] = cls.superadmin_key
         env["SESSION_SECRET_KEY"] = cls.session_secret
         env.setdefault("PYTHONUNBUFFERED", "1")
@@ -202,27 +206,35 @@ class UiSmokeTests(unittest.TestCase):
             errors, responses = self._collect_client_issues(page)
 
             page.goto(f"{self.base_url}/superadmin", wait_until="networkidle", timeout=20000)
-            page.wait_for_selector("#superadmin-auth-modal:not(.hidden)", timeout=5000)
-            page.fill("#superadmin-auth-key", self.superadmin_key)
-            page.click("#superadmin-auth-submit")
-            page.wait_for_selector("#camps_tbl tbody tr", timeout=10000)
+            page.wait_for_url(f"{self.base_url}/admin/login", timeout=10000)
+            page.wait_for_selector("#superadmin-login", timeout=5000)
+            page.fill("#superadmin-login", self.superadmin_login)
+            page.fill("#superadmin-password", self.superadmin_password)
+            page.fill("#superadmin-key", self.superadmin_key)
+            page.click("#superadmin-submit")
+            page.wait_for_url(f"{self.base_url}/admin/bases", timeout=10000)
+            page.wait_for_selector("table tbody tr", timeout=10000)
 
-            self.assertGreater(page.locator("#camps_tbl tbody tr").count(), 0)
+            self.assertGreater(page.locator("table tbody tr").count(), 0)
 
-            page.click("#tab_users")
-            page.wait_for_selector("#users_tbl tbody tr", timeout=10000)
-            self.assertGreater(page.locator("#users_tbl tbody tr").count(), 0)
+            page.get_by_role("link", name="Пользователи").click()
+            page.wait_for_url(f"{self.base_url}/admin/users", timeout=10000)
+            page.wait_for_selector("table tbody tr", timeout=10000)
+            self.assertGreater(page.locator("table tbody tr").count(), 0)
 
-            page.click("#tab_accounts")
-            page.wait_for_selector(".accounts-table tbody tr", timeout=10000)
-            self.assertGreater(page.locator(".accounts-table tbody tr").count(), 0)
+            page.get_by_role("link", name="Учётные записи").click()
+            page.wait_for_url(f"{self.base_url}/admin/accounts", timeout=10000)
+            page.wait_for_selector("table tbody tr", timeout=10000)
+            self.assertGreater(page.locator("table tbody tr").count(), 0)
 
-            page.click("#tab_archive")
-            page.wait_for_timeout(800)
-            self.assertTrue(page.locator("#archive_tbl tbody").inner_text().strip())
+            page.get_by_role("link", name="Архив").click()
+            page.wait_for_url(f"{self.base_url}/admin/archive", timeout=10000)
+            page.wait_for_selector("text=Архив изменений", timeout=10000)
+            self.assertGreater(page.locator("text=Журнал изменений карточек и пользователей").count(), 0)
 
             page.click("#superadmin-logout-btn")
-            page.wait_for_selector("#superadmin-auth-modal:not(.hidden)", timeout=10000)
+            page.wait_for_url(f"{self.base_url}/admin/login", timeout=10000)
+            page.wait_for_selector("#superadmin-login", timeout=10000)
             browser.close()
 
         unexpected_responses = [(status, url) for status, url in responses if status >= 400]

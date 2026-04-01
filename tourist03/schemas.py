@@ -11,6 +11,8 @@ class AdminLoginRequest(BaseModel):
 
 class SuperAdminLoginRequest(BaseModel):
     key: str
+    login: Optional[str] = None
+    password: Optional[str] = None
 
 
 class AdminMeResponse(BaseModel):

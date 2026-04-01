@@ -2,8 +2,8 @@ import { Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router";
 import { useTheme } from "next-themes";
-import { clearCrmSession, getCrmSession } from "../../session";
 import { crmPath } from "../../paths";
+import { fetchSuperadminSession, logoutSuperadminSession } from "../session";
 
 const adminTabs = [
   { label: "Базы и номера", path: "/admin/bases" },
@@ -15,16 +15,38 @@ const adminTabs = [
 export default function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const session = getCrmSession();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  const loginPath = crmPath("/login");
+  const [authState, setAuthState] = useState<"loading" | "authenticated" | "unauthenticated">("loading");
+  const [authError, setAuthError] = useState("");
+  const loginPath = crmPath("/admin/login");
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  if (!session) {
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchSuperadminSession(controller.signal)
+      .then((session) => {
+        setAuthState(session.authenticated ? "authenticated" : "unauthenticated");
+      })
+      .catch(() => {
+        setAuthError("Не удалось проверить superadmin-сессию");
+        setAuthState("unauthenticated");
+      });
+    return () => controller.abort();
+  }, []);
+
+  if (authState === "loading") {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4 text-center text-sm text-muted-foreground">
+        Проверяем доступ суперадмина...
+      </div>
+    );
+  }
+
+  if (authState !== "authenticated") {
     return <Navigate to={loginPath} replace state={{ from: location.pathname }} />;
   }
 
@@ -51,13 +73,14 @@ export default function AdminLayout() {
                 </button>
               ) : null}
               <div className="hidden rounded-xl border border-border bg-background/70 px-3 py-2 md:block">
-                <p className="text-sm font-medium text-foreground">{session.name}</p>
-                <p className="text-xs text-muted-foreground">{session.email}</p>
+                <p className="text-sm font-medium text-foreground">Суперадминистратор</p>
+                <p className="text-xs text-muted-foreground">{authError || "Полный доступ к CRM и справочникам"}</p>
               </div>
               <button
+                id="superadmin-logout-btn"
                 type="button"
-                onClick={() => {
-                  clearCrmSession();
+                onClick={async () => {
+                  await logoutSuperadminSession().catch(() => null);
                   navigate(loginPath, { replace: true });
                 }}
                 className="admin-button"

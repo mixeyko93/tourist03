@@ -15,6 +15,7 @@ import AdminBaseEditPage from "./admin/pages/AdminBaseEditPage";
 import AdminUsersPage from "./admin/pages/AdminUsersPage";
 import AdminAccountsPage from "./admin/pages/AdminAccountsPage";
 import AdminArchivePage from "./admin/pages/AdminArchivePage";
+import AdminLoginPage from "./admin/pages/AdminLoginPage";
 import { crmPath } from "./paths";
 
 function RouteRedirect({ to, base = "" }: { to: string; base?: "" | "/react-map" }) {
@@ -50,6 +51,10 @@ function createCrmRoutes(base: "" | "/react-map"): RouteObject[] {
 
 function createAdminRoutes(base: "" | "/react-map"): RouteObject[] {
   return [
+    {
+      path: crmPath("/admin/login", base),
+      Component: AdminLoginPage,
+    },
     {
       path: crmPath("/admin", base),
       Component: AdminLayout,

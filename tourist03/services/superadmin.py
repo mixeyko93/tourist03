@@ -10,8 +10,10 @@ from tourist03.schemas import (
 from tourist03.security import (
     extract_superadmin_header_token,
     hash_password,
+    is_valid_superadmin_credentials,
     is_local_superadmin_bypass,
     is_valid_superadmin_key,
+    superadmin_credentials_required,
 )
 
 
@@ -37,6 +39,9 @@ def superadmin_login(payload: SuperAdminLoginRequest, request: Request):
         return {"ok": True, "authenticated": True}
 
     if not is_valid_superadmin_key(payload.key):
+        raise HTTPException(status_code=401, detail="Нет доступа")
+
+    if superadmin_credentials_required() and not is_valid_superadmin_credentials(payload.login or "", payload.password or ""):
         raise HTTPException(status_code=401, detail="Нет доступа")
 
     request.session["superadmin"] = True

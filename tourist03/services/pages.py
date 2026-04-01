@@ -52,7 +52,7 @@ def api_version():
 
 
 def superadmin_page():
-    return FileResponse(os.path.join(TEMPLATES, "superadmin.html"))
+    return RedirectResponse(url="/admin/login", status_code=302)
 
 
 def admin_camps_page(request: Request):
