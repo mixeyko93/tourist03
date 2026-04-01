@@ -169,6 +169,55 @@
     @apply inline-flex items-center justify-center rounded-2xl border border-[#E5D3B3]/30 bg-[#E5D3B3]/10 px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-[#E5D3B3]/16 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5D3B3]/60;
   }
 
+  .admin-card {
+    @apply rounded-3xl border border-border bg-card/88 shadow-xl backdrop-blur-xl;
+    box-shadow: var(--brand-shadow);
+  }
+
+  .admin-input {
+    @apply w-full rounded-xl border border-input bg-background/82 px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20;
+  }
+
+  .admin-button {
+    @apply inline-flex items-center justify-center rounded-xl border border-border bg-background/75 px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/35 active:scale-[0.99];
+  }
+
+  .admin-primary-button {
+    @apply inline-flex items-center justify-center rounded-xl bg-blue-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/35 active:scale-[0.99];
+  }
+
+  .admin-icon-button {
+    @apply inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-background/72 text-foreground transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/35;
+  }
+
+  .admin-table-shell {
+    @apply overflow-x-auto;
+  }
+
+  .admin-table {
+    @apply w-full border-collapse text-left;
+  }
+
+  .admin-table thead tr {
+    @apply border-b border-border bg-background/70;
+  }
+
+  .admin-table th {
+    @apply px-6 py-4 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground;
+  }
+
+  .admin-table td {
+    @apply px-6 py-4 text-sm text-muted-foreground;
+  }
+
+  .admin-table tbody tr {
+    @apply border-b border-border/80 transition hover:bg-accent/45;
+  }
+
+  .admin-table tbody tr:last-child {
+    @apply border-b-0;
+  }
+
   .legacy-map-shell {
     min-height: 100vh;
     background:
