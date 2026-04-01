@@ -1,7 +1,8 @@
 import json
 import re
 import secrets
-from typing import Optional
+from datetime import datetime, timedelta, timezone
+from typing import Any, Optional
 
 from fastapi import HTTPException, Request, status
 from passlib.context import CryptContext
@@ -94,6 +95,199 @@ def log_user_event(user_id: int, event_type: str, payload: Optional[dict] = None
         pass
 
 
+def log_crm_audit_event(
+    *,
+    actor_type: str,
+    action_type: str,
+    action_label: str,
+    target_type: str,
+    actor_id: Optional[int] = None,
+    actor_display: Optional[str] = None,
+    camp_id: Optional[int] = None,
+    target_id: Optional[Any] = None,
+    changed_field: Optional[str] = None,
+    old_value=None,
+    new_value=None,
+    comment: Optional[str] = None,
+    is_sensitive: bool = False,
+    was_auto_applied: bool = False,
+    metadata: Optional[dict] = None,
+) -> None:
+    if not actor_type or not action_type or not action_label or not target_type:
+        return
+    try:
+        with _db_conn("crm") as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                INSERT INTO crm.audit_log (
+                    actor_type,
+                    actor_id,
+                    actor_display,
+                    camp_id,
+                    target_type,
+                    target_id,
+                    action_type,
+                    action_label,
+                    changed_field,
+                    old_value,
+                    new_value,
+                    comment,
+                    is_sensitive,
+                    was_auto_applied,
+                    metadata
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s, %s, %s::jsonb)
+                """,
+                (
+                    actor_type,
+                    actor_id,
+                    actor_display,
+                    camp_id,
+                    target_type,
+                    str(target_id) if target_id is not None else None,
+                    action_type,
+                    action_label,
+                    changed_field,
+                    json.dumps(old_value, ensure_ascii=False) if old_value is not None else None,
+                    json.dumps(new_value, ensure_ascii=False) if new_value is not None else None,
+                    comment,
+                    bool(is_sensitive),
+                    bool(was_auto_applied),
+                    json.dumps(metadata or {}, ensure_ascii=False),
+                ),
+            )
+            conn.commit()
+    except Exception:
+        pass
+
+
+def create_notification_event(
+    *,
+    event_type: str,
+    title: str,
+    body: str,
+    channel: str = "in_app",
+    recipient_scope: str = "crm",
+    recipient_admin_id: Optional[int] = None,
+    recipient_role_key: Optional[str] = None,
+    camp_id: Optional[int] = None,
+    action_url: Optional[str] = None,
+    action_payload: Optional[dict] = None,
+    severity: str = "info",
+    metadata: Optional[dict] = None,
+) -> None:
+    if not event_type or not title or not body:
+        return
+    try:
+        with _db_conn("crm") as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                INSERT INTO crm.notification_events (
+                    camp_id,
+                    recipient_scope,
+                    recipient_admin_id,
+                    recipient_role_key,
+                    channel,
+                    event_type,
+                    title,
+                    body,
+                    action_url,
+                    action_payload,
+                    severity,
+                    metadata
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s::jsonb)
+                """,
+                (
+                    camp_id,
+                    recipient_scope,
+                    recipient_admin_id,
+                    recipient_role_key,
+                    channel,
+                    event_type,
+                    title,
+                    body,
+                    action_url,
+                    json.dumps(action_payload or {}, ensure_ascii=False),
+                    severity,
+                    json.dumps(metadata or {}, ensure_ascii=False),
+                ),
+            )
+            conn.commit()
+    except Exception:
+        pass
+
+
+def issue_admin_telegram_link_code(admin_id: int, *, ttl_minutes: int = 15) -> str:
+    if not admin_id:
+        raise ValueError("admin_id is required")
+    code = secrets.token_urlsafe(12)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=max(int(ttl_minutes or 15), 1))
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE auth.camp_admin_accounts
+            SET telegram_link_code = %s,
+                telegram_link_code_expires_at = %s,
+                updated_at = NOW()
+            WHERE id = %s
+            """,
+            (code, expires_at, int(admin_id)),
+        )
+        conn.commit()
+    return code
+
+
+def link_admin_telegram_account(
+    code: str,
+    *,
+    telegram_user_id: int,
+    telegram_chat_id: int,
+    telegram_username: Optional[str] = None,
+) -> Optional[dict]:
+    token = (code or "").strip()
+    if not token:
+        return None
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT id, email, display_name, telegram_link_code_expires_at
+            FROM auth.camp_admin_accounts
+            WHERE telegram_link_code = %s
+              AND archived_at IS NULL
+              AND is_active = TRUE
+            """,
+            (token,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+
+        expires_at = row.get("telegram_link_code_expires_at")
+        if expires_at is None or expires_at < datetime.now(timezone.utc):
+            return None
+
+        cur.execute(
+            """
+            UPDATE auth.camp_admin_accounts
+            SET telegram_user_id = %s,
+                telegram_chat_id = %s,
+                telegram_username = %s,
+                telegram_link_code = NULL,
+                telegram_link_code_expires_at = NULL,
+                updated_at = NOW()
+            WHERE id = %s
+            """,
+            (int(telegram_user_id), int(telegram_chat_id), (telegram_username or "").strip() or None, row["id"]),
+        )
+        conn.commit()
+        return {"id": row["id"], "email": row["email"], "display_name": row["display_name"]}
+
+
 def issue_user_token(user_id: int) -> str:
     token = secrets.token_urlsafe(24)
     try:
@@ -165,7 +359,7 @@ def get_current_admin(request: Request):
         cur = conn.cursor()
         cur.execute(
             """
-            SELECT id, email, display_name
+            SELECT id, email, display_name, phone, default_role_key, telegram_chat_id
             FROM auth.camp_admin_accounts
             WHERE id = %s AND is_active = TRUE
             """,
@@ -174,7 +368,14 @@ def get_current_admin(request: Request):
         row = cur.fetchone()
     if not row:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Не авторизован")
-    return {"id": row["id"], "email": row["email"], "display_name": row["display_name"]}
+    return {
+        "id": row["id"],
+        "email": row["email"],
+        "display_name": row["display_name"],
+        "phone": row.get("phone") or "",
+        "default_role_key": row.get("default_role_key") or "administrator",
+        "telegram_chat_id": row.get("telegram_chat_id"),
+    }
 
 
 def _get_admin_camp_ids(admin_id: int) -> list[int]:
@@ -263,8 +464,12 @@ __all__ = [
     "superadmin_credentials_required",
     "hash_password",
     "extract_superadmin_header_token",
+    "create_notification_event",
     "is_valid_superadmin_key",
     "issue_user_token",
+    "issue_admin_telegram_link_code",
+    "link_admin_telegram_account",
+    "log_crm_audit_event",
     "log_user_event",
     "verify_password",
     "is_local_superadmin_bypass",

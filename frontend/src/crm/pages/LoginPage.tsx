@@ -11,7 +11,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const session = getCrmSession();
-  const homePath = crmPath("/dashboard");
+  const homePath = crmPath("/calendar");
 
   if (session) {
     return <Navigate to={homePath} replace />;

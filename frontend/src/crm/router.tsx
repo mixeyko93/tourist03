@@ -36,7 +36,7 @@ function createCrmRoutes(base: "" | "/react-map"): RouteObject[] {
       path: base || "/",
       Component: AppLayout,
       children: [
-        { index: true, Component: () => <RouteRedirect to="/dashboard" base={base} /> },
+        { index: true, Component: () => <RouteRedirect to="/calendar" base={base} /> },
         { path: "dashboard", Component: DashboardPage },
         { path: "calendar", Component: CalendarPage },
         { path: "bookings", Component: BookingsPage },

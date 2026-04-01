@@ -407,6 +407,380 @@ MIGRATIONS = (
         EXECUTE FUNCTION crm.enforce_booking_overlap_guard();
         """,
     ),
+    MigrationStep(
+        version="0003_operational_foundation",
+        sql="""
+        ALTER TABLE catalog.camps ADD COLUMN IF NOT EXISTS is_visible_on_map BOOLEAN NOT NULL DEFAULT TRUE;
+        ALTER TABLE catalog.camps ADD COLUMN IF NOT EXISTS accepts_bookings BOOLEAN NOT NULL DEFAULT TRUE;
+        ALTER TABLE catalog.camps ADD COLUMN IF NOT EXISTS accepts_standalone_services BOOLEAN NOT NULL DEFAULT FALSE;
+        ALTER TABLE catalog.camps ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
+
+        ALTER TABLE auth.users ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
+
+        ALTER TABLE auth.camp_admin_accounts ADD COLUMN IF NOT EXISTS phone TEXT;
+        ALTER TABLE auth.camp_admin_accounts ADD COLUMN IF NOT EXISTS default_role_key TEXT NOT NULL DEFAULT 'administrator';
+        ALTER TABLE auth.camp_admin_accounts ADD COLUMN IF NOT EXISTS locale TEXT NOT NULL DEFAULT 'ru';
+        ALTER TABLE auth.camp_admin_accounts ADD COLUMN IF NOT EXISTS notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+        ALTER TABLE auth.camp_admin_accounts ADD COLUMN IF NOT EXISTS telegram_user_id BIGINT;
+        ALTER TABLE auth.camp_admin_accounts ADD COLUMN IF NOT EXISTS telegram_chat_id BIGINT;
+        ALTER TABLE auth.camp_admin_accounts ADD COLUMN IF NOT EXISTS telegram_username TEXT;
+        ALTER TABLE auth.camp_admin_accounts ADD COLUMN IF NOT EXISTS telegram_link_code TEXT;
+        ALTER TABLE auth.camp_admin_accounts ADD COLUMN IF NOT EXISTS telegram_link_code_expires_at TIMESTAMPTZ;
+        ALTER TABLE auth.camp_admin_accounts ADD COLUMN IF NOT EXISTS delegated_from_admin_id INTEGER;
+        ALTER TABLE auth.camp_admin_accounts ADD COLUMN IF NOT EXISTS delegated_until TIMESTAMPTZ;
+        ALTER TABLE auth.camp_admin_accounts ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ;
+        ALTER TABLE auth.camp_admin_accounts ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
+        ALTER TABLE auth.camp_admin_accounts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+        ALTER TABLE crm.camp_admin_links ADD COLUMN IF NOT EXISTS role_key TEXT NOT NULL DEFAULT 'administrator';
+        ALTER TABLE crm.camp_admin_links ADD COLUMN IF NOT EXISTS can_manage_staff BOOLEAN NOT NULL DEFAULT FALSE;
+        ALTER TABLE crm.camp_admin_links ADD COLUMN IF NOT EXISTS is_primary BOOLEAN NOT NULL DEFAULT FALSE;
+        ALTER TABLE crm.camp_admin_links ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+        CREATE TABLE IF NOT EXISTS auth.superadmin_accounts (
+            id SERIAL PRIMARY KEY,
+            login TEXT NOT NULL,
+            password_hash TEXT NOT NULL,
+            display_name TEXT NOT NULL,
+            phone TEXT,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            is_root BOOLEAN NOT NULL DEFAULT FALSE,
+            telegram_user_id BIGINT,
+            telegram_chat_id BIGINT,
+            telegram_username TEXT,
+            telegram_link_code TEXT,
+            telegram_link_code_expires_at TIMESTAMPTZ,
+            created_by_id INTEGER,
+            archived_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_superadmin_accounts_login_unique
+        ON auth.superadmin_accounts((lower(login)))
+        WHERE archived_at IS NULL;
+
+        CREATE TABLE IF NOT EXISTS crm.camp_settings (
+            camp_id INTEGER PRIMARY KEY,
+            time_zone TEXT NOT NULL DEFAULT 'Asia/Irkutsk',
+            booking_hold_hours INTEGER NOT NULL DEFAULT 4,
+            night_release_after_shift_minutes INTEGER NOT NULL DEFAULT 60,
+            escalation_step_minutes INTEGER NOT NULL DEFAULT 15,
+            escalation_repeats_before_manager INTEGER NOT NULL DEFAULT 2,
+            check_in_time TEXT,
+            check_out_time TEXT,
+            cancellation_policy TEXT,
+            arrival_instructions TEXT,
+            payment_instructions TEXT,
+            admin_contact_phone TEXT,
+            support_whatsapp TEXT,
+            support_telegram TEXT,
+            notifications_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS crm.camp_admin_permissions (
+            id BIGSERIAL PRIMARY KEY,
+            admin_id INTEGER NOT NULL,
+            camp_id INTEGER NOT NULL,
+            permission_key TEXT NOT NULL,
+            is_allowed BOOLEAN NOT NULL DEFAULT TRUE,
+            created_by_admin_id INTEGER,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_camp_admin_permissions_unique
+        ON crm.camp_admin_permissions(admin_id, camp_id, permission_key);
+
+        CREATE TABLE IF NOT EXISTS crm.audit_log (
+            id BIGSERIAL PRIMARY KEY,
+            actor_type TEXT NOT NULL,
+            actor_id INTEGER,
+            actor_display TEXT,
+            camp_id INTEGER,
+            target_type TEXT NOT NULL,
+            target_id TEXT,
+            action_type TEXT NOT NULL,
+            action_label TEXT NOT NULL,
+            changed_field TEXT,
+            old_value JSONB,
+            new_value JSONB,
+            comment TEXT,
+            is_sensitive BOOLEAN NOT NULL DEFAULT FALSE,
+            was_auto_applied BOOLEAN NOT NULL DEFAULT FALSE,
+            metadata JSONB,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_crm_audit_log_camp_created
+        ON crm.audit_log(camp_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_crm_audit_log_actor_created
+        ON crm.audit_log(actor_type, actor_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_crm_audit_log_target_created
+        ON crm.audit_log(target_type, target_id, created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS crm.change_requests (
+            id BIGSERIAL PRIMARY KEY,
+            camp_id INTEGER NOT NULL,
+            created_by_admin_id INTEGER NOT NULL,
+            reviewer_admin_id INTEGER,
+            target_type TEXT NOT NULL,
+            target_id TEXT,
+            change_kind TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending_review',
+            summary TEXT,
+            request_comment TEXT,
+            reviewer_comment TEXT,
+            payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+            applied_snapshot JSONB,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            decided_at TIMESTAMPTZ,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_change_requests_camp_status_created
+        ON crm.change_requests(camp_id, status, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_change_requests_reviewer_status
+        ON crm.change_requests(reviewer_admin_id, status, created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS crm.notification_events (
+            id BIGSERIAL PRIMARY KEY,
+            camp_id INTEGER,
+            recipient_scope TEXT NOT NULL DEFAULT 'crm',
+            recipient_admin_id INTEGER,
+            recipient_role_key TEXT,
+            channel TEXT NOT NULL DEFAULT 'in_app',
+            event_type TEXT NOT NULL,
+            title TEXT NOT NULL,
+            body TEXT NOT NULL,
+            action_url TEXT,
+            action_payload JSONB,
+            severity TEXT NOT NULL DEFAULT 'info',
+            status TEXT NOT NULL DEFAULT 'new',
+            metadata JSONB,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            read_at TIMESTAMPTZ,
+            closed_at TIMESTAMPTZ
+        );
+        CREATE INDEX IF NOT EXISTS idx_notification_events_recipient_created
+        ON crm.notification_events(recipient_admin_id, status, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_notification_events_scope_created
+        ON crm.notification_events(recipient_scope, status, created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS crm.notification_preferences (
+            id BIGSERIAL PRIMARY KEY,
+            admin_id INTEGER NOT NULL,
+            camp_id INTEGER,
+            event_type TEXT NOT NULL,
+            channel TEXT NOT NULL,
+            is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_notification_preferences_unique
+        ON crm.notification_preferences(admin_id, camp_id, event_type, channel);
+
+        CREATE TABLE IF NOT EXISTS crm.shift_schedule_rules (
+            id BIGSERIAL PRIMARY KEY,
+            camp_id INTEGER NOT NULL,
+            admin_id INTEGER NOT NULL,
+            weekday SMALLINT NOT NULL,
+            starts_at TIME NOT NULL,
+            ends_at TIME NOT NULL,
+            is_night_shift BOOLEAN NOT NULL DEFAULT FALSE,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_by_admin_id INTEGER,
+            comment TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_shift_schedule_rules_camp_weekday
+        ON crm.shift_schedule_rules(camp_id, weekday, is_active);
+
+        CREATE TABLE IF NOT EXISTS crm.shift_assignments (
+            id BIGSERIAL PRIMARY KEY,
+            camp_id INTEGER NOT NULL,
+            admin_id INTEGER NOT NULL,
+            starts_at TIMESTAMPTZ NOT NULL,
+            ends_at TIMESTAMPTZ NOT NULL,
+            status TEXT NOT NULL DEFAULT 'scheduled',
+            source TEXT NOT NULL DEFAULT 'manual',
+            comment TEXT,
+            created_by_admin_id INTEGER,
+            confirmed_by_admin_id INTEGER,
+            confirmed_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_shift_assignments_camp_period
+        ON crm.shift_assignments(camp_id, starts_at, ends_at);
+        CREATE INDEX IF NOT EXISTS idx_shift_assignments_admin_period
+        ON crm.shift_assignments(admin_id, starts_at, ends_at);
+
+        CREATE TABLE IF NOT EXISTS crm.shift_handoffs (
+            id BIGSERIAL PRIMARY KEY,
+            camp_id INTEGER NOT NULL,
+            from_admin_id INTEGER NOT NULL,
+            to_admin_id INTEGER NOT NULL,
+            starts_at TIMESTAMPTZ NOT NULL,
+            ends_at TIMESTAMPTZ NOT NULL,
+            status TEXT NOT NULL DEFAULT 'active',
+            comment TEXT,
+            created_by_admin_id INTEGER NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_shift_handoffs_camp_period
+        ON crm.shift_handoffs(camp_id, starts_at, ends_at);
+
+        CREATE TABLE IF NOT EXISTS crm.customer_profile_conflicts (
+            id BIGSERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            source_admin_id INTEGER,
+            camp_id INTEGER,
+            phone TEXT NOT NULL,
+            current_name TEXT,
+            current_email TEXT,
+            proposed_name TEXT,
+            proposed_email TEXT,
+            status TEXT NOT NULL DEFAULT 'pending_user_confirmation',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            resolved_at TIMESTAMPTZ,
+            resolution_note TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_customer_profile_conflicts_user_status
+        ON crm.customer_profile_conflicts(user_id, status, created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS crm.notification_templates (
+            id BIGSERIAL PRIMARY KEY,
+            camp_id INTEGER NOT NULL,
+            template_key TEXT NOT NULL,
+            version_number INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            body TEXT NOT NULL,
+            variables_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+            created_by_admin_id INTEGER,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_notification_templates_version_unique
+        ON crm.notification_templates(camp_id, template_key, version_number);
+
+        CREATE TABLE IF NOT EXISTS catalog.camp_media (
+            id BIGSERIAL PRIMARY KEY,
+            camp_id INTEGER NOT NULL,
+            media_type TEXT NOT NULL,
+            url TEXT NOT NULL,
+            sort INTEGER NOT NULL DEFAULT 0,
+            cover BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_camp_media_camp_sort
+        ON catalog.camp_media(camp_id, sort, created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS catalog.room_media (
+            id BIGSERIAL PRIMARY KEY,
+            camp_id INTEGER NOT NULL,
+            room_id INTEGER NOT NULL,
+            media_type TEXT NOT NULL,
+            url TEXT NOT NULL,
+            sort INTEGER NOT NULL DEFAULT 0,
+            cover BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_room_media_room_sort
+        ON catalog.room_media(camp_id, room_id, sort, created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS crm.service_categories (
+            id BIGSERIAL PRIMARY KEY,
+            camp_id INTEGER,
+            name TEXT NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS crm.services (
+            id BIGSERIAL PRIMARY KEY,
+            camp_id INTEGER,
+            category_id BIGINT,
+            provider_name TEXT,
+            provider_contact_phone TEXT,
+            provider_contact_telegram TEXT,
+            responsible_scope TEXT NOT NULL DEFAULT 'shift_admins',
+            responsible_admin_id INTEGER,
+            name TEXT NOT NULL,
+            description TEXT,
+            status TEXT NOT NULL DEFAULT 'draft',
+            requires_booking BOOLEAN NOT NULL DEFAULT FALSE,
+            allows_standalone BOOLEAN NOT NULL DEFAULT TRUE,
+            location_hint TEXT,
+            duration_minutes INTEGER,
+            cover_photo_url TEXT,
+            cover_video_url TEXT,
+            media_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+            created_by_admin_id INTEGER,
+            updated_by_admin_id INTEGER,
+            archived_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_services_camp_status_created
+        ON crm.services(camp_id, status, created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS crm.service_slots (
+            id BIGSERIAL PRIMARY KEY,
+            service_id BIGINT NOT NULL,
+            starts_at TIMESTAMPTZ NOT NULL,
+            ends_at TIMESTAMPTZ NOT NULL,
+            capacity_total INTEGER NOT NULL DEFAULT 1,
+            capacity_available INTEGER NOT NULL DEFAULT 1,
+            price INTEGER,
+            child_price INTEGER,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_service_slots_service_period
+        ON crm.service_slots(service_id, starts_at, ends_at);
+
+        CREATE TABLE IF NOT EXISTS crm.service_orders (
+            id BIGSERIAL PRIMARY KEY,
+            user_id INTEGER,
+            camp_id INTEGER,
+            provider_name TEXT,
+            booking_id INTEGER,
+            status TEXT NOT NULL DEFAULT 'pending',
+            source TEXT NOT NULL DEFAULT 'app',
+            customer_name TEXT,
+            customer_phone TEXT,
+            customer_email TEXT,
+            comment TEXT,
+            total_amount INTEGER,
+            payment_status TEXT NOT NULL DEFAULT 'unpaid',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_service_orders_user_created
+        ON crm.service_orders(user_id, created_at DESC);
+
+        CREATE TABLE IF NOT EXISTS crm.service_order_items (
+            id BIGSERIAL PRIMARY KEY,
+            order_id BIGINT NOT NULL,
+            service_id BIGINT NOT NULL,
+            slot_id BIGINT,
+            service_name TEXT,
+            quantity INTEGER NOT NULL DEFAULT 1,
+            adults INTEGER NOT NULL DEFAULT 1,
+            kids INTEGER NOT NULL DEFAULT 0,
+            starts_at TIMESTAMPTZ,
+            ends_at TIMESTAMPTZ,
+            price INTEGER,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_service_order_items_order
+        ON crm.service_order_items(order_id, created_at DESC);
+        """,
+    ),
 )
 
 

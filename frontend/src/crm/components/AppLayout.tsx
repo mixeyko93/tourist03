@@ -6,8 +6,8 @@ import { clearCrmSession, getCrmSession } from "../session";
 import { crmPath } from "../paths";
 
 const navItems = [
-  { label: "Сводка", path: "/dashboard" },
   { label: "Календарь", path: "/calendar" },
+  { label: "Сводка", path: "/dashboard" },
   { label: "Брони", path: "/bookings" },
   { label: "Номера и цены", path: "/rooms" },
   { label: "Гости", path: "/guests" },
@@ -23,6 +23,7 @@ export default function AppLayout() {
   const [mounted, setMounted] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const session = getCrmSession();
+  const calendarPath = crmPath("/calendar");
 
   useEffect(() => {
     setMounted(true);
@@ -37,7 +38,6 @@ export default function AppLayout() {
     }
   }, [location.pathname]);
 
-  const dashboardPath = crmPath("/dashboard");
   const loginPath = crmPath("/login");
   const navLinks = navItems.map((item) => ({
     ...item,
@@ -54,7 +54,7 @@ export default function AppLayout() {
         <NavLink
           key={item.to}
           to={item.to}
-          end={item.to === dashboardPath}
+          end={item.to === calendarPath}
           className={({ isActive }) =>
             [
               "rounded-2xl border px-4 py-3 text-sm font-medium transition",
