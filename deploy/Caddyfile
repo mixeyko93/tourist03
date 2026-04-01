@@ -4,11 +4,11 @@
 }
 
 http://45.153.71.21 {
-  reverse_proxy app:8000
+  reverse_proxy 127.0.0.1:8000
 }
 
 turist03.ru, www.turist03.ru {
-  reverse_proxy app:8000
+  reverse_proxy 127.0.0.1:8000
 }
 
 superadmin.turist03.ru {
@@ -21,12 +21,12 @@ superadmin.turist03.ru {
   @legacy_superadmin path /superadmin /superadmin/*
   redir @legacy_superadmin /admin/login 302
 
-  reverse_proxy app:8000
+  reverse_proxy 127.0.0.1:8000
 }
 
 crm.turist03.ru {
   @root path /
   redir @root /login 302
 
-  reverse_proxy app:8000
+  reverse_proxy 127.0.0.1:8000
 }
