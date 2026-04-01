@@ -191,6 +191,58 @@ export type CrmService = {
   updated_at?: string | null;
 };
 
+export type CrmStaffRoleMeta = {
+  key: string;
+  label: string;
+};
+
+export type CrmStaffPermissionMeta = {
+  key: string;
+  label: string;
+};
+
+export type CrmStaffMember = {
+  id: number;
+  email: string;
+  display_name: string;
+  phone: string | null;
+  default_role_key: string;
+  role_key: string;
+  role_label: string;
+  can_manage_staff: boolean;
+  is_primary: boolean;
+  is_active: boolean;
+  notifications_enabled: boolean;
+  telegram_chat_id: number | null;
+  telegram_username: string | null;
+  has_telegram_link: boolean;
+  last_seen_at: string | null;
+  delegated_until: string | null;
+  permission_keys: string[];
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type CrmAuditEntry = {
+  id: number;
+  actor_type: string;
+  actor_id: number | null;
+  actor_display: string | null;
+  camp_id: number | null;
+  target_type: string;
+  target_id: string | null;
+  action_type: string;
+  action_label: string;
+  changed_field: string | null;
+  old_value: unknown;
+  new_value: unknown;
+  comment: string | null;
+  is_sensitive: boolean;
+  was_auto_applied: boolean;
+  metadata: unknown;
+  created_at: string;
+};
+
 export type CrmCampProfileUpdatePayload = {
   name: string;
   lake_name?: string;
@@ -250,6 +302,19 @@ export type CrmServiceUpsertPayload = {
   duration_minutes?: number | null;
   cover_photo_url?: string;
   cover_video_url?: string;
+};
+
+export type CrmStaffUpsertPayload = {
+  email: string;
+  display_name: string;
+  phone?: string;
+  password?: string;
+  role_key: string;
+  can_manage_staff: boolean;
+  is_primary: boolean;
+  is_active: boolean;
+  notifications_enabled: boolean;
+  permission_keys: string[];
 };
 
 type AdminSessionPayload = {
@@ -413,6 +478,49 @@ export async function fetchCrmServices(campId: number, signal?: AbortSignal): Pr
   return (await response.json()) as CrmService[];
 }
 
+export async function fetchCrmStaff(
+  campId: number,
+  signal?: AbortSignal,
+): Promise<{ items: CrmStaffMember[]; roles: CrmStaffRoleMeta[]; permissions: CrmStaffPermissionMeta[] }> {
+  const response = await fetch(`/api/admin/camps/${campId}/staff`, {
+    credentials: "same-origin",
+    signal,
+  });
+  await assertOk(response);
+  return (await response.json()) as { items: CrmStaffMember[]; roles: CrmStaffRoleMeta[]; permissions: CrmStaffPermissionMeta[] };
+}
+
+export async function fetchCrmAuditLog(
+  campId: number,
+  params: {
+    search?: string;
+    actorId?: number | null;
+    targetType?: string;
+    limit?: number;
+  },
+  signal?: AbortSignal,
+): Promise<{ items: CrmAuditEntry[]; actors: Array<{ id: number; label: string }>; target_types: string[] }> {
+  const query = new URLSearchParams();
+  if (params.search) {
+    query.set("search", params.search);
+  }
+  if (params.actorId) {
+    query.set("actor_id", String(params.actorId));
+  }
+  if (params.targetType) {
+    query.set("target_type", params.targetType);
+  }
+  if (params.limit) {
+    query.set("limit", String(params.limit));
+  }
+  const response = await fetch(`/api/admin/camps/${campId}/audit-log?${query.toString()}`, {
+    credentials: "same-origin",
+    signal,
+  });
+  await assertOk(response);
+  return (await response.json()) as { items: CrmAuditEntry[]; actors: Array<{ id: number; label: string }>; target_types: string[] };
+}
+
 export async function createCrmBooking(payload: CrmCreateBookingPayload) {
   const response = await fetch("/api/admin/bookings", {
     method: "POST",
@@ -481,6 +589,41 @@ export async function deleteCrmRoom(campId: number, roomId: number) {
   });
   await assertOk(response);
   return (await response.json()) as { ok: boolean };
+}
+
+export async function createCrmStaff(campId: number, payload: CrmStaffUpsertPayload) {
+  const response = await fetch(`/api/admin/camps/${campId}/staff`, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  await assertOk(response);
+  return (await response.json()) as { ok: boolean; id: number; item: CrmStaffMember };
+}
+
+export async function updateCrmStaff(campId: number, staffId: number, payload: CrmStaffUpsertPayload) {
+  const response = await fetch(`/api/admin/camps/${campId}/staff/${staffId}`, {
+    method: "PUT",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  await assertOk(response);
+  return (await response.json()) as { ok: boolean; item: CrmStaffMember };
+}
+
+export async function issueCrmStaffTelegramLink(campId: number, staffId: number) {
+  const response = await fetch(`/api/admin/camps/${campId}/staff/${staffId}/telegram-link`, {
+    method: "POST",
+    credentials: "same-origin",
+  });
+  await assertOk(response);
+  return (await response.json()) as { ok: boolean; code: string };
 }
 
 export async function createCrmService(campId: number, payload: CrmServiceUpsertPayload) {

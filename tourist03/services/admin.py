@@ -5,12 +5,14 @@ from fastapi import Depends, HTTPException, Request, status
 
 from tourist03.booking_db_errors import BookingConflictError, BookingValidationError
 from tourist03.domain import bookings as booking_domain
+from tourist03.domain import crm as crm_domain
 from tourist03.repositories import admin as admin_repo
 from tourist03.schemas import (
     AdminCampProfileUpdateRequest,
     AdminCreateBookingRequest,
     AdminLoginRequest,
     AdminRoomUpsertRequest,
+    AdminStaffUpsertRequest,
     AdminServiceUpsertRequest,
     BookingAdminUpdateRequest,
 )
@@ -19,6 +21,8 @@ from tourist03.security import (
     _get_admin_camp_ids,
     _normalize_phone,
     get_current_admin,
+    hash_password,
+    issue_admin_telegram_link_code,
     log_crm_audit_event,
     log_user_event,
     verify_password,
@@ -40,6 +44,42 @@ def _ensure_admin_camp_access(admin: dict, camp_id: int) -> list[int]:
     if camp_id not in camp_ids:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа к выбранной базе")
     return camp_ids
+
+
+def _effective_permission_keys(admin_id: int, camp_id: int, *, role_key: Optional[str] = None) -> list[str]:
+    explicit_keys = admin_repo.list_camp_admin_permission_keys(admin_id, camp_id)
+    if explicit_keys:
+        return explicit_keys
+    normalized_role = (role_key or "").strip() or "administrator"
+    return list(crm_domain.DEFAULT_ROLE_PERMISSIONS.get(normalized_role, ()))
+
+
+def _ensure_admin_staff_access(admin: dict, camp_id: int):
+    link = admin_repo.get_admin_camp_link(int(admin["id"]), camp_id)
+    if not link:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа к выбранной базе")
+    permission_keys = _effective_permission_keys(
+        int(admin["id"]),
+        camp_id,
+        role_key=link.get("role_key") or admin.get("default_role_key"),
+    )
+    if not (link.get("can_manage_staff") or "manage_staff_accounts" in permission_keys or "manage_staff_permissions" in permission_keys):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для управления сотрудниками")
+    return link, permission_keys
+
+
+def _ensure_admin_audit_access(admin: dict, camp_id: int):
+    link = admin_repo.get_admin_camp_link(int(admin["id"]), camp_id)
+    if not link:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа к выбранной базе")
+    permission_keys = _effective_permission_keys(
+        int(admin["id"]),
+        camp_id,
+        role_key=link.get("role_key") or admin.get("default_role_key"),
+    )
+    if "view_audit_log" not in permission_keys and not link.get("can_manage_staff"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для просмотра журнала")
+    return link, permission_keys
 
 
 def admin_login(req: AdminLoginRequest, request: Request):
@@ -143,6 +183,19 @@ def _normalize_service_status(status_value: Optional[str]) -> str:
     if normalized in allowed:
         return normalized
     return "draft"
+
+
+def _normalize_staff_permission_keys(permission_keys: list[str]) -> list[str]:
+    allowed = set(crm_domain.STAFF_PERMISSION_KEYS)
+    result: list[str] = []
+    seen: set[str] = set()
+    for permission_key in permission_keys:
+        normalized = str(permission_key or "").strip()
+        if normalized not in allowed or normalized in seen:
+            continue
+        seen.add(normalized)
+        result.append(normalized)
+    return result
 
 
 def api_admin_my_camps(admin: dict = Depends(get_current_admin)):
@@ -533,6 +586,210 @@ def api_admin_update_camp_profile(
 def api_admin_camp_rooms(camp_id: int, admin: dict = Depends(get_current_admin)):
     _ensure_admin_camp_access(admin, camp_id)
     return admin_repo.list_admin_camp_rooms(camp_id)
+
+
+def api_admin_camp_staff(camp_id: int, admin: dict = Depends(get_current_admin)):
+    _ensure_admin_staff_access(admin, camp_id)
+    items = admin_repo.list_admin_staff(camp_id)
+    for item in items:
+        role_key = (item.get("role_key") or item.get("default_role_key") or "administrator").strip() or "administrator"
+        permission_keys = item.get("permission_keys") or list(crm_domain.DEFAULT_ROLE_PERMISSIONS.get(role_key, ()))
+        item["permission_keys"] = permission_keys
+        item["role_label"] = crm_domain.STAFF_ROLE_LABELS.get(role_key, role_key)
+        item["has_telegram_link"] = bool(item.get("telegram_chat_id"))
+    return {
+        "items": items,
+        "roles": [{"key": key, "label": crm_domain.STAFF_ROLE_LABELS[key]} for key in crm_domain.STAFF_ROLE_KEYS],
+        "permissions": [{"key": key, "label": crm_domain.STAFF_PERMISSION_LABELS[key]} for key in crm_domain.STAFF_PERMISSION_KEYS],
+    }
+
+
+def api_admin_create_staff(
+    camp_id: int,
+    payload: AdminStaffUpsertRequest,
+    admin: dict = Depends(get_current_admin),
+):
+    _ensure_admin_staff_access(admin, camp_id)
+    email = str(payload.email).strip().lower()
+    display_name = (payload.display_name or "").strip()
+    if not display_name:
+        raise HTTPException(status_code=400, detail="Укажите имя сотрудника")
+    role_key = (payload.role_key or "").strip() or "administrator"
+    if role_key not in crm_domain.STAFF_ROLE_KEYS:
+        raise HTTPException(status_code=400, detail="Некорректная роль сотрудника")
+    password_raw = (payload.password or "").strip()
+    permission_keys = _normalize_staff_permission_keys(payload.permission_keys or [])
+    if not permission_keys:
+        permission_keys = list(crm_domain.DEFAULT_ROLE_PERMISSIONS.get(role_key, ()))
+
+    try:
+        staff_id = admin_repo.create_or_link_admin_staff(
+            camp_id,
+            {
+                "email": email,
+                "display_name": display_name,
+                "phone": _normalize_phone(payload.phone or ""),
+                "role_key": role_key,
+                "can_manage_staff": bool(payload.can_manage_staff),
+                "is_primary": bool(payload.is_primary),
+                "is_active": bool(payload.is_active),
+                "notifications_enabled": bool(payload.notifications_enabled),
+                "permission_keys": permission_keys,
+            },
+            int(admin["id"]),
+            hash_password(password_raw) if password_raw else None,
+        )
+    except ValueError as exc:
+        if str(exc) == "password_required":
+            raise HTTPException(status_code=400, detail="Для новой учётки задайте пароль") from exc
+        if str(exc) == "already_linked":
+            raise HTTPException(status_code=409, detail="Сотрудник уже привязан к этой базе") from exc
+        raise
+
+    staff = admin_repo.get_admin_staff_member(camp_id, staff_id)
+    log_crm_audit_event(
+        actor_type="camp_admin",
+        actor_id=admin.get("id"),
+        actor_display=admin.get("display_name"),
+        camp_id=camp_id,
+        target_type="staff_account",
+        target_id=staff_id,
+        action_type="staff_create",
+        action_label="Создал учётку сотрудника",
+        new_value=staff,
+        is_sensitive=True,
+        was_auto_applied=True,
+    )
+    return {"ok": True, "id": staff_id, "item": staff}
+
+
+def api_admin_update_staff(
+    camp_id: int,
+    staff_id: int,
+    payload: AdminStaffUpsertRequest,
+    admin: dict = Depends(get_current_admin),
+):
+    _ensure_admin_staff_access(admin, camp_id)
+    before = admin_repo.get_admin_staff_member(camp_id, staff_id)
+    if not before:
+        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+    display_name = (payload.display_name or "").strip()
+    if not display_name:
+        raise HTTPException(status_code=400, detail="Укажите имя сотрудника")
+    role_key = (payload.role_key or "").strip() or "administrator"
+    if role_key not in crm_domain.STAFF_ROLE_KEYS:
+        raise HTTPException(status_code=400, detail="Некорректная роль сотрудника")
+    permission_keys = _normalize_staff_permission_keys(payload.permission_keys or [])
+    if not permission_keys:
+        permission_keys = list(crm_domain.DEFAULT_ROLE_PERMISSIONS.get(role_key, ()))
+
+    try:
+        changed = admin_repo.update_admin_staff(
+            camp_id,
+            staff_id,
+            {
+                "email": str(payload.email).strip().lower(),
+                "display_name": display_name,
+                "phone": _normalize_phone(payload.phone or ""),
+                "role_key": role_key,
+                "can_manage_staff": bool(payload.can_manage_staff),
+                "is_primary": bool(payload.is_primary),
+                "is_active": bool(payload.is_active),
+                "notifications_enabled": bool(payload.notifications_enabled),
+                "permission_keys": permission_keys,
+            },
+            int(admin["id"]),
+            hash_password((payload.password or "").strip()) if (payload.password or "").strip() else None,
+        )
+    except ValueError as exc:
+        if str(exc) == "email_conflict":
+            raise HTTPException(status_code=409, detail="Учётка с таким email уже существует") from exc
+        raise
+    if not changed:
+        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+    after = admin_repo.get_admin_staff_member(camp_id, staff_id)
+    log_crm_audit_event(
+        actor_type="camp_admin",
+        actor_id=admin.get("id"),
+        actor_display=admin.get("display_name"),
+        camp_id=camp_id,
+        target_type="staff_account",
+        target_id=staff_id,
+        action_type="staff_update",
+        action_label="Обновил учётку сотрудника",
+        old_value=before,
+        new_value=after,
+        is_sensitive=True,
+        was_auto_applied=True,
+    )
+    return {"ok": True, "item": after}
+
+
+def api_admin_issue_staff_telegram_link(
+    camp_id: int,
+    staff_id: int,
+    admin: dict = Depends(get_current_admin),
+):
+    _ensure_admin_staff_access(admin, camp_id)
+    staff = admin_repo.get_admin_staff_member(camp_id, staff_id)
+    if not staff:
+        raise HTTPException(status_code=404, detail="Сотрудник не найден")
+    code = issue_admin_telegram_link_code(int(staff_id))
+    log_crm_audit_event(
+        actor_type="camp_admin",
+        actor_id=admin.get("id"),
+        actor_display=admin.get("display_name"),
+        camp_id=camp_id,
+        target_type="staff_account",
+        target_id=staff_id,
+        action_type="staff_telegram_link_issue",
+        action_label="Сгенерировал код привязки Telegram",
+        comment=f"Код выдан для {staff.get('display_name') or staff.get('email')}",
+        is_sensitive=False,
+        was_auto_applied=True,
+    )
+    return {"ok": True, "code": code}
+
+
+def api_admin_audit_log(
+    camp_id: int,
+    search: Optional[str] = None,
+    actor_id: Optional[int] = None,
+    target_type: Optional[str] = None,
+    limit: int = 200,
+    admin: dict = Depends(get_current_admin),
+):
+    _ensure_admin_audit_access(admin, camp_id)
+    items = admin_repo.list_admin_audit_log(
+        camp_id,
+        search=search,
+        actor_id=actor_id,
+        target_type=target_type,
+        limit=limit,
+    )
+    actors = []
+    seen_actors: set[int] = set()
+    target_types: set[str] = set()
+    for item in items:
+        actor_value = item.get("actor_id")
+        if actor_value is not None:
+            actor_int = int(actor_value)
+            if actor_int not in seen_actors:
+                seen_actors.add(actor_int)
+                actors.append(
+                    {
+                        "id": actor_int,
+                        "label": item.get("actor_display") or f"Сотрудник #{actor_int}",
+                    }
+                )
+        target_type_value = str(item.get("target_type") or "").strip()
+        if target_type_value:
+            target_types.add(target_type_value)
+    return {
+        "items": items,
+        "actors": actors,
+        "target_types": sorted(target_types),
+    }
 
 
 def api_admin_camp_services(camp_id: int, admin: dict = Depends(get_current_admin)):

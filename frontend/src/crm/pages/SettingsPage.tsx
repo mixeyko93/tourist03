@@ -1,9 +1,38 @@
-import { Bell, Building2, ChevronDown, Link2, MapPinHouse, Phone, Save, ShieldCheck } from "lucide-react";
-import { useEffect, useState, type FormEvent } from "react";
+import {
+  Bell,
+  Building2,
+  ChevronDown,
+  FileSpreadsheet,
+  Link2,
+  MapPinHouse,
+  Phone,
+  Save,
+  Search,
+  ShieldCheck,
+  Users2,
+} from "lucide-react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { EmptyState } from "../components/EmptyState";
+import { ModalShell } from "../components/ModalShell";
 import { PageMotion } from "../components/PageMotion";
 import { SectionHeading } from "../components/SectionHeading";
-import { fetchCrmCampProfile, fetchCrmCamps, saveCrmCampProfile, type CrmCamp, type CrmCampProfileUpdatePayload } from "../session";
+import {
+  createCrmStaff,
+  fetchCrmAuditLog,
+  fetchCrmCampProfile,
+  fetchCrmCamps,
+  fetchCrmStaff,
+  issueCrmStaffTelegramLink,
+  saveCrmCampProfile,
+  updateCrmStaff,
+  type CrmAuditEntry,
+  type CrmCamp,
+  type CrmCampProfileUpdatePayload,
+  type CrmStaffMember,
+  type CrmStaffPermissionMeta,
+  type CrmStaffRoleMeta,
+  type CrmStaffUpsertPayload,
+} from "../session";
 
 type ProfileForm = {
   name: string;
@@ -24,6 +53,21 @@ type ProfileForm = {
   notificationsEnabled: boolean;
 };
 
+type StaffForm = {
+  email: string;
+  displayName: string;
+  phone: string;
+  password: string;
+  roleKey: string;
+  canManageStaff: boolean;
+  isPrimary: boolean;
+  isActive: boolean;
+  notificationsEnabled: boolean;
+  permissionKeys: string[];
+};
+
+type SettingsTab = "profile" | "team" | "audit";
+
 const emptyProfileForm: ProfileForm = {
   name: "",
   lakeName: "",
@@ -42,6 +86,51 @@ const emptyProfileForm: ProfileForm = {
   supportTelegram: "",
   notificationsEnabled: true,
 };
+
+const defaultRolePermissions: Record<string, string[]> = {
+  chief_manager: [
+    "manage_staff_accounts",
+    "manage_staff_permissions",
+    "manage_shift_schedule",
+    "manage_camp_visibility",
+    "manage_pricing",
+    "manage_cancellation_policy",
+    "manage_rooms",
+    "manage_services",
+    "manage_templates",
+    "manage_notifications",
+    "manage_bookings",
+    "manage_payments",
+    "view_audit_log",
+    "export_data",
+  ],
+  administrator: [
+    "manage_staff_accounts",
+    "manage_staff_permissions",
+    "manage_shift_schedule",
+    "manage_camp_visibility",
+    "manage_pricing",
+    "manage_cancellation_policy",
+    "manage_rooms",
+    "manage_services",
+    "manage_templates",
+    "manage_notifications",
+    "manage_bookings",
+    "manage_payments",
+    "view_audit_log",
+    "export_data",
+  ],
+  booking_manager: ["manage_bookings", "manage_payments", "manage_notifications", "view_audit_log", "export_data"],
+  content_manager: ["manage_rooms", "manage_services", "manage_templates", "manage_camp_visibility", "view_audit_log"],
+  finance_manager: ["manage_payments", "view_audit_log", "export_data"],
+  viewer: ["view_audit_log"],
+};
+
+const tabOptions: Array<{ key: SettingsTab; label: string }> = [
+  { key: "profile", label: "Профиль базы" },
+  { key: "team", label: "Команда" },
+  { key: "audit", label: "Журнал действий" },
+];
 
 function mapProfileForm(payload: Awaited<ReturnType<typeof fetchCrmCampProfile>>): ProfileForm {
   return {
@@ -85,20 +174,125 @@ function toProfilePayload(form: ProfileForm): CrmCampProfileUpdatePayload {
   };
 }
 
+function createEmptyStaffForm(roleKey = "administrator"): StaffForm {
+  return {
+    email: "",
+    displayName: "",
+    phone: "",
+    password: "",
+    roleKey,
+    canManageStaff: roleKey === "chief_manager" || roleKey === "administrator",
+    isPrimary: false,
+    isActive: true,
+    notificationsEnabled: true,
+    permissionKeys: [...(defaultRolePermissions[roleKey] || [])],
+  };
+}
+
+function mapStaffForm(staff: CrmStaffMember): StaffForm {
+  return {
+    email: staff.email,
+    displayName: staff.display_name,
+    phone: staff.phone || "",
+    password: "",
+    roleKey: staff.role_key || "administrator",
+    canManageStaff: staff.can_manage_staff,
+    isPrimary: staff.is_primary,
+    isActive: staff.is_active,
+    notificationsEnabled: staff.notifications_enabled,
+    permissionKeys: [...staff.permission_keys],
+  };
+}
+
+function toStaffPayload(form: StaffForm): CrmStaffUpsertPayload {
+  return {
+    email: form.email,
+    display_name: form.displayName,
+    phone: form.phone || undefined,
+    password: form.password || undefined,
+    role_key: form.roleKey,
+    can_manage_staff: form.canManageStaff,
+    is_primary: form.isPrimary,
+    is_active: form.isActive,
+    notifications_enabled: form.notificationsEnabled,
+    permission_keys: form.permissionKeys,
+  };
+}
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) {
+    return "Не указано";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function downloadCsv(filename: string, rows: Array<Record<string, string | number | boolean | null | undefined>>) {
+  if (!rows.length || typeof window === "undefined") {
+    return;
+  }
+  const headers = Object.keys(rows[0]);
+  const escapeCell = (value: string | number | boolean | null | undefined) =>
+    `"${String(value ?? "").replaceAll('"', '""')}"`;
+  const content = [headers.join(";"), ...rows.map((row) => headers.map((header) => escapeCell(row[header])).join(";"))].join("\n");
+  const blob = new Blob([`\ufeff${content}`], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 export default function SettingsPage() {
+  const [activeTab, setActiveTab] = useState<SettingsTab>("profile");
   const [camps, setCamps] = useState<CrmCamp[]>([]);
   const [selectedCampId, setSelectedCampId] = useState<number | null>(null);
-  const [form, setForm] = useState<ProfileForm>(emptyProfileForm);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
+  const [isBootLoading, setIsBootLoading] = useState(true);
+  const [profileForm, setProfileForm] = useState<ProfileForm>(emptyProfileForm);
+  const [isProfileLoading, setIsProfileLoading] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState("");
+  const [profileSuccess, setProfileSuccess] = useState("");
+  const [teamItems, setTeamItems] = useState<CrmStaffMember[]>([]);
+  const [teamRoles, setTeamRoles] = useState<CrmStaffRoleMeta[]>([]);
+  const [teamPermissions, setTeamPermissions] = useState<CrmStaffPermissionMeta[]>([]);
+  const [teamSearch, setTeamSearch] = useState("");
+  const [teamError, setTeamError] = useState("");
+  const [teamSuccess, setTeamSuccess] = useState("");
+  const [isTeamLoading, setIsTeamLoading] = useState(false);
+  const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
+  const [editingStaff, setEditingStaff] = useState<CrmStaffMember | null>(null);
+  const [staffForm, setStaffForm] = useState<StaffForm>(createEmptyStaffForm());
+  const [staffFormError, setStaffFormError] = useState("");
+  const [isSavingStaff, setIsSavingStaff] = useState(false);
+  const [telegramCode, setTelegramCode] = useState("");
+  const [issuingTelegramCodeId, setIssuingTelegramCodeId] = useState<number | null>(null);
+  const [auditItems, setAuditItems] = useState<CrmAuditEntry[]>([]);
+  const [auditActors, setAuditActors] = useState<Array<{ id: number; label: string }>>([]);
+  const [auditTargetTypes, setAuditTargetTypes] = useState<string[]>([]);
+  const [auditSearch, setAuditSearch] = useState("");
+  const [auditActorId, setAuditActorId] = useState<number | null>(null);
+  const [auditTargetType, setAuditTargetType] = useState("");
+  const [auditError, setAuditError] = useState("");
+  const [isAuditLoading, setIsAuditLoading] = useState(false);
+  const [selectedAuditEntry, setSelectedAuditEntry] = useState<CrmAuditEntry | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
-    setIsLoading(true);
-    setErrorMessage("");
+    setIsBootLoading(true);
     fetchCrmCamps(controller.signal)
       .then((items) => {
         setCamps(items);
@@ -116,65 +310,219 @@ export default function SettingsPage() {
         if (controller.signal.aborted) {
           return;
         }
-        setErrorMessage(error instanceof Error ? error.message : "Не удалось загрузить список баз");
+        setProfileError(error instanceof Error ? error.message : "Не удалось загрузить список баз");
         setCamps([]);
         setSelectedCampId(null);
       })
       .finally(() => {
         if (!controller.signal.aborted) {
-          setIsLoading(false);
+          setIsBootLoading(false);
         }
       });
-
     return () => controller.abort();
   }, [reloadKey]);
 
   useEffect(() => {
     if (!selectedCampId) {
-      setForm(emptyProfileForm);
+      setProfileForm(emptyProfileForm);
       return;
     }
     const controller = new AbortController();
-    setIsLoading(true);
-    setErrorMessage("");
-    setSuccessMessage("");
+    setIsProfileLoading(true);
+    setProfileError("");
+    setProfileSuccess("");
     fetchCrmCampProfile(selectedCampId, controller.signal)
       .then((payload) => {
-        setForm(mapProfileForm(payload));
+        setProfileForm(mapProfileForm(payload));
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) {
           return;
         }
-        setErrorMessage(error instanceof Error ? error.message : "Не удалось загрузить профиль базы");
-        setForm(emptyProfileForm);
+        setProfileError(error instanceof Error ? error.message : "Не удалось загрузить профиль базы");
+        setProfileForm(emptyProfileForm);
       })
       .finally(() => {
         if (!controller.signal.aborted) {
-          setIsLoading(false);
+          setIsProfileLoading(false);
         }
       });
-
     return () => controller.abort();
   }, [selectedCampId, reloadKey]);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  useEffect(() => {
+    if (!selectedCampId || activeTab !== "team") {
+      return;
+    }
+    const controller = new AbortController();
+    setIsTeamLoading(true);
+    setTeamError("");
+    fetchCrmStaff(selectedCampId, controller.signal)
+      .then((payload) => {
+        setTeamItems(payload.items);
+        setTeamRoles(payload.roles);
+        setTeamPermissions(payload.permissions);
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+        setTeamError(error instanceof Error ? error.message : "Не удалось загрузить команду базы");
+        setTeamItems([]);
+        setTeamRoles([]);
+        setTeamPermissions([]);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setIsTeamLoading(false);
+        }
+      });
+    return () => controller.abort();
+  }, [selectedCampId, activeTab, reloadKey]);
+
+  useEffect(() => {
+    if (!selectedCampId || activeTab !== "audit") {
+      return;
+    }
+    const controller = new AbortController();
+    setIsAuditLoading(true);
+    setAuditError("");
+    fetchCrmAuditLog(
+      selectedCampId,
+      {
+        search: auditSearch || undefined,
+        actorId: auditActorId,
+        targetType: auditTargetType || undefined,
+        limit: 250,
+      },
+      controller.signal,
+    )
+      .then((payload) => {
+        setAuditItems(payload.items);
+        setAuditActors(payload.actors);
+        setAuditTargetTypes(payload.target_types);
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) {
+          return;
+        }
+        setAuditError(error instanceof Error ? error.message : "Не удалось загрузить журнал действий");
+        setAuditItems([]);
+        setAuditActors([]);
+        setAuditTargetTypes([]);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setIsAuditLoading(false);
+        }
+      });
+    return () => controller.abort();
+  }, [selectedCampId, activeTab, auditSearch, auditActorId, auditTargetType, reloadKey]);
+
+  const filteredTeamItems = useMemo(() => {
+    const query = teamSearch.trim().toLowerCase();
+    if (!query) {
+      return teamItems;
+    }
+    return teamItems.filter((staff) =>
+      [staff.display_name, staff.email, staff.phone, staff.role_label].filter(Boolean).join(" ").toLowerCase().includes(query),
+    );
+  }, [teamItems, teamSearch]);
+
+  async function handleProfileSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedCampId) {
-      setErrorMessage("Сначала выберите базу.");
+      setProfileError("Сначала выберите базу.");
       return;
     }
     try {
-      setIsSaving(true);
-      setErrorMessage("");
-      setSuccessMessage("");
-      const response = await saveCrmCampProfile(selectedCampId, toProfilePayload(form));
-      setForm(mapProfileForm(response.item));
-      setSuccessMessage("Профиль базы сохранён.");
+      setIsSavingProfile(true);
+      setProfileError("");
+      setProfileSuccess("");
+      const response = await saveCrmCampProfile(selectedCampId, toProfilePayload(profileForm));
+      setProfileForm(mapProfileForm(response.item));
+      setProfileSuccess("Профиль базы сохранён.");
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Не удалось сохранить настройки");
+      setProfileError(error instanceof Error ? error.message : "Не удалось сохранить настройки");
     } finally {
-      setIsSaving(false);
+      setIsSavingProfile(false);
+    }
+  }
+
+  function openCreateStaffModal() {
+    const firstRole = teamRoles[0]?.key || "administrator";
+    setEditingStaff(null);
+    setStaffForm(createEmptyStaffForm(firstRole));
+    setStaffFormError("");
+    setTeamSuccess("");
+    setTelegramCode("");
+    setIsStaffModalOpen(true);
+  }
+
+  function openEditStaffModal(staff: CrmStaffMember) {
+    setEditingStaff(staff);
+    setStaffForm(mapStaffForm(staff));
+    setStaffFormError("");
+    setTelegramCode("");
+    setIsStaffModalOpen(true);
+  }
+
+  async function handleStaffSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedCampId) {
+      setStaffFormError("Сначала выберите базу.");
+      return;
+    }
+    if (!staffForm.email.trim() || !staffForm.displayName.trim()) {
+      setStaffFormError("Заполните email и имя сотрудника.");
+      return;
+    }
+    if (!editingStaff && !staffForm.password.trim()) {
+      setStaffFormError("Для новой учётки нужно задать пароль.");
+      return;
+    }
+    try {
+      setIsSavingStaff(true);
+      setStaffFormError("");
+      setTeamError("");
+      setTeamSuccess("");
+      if (editingStaff) {
+        await updateCrmStaff(selectedCampId, editingStaff.id, toStaffPayload(staffForm));
+        setTeamSuccess(`Учётка ${staffForm.displayName} обновлена.`);
+      } else {
+        await createCrmStaff(selectedCampId, toStaffPayload(staffForm));
+        setTeamSuccess(`Учётка ${staffForm.displayName} создана.`);
+      }
+      setIsStaffModalOpen(false);
+      setEditingStaff(null);
+      setTelegramCode("");
+      setReloadKey((value) => value + 1);
+    } catch (error) {
+      setStaffFormError(error instanceof Error ? error.message : "Не удалось сохранить учётку сотрудника");
+    } finally {
+      setIsSavingStaff(false);
+    }
+  }
+
+  async function handleIssueTelegramCode(staff: CrmStaffMember) {
+    if (!selectedCampId) {
+      return;
+    }
+    try {
+      setIssuingTelegramCodeId(staff.id);
+      setStaffFormError("");
+      setTeamError("");
+      const response = await issueCrmStaffTelegramLink(selectedCampId, staff.id);
+      setTelegramCode(response.code);
+      if (!isStaffModalOpen) {
+        openEditStaffModal(staff);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Не удалось выпустить код привязки Telegram";
+      setTeamError(message);
+      setStaffFormError(message);
+    } finally {
+      setIssuingTelegramCodeId(null);
     }
   }
 
@@ -184,18 +532,18 @@ export default function SettingsPage() {
     <PageMotion className="space-y-6">
       <SectionHeading
         eyebrow="Настройки"
-        title="Профиль базы и правила"
-        description="Живые настройки базы отдыха: основные данные, правила заезда, контакты поддержки и тексты для бронирований."
+        title="Профиль, команда и контроль"
+        description="Живой центр управления базой: данные объекта, команда сотрудников, роли, Telegram-привязки и журнал действий."
       />
 
       <section className="glass-card p-5">
-        <div className="grid gap-3 sm:grid-cols-[minmax(0,280px)_auto] sm:items-center sm:justify-between">
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,280px)_auto] lg:items-center lg:justify-between">
           <div className="relative">
             <select
               className="soft-input appearance-none pr-10 disabled:cursor-not-allowed disabled:opacity-60"
               value={selectedCampId ?? ""}
               onChange={(event) => setSelectedCampId(event.target.value ? Number(event.target.value) : null)}
-              disabled={!hasCampOptions || isLoading}
+              disabled={!hasCampOptions || isBootLoading}
             >
               {hasCampOptions ? (
                 camps.map((camp) => (
@@ -210,176 +558,693 @@ export default function SettingsPage() {
             <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           </div>
 
-          <button type="button" className="soft-button" onClick={() => setReloadKey((value) => value + 1)}>
-            Обновить профиль
-          </button>
+          <div className="flex flex-wrap gap-2">
+            {tabOptions.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                className={`rounded-2xl border px-4 py-2.5 text-sm font-medium transition ${
+                  activeTab === tab.key
+                    ? "border-[#E5D3B3]/30 bg-[#E5D3B3]/10 text-foreground"
+                    : "border-border bg-background/65 text-muted-foreground hover:bg-accent hover:text-foreground"
+                }`}
+                onClick={() => setActiveTab(tab.key)}
+              >
+                {tab.label}
+              </button>
+            ))}
+            <button type="button" className="soft-button" onClick={() => setReloadKey((value) => value + 1)}>
+              Обновить данные
+            </button>
+          </div>
         </div>
       </section>
 
-      {isLoading ? (
-        <section className="glass-card p-6">
-          <EmptyState
-            icon={Building2}
-            title="Загружаем профиль базы"
-            description="Подтягиваем рабочие параметры, правила проживания и контакты поддержки."
-          />
-        </section>
-      ) : !hasCampOptions ? (
+      {!hasCampOptions && !isBootLoading ? (
         <section className="glass-card p-6">
           <EmptyState
             icon={Building2}
             title="Нет доступных баз"
-            description="Когда вам выдадут доступ к базе, её профиль и настройки появятся здесь."
+            description="Когда вам выдадут доступ к базе, её профиль, сотрудники и журнал действий появятся здесь."
           />
         </section>
-      ) : (
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {errorMessage ? (
+      ) : null}
+
+      {activeTab === "profile" && hasCampOptions ? (
+        <>
+          {isProfileLoading ? (
+            <section className="glass-card p-6">
+              <EmptyState
+                icon={Building2}
+                title="Загружаем профиль базы"
+                description="Подтягиваем рабочие параметры, правила проживания и контакты поддержки."
+              />
+            </section>
+          ) : (
+            <form onSubmit={handleProfileSubmit} className="space-y-6">
+              {profileError ? (
+                <section className="rounded-3xl border border-rose-500/30 bg-rose-500/10 px-5 py-4 text-sm text-rose-200">
+                  {profileError}
+                </section>
+              ) : null}
+
+              {profileSuccess ? (
+                <section className="rounded-3xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-4 text-sm text-emerald-200">
+                  {profileSuccess}
+                </section>
+              ) : null}
+
+              <section className="glass-card p-6 md:p-8">
+                <div className="flex items-center gap-3">
+                  <Building2 className="h-5 w-5 text-[#E5D3B3]" />
+                  <h2 className="text-xl font-semibold tracking-[-0.03em] text-foreground">Основная информация</h2>
+                </div>
+
+                <div className="mt-6 grid gap-5 md:grid-cols-2">
+                  <label className="space-y-2">
+                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Название базы отдыха</span>
+                    <input className="soft-input" value={profileForm.name} onChange={(event) => setProfileForm((current) => ({ ...current, name: event.target.value }))} required />
+                  </label>
+                  <label className="space-y-2">
+                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Озеро / локация</span>
+                    <input className="soft-input" value={profileForm.lakeName} onChange={(event) => setProfileForm((current) => ({ ...current, lakeName: event.target.value }))} placeholder="Например: Щучье" />
+                  </label>
+                  <label className="space-y-2 md:col-span-2">
+                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Адрес</span>
+                    <input className="soft-input" value={profileForm.address} onChange={(event) => setProfileForm((current) => ({ ...current, address: event.target.value }))} />
+                  </label>
+                  <label className="space-y-2">
+                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Контактный телефон базы</span>
+                    <input className="soft-input" value={profileForm.phone} onChange={(event) => setProfileForm((current) => ({ ...current, phone: event.target.value }))} />
+                  </label>
+                  <label className="space-y-2">
+                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Сайт базы</span>
+                    <input className="soft-input" value={profileForm.siteUrl} onChange={(event) => setProfileForm((current) => ({ ...current, siteUrl: event.target.value }))} placeholder="https://..." />
+                  </label>
+                  <label className="space-y-2 md:col-span-2">
+                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Описание</span>
+                    <textarea className="soft-input min-h-32 resize-none" value={profileForm.description} onChange={(event) => setProfileForm((current) => ({ ...current, description: event.target.value }))} />
+                  </label>
+                </div>
+              </section>
+
+              <section className="glass-card p-6 md:p-8">
+                <div className="flex items-center gap-3">
+                  <MapPinHouse className="h-5 w-5 text-[#E5D3B3]" />
+                  <h2 className="text-xl font-semibold tracking-[-0.03em] text-foreground">Правила проживания</h2>
+                </div>
+
+                <div className="mt-6 grid gap-5 md:grid-cols-2">
+                  <label className="space-y-2">
+                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Часовой пояс</span>
+                    <input className="soft-input" value={profileForm.timeZone} onChange={(event) => setProfileForm((current) => ({ ...current, timeZone: event.target.value }))} />
+                  </label>
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <label className="space-y-2">
+                      <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Заезд</span>
+                      <input type="time" className="soft-input" value={profileForm.checkInTime} onChange={(event) => setProfileForm((current) => ({ ...current, checkInTime: event.target.value }))} />
+                    </label>
+                    <label className="space-y-2">
+                      <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Выезд</span>
+                      <input type="time" className="soft-input" value={profileForm.checkOutTime} onChange={(event) => setProfileForm((current) => ({ ...current, checkOutTime: event.target.value }))} />
+                    </label>
+                  </div>
+                  <label className="space-y-2 md:col-span-2">
+                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Правила отмены</span>
+                    <textarea className="soft-input min-h-28 resize-none" value={profileForm.cancellationPolicy} onChange={(event) => setProfileForm((current) => ({ ...current, cancellationPolicy: event.target.value }))} />
+                  </label>
+                  <label className="space-y-2 md:col-span-2">
+                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Инструкция перед заездом</span>
+                    <textarea className="soft-input min-h-28 resize-none" value={profileForm.arrivalInstructions} onChange={(event) => setProfileForm((current) => ({ ...current, arrivalInstructions: event.target.value }))} />
+                  </label>
+                  <label className="space-y-2 md:col-span-2">
+                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Инструкция по оплате</span>
+                    <textarea className="soft-input min-h-28 resize-none" value={profileForm.paymentInstructions} onChange={(event) => setProfileForm((current) => ({ ...current, paymentInstructions: event.target.value }))} />
+                  </label>
+                </div>
+              </section>
+
+              <section className="glass-card p-6 md:p-8">
+                <div className="flex items-center gap-3">
+                  <Phone className="h-5 w-5 text-[#E5D3B3]" />
+                  <h2 className="text-xl font-semibold tracking-[-0.03em] text-foreground">Контакты и уведомления</h2>
+                </div>
+
+                <div className="mt-6 grid gap-5 md:grid-cols-2">
+                  <label className="space-y-2">
+                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Телефон администратора</span>
+                    <input className="soft-input" value={profileForm.adminContactPhone} onChange={(event) => setProfileForm((current) => ({ ...current, adminContactPhone: event.target.value }))} />
+                  </label>
+                  <label className="space-y-2">
+                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">WhatsApp поддержки</span>
+                    <input className="soft-input" value={profileForm.supportWhatsapp} onChange={(event) => setProfileForm((current) => ({ ...current, supportWhatsapp: event.target.value }))} />
+                  </label>
+                  <label className="space-y-2">
+                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Telegram поддержки</span>
+                    <input className="soft-input" value={profileForm.supportTelegram} onChange={(event) => setProfileForm((current) => ({ ...current, supportTelegram: event.target.value }))} />
+                  </label>
+                  <label className="flex items-center gap-3 rounded-2xl border border-border bg-background/65 px-4 py-3 md:self-end">
+                    <input type="checkbox" className="h-4 w-4 rounded border-border bg-background" checked={profileForm.notificationsEnabled} onChange={(event) => setProfileForm((current) => ({ ...current, notificationsEnabled: event.target.checked }))} />
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Уведомления базы включены</p>
+                      <p className="text-xs text-muted-foreground">Отключение сохранится в CRM и будет видно в аудите.</p>
+                    </div>
+                  </label>
+                </div>
+
+                <div className="mt-6 grid gap-4 md:grid-cols-3">
+                  <div className="rounded-3xl border border-border bg-background/65 p-4">
+                    <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                      <Bell className="h-4 w-4 text-[#E5D3B3]" />
+                      Уведомления
+                    </div>
+                    <p className="mt-2 text-sm text-muted-foreground">Базовый переключатель уже связан с серверными настройками базы.</p>
+                  </div>
+                  <div className="rounded-3xl border border-border bg-background/65 p-4">
+                    <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                      <Link2 className="h-4 w-4 text-[#E5D3B3]" />
+                      Контакты
+                    </div>
+                    <p className="mt-2 text-sm text-muted-foreground">Эти контакты используются в клиентских уведомлениях и в разделе помощи.</p>
+                  </div>
+                  <div className="rounded-3xl border border-border bg-background/65 p-4">
+                    <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                      <ShieldCheck className="h-4 w-4 text-[#E5D3B3]" />
+                      Аудит
+                    </div>
+                    <p className="mt-2 text-sm text-muted-foreground">Все сохранения профиля уже попадают в журнал действий CRM.</p>
+                  </div>
+                </div>
+              </section>
+
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <button type="submit" className="brand-button gap-2 disabled:cursor-not-allowed disabled:opacity-60" disabled={isSavingProfile}>
+                  <Save className="h-4 w-4" />
+                  {isSavingProfile ? "Сохраняем профиль..." : "Сохранить изменения"}
+                </button>
+                <button type="button" className="soft-button" onClick={() => setReloadKey((value) => value + 1)} disabled={isSavingProfile}>
+                  Сбросить к серверной версии
+                </button>
+              </div>
+            </form>
+          )}
+        </>
+      ) : null}
+
+      {activeTab === "team" && hasCampOptions ? (
+        <div className="space-y-6">
+          <section className="glass-card p-5">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="relative w-full lg:max-w-md">
+                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="search"
+                  className="soft-input pl-11"
+                  placeholder="Поиск по имени, email, телефону или роли"
+                  value={teamSearch}
+                  onChange={(event) => setTeamSearch(event.target.value)}
+                />
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button type="button" className="soft-button" onClick={() => setReloadKey((value) => value + 1)}>
+                  Обновить команду
+                </button>
+                <button type="button" className="brand-button gap-2" onClick={openCreateStaffModal}>
+                  <Users2 className="h-4 w-4" />
+                  Добавить сотрудника
+                </button>
+              </div>
+            </div>
+          </section>
+
+          {teamError ? (
             <section className="rounded-3xl border border-rose-500/30 bg-rose-500/10 px-5 py-4 text-sm text-rose-200">
-              {errorMessage}
+              {teamError}
             </section>
           ) : null}
 
-          {successMessage ? (
+          {teamSuccess ? (
             <section className="rounded-3xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-4 text-sm text-emerald-200">
-              {successMessage}
+              {teamSuccess}
             </section>
           ) : null}
 
-          <section className="glass-card p-6 md:p-8">
-            <div className="flex items-center gap-3">
-              <Building2 className="h-5 w-5 text-[#E5D3B3]" />
-              <h2 className="text-xl font-semibold tracking-[-0.03em] text-foreground">Основная информация</h2>
-            </div>
+          {isTeamLoading ? (
+            <section className="glass-card p-6">
+              <EmptyState icon={Users2} title="Загружаем команду базы" description="Подтягиваем сотрудников, роли, доступы и Telegram-статусы." />
+            </section>
+          ) : filteredTeamItems.length ? (
+            <div className="grid gap-4 xl:grid-cols-2">
+              {filteredTeamItems.map((staff) => (
+                <article key={staff.id} className="glass-card p-5">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <h2 className="truncate text-lg font-semibold tracking-[-0.03em] text-foreground">{staff.display_name}</h2>
+                      <p className="mt-1 truncate text-sm text-muted-foreground">{staff.email}</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <span className="rounded-full border border-[#E5D3B3]/25 bg-[#E5D3B3]/10 px-3 py-1 text-xs font-medium text-[#E5D3B3]">
+                          {staff.role_label}
+                        </span>
+                        <span className={`rounded-full border px-3 py-1 text-xs font-medium ${staff.is_active ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300" : "border-rose-500/25 bg-rose-500/10 text-rose-300"}`}>
+                          {staff.is_active ? "Активен" : "Отключён"}
+                        </span>
+                        {staff.can_manage_staff ? (
+                          <span className="rounded-full border border-sky-500/25 bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-300">
+                            Управляет командой
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
 
-            <div className="mt-6 grid gap-5 md:grid-cols-2">
-              <label className="space-y-2">
-                <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Название базы отдыха</span>
-                <input className="soft-input" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} required />
-              </label>
-              <label className="space-y-2">
-                <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Озеро / локация</span>
-                <input className="soft-input" value={form.lakeName} onChange={(event) => setForm((current) => ({ ...current, lakeName: event.target.value }))} placeholder="Например: Щучье" />
-              </label>
-              <label className="space-y-2 md:col-span-2">
-                <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Адрес</span>
-                <input className="soft-input" value={form.address} onChange={(event) => setForm((current) => ({ ...current, address: event.target.value }))} />
-              </label>
-              <label className="space-y-2">
-                <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Контактный телефон базы</span>
-                <input className="soft-input" value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} />
-              </label>
-              <label className="space-y-2">
-                <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Сайт базы</span>
-                <input className="soft-input" value={form.siteUrl} onChange={(event) => setForm((current) => ({ ...current, siteUrl: event.target.value }))} placeholder="https://..." />
-              </label>
-              <label className="space-y-2 md:col-span-2">
-                <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Описание</span>
-                <textarea className="soft-input min-h-32 resize-none" value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} />
-              </label>
-            </div>
-          </section>
+                    <div className="flex flex-col gap-2 sm:min-w-[150px]">
+                      <button type="button" className="soft-button" onClick={() => openEditStaffModal(staff)}>
+                        Редактировать
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-2xl border border-border bg-background/70 px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-accent"
+                        onClick={() => handleIssueTelegramCode(staff)}
+                        disabled={issuingTelegramCodeId === staff.id}
+                      >
+                        {issuingTelegramCodeId === staff.id ? "Генерируем..." : "Код Telegram"}
+                      </button>
+                    </div>
+                  </div>
 
-          <section className="glass-card p-6 md:p-8">
-            <div className="flex items-center gap-3">
-              <MapPinHouse className="h-5 w-5 text-[#E5D3B3]" />
-              <h2 className="text-xl font-semibold tracking-[-0.03em] text-foreground">Правила проживания</h2>
-            </div>
+                  <div className="mt-5 grid gap-3 md:grid-cols-2">
+                    <div className="rounded-3xl border border-border bg-background/65 p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Телефон</p>
+                      <p className="mt-2 text-sm font-medium text-foreground">{staff.phone || "Не указан"}</p>
+                    </div>
+                    <div className="rounded-3xl border border-border bg-background/65 p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Telegram</p>
+                      <p className="mt-2 text-sm font-medium text-foreground">{staff.has_telegram_link ? `Подключён ${staff.telegram_username ? `(${staff.telegram_username})` : ""}` : "Не подключён"}</p>
+                    </div>
+                    <div className="rounded-3xl border border-border bg-background/65 p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Последний вход</p>
+                      <p className="mt-2 text-sm font-medium text-foreground">{formatDateTime(staff.last_seen_at)}</p>
+                    </div>
+                    <div className="rounded-3xl border border-border bg-background/65 p-4">
+                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Уведомления</p>
+                      <p className="mt-2 text-sm font-medium text-foreground">{staff.notifications_enabled ? "Включены" : "Отключены"}</p>
+                    </div>
+                  </div>
 
-            <div className="mt-6 grid gap-5 md:grid-cols-2">
-              <label className="space-y-2">
-                <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Часовой пояс</span>
-                <input className="soft-input" value={form.timeZone} onChange={(event) => setForm((current) => ({ ...current, timeZone: event.target.value }))} />
-              </label>
-              <div className="grid gap-5 sm:grid-cols-2">
-                <label className="space-y-2">
-                  <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Заезд</span>
-                  <input type="time" className="soft-input" value={form.checkInTime} onChange={(event) => setForm((current) => ({ ...current, checkInTime: event.target.value }))} />
-                </label>
-                <label className="space-y-2">
-                  <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Выезд</span>
-                  <input type="time" className="soft-input" value={form.checkOutTime} onChange={(event) => setForm((current) => ({ ...current, checkOutTime: event.target.value }))} />
-                </label>
+                  <div className="mt-5">
+                    <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Права в этой базе</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {staff.permission_keys.length ? (
+                        staff.permission_keys.map((permissionKey) => {
+                          const label = teamPermissions.find((permission) => permission.key === permissionKey)?.label || permissionKey;
+                          return (
+                            <span key={permissionKey} className="rounded-full border border-border bg-background/70 px-3 py-1 text-xs text-foreground">
+                              {label}
+                            </span>
+                          );
+                        })
+                      ) : (
+                        <span className="rounded-full border border-border bg-background/70 px-3 py-1 text-xs text-muted-foreground">
+                          Отдельные права не назначены
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <section className="glass-card p-6">
+              <EmptyState
+                icon={Users2}
+                title="Команда пока не настроена"
+                description="Создайте сотрудников базы, задайте роли, права и выпустите код привязки Telegram для оперативных уведомлений."
+              />
+            </section>
+          )}
+        </div>
+      ) : null}
+
+      {activeTab === "audit" && hasCampOptions ? (
+        <div className="space-y-6">
+          <section className="glass-card p-5">
+            <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_220px_220px_auto_auto] xl:items-center">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  type="search"
+                  className="soft-input pl-11"
+                  placeholder="Поиск по сотруднику, действию, комментарию или объекту"
+                  value={auditSearch}
+                  onChange={(event) => setAuditSearch(event.target.value)}
+                />
               </div>
-              <label className="space-y-2 md:col-span-2">
-                <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Правила отмены</span>
-                <textarea className="soft-input min-h-28 resize-none" value={form.cancellationPolicy} onChange={(event) => setForm((current) => ({ ...current, cancellationPolicy: event.target.value }))} />
-              </label>
-              <label className="space-y-2 md:col-span-2">
-                <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Инструкция перед заездом</span>
-                <textarea className="soft-input min-h-28 resize-none" value={form.arrivalInstructions} onChange={(event) => setForm((current) => ({ ...current, arrivalInstructions: event.target.value }))} />
-              </label>
-              <label className="space-y-2 md:col-span-2">
-                <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Инструкция по оплате</span>
-                <textarea className="soft-input min-h-28 resize-none" value={form.paymentInstructions} onChange={(event) => setForm((current) => ({ ...current, paymentInstructions: event.target.value }))} />
-              </label>
+              <select className="soft-input" value={auditActorId ?? ""} onChange={(event) => setAuditActorId(event.target.value ? Number(event.target.value) : null)}>
+                <option value="">Все сотрудники</option>
+                {auditActors.map((actor) => (
+                  <option key={actor.id} value={actor.id}>
+                    {actor.label}
+                  </option>
+                ))}
+              </select>
+              <select className="soft-input" value={auditTargetType} onChange={(event) => setAuditTargetType(event.target.value)}>
+                <option value="">Все объекты</option>
+                {auditTargetTypes.map((targetType) => (
+                  <option key={targetType} value={targetType}>
+                    {targetType}
+                  </option>
+                ))}
+              </select>
+              <button type="button" className="soft-button" onClick={() => setReloadKey((value) => value + 1)}>
+                Обновить журнал
+              </button>
+              <button
+                type="button"
+                className="brand-button gap-2"
+                onClick={() =>
+                  downloadCsv(
+                    "crm-audit-log.csv",
+                    auditItems.map((item) => ({
+                      Дата: formatDateTime(item.created_at),
+                      Сотрудник: item.actor_display || item.actor_id || "",
+                      Действие: item.action_label,
+                      Объект: item.target_type,
+                      Идентификатор: item.target_id || "",
+                      Комментарий: item.comment || "",
+                      Чувствительное: item.is_sensitive ? "Да" : "Нет",
+                      Автоприменение: item.was_auto_applied ? "Да" : "Нет",
+                    })),
+                  )
+                }
+                disabled={!auditItems.length}
+              >
+                <FileSpreadsheet className="h-4 w-4" />
+                CSV
+              </button>
             </div>
           </section>
 
-          <section className="glass-card p-6 md:p-8">
-            <div className="flex items-center gap-3">
-              <Phone className="h-5 w-5 text-[#E5D3B3]" />
-              <h2 className="text-xl font-semibold tracking-[-0.03em] text-foreground">Контакты и уведомления</h2>
-            </div>
+          {auditError ? (
+            <section className="rounded-3xl border border-rose-500/30 bg-rose-500/10 px-5 py-4 text-sm text-rose-200">
+              {auditError}
+            </section>
+          ) : null}
 
-            <div className="mt-6 grid gap-5 md:grid-cols-2">
-              <label className="space-y-2">
-                <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Телефон администратора</span>
-                <input className="soft-input" value={form.adminContactPhone} onChange={(event) => setForm((current) => ({ ...current, adminContactPhone: event.target.value }))} />
+          {isAuditLoading ? (
+            <section className="glass-card p-6">
+              <EmptyState icon={ShieldCheck} title="Загружаем журнал действий" description="Подтягиваем сохранения, изменения и служебные операции по выбранной базе." />
+            </section>
+          ) : auditItems.length ? (
+            <div className="space-y-3">
+              {auditItems.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="glass-card w-full p-5 text-left transition hover:border-[#E5D3B3]/30 hover:bg-card/95"
+                  onClick={() => setSelectedAuditEntry(item)}
+                >
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0 space-y-2">
+                      <div className="flex flex-wrap gap-2">
+                        <span className="rounded-full border border-border bg-background/70 px-3 py-1 text-xs text-foreground">
+                          {item.actor_display || `Сотрудник #${item.actor_id ?? "?"}`}
+                        </span>
+                        <span className={`rounded-full border px-3 py-1 text-xs font-medium ${item.is_sensitive ? "border-rose-500/25 bg-rose-500/10 text-rose-300" : "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"}`}>
+                          {item.is_sensitive ? "Чувствительное" : "Обычное"}
+                        </span>
+                        {item.was_auto_applied ? (
+                          <span className="rounded-full border border-sky-500/25 bg-sky-500/10 px-3 py-1 text-xs font-medium text-sky-300">
+                            Применено сразу
+                          </span>
+                        ) : null}
+                      </div>
+                      <h2 className="text-lg font-semibold tracking-[-0.03em] text-foreground">{item.action_label}</h2>
+                      <p className="text-sm text-muted-foreground">
+                        Объект: {item.target_type}
+                        {item.target_id ? ` #${item.target_id}` : ""}
+                      </p>
+                      {item.comment ? <p className="line-clamp-2 text-sm text-foreground/90">{item.comment}</p> : null}
+                    </div>
+                    <p className="shrink-0 text-sm text-muted-foreground">{formatDateTime(item.created_at)}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <section className="glass-card p-6">
+              <EmptyState icon={ShieldCheck} title="Журнал действий пока пуст" description="Когда сотрудники начнут вносить изменения, здесь появится хронология всех операций по базе." />
+            </section>
+          )}
+        </div>
+      ) : null}
+
+      <ModalShell
+        open={isStaffModalOpen}
+        onClose={() => {
+          setIsStaffModalOpen(false);
+          setEditingStaff(null);
+          setStaffFormError("");
+          setTelegramCode("");
+        }}
+        title={editingStaff ? "Редактирование сотрудника" : "Новая учётка сотрудника"}
+        description="Задайте роль, права и параметры уведомлений для команды базы. Все изменения попадут в аудит."
+      >
+        <form className="space-y-5" onSubmit={handleStaffSubmit}>
+          {staffFormError ? (
+            <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{staffFormError}</div>
+          ) : null}
+
+          {telegramCode ? (
+            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+              Код привязки Telegram: <span className="font-semibold text-emerald-100">{telegramCode}</span>
+            </div>
+          ) : null}
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="space-y-2">
+              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Email</span>
+              <input className="soft-input" value={staffForm.email} onChange={(event) => setStaffForm((current) => ({ ...current, email: event.target.value }))} required />
+            </label>
+            <label className="space-y-2">
+              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Имя сотрудника</span>
+              <input className="soft-input" value={staffForm.displayName} onChange={(event) => setStaffForm((current) => ({ ...current, displayName: event.target.value }))} required />
+            </label>
+            <label className="space-y-2">
+              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Телефон</span>
+              <input className="soft-input" value={staffForm.phone} onChange={(event) => setStaffForm((current) => ({ ...current, phone: event.target.value }))} />
+            </label>
+            <label className="space-y-2">
+              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                {editingStaff ? "Новый пароль" : "Пароль"}
+              </span>
+              <input
+                type="password"
+                className="soft-input"
+                value={staffForm.password}
+                onChange={(event) => setStaffForm((current) => ({ ...current, password: event.target.value }))}
+                placeholder={editingStaff ? "Оставьте пустым, если не нужно менять" : ""}
+              />
+            </label>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="space-y-2">
+              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Роль</span>
+              <select
+                className="soft-input"
+                value={staffForm.roleKey}
+                onChange={(event) => {
+                  const nextRole = event.target.value;
+                  setStaffForm((current) => ({
+                    ...current,
+                    roleKey: nextRole,
+                    canManageStaff: nextRole === "chief_manager" || nextRole === "administrator" ? true : current.canManageStaff,
+                    permissionKeys: [...(defaultRolePermissions[nextRole] || [])],
+                  }));
+                }}
+              >
+                {teamRoles.map((role) => (
+                  <option key={role.key} value={role.key}>
+                    {role.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="flex items-center gap-3 rounded-2xl border border-border bg-background/65 px-4 py-3">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-border bg-background"
+                  checked={staffForm.canManageStaff}
+                  onChange={(event) => setStaffForm((current) => ({ ...current, canManageStaff: event.target.checked }))}
+                />
+                <span className="text-sm text-foreground">Управляет сотрудниками</span>
               </label>
-              <label className="space-y-2">
-                <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">WhatsApp поддержки</span>
-                <input className="soft-input" value={form.supportWhatsapp} onChange={(event) => setForm((current) => ({ ...current, supportWhatsapp: event.target.value }))} />
+              <label className="flex items-center gap-3 rounded-2xl border border-border bg-background/65 px-4 py-3">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-border bg-background"
+                  checked={staffForm.isPrimary}
+                  onChange={(event) => setStaffForm((current) => ({ ...current, isPrimary: event.target.checked }))}
+                />
+                <span className="text-sm text-foreground">Главный в базе</span>
               </label>
-              <label className="space-y-2">
-                <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Telegram поддержки</span>
-                <input className="soft-input" value={form.supportTelegram} onChange={(event) => setForm((current) => ({ ...current, supportTelegram: event.target.value }))} />
+              <label className="flex items-center gap-3 rounded-2xl border border-border bg-background/65 px-4 py-3">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-border bg-background"
+                  checked={staffForm.isActive}
+                  onChange={(event) => setStaffForm((current) => ({ ...current, isActive: event.target.checked }))}
+                />
+                <span className="text-sm text-foreground">Учётка активна</span>
               </label>
-              <label className="flex items-center gap-3 rounded-2xl border border-border bg-background/65 px-4 py-3 md:self-end">
-                <input type="checkbox" className="h-4 w-4 rounded border-border bg-background" checked={form.notificationsEnabled} onChange={(event) => setForm((current) => ({ ...current, notificationsEnabled: event.target.checked }))} />
+              <label className="flex items-center gap-3 rounded-2xl border border-border bg-background/65 px-4 py-3">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-border bg-background"
+                  checked={staffForm.notificationsEnabled}
+                  onChange={(event) => setStaffForm((current) => ({ ...current, notificationsEnabled: event.target.checked }))}
+                />
+                <span className="text-sm text-foreground">Уведомления включены</span>
+              </label>
+            </div>
+          </div>
+
+          <div className="space-y-3 rounded-3xl border border-border bg-background/65 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium text-foreground">Права в рамках базы</p>
+                <p className="text-sm text-muted-foreground">Можно быстро заполнить права ролью и затем точечно поправить чекбоксы.</p>
+              </div>
+              <button
+                type="button"
+                className="soft-button"
+                onClick={() => setStaffForm((current) => ({ ...current, permissionKeys: [...(defaultRolePermissions[current.roleKey] || [])] }))}
+              >
+                Заполнить по роли
+              </button>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              {teamPermissions.map((permission) => {
+                const checked = staffForm.permissionKeys.includes(permission.key);
+                return (
+                  <label key={permission.key} className="flex items-center gap-3 rounded-2xl border border-border bg-card/60 px-4 py-3">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-border bg-background"
+                      checked={checked}
+                      onChange={(event) =>
+                        setStaffForm((current) => ({
+                          ...current,
+                          permissionKeys: event.target.checked
+                            ? [...current.permissionKeys, permission.key]
+                            : current.permissionKeys.filter((item) => item !== permission.key),
+                        }))
+                      }
+                    />
+                    <span className="text-sm text-foreground">{permission.label}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          {editingStaff ? (
+            <div className="rounded-3xl border border-border bg-background/65 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="text-sm font-medium text-foreground">Уведомления базы включены</p>
-                  <p className="text-xs text-muted-foreground">Отключение сохранится в CRM и будет видно в аудите.</p>
+                  <p className="text-sm font-medium text-foreground">Привязка к staff-боту</p>
+                  <p className="text-sm text-muted-foreground">Сгенерируйте одноразовый код, чтобы сотрудник подключил Telegram к своей учётке.</p>
                 </div>
-              </label>
-            </div>
-
-            <div className="mt-6 grid gap-4 md:grid-cols-3">
-              <div className="rounded-3xl border border-border bg-background/65 p-4">
-                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                  <Bell className="h-4 w-4 text-[#E5D3B3]" />
-                  Уведомления
-                </div>
-                <p className="mt-2 text-sm text-muted-foreground">Базовый переключатель already wired к серверным настройкам базы.</p>
-              </div>
-              <div className="rounded-3xl border border-border bg-background/65 p-4">
-                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                  <Link2 className="h-4 w-4 text-[#E5D3B3]" />
-                  Контакты
-                </div>
-                <p className="mt-2 text-sm text-muted-foreground">Эти контакты будут использоваться в клиентских уведомлениях и в разделе помощи.</p>
-              </div>
-              <div className="rounded-3xl border border-border bg-background/65 p-4">
-                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                  <ShieldCheck className="h-4 w-4 text-[#E5D3B3]" />
-                  Аудит
-                </div>
-                <p className="mt-2 text-sm text-muted-foreground">Все сохранения профиля уже попадают в журнал действий CRM.</p>
+                <button
+                  type="button"
+                  className="soft-button"
+                  onClick={() => editingStaff && handleIssueTelegramCode(editingStaff)}
+                  disabled={issuingTelegramCodeId === editingStaff.id}
+                >
+                  {issuingTelegramCodeId === editingStaff.id ? "Генерируем..." : "Выдать код"}
+                </button>
               </div>
             </div>
-          </section>
+          ) : null}
 
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <button type="submit" className="brand-button gap-2 disabled:cursor-not-allowed disabled:opacity-60" disabled={isSaving}>
-              <Save className="h-4 w-4" />
-              {isSaving ? "Сохраняем профиль..." : "Сохранить изменения"}
+          <div className="flex flex-col gap-3 border-t border-border pt-2 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              className="soft-button"
+              onClick={() => {
+                setIsStaffModalOpen(false);
+                setEditingStaff(null);
+                setStaffFormError("");
+                setTelegramCode("");
+              }}
+            >
+              Отмена
             </button>
-            <button type="button" className="soft-button" onClick={() => setReloadKey((value) => value + 1)} disabled={isSaving}>
-              Сбросить к серверной версии
+            <button type="submit" className="brand-button justify-center gap-2" disabled={isSavingStaff}>
+              <Save className="h-4 w-4" />
+              {isSavingStaff ? "Сохраняем..." : editingStaff ? "Сохранить сотрудника" : "Создать учётку"}
             </button>
           </div>
         </form>
-      )}
+      </ModalShell>
+
+      <ModalShell
+        open={Boolean(selectedAuditEntry)}
+        onClose={() => setSelectedAuditEntry(null)}
+        title={selectedAuditEntry?.action_label || "Детали действия"}
+        description="Полная запись из журнала действий по выбранной базе."
+      >
+        {selectedAuditEntry ? (
+          <div className="space-y-5">
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-3xl border border-border bg-background/65 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Сотрудник</p>
+                <p className="mt-2 text-sm font-medium text-foreground">{selectedAuditEntry.actor_display || `#${selectedAuditEntry.actor_id ?? "?"}`}</p>
+              </div>
+              <div className="rounded-3xl border border-border bg-background/65 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Дата</p>
+                <p className="mt-2 text-sm font-medium text-foreground">{formatDateTime(selectedAuditEntry.created_at)}</p>
+              </div>
+              <div className="rounded-3xl border border-border bg-background/65 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Объект</p>
+                <p className="mt-2 text-sm font-medium text-foreground">
+                  {selectedAuditEntry.target_type}
+                  {selectedAuditEntry.target_id ? ` #${selectedAuditEntry.target_id}` : ""}
+                </p>
+              </div>
+              <div className="rounded-3xl border border-border bg-background/65 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Режим</p>
+                <p className="mt-2 text-sm font-medium text-foreground">
+                  {selectedAuditEntry.is_sensitive ? "Чувствительное изменение" : "Обычное действие"}
+                  {selectedAuditEntry.was_auto_applied ? " / применено сразу" : ""}
+                </p>
+              </div>
+            </div>
+
+            {selectedAuditEntry.comment ? (
+              <div className="rounded-3xl border border-border bg-background/65 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Комментарий</p>
+                <p className="mt-2 text-sm text-foreground">{selectedAuditEntry.comment}</p>
+              </div>
+            ) : null}
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-3xl border border-border bg-background/65 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Было</p>
+                <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words text-xs leading-6 text-muted-foreground">
+                  {JSON.stringify(selectedAuditEntry.old_value ?? {}, null, 2)}
+                </pre>
+              </div>
+              <div className="rounded-3xl border border-border bg-background/65 p-4">
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Стало</p>
+                <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words text-xs leading-6 text-muted-foreground">
+                  {JSON.stringify(selectedAuditEntry.new_value ?? {}, null, 2)}
+                </pre>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </ModalShell>
     </PageMotion>
   );
 }

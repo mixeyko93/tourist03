@@ -36,6 +36,40 @@ def list_admin_camps(camp_ids: list[int]):
         return [dict(row) for row in cur.fetchall()]
 
 
+def get_admin_camp_link(admin_id: int, camp_id: int):
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT id, admin_id, camp_id, role_key, can_manage_staff, is_primary, created_at, updated_at
+            FROM crm.camp_admin_links
+            WHERE admin_id = %s
+              AND camp_id = %s
+            LIMIT 1
+            """,
+            (admin_id, camp_id),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+
+def list_camp_admin_permission_keys(admin_id: int, camp_id: int):
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT permission_key
+            FROM crm.camp_admin_permissions
+            WHERE admin_id = %s
+              AND camp_id = %s
+              AND is_allowed = TRUE
+            ORDER BY permission_key
+            """,
+            (admin_id, camp_id),
+        )
+        return [str(row["permission_key"]) for row in cur.fetchall()]
+
+
 def list_admin_calendar_rooms(camp_ids: list[int], camp_id: Optional[int]):
     conditions = []
     params: list = []
@@ -707,6 +741,392 @@ def archive_admin_service(camp_id: int, service_id: int, actor_admin_id: int) ->
         changed = cur.rowcount > 0
         conn.commit()
         return changed
+
+
+def _replace_camp_admin_permissions(cur, admin_id: int, camp_id: int, permission_keys: list[str], actor_admin_id: int):
+    cur.execute(
+        "DELETE FROM crm.camp_admin_permissions WHERE admin_id = %s AND camp_id = %s",
+        (admin_id, camp_id),
+    )
+    unique_keys: list[str] = []
+    seen: set[str] = set()
+    for permission_key in permission_keys:
+        normalized = str(permission_key or "").strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        unique_keys.append(normalized)
+    for permission_key in unique_keys:
+        cur.execute(
+            """
+            INSERT INTO crm.camp_admin_permissions (
+                admin_id,
+                camp_id,
+                permission_key,
+                is_allowed,
+                created_by_admin_id
+            )
+            VALUES (%s, %s, %s, TRUE, %s)
+            """,
+            (admin_id, camp_id, permission_key, actor_admin_id),
+        )
+
+
+def find_admin_account_by_email_lower(email: str):
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT *
+            FROM auth.camp_admin_accounts
+            WHERE lower(email) = lower(%s)
+            LIMIT 1
+            """,
+            (email,),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+
+def list_admin_staff(camp_id: int):
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT
+                a.id,
+                a.email,
+                a.display_name,
+                a.phone,
+                a.default_role_key,
+                a.is_active,
+                a.notifications_enabled,
+                a.telegram_chat_id,
+                a.telegram_username,
+                a.last_seen_at,
+                a.delegated_from_admin_id,
+                a.delegated_until,
+                a.archived_at,
+                a.created_at,
+                a.updated_at,
+                l.role_key,
+                l.can_manage_staff,
+                l.is_primary,
+                l.created_at AS linked_at,
+                l.updated_at AS link_updated_at
+            FROM crm.camp_admin_links l
+            JOIN auth.camp_admin_accounts a ON a.id = l.admin_id
+            WHERE l.camp_id = %s
+              AND a.archived_at IS NULL
+            ORDER BY l.is_primary DESC, a.display_name ASC, a.id ASC
+            """,
+            (camp_id,),
+        )
+        rows = [dict(row) for row in cur.fetchall()]
+        if not rows:
+            return []
+
+        admin_ids = [int(row["id"]) for row in rows]
+        cur.execute(
+            """
+            SELECT admin_id, permission_key
+            FROM crm.camp_admin_permissions
+            WHERE camp_id = %s
+              AND admin_id = ANY(%s)
+              AND is_allowed = TRUE
+            ORDER BY admin_id, permission_key
+            """,
+            (camp_id, admin_ids),
+        )
+        permission_map: dict[int, list[str]] = {}
+        for row in cur.fetchall():
+            permission_map.setdefault(int(row["admin_id"]), []).append(str(row["permission_key"]))
+
+    for row in rows:
+        row["permission_keys"] = permission_map.get(int(row["id"]), [])
+    return rows
+
+
+def get_admin_staff_member(camp_id: int, staff_id: int):
+    rows = list_admin_staff(camp_id)
+    for row in rows:
+        if int(row["id"]) == int(staff_id):
+            return row
+    return None
+
+
+def create_or_link_admin_staff(camp_id: int, payload: dict, actor_admin_id: int, password_hash: Optional[str] = None):
+    email = str(payload.get("email") or "").strip().lower()
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT *
+            FROM auth.camp_admin_accounts
+            WHERE lower(email) = lower(%s)
+            LIMIT 1
+            """,
+            (email,),
+        )
+        existing = cur.fetchone()
+
+        if existing:
+            account_id = int(existing["id"])
+            cur.execute(
+                """
+                SELECT 1
+                FROM crm.camp_admin_links
+                WHERE admin_id = %s
+                  AND camp_id = %s
+                LIMIT 1
+                """,
+                (account_id, camp_id),
+            )
+            if cur.fetchone():
+                raise ValueError("already_linked")
+
+            update_parts = [
+                "display_name = %s",
+                "phone = %s",
+                "default_role_key = %s",
+                "notifications_enabled = %s",
+                "is_active = %s",
+                "archived_at = NULL",
+                "updated_at = NOW()",
+            ]
+            update_params = [
+                payload.get("display_name"),
+                payload.get("phone"),
+                payload.get("role_key"),
+                bool(payload.get("notifications_enabled", True)),
+                bool(payload.get("is_active", True)),
+            ]
+            if password_hash:
+                update_parts.append("password_hash = %s")
+                update_params.append(password_hash)
+            cur.execute(
+                f"""
+                UPDATE auth.camp_admin_accounts
+                SET {", ".join(update_parts)}
+                WHERE id = %s
+                """,
+                (*update_params, account_id),
+            )
+        else:
+            if not password_hash:
+                raise ValueError("password_required")
+            cur.execute(
+                """
+                INSERT INTO auth.camp_admin_accounts (
+                    email,
+                    password_hash,
+                    display_name,
+                    phone,
+                    default_role_key,
+                    notifications_enabled,
+                    is_active
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+                """,
+                (
+                    email,
+                    password_hash,
+                    payload.get("display_name"),
+                    payload.get("phone"),
+                    payload.get("role_key"),
+                    bool(payload.get("notifications_enabled", True)),
+                    bool(payload.get("is_active", True)),
+                ),
+            )
+            account_id = int(cur.fetchone()["id"])
+
+        cur.execute(
+            """
+            INSERT INTO crm.camp_admin_links (
+                admin_id,
+                camp_id,
+                role_key,
+                can_manage_staff,
+                is_primary,
+                updated_at
+            )
+            VALUES (%s, %s, %s, %s, %s, NOW())
+            """,
+            (
+                account_id,
+                camp_id,
+                payload.get("role_key"),
+                bool(payload.get("can_manage_staff", False)),
+                bool(payload.get("is_primary", False)),
+            ),
+        )
+        _replace_camp_admin_permissions(
+            cur,
+            account_id,
+            camp_id,
+            list(payload.get("permission_keys") or []),
+            actor_admin_id,
+        )
+        conn.commit()
+        return account_id
+
+
+def update_admin_staff(camp_id: int, staff_id: int, payload: dict, actor_admin_id: int, password_hash: Optional[str] = None):
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT id, email
+            FROM auth.camp_admin_accounts
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (staff_id,),
+        )
+        existing = cur.fetchone()
+        if not existing:
+            return False
+
+        next_email = str(payload.get("email") or "").strip().lower()
+        if next_email and next_email != str(existing["email"] or "").strip().lower():
+            cur.execute(
+                """
+                SELECT 1
+                FROM auth.camp_admin_accounts
+                WHERE lower(email) = lower(%s)
+                  AND id <> %s
+                LIMIT 1
+                """,
+                (next_email, staff_id),
+            )
+            if cur.fetchone():
+                raise ValueError("email_conflict")
+
+        cur.execute(
+            """
+            UPDATE auth.camp_admin_accounts
+            SET email = %s,
+                display_name = %s,
+                phone = %s,
+                default_role_key = %s,
+                notifications_enabled = %s,
+                is_active = %s,
+                updated_at = NOW()
+                {password_sql}
+            WHERE id = %s
+            """.format(password_sql=", password_hash = %s" if password_hash else ""),
+            (
+                next_email,
+                payload.get("display_name"),
+                payload.get("phone"),
+                payload.get("role_key"),
+                bool(payload.get("notifications_enabled", True)),
+                bool(payload.get("is_active", True)),
+                *((password_hash,) if password_hash else ()),
+                staff_id,
+            ),
+        )
+        cur.execute(
+            """
+            UPDATE crm.camp_admin_links
+            SET role_key = %s,
+                can_manage_staff = %s,
+                is_primary = %s,
+                updated_at = NOW()
+            WHERE admin_id = %s
+              AND camp_id = %s
+            """,
+            (
+                payload.get("role_key"),
+                bool(payload.get("can_manage_staff", False)),
+                bool(payload.get("is_primary", False)),
+                staff_id,
+                camp_id,
+            ),
+        )
+        changed = cur.rowcount > 0
+        if not changed:
+            conn.rollback()
+            return False
+        _replace_camp_admin_permissions(
+            cur,
+            staff_id,
+            camp_id,
+            list(payload.get("permission_keys") or []),
+            actor_admin_id,
+        )
+        conn.commit()
+        return True
+
+
+def list_admin_audit_log(
+    camp_id: int,
+    *,
+    search: Optional[str] = None,
+    actor_id: Optional[int] = None,
+    target_type: Optional[str] = None,
+    limit: int = 200,
+):
+    conditions = ["camp_id = %s"]
+    params: list = [camp_id]
+
+    normalized_search = (search or "").strip()
+    if normalized_search:
+        conditions.append(
+            """
+            (
+                coalesce(actor_display, '') ILIKE %s OR
+                coalesce(action_label, '') ILIKE %s OR
+                coalesce(target_type, '') ILIKE %s OR
+                coalesce(comment, '') ILIKE %s OR
+                coalesce(target_id, '') ILIKE %s
+            )
+            """
+        )
+        pattern = f"%{normalized_search}%"
+        params.extend([pattern, pattern, pattern, pattern, pattern])
+
+    if actor_id:
+        conditions.append("actor_id = %s")
+        params.append(actor_id)
+    if target_type:
+        conditions.append("target_type = %s")
+        params.append(target_type)
+
+    safe_limit = max(1, min(int(limit or 200), 500))
+    params.append(safe_limit)
+
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT
+                id,
+                actor_type,
+                actor_id,
+                actor_display,
+                camp_id,
+                target_type,
+                target_id,
+                action_type,
+                action_label,
+                changed_field,
+                old_value,
+                new_value,
+                comment,
+                is_sensitive,
+                was_auto_applied,
+                metadata,
+                created_at
+            FROM crm.audit_log
+            WHERE {' AND '.join(conditions)}
+            ORDER BY created_at DESC, id DESC
+            LIMIT %s
+            """,
+            tuple(params),
+        )
+        return [dict(row) for row in cur.fetchall()]
 
 
 def room_exists_for_camp(room_id: int, camp_id: int) -> bool:

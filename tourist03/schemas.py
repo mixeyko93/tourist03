@@ -19,6 +19,9 @@ class AdminMeResponse(BaseModel):
     id: int
     email: EmailStr
     display_name: str
+    phone: str = ""
+    default_role_key: str = "administrator"
+    telegram_chat_id: Optional[int] = None
 
 
 class SuperAdminCreateAccountRequest(BaseModel):
@@ -195,3 +198,16 @@ class AdminServiceUpsertRequest(BaseModel):
     duration_minutes: Optional[int] = None
     cover_photo_url: Optional[str] = None
     cover_video_url: Optional[str] = None
+
+
+class AdminStaffUpsertRequest(BaseModel):
+    email: EmailStr
+    display_name: str
+    phone: Optional[str] = None
+    password: Optional[str] = None
+    role_key: str = "administrator"
+    can_manage_staff: bool = False
+    is_primary: bool = False
+    is_active: bool = True
+    notifications_enabled: bool = True
+    permission_keys: List[str] = []

@@ -83,6 +83,36 @@ router.add_api_route(
     responses=error_responses(400, 401, 403, 404, 422, 500),
 )
 router.add_api_route(
+    "/api/admin/camps/{camp_id}/staff",
+    admin_service.api_admin_camp_staff,
+    methods=["GET"],
+    responses=error_responses(401, 403, 404, 422, 500),
+)
+router.add_api_route(
+    "/api/admin/camps/{camp_id}/staff",
+    admin_service.api_admin_create_staff,
+    methods=["POST"],
+    responses=error_responses(400, 401, 403, 404, 409, 422, 500),
+)
+router.add_api_route(
+    "/api/admin/camps/{camp_id}/staff/{staff_id}",
+    admin_service.api_admin_update_staff,
+    methods=["PUT"],
+    responses=error_responses(400, 401, 403, 404, 409, 422, 500),
+)
+router.add_api_route(
+    "/api/admin/camps/{camp_id}/staff/{staff_id}/telegram-link",
+    admin_service.api_admin_issue_staff_telegram_link,
+    methods=["POST"],
+    responses=error_responses(401, 403, 404, 422, 500),
+)
+router.add_api_route(
+    "/api/admin/camps/{camp_id}/audit-log",
+    admin_service.api_admin_audit_log,
+    methods=["GET"],
+    responses=error_responses(401, 403, 404, 422, 500),
+)
+router.add_api_route(
     "/api/admin/camps/{camp_id}/rooms",
     admin_service.api_admin_camp_rooms,
     methods=["GET"],
