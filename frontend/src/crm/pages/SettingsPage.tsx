@@ -54,23 +54,23 @@ export default function SettingsPage() {
             <div className="grid gap-5 md:grid-cols-2">
               <label className="space-y-2">
                 <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Название базы отдыха</span>
-                <input className="soft-input" defaultValue="Гостиный Дворъ" />
+                <input className="soft-input" placeholder="Введите название базы" />
               </label>
               <label className="space-y-2">
                 <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Юридическое лицо</span>
-                <input className="soft-input" defaultValue="ООО Байкал Тур" />
+                <input className="soft-input" placeholder="Введите юридическое лицо" />
               </label>
               <label className="space-y-2 md:col-span-2">
                 <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Адрес</span>
-                <input className="soft-input" defaultValue="Республика Бурятия, с. Максимиха, ул. Байкальская, 15" />
+                <input className="soft-input" placeholder="Укажите адрес базы отдыха" />
               </label>
               <label className="space-y-2">
                 <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Контактный телефон</span>
-                <input className="soft-input" defaultValue="+7 (999) 000-00-00" />
+                <input className="soft-input" placeholder="+7 (___) ___-__-__" />
               </label>
               <label className="space-y-2">
                 <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Email для бронирований</span>
-                <input className="soft-input" defaultValue="booking@gostiny-dvor.ru" />
+                <input className="soft-input" placeholder="booking@company.ru" />
               </label>
             </div>
 
@@ -79,14 +79,20 @@ export default function SettingsPage() {
               <div className="mt-5 grid gap-5 md:grid-cols-2">
                 <label className="space-y-2">
                   <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Время заезда</span>
-                  <select className="soft-input appearance-none">
+                  <select className="soft-input appearance-none" defaultValue="">
+                    <option value="" disabled>
+                      Выберите время
+                    </option>
                     <option>14:00</option>
                     <option>15:00</option>
                   </select>
                 </label>
                 <label className="space-y-2">
                   <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Время выезда</span>
-                  <select className="soft-input appearance-none">
+                  <select className="soft-input appearance-none" defaultValue="">
+                    <option value="" disabled>
+                      Выберите время
+                    </option>
                     <option>12:00</option>
                     <option>11:00</option>
                   </select>
@@ -96,10 +102,10 @@ export default function SettingsPage() {
               <div className="mt-5 flex flex-col gap-4 rounded-3xl border border-border bg-background/65 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h3 className="text-sm font-medium text-foreground">Размещение с животными</h3>
-                  <p className="mt-1 text-sm text-muted-foreground">Разрешить гостям приезжать с питомцами</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Параметр пока не настроен для боевого объекта</p>
                 </div>
-                <div className="h-7 w-14 rounded-full bg-[#E5D3B3]/30 p-1">
-                  <div className="ml-auto h-5 w-5 rounded-full bg-[#E5D3B3] shadow-lg shadow-[#E5D3B3]/20" />
+                <div className="h-7 w-14 rounded-full border border-border bg-background/80 p-1">
+                  <div className="h-5 w-5 rounded-full bg-muted-foreground/45" />
                 </div>
               </div>
             </div>

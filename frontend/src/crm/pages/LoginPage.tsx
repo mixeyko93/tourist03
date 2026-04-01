@@ -8,8 +8,8 @@ import { crmPath } from "../paths";
 export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [email, setEmail] = useState("manager@tourist03.ru");
-  const [password, setPassword] = useState("tourist03-demo");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const session = getCrmSession();
   const homePath = crmPath("/dashboard");
 
@@ -91,9 +91,7 @@ export default function LoginPage() {
                 <div className="space-y-2 text-center">
                   <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#E5D3B3]">Tourist_03 CRM</p>
                   <h2 className="text-2xl font-semibold tracking-[-0.05em] text-foreground sm:text-3xl">Вход в систему</h2>
-                  <p className="text-sm leading-6 text-muted-foreground">
-                    Используйте демонстрационные данные или войдите под своей учётной записью.
-                  </p>
+                  <p className="text-sm leading-6 text-muted-foreground">Войдите под своей учётной записью, чтобы открыть рабочее пространство CRM.</p>
                 </div>
 
                 <form onSubmit={handleSubmit} className="mt-8 space-y-4">
@@ -104,7 +102,7 @@ export default function LoginPage() {
                       <input
                         type="email"
                         className="soft-input pl-12"
-                        placeholder="manager@tourist03.ru"
+                        placeholder="email@company.ru"
                         value={email}
                         onChange={(event) => setEmail(event.target.value)}
                         required
@@ -126,11 +124,6 @@ export default function LoginPage() {
                       />
                     </div>
                   </label>
-
-                  <div className="flex flex-col gap-1 rounded-2xl border border-border bg-background/60 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
-                    <span className="text-muted-foreground">Demo user</span>
-                    <span className="font-medium text-foreground">manager@tourist03.ru</span>
-                  </div>
 
                   <button type="submit" className="brand-button w-full gap-2">
                     Войти в CRM

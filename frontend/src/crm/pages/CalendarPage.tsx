@@ -1,7 +1,8 @@
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
-import { calendarRooms } from "../mock-data";
+import { EmptyState } from "../components/EmptyState";
 import { PageMotion } from "../components/PageMotion";
 import { SectionHeading } from "../components/SectionHeading";
+import { calendarRooms, campOptions, roomOptions } from "../mock-data";
 
 const statusClasses = {
   processing: "border-amber-500/30 bg-amber-500/20 text-amber-200",
@@ -11,7 +12,13 @@ const statusClasses = {
 } as const;
 
 export default function CalendarPage() {
-  const days = Array.from({ length: 31 }, (_, index) => index + 1);
+  const today = new Date();
+  const days = Array.from({ length: new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate() }, (_, index) => index + 1);
+  const monthLabelRaw = new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric" }).format(today);
+  const monthLabel = `${monthLabelRaw.charAt(0).toUpperCase()}${monthLabelRaw.slice(1)}`;
+  const hasCampOptions = campOptions.length > 0;
+  const hasRoomOptions = roomOptions.length > 0;
+  const hasCalendarRooms = calendarRooms.length > 0;
 
   return (
     <PageMotion className="space-y-6">
@@ -43,19 +50,44 @@ export default function CalendarPage() {
               </button>
             </div>
 
-            <h2 className="text-xl font-semibold tracking-[-0.04em] text-foreground sm:ml-2">Март 2026</h2>
+            <h2 className="text-xl font-semibold tracking-[-0.04em] text-foreground sm:ml-2">{monthLabel}</h2>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 xl:flex xl:flex-wrap xl:items-center">
             <div className="relative">
-              <select className="soft-input w-full min-w-0 appearance-none pr-10 sm:min-w-52">
-                <option>Гостиный Дворъ</option>
+              <select
+                className="soft-input w-full min-w-0 appearance-none pr-10 disabled:cursor-not-allowed disabled:opacity-60 sm:min-w-52"
+                disabled={!hasCampOptions}
+              >
+                {hasCampOptions ? (
+                  campOptions.map((camp) => (
+                    <option key={camp} value={camp}>
+                      {camp}
+                    </option>
+                  ))
+                ) : (
+                  <option>Нет подключённых баз</option>
+                )}
               </select>
               <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             </div>
             <div className="relative">
-              <select className="soft-input w-full min-w-0 appearance-none pr-10 sm:min-w-44">
-                <option>Все номера</option>
+              <select
+                className="soft-input w-full min-w-0 appearance-none pr-10 disabled:cursor-not-allowed disabled:opacity-60 sm:min-w-44"
+                disabled={!hasRoomOptions}
+              >
+                {hasRoomOptions ? (
+                  <>
+                    <option value="">Все номера</option>
+                    {roomOptions.map((room) => (
+                      <option key={room} value={room}>
+                        {room}
+                      </option>
+                    ))}
+                  </>
+                ) : (
+                  <option>Номерной фонд не настроен</option>
+                )}
               </select>
               <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             </div>
@@ -80,55 +112,65 @@ export default function CalendarPage() {
           ))}
         </div>
 
-        <div className="mt-6 overflow-x-auto rounded-3xl border border-border bg-background/55">
-          <div className="min-w-[1480px]">
-            <div className="flex border-b border-border bg-card/70">
-              <div className="sticky left-0 z-10 w-56 shrink-0 border-r border-border bg-card/90 px-5 py-4 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                Номер
+        {hasCalendarRooms ? (
+          <div className="mt-6 overflow-x-auto rounded-3xl border border-border bg-background/55">
+            <div className="min-w-[1480px]">
+              <div className="flex border-b border-border bg-card/70">
+                <div className="sticky left-0 z-10 w-56 shrink-0 border-r border-border bg-card/90 px-5 py-4 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  Номер
+                </div>
+                <div className="grid flex-1" style={{ gridTemplateColumns: `repeat(${days.length}, minmax(46px, 1fr))` }}>
+                  {days.map((day) => (
+                    <div key={day} className="border-r border-border px-2 py-3 text-center last:border-r-0">
+                      <div className="text-sm font-semibold text-foreground">{day}</div>
+                      <div className="mt-1 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">день</div>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="grid flex-1" style={{ gridTemplateColumns: `repeat(${days.length}, minmax(46px, 1fr))` }}>
-                {days.map((day) => (
-                  <div key={day} className="border-r border-border px-2 py-3 text-center last:border-r-0">
-                    <div className="text-sm font-semibold text-foreground">{day}</div>
-                    <div className="mt-1 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">день</div>
+
+              <div>
+                {calendarRooms.map((room) => (
+                  <div key={room.id} className="flex border-b border-border last:border-b-0">
+                    <div className="sticky left-0 z-10 flex w-56 shrink-0 flex-col justify-center border-r border-border bg-card/85 px-5 py-5">
+                      <span className="text-sm font-semibold text-foreground">{room.title}</span>
+                      <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{room.category}</span>
+                    </div>
+
+                    <div className="relative grid flex-1" style={{ gridTemplateColumns: `repeat(${days.length}, minmax(46px, 1fr))` }}>
+                      {days.map((day) => (
+                        <div key={`${room.id}-${day}`} className="h-18 border-r border-border/80 last:border-r-0" />
+                      ))}
+
+                      <div className="pointer-events-none absolute inset-0 px-1 py-2">
+                        {room.bookings.map((booking) => (
+                          <div
+                            key={`${room.id}-${booking.label}-${booking.start}`}
+                            className={`absolute top-2 flex h-[calc(100%-1rem)] items-center rounded-2xl border px-3 text-xs font-medium shadow-lg shadow-black/10 ${statusClasses[booking.status]}`}
+                            style={{
+                              left: `calc((100% / ${days.length}) * ${booking.start - 1} + 4px)`,
+                              width: `calc((100% / ${days.length}) * ${booking.span} - 8px)`,
+                            }}
+                          >
+                            <span className="truncate">{booking.label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
-
-            <div>
-              {calendarRooms.map((room) => (
-                <div key={room.id} className="flex border-b border-border last:border-b-0">
-                  <div className="sticky left-0 z-10 flex w-56 shrink-0 flex-col justify-center border-r border-border bg-card/85 px-5 py-5">
-                    <span className="text-sm font-semibold text-foreground">{room.title}</span>
-                    <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{room.category}</span>
-                  </div>
-
-                  <div className="relative grid flex-1" style={{ gridTemplateColumns: `repeat(${days.length}, minmax(46px, 1fr))` }}>
-                    {days.map((day) => (
-                      <div key={`${room.id}-${day}`} className="h-18 border-r border-border/80 last:border-r-0" />
-                    ))}
-
-                    <div className="pointer-events-none absolute inset-0 px-1 py-2">
-                      {room.bookings.map((booking) => (
-                        <div
-                          key={`${room.id}-${booking.label}-${booking.start}`}
-                          className={`absolute top-2 flex h-[calc(100%-1rem)] items-center rounded-2xl border px-3 text-xs font-medium shadow-lg shadow-black/10 ${statusClasses[booking.status]}`}
-                          style={{
-                            left: `calc((100% / ${days.length}) * ${booking.start - 1} + 4px)`,
-                            width: `calc((100% / ${days.length}) * ${booking.span} - 8px)`,
-                          }}
-                        >
-                          <span className="truncate">{booking.label}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
-        </div>
+        ) : (
+          <div className="mt-6">
+            <EmptyState
+              icon={ChevronRight}
+              title="Календарь пока пуст"
+              description="После подключения базы, номеров и первых бронирований здесь появится реальная сетка размещения по дням."
+            />
+          </div>
+        )}
       </section>
     </PageMotion>
   );
