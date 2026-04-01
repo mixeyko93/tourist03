@@ -138,6 +138,31 @@ export type CrmCampProfile = {
   photos: Array<{ id?: number; url: string; cover?: number; sort?: number }>;
 };
 
+export type CrmGuestBooking = {
+  id: number;
+  camp_name: string;
+  room_name: string;
+  check_in: string | null;
+  check_out: string | null;
+  guests_count: number;
+  status: string;
+  payment_status: string;
+  source: string;
+  comment: string;
+};
+
+export type CrmGuest = {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  visits_count: number;
+  total_estimate: number;
+  last_visit: string | null;
+  status: "Новый" | "Постоянный" | "VIP";
+  bookings: CrmGuestBooking[];
+};
+
 export type CrmCampProfileUpdatePayload = {
   name: string;
   lake_name?: string;
@@ -304,6 +329,24 @@ export async function fetchCrmBookings(
   });
   await assertOk(response);
   return (await response.json()) as CrmBooking[];
+}
+
+export async function fetchCrmGuests(
+  params: {
+    campId?: number | null;
+  },
+  signal?: AbortSignal,
+): Promise<CrmGuest[]> {
+  const query = new URLSearchParams();
+  if (params.campId) {
+    query.set("camp_id", String(params.campId));
+  }
+  const response = await fetch(`/api/admin/guests?${query.toString()}`, {
+    credentials: "same-origin",
+    signal,
+  });
+  await assertOk(response);
+  return (await response.json()) as CrmGuest[];
 }
 
 export async function fetchCrmCampRooms(campId: number, signal?: AbortSignal): Promise<CrmRoomOption[]> {

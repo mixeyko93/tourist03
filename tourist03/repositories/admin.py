@@ -393,6 +393,54 @@ def list_admin_bookings(camp_ids: list[int], camp_id: Optional[int], date_from: 
         return [dict(row) for row in cur.fetchall()]
 
 
+def list_admin_guest_rows(camp_ids: list[int], camp_id: Optional[int]):
+    conditions = []
+    params: list = []
+    if camp_id:
+        conditions.append("b.camp_id = %s")
+        params.append(camp_id)
+    else:
+        conditions.append("b.camp_id = ANY(%s)")
+        params.append(camp_ids)
+    where_clause = " AND ".join(conditions) if conditions else "TRUE"
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT
+                b.id,
+                b.camp_id,
+                c.name AS camp_name,
+                b.room_id,
+                r.name AS room_name,
+                r.price AS room_price,
+                b.check_in,
+                b.check_out,
+                b.guests_count,
+                b.status,
+                b.source,
+                b.payment_status,
+                b.payment_required,
+                b.user_id,
+                u.name AS user_name,
+                u.phone AS user_phone,
+                CASE WHEN u.email_verified THEN u.email ELSE '' END AS user_email,
+                b.guest_name,
+                b.guest_phone,
+                b.guest_email,
+                b.comment
+            FROM crm.bookings b
+            LEFT JOIN catalog.camps c ON c.id = b.camp_id
+            LEFT JOIN catalog.rooms r ON r.id = b.room_id
+            LEFT JOIN auth.users u ON u.id = b.user_id
+            WHERE {where_clause}
+            ORDER BY b.check_in DESC, b.id DESC
+            """,
+            tuple(params),
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+
 def room_exists_for_camp(room_id: int, camp_id: int) -> bool:
     with _db_conn("catalog") as conn:
         cur = conn.cursor()

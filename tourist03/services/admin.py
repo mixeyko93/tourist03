@@ -16,6 +16,7 @@ from tourist03.schemas import (
 from tourist03.serializers import bookings as booking_serializers
 from tourist03.security import (
     _get_admin_camp_ids,
+    _normalize_phone,
     get_current_admin,
     log_crm_audit_event,
     log_user_event,
@@ -119,6 +120,20 @@ def _calendar_booking_label(row: dict) -> str:
     if guest:
         return guest
     return f"Бронь #{row.get('id')}"
+
+
+def _days_between(check_in, check_out) -> int:
+    if not check_in or not check_out:
+        return 0
+    return max((check_out - check_in).days, 1)
+
+
+def _guest_status(visits_count: int) -> str:
+    if visits_count >= 4:
+        return "VIP"
+    if visits_count >= 2:
+        return "Постоянный"
+    return "Новый"
 
 
 def api_admin_my_camps(admin: dict = Depends(get_current_admin)):
@@ -293,6 +308,91 @@ def api_admin_bookings_calendar(
     return booking_serializers.serialize_admin_booking_list(
         admin_repo.list_admin_bookings_calendar(camp_ids, camp_id, date_from, date_to)
     )
+
+
+def api_admin_guests(
+    camp_id: Optional[int] = None,
+    admin: dict = Depends(get_current_admin),
+):
+    camp_ids = _get_admin_camp_ids(admin["id"])
+    if not camp_ids:
+        return []
+    if camp_id and camp_id not in camp_ids:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа к выбранной базе")
+
+    rows = admin_repo.list_admin_guest_rows(camp_ids, camp_id)
+    guests: dict[str, dict] = {}
+
+    for row in rows:
+        phone = _normalize_phone((row.get("guest_phone") or row.get("user_phone") or "").strip())
+        email = (row.get("guest_email") or row.get("user_email") or "").strip().lower()
+        name = (row.get("guest_name") or row.get("user_name") or "").strip()
+        user_id = row.get("user_id")
+
+        guest_key = ""
+        if phone:
+            guest_key = f"phone:{phone}"
+        elif user_id:
+            guest_key = f"user:{user_id}"
+        elif email:
+            guest_key = f"email:{email}"
+        else:
+            guest_key = f"booking:{row.get('id')}"
+
+        guest = guests.get(guest_key)
+        if guest is None:
+            guest = {
+                "id": guest_key,
+                "name": name or "Гость без имени",
+                "phone": phone,
+                "email": email,
+                "visits_count": 0,
+                "total_estimate": 0,
+                "last_visit": None,
+                "status": "Новый",
+                "bookings": [],
+            }
+            guests[guest_key] = guest
+
+        if not guest.get("phone") and phone:
+            guest["phone"] = phone
+        if not guest.get("email") and email:
+            guest["email"] = email
+        if guest.get("name") in ("", "Гость без имени") and name:
+            guest["name"] = name
+
+        visit_total = int(row.get("room_price") or 0) * _days_between(row.get("check_in"), row.get("check_out"))
+        guest["visits_count"] += 1
+        guest["total_estimate"] += max(visit_total, 0)
+        check_out = row.get("check_out")
+        if check_out and (guest["last_visit"] is None or check_out > guest["last_visit"]):
+            guest["last_visit"] = check_out
+
+        guest["bookings"].append(
+            {
+                "id": row.get("id"),
+                "camp_name": row.get("camp_name") or "",
+                "room_name": row.get("room_name") or "Без апартамента",
+                "check_in": row.get("check_in").isoformat() if row.get("check_in") else None,
+                "check_out": row.get("check_out").isoformat() if row.get("check_out") else None,
+                "guests_count": row.get("guests_count") or 0,
+                "status": row.get("status") or "",
+                "payment_status": row.get("payment_status") or "",
+                "source": row.get("source") or "",
+                "comment": row.get("comment") or "",
+            }
+        )
+
+    items = []
+    for guest in guests.values():
+        guest["status"] = _guest_status(int(guest["visits_count"] or 0))
+        last_visit = guest.get("last_visit")
+        guest["last_visit"] = last_visit.isoformat() if last_visit else None
+        guest["bookings"].sort(key=lambda item: ((item.get("check_in") or ""), int(item.get("id") or 0)), reverse=True)
+        items.append(guest)
+
+    items.sort(key=lambda item: ((item.get("last_visit") or ""), int(item.get("visits_count") or 0)), reverse=True)
+    return items
 
 
 def api_admin_calendar_feed(

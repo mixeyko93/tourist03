@@ -32,6 +32,12 @@ router.add_api_route(
     responses=error_responses(401, 403, 422, 500),
 )
 router.add_api_route(
+    "/api/admin/guests",
+    admin_service.api_admin_guests,
+    methods=["GET"],
+    responses=error_responses(401, 403, 422, 500),
+)
+router.add_api_route(
     "/api/admin/bookings",
     admin_service.api_admin_create_booking,
     methods=["POST"],
