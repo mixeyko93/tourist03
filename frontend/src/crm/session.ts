@@ -46,6 +46,53 @@ export type CrmCalendarFeed = {
   rooms: CrmCalendarRoom[];
 };
 
+export type CrmBooking = {
+  id: number;
+  camp_id: number | null;
+  camp_name: string | null;
+  room_id: number | null;
+  room_name: string | null;
+  check_in: string;
+  check_out: string;
+  guests_count: number;
+  status: string;
+  source: string;
+  payment_status: string;
+  payment_required: boolean;
+  user_id: number | null;
+  user_name: string | null;
+  user_phone: string | null;
+  user_email: string | null;
+  guest_name: string | null;
+  guest_phone: string | null;
+  guest_email: string | null;
+  comment: string | null;
+};
+
+export type CrmRoomOption = {
+  id: number;
+  camp_id: number | null;
+  name: string | null;
+  room_type: string | null;
+  capacity: number | null;
+  price: number | null;
+};
+
+export type CrmCreateBookingPayload = {
+  camp_id: number;
+  room_id?: number | null;
+  check_in: string;
+  check_out: string;
+  guests_count: number;
+  status: string;
+  payment_status: string;
+  payment_required: boolean;
+  guest_name?: string;
+  guest_phone?: string;
+  guest_email?: string;
+  comment?: string;
+};
+
 type AdminSessionPayload = {
   id: number;
   email: string;
@@ -143,4 +190,52 @@ export async function fetchCrmCalendarFeed(
   });
   await assertOk(response);
   return (await response.json()) as CrmCalendarFeed;
+}
+
+export async function fetchCrmBookings(
+  params: {
+    campId?: number | null;
+    dateFrom?: string;
+    dateTo?: string;
+  },
+  signal?: AbortSignal,
+): Promise<CrmBooking[]> {
+  const query = new URLSearchParams();
+  if (params.campId) {
+    query.set("camp_id", String(params.campId));
+  }
+  if (params.dateFrom) {
+    query.set("date_from", params.dateFrom);
+  }
+  if (params.dateTo) {
+    query.set("date_to", params.dateTo);
+  }
+  const response = await fetch(`/api/admin/bookings?${query.toString()}`, {
+    credentials: "same-origin",
+    signal,
+  });
+  await assertOk(response);
+  return (await response.json()) as CrmBooking[];
+}
+
+export async function fetchCrmCampRooms(campId: number, signal?: AbortSignal): Promise<CrmRoomOption[]> {
+  const response = await fetch(`/api/rooms?camp_id=${campId}`, {
+    credentials: "same-origin",
+    signal,
+  });
+  await assertOk(response);
+  return (await response.json()) as CrmRoomOption[];
+}
+
+export async function createCrmBooking(payload: CrmCreateBookingPayload) {
+  const response = await fetch("/api/admin/bookings", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  await assertOk(response);
+  return (await response.json()) as { ok: boolean; id: number };
 }
