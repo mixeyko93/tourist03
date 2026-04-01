@@ -16,6 +16,7 @@ router.add_api_route("/admincamps/{path:path}", pages_service.admin_camps_page, 
 router.add_api_route("/login", pages_service.react_map_page, methods=["GET"], response_class=HTMLResponse)
 router.add_api_route("/dashboard", pages_service.react_map_page, methods=["GET"], response_class=HTMLResponse)
 router.add_api_route("/calendar", pages_service.react_map_page, methods=["GET"], response_class=HTMLResponse)
+router.add_api_route("/shifts", pages_service.react_map_page, methods=["GET"], response_class=HTMLResponse)
 router.add_api_route("/bookings", pages_service.react_map_page, methods=["GET"], response_class=HTMLResponse)
 router.add_api_route("/rooms", pages_service.react_map_page, methods=["GET"], response_class=HTMLResponse)
 router.add_api_route("/guests", pages_service.react_map_page, methods=["GET"], response_class=HTMLResponse)

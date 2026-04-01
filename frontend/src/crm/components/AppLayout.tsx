@@ -7,6 +7,7 @@ import { crmPath } from "../paths";
 
 const navItems = [
   { label: "Календарь", path: "/calendar" },
+  { label: "Смены", path: "/shifts" },
   { label: "Сводка", path: "/dashboard" },
   { label: "Брони", path: "/bookings" },
   { label: "Номера и цены", path: "/rooms" },

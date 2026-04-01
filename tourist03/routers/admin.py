@@ -83,6 +83,36 @@ router.add_api_route(
     responses=error_responses(400, 401, 403, 404, 422, 500),
 )
 router.add_api_route(
+    "/api/admin/camps/{camp_id}/shifts",
+    admin_service.api_admin_camp_shifts,
+    methods=["GET"],
+    responses=error_responses(401, 403, 404, 422, 500),
+)
+router.add_api_route(
+    "/api/admin/camps/{camp_id}/shifts/settings",
+    admin_service.api_admin_update_shift_settings,
+    methods=["PUT"],
+    responses=error_responses(400, 401, 403, 404, 422, 500),
+)
+router.add_api_route(
+    "/api/admin/camps/{camp_id}/shift-rules",
+    admin_service.api_admin_create_shift_rule,
+    methods=["POST"],
+    responses=error_responses(400, 401, 403, 404, 422, 500),
+)
+router.add_api_route(
+    "/api/admin/camps/{camp_id}/shift-rules/{rule_id}",
+    admin_service.api_admin_update_shift_rule,
+    methods=["PUT"],
+    responses=error_responses(400, 401, 403, 404, 422, 500),
+)
+router.add_api_route(
+    "/api/admin/camps/{camp_id}/shift-rules/{rule_id}",
+    admin_service.api_admin_delete_shift_rule,
+    methods=["DELETE"],
+    responses=error_responses(401, 403, 404, 422, 500),
+)
+router.add_api_route(
     "/api/admin/camps/{camp_id}/staff",
     admin_service.api_admin_camp_staff,
     methods=["GET"],

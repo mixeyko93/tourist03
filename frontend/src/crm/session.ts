@@ -243,6 +243,65 @@ export type CrmAuditEntry = {
   created_at: string;
 };
 
+export type CrmShiftSettings = {
+  camp_id: number;
+  time_zone: string;
+  booking_hold_hours: number;
+  night_release_after_shift_minutes: number;
+  escalation_step_minutes: number;
+  escalation_repeats_before_manager: number;
+};
+
+export type CrmShiftStaffOption = {
+  id: number;
+  display_name: string;
+  role_key: string;
+  role_label: string;
+  is_active: boolean;
+  notifications_enabled: boolean;
+  has_telegram_link: boolean;
+};
+
+export type CrmShiftRule = {
+  id: number;
+  camp_id: number;
+  admin_id: number;
+  admin_name: string;
+  admin_email: string;
+  weekday: number;
+  starts_at: string;
+  ends_at: string;
+  is_night_shift: boolean;
+  is_active: boolean;
+  comment: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CrmShiftOccurrence = {
+  rule_id: number;
+  admin_id: number;
+  admin_name: string;
+  weekday: number;
+  weekday_label: string;
+  starts_at: string;
+  ends_at: string;
+  starts_time: string;
+  ends_time: string;
+  is_night_shift: boolean;
+  is_active: boolean;
+  comment: string;
+  timezone: string;
+};
+
+export type CrmShiftOverview = {
+  timezone: string;
+  now: string;
+  active_rules: CrmShiftOccurrence[];
+  next_rule: CrmShiftOccurrence | null;
+  upcoming_windows: CrmShiftOccurrence[];
+};
+
 export type CrmCampProfileUpdatePayload = {
   name: string;
   lake_name?: string;
@@ -315,6 +374,24 @@ export type CrmStaffUpsertPayload = {
   is_active: boolean;
   notifications_enabled: boolean;
   permission_keys: string[];
+};
+
+export type CrmShiftSettingsUpdatePayload = {
+  time_zone: string;
+  booking_hold_hours: number;
+  night_release_after_shift_minutes: number;
+  escalation_step_minutes: number;
+  escalation_repeats_before_manager: number;
+};
+
+export type CrmShiftRuleUpsertPayload = {
+  admin_id: number;
+  weekday: number;
+  starts_at: string;
+  ends_at: string;
+  is_night_shift: boolean;
+  is_active: boolean;
+  comment?: string;
 };
 
 type AdminSessionPayload = {
@@ -521,6 +598,18 @@ export async function fetchCrmAuditLog(
   return (await response.json()) as { items: CrmAuditEntry[]; actors: Array<{ id: number; label: string }>; target_types: string[] };
 }
 
+export async function fetchCrmShifts(
+  campId: number,
+  signal?: AbortSignal,
+): Promise<{ settings: CrmShiftSettings; rules: CrmShiftRule[]; overview: CrmShiftOverview; staff: CrmShiftStaffOption[] }> {
+  const response = await fetch(`/api/admin/camps/${campId}/shifts`, {
+    credentials: "same-origin",
+    signal,
+  });
+  await assertOk(response);
+  return (await response.json()) as { settings: CrmShiftSettings; rules: CrmShiftRule[]; overview: CrmShiftOverview; staff: CrmShiftStaffOption[] };
+}
+
 export async function createCrmBooking(payload: CrmCreateBookingPayload) {
   const response = await fetch("/api/admin/bookings", {
     method: "POST",
@@ -624,6 +713,54 @@ export async function issueCrmStaffTelegramLink(campId: number, staffId: number)
   });
   await assertOk(response);
   return (await response.json()) as { ok: boolean; code: string };
+}
+
+export async function saveCrmShiftSettings(campId: number, payload: CrmShiftSettingsUpdatePayload) {
+  const response = await fetch(`/api/admin/camps/${campId}/shifts/settings`, {
+    method: "PUT",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  await assertOk(response);
+  return (await response.json()) as { ok: boolean; item: CrmShiftSettings };
+}
+
+export async function createCrmShiftRule(campId: number, payload: CrmShiftRuleUpsertPayload) {
+  const response = await fetch(`/api/admin/camps/${campId}/shift-rules`, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  await assertOk(response);
+  return (await response.json()) as { ok: boolean; id: number; item: CrmShiftRule };
+}
+
+export async function updateCrmShiftRule(campId: number, ruleId: number, payload: CrmShiftRuleUpsertPayload) {
+  const response = await fetch(`/api/admin/camps/${campId}/shift-rules/${ruleId}`, {
+    method: "PUT",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  await assertOk(response);
+  return (await response.json()) as { ok: boolean; item: CrmShiftRule };
+}
+
+export async function deleteCrmShiftRule(campId: number, ruleId: number) {
+  const response = await fetch(`/api/admin/camps/${campId}/shift-rules/${ruleId}`, {
+    method: "DELETE",
+    credentials: "same-origin",
+  });
+  await assertOk(response);
+  return (await response.json()) as { ok: boolean };
 }
 
 export async function createCrmService(campId: number, payload: CrmServiceUpsertPayload) {

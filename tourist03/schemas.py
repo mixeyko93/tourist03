@@ -211,3 +211,21 @@ class AdminStaffUpsertRequest(BaseModel):
     is_active: bool = True
     notifications_enabled: bool = True
     permission_keys: List[str] = []
+
+
+class AdminShiftSettingsUpdateRequest(BaseModel):
+    time_zone: str
+    booking_hold_hours: int = 4
+    night_release_after_shift_minutes: int = 60
+    escalation_step_minutes: int = 15
+    escalation_repeats_before_manager: int = 2
+
+
+class AdminShiftRuleUpsertRequest(BaseModel):
+    admin_id: int
+    weekday: int
+    starts_at: str
+    ends_at: str
+    is_night_shift: bool = False
+    is_active: bool = True
+    comment: Optional[str] = None

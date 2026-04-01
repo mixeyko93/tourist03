@@ -5,6 +5,7 @@ import AdminLayout from "./admin/components/AdminLayout";
 import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
 import CalendarPage from "./pages/CalendarPage";
+import ShiftsPage from "./pages/ShiftsPage";
 import BookingsPage from "./pages/BookingsPage";
 import RoomsPage from "./pages/RoomsPage";
 import GuestsPage from "./pages/GuestsPage";
@@ -39,6 +40,7 @@ function createCrmRoutes(base: "" | "/react-map"): RouteObject[] {
         { index: true, Component: () => <RouteRedirect to="/calendar" base={base} /> },
         { path: "dashboard", Component: DashboardPage },
         { path: "calendar", Component: CalendarPage },
+        { path: "shifts", Component: ShiftsPage },
         { path: "bookings", Component: BookingsPage },
         { path: "rooms", Component: RoomsPage },
         { path: "guests", Component: GuestsPage },

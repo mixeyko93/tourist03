@@ -36,6 +36,207 @@ def list_admin_camps(camp_ids: list[int]):
         return [dict(row) for row in cur.fetchall()]
 
 
+def get_camp_shift_settings(camp_id: int):
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT
+                camp_id,
+                time_zone,
+                booking_hold_hours,
+                night_release_after_shift_minutes,
+                escalation_step_minutes,
+                escalation_repeats_before_manager
+            FROM crm.camp_settings
+            WHERE camp_id = %s
+            """,
+            (camp_id,),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+
+def save_camp_shift_settings(camp_id: int, payload: dict):
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO crm.camp_settings (
+                camp_id,
+                time_zone,
+                booking_hold_hours,
+                night_release_after_shift_minutes,
+                escalation_step_minutes,
+                escalation_repeats_before_manager
+            )
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (camp_id) DO UPDATE SET
+                time_zone = EXCLUDED.time_zone,
+                booking_hold_hours = EXCLUDED.booking_hold_hours,
+                night_release_after_shift_minutes = EXCLUDED.night_release_after_shift_minutes,
+                escalation_step_minutes = EXCLUDED.escalation_step_minutes,
+                escalation_repeats_before_manager = EXCLUDED.escalation_repeats_before_manager,
+                updated_at = NOW()
+            """,
+            (
+                camp_id,
+                payload.get("time_zone") or "Asia/Irkutsk",
+                int(payload.get("booking_hold_hours") or 4),
+                int(payload.get("night_release_after_shift_minutes") or 60),
+                int(payload.get("escalation_step_minutes") or 15),
+                int(payload.get("escalation_repeats_before_manager") or 2),
+            ),
+        )
+        conn.commit()
+
+
+def list_camp_shift_rules(camp_id: int):
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT
+                r.id,
+                r.camp_id,
+                r.admin_id,
+                a.display_name AS admin_name,
+                a.email AS admin_email,
+                r.weekday,
+                r.starts_at,
+                r.ends_at,
+                r.is_night_shift,
+                r.is_active,
+                r.comment,
+                r.created_at,
+                r.updated_at
+            FROM crm.shift_schedule_rules r
+            JOIN auth.camp_admin_accounts a ON a.id = r.admin_id
+            WHERE r.camp_id = %s
+            ORDER BY r.weekday ASC, r.starts_at ASC, a.display_name ASC
+            """,
+            (camp_id,),
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+
+def get_camp_shift_rule(camp_id: int, rule_id: int):
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT
+                r.id,
+                r.camp_id,
+                r.admin_id,
+                a.display_name AS admin_name,
+                a.email AS admin_email,
+                r.weekday,
+                r.starts_at,
+                r.ends_at,
+                r.is_night_shift,
+                r.is_active,
+                r.comment,
+                r.created_at,
+                r.updated_at
+            FROM crm.shift_schedule_rules r
+            JOIN auth.camp_admin_accounts a ON a.id = r.admin_id
+            WHERE r.camp_id = %s
+              AND r.id = %s
+            LIMIT 1
+            """,
+            (camp_id, rule_id),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+
+def create_camp_shift_rule(camp_id: int, payload: dict, actor_admin_id: int) -> int:
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO crm.shift_schedule_rules (
+                camp_id,
+                admin_id,
+                weekday,
+                starts_at,
+                ends_at,
+                is_night_shift,
+                is_active,
+                created_by_admin_id,
+                comment
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (
+                camp_id,
+                int(payload.get("admin_id")),
+                int(payload.get("weekday")),
+                payload.get("starts_at"),
+                payload.get("ends_at"),
+                bool(payload.get("is_night_shift")),
+                bool(payload.get("is_active", True)),
+                actor_admin_id,
+                payload.get("comment"),
+            ),
+        )
+        rule_id = cur.fetchone()["id"]
+        conn.commit()
+        return int(rule_id)
+
+
+def update_camp_shift_rule(camp_id: int, rule_id: int, payload: dict) -> bool:
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE crm.shift_schedule_rules
+            SET admin_id = %s,
+                weekday = %s,
+                starts_at = %s,
+                ends_at = %s,
+                is_night_shift = %s,
+                is_active = %s,
+                comment = %s,
+                updated_at = NOW()
+            WHERE camp_id = %s
+              AND id = %s
+            """,
+            (
+                int(payload.get("admin_id")),
+                int(payload.get("weekday")),
+                payload.get("starts_at"),
+                payload.get("ends_at"),
+                bool(payload.get("is_night_shift")),
+                bool(payload.get("is_active", True)),
+                payload.get("comment"),
+                camp_id,
+                rule_id,
+            ),
+        )
+        changed = cur.rowcount > 0
+        conn.commit()
+        return changed
+
+
+def delete_camp_shift_rule(camp_id: int, rule_id: int) -> bool:
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            DELETE FROM crm.shift_schedule_rules
+            WHERE camp_id = %s
+              AND id = %s
+            """,
+            (camp_id, rule_id),
+        )
+        changed = cur.rowcount > 0
+        conn.commit()
+        return changed
+
+
 def get_admin_camp_link(admin_id: int, camp_id: int):
     with _db_conn("crm") as conn:
         cur = conn.cursor()

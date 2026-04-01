@@ -1,5 +1,6 @@
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from fastapi import Depends, HTTPException, Request, status
 
@@ -12,6 +13,8 @@ from tourist03.schemas import (
     AdminCreateBookingRequest,
     AdminLoginRequest,
     AdminRoomUpsertRequest,
+    AdminShiftRuleUpsertRequest,
+    AdminShiftSettingsUpdateRequest,
     AdminStaffUpsertRequest,
     AdminServiceUpsertRequest,
     BookingAdminUpdateRequest,
@@ -79,6 +82,20 @@ def _ensure_admin_audit_access(admin: dict, camp_id: int):
     )
     if "view_audit_log" not in permission_keys and not link.get("can_manage_staff"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для просмотра журнала")
+    return link, permission_keys
+
+
+def _ensure_admin_shift_access(admin: dict, camp_id: int):
+    link = admin_repo.get_admin_camp_link(int(admin["id"]), camp_id)
+    if not link:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа к выбранной базе")
+    permission_keys = _effective_permission_keys(
+        int(admin["id"]),
+        camp_id,
+        role_key=link.get("role_key") or admin.get("default_role_key"),
+    )
+    if "manage_shift_schedule" not in permission_keys and not link.get("can_manage_staff"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для управления сменами")
     return link, permission_keys
 
 
@@ -196,6 +213,114 @@ def _normalize_staff_permission_keys(permission_keys: list[str]) -> list[str]:
         seen.add(normalized)
         result.append(normalized)
     return result
+
+
+def _parse_shift_time(value: str) -> time:
+    raw = str(value or "").strip()
+    try:
+        hour_str, minute_str = raw.split(":", 1)
+        return time(hour=int(hour_str), minute=int(minute_str))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Некорректное время смены") from exc
+
+
+def _weekday_label(weekday: int) -> str:
+    labels = [
+        "Понедельник",
+        "Вторник",
+        "Среда",
+        "Четверг",
+        "Пятница",
+        "Суббота",
+        "Воскресенье",
+    ]
+    try:
+        return labels[int(weekday)]
+    except Exception:
+        return f"День {weekday}"
+
+
+def _resolve_shift_window(anchor_day: date, starts_at_value, ends_at_value) -> tuple[datetime, datetime]:
+    start_time = starts_at_value if isinstance(starts_at_value, time) else _parse_shift_time(str(starts_at_value))
+    end_time = ends_at_value if isinstance(ends_at_value, time) else _parse_shift_time(str(ends_at_value))
+    starts_at = datetime.combine(anchor_day, start_time)
+    ends_at = datetime.combine(anchor_day, end_time)
+    if ends_at <= starts_at:
+        ends_at += timedelta(days=1)
+    return starts_at, ends_at
+
+
+def _serialize_shift_occurrence(rule: dict, starts_at: datetime, ends_at: datetime, *, timezone_name: str) -> dict:
+    return {
+        "rule_id": rule.get("id"),
+        "admin_id": rule.get("admin_id"),
+        "admin_name": rule.get("admin_name") or rule.get("admin_email") or f"Сотрудник #{rule.get('admin_id')}",
+        "weekday": rule.get("weekday"),
+        "weekday_label": _weekday_label(int(rule.get("weekday") or 0)),
+        "starts_at": starts_at.isoformat(),
+        "ends_at": ends_at.isoformat(),
+        "starts_time": starts_at.strftime("%H:%M"),
+        "ends_time": ends_at.strftime("%H:%M"),
+        "is_night_shift": bool(rule.get("is_night_shift")),
+        "is_active": bool(rule.get("is_active")),
+        "comment": rule.get("comment") or "",
+        "timezone": timezone_name,
+    }
+
+
+def _build_shift_overview(timezone_name: str, rules: list[dict]) -> dict:
+    try:
+        zone = ZoneInfo(timezone_name or "Asia/Irkutsk")
+    except Exception:
+        zone = ZoneInfo("Asia/Irkutsk")
+        timezone_name = "Asia/Irkutsk"
+
+    now = datetime.now(zone)
+    active_rules: list[dict] = []
+    next_occurrence: Optional[dict] = None
+    upcoming_windows: list[dict] = []
+
+    for offset in range(0, 14):
+        anchor_day = (now + timedelta(days=offset)).date()
+        weekday_value = anchor_day.weekday()
+        for rule in rules:
+            if not rule.get("is_active"):
+                continue
+            if int(rule.get("weekday") or 0) != weekday_value:
+                continue
+            starts_at_naive, ends_at_naive = _resolve_shift_window(anchor_day, rule.get("starts_at"), rule.get("ends_at"))
+            starts_at = starts_at_naive.replace(tzinfo=zone)
+            ends_at = ends_at_naive.replace(tzinfo=zone)
+            occurrence = _serialize_shift_occurrence(rule, starts_at, ends_at, timezone_name=timezone_name)
+            if starts_at <= now < ends_at:
+                active_rules.append(occurrence)
+            if starts_at > now:
+                upcoming_windows.append(occurrence)
+                if next_occurrence is None or starts_at < datetime.fromisoformat(next_occurrence["starts_at"]):
+                    next_occurrence = occurrence
+
+    previous_day = (now - timedelta(days=1)).date()
+    previous_weekday = previous_day.weekday()
+    for rule in rules:
+        if not rule.get("is_active"):
+            continue
+        if int(rule.get("weekday") or 0) != previous_weekday:
+            continue
+        starts_at_naive, ends_at_naive = _resolve_shift_window(previous_day, rule.get("starts_at"), rule.get("ends_at"))
+        starts_at = starts_at_naive.replace(tzinfo=zone)
+        ends_at = ends_at_naive.replace(tzinfo=zone)
+        if starts_at <= now < ends_at:
+            active_rules.append(_serialize_shift_occurrence(rule, starts_at, ends_at, timezone_name=timezone_name))
+
+    active_rules.sort(key=lambda item: (item["starts_at"], item["admin_name"]))
+    upcoming_windows.sort(key=lambda item: (item["starts_at"], item["admin_name"]))
+    return {
+        "timezone": timezone_name,
+        "now": now.isoformat(),
+        "active_rules": active_rules,
+        "next_rule": next_occurrence,
+        "upcoming_windows": upcoming_windows[:10],
+    }
 
 
 def api_admin_my_camps(admin: dict = Depends(get_current_admin)):
@@ -554,6 +679,155 @@ def api_admin_camp_profile(camp_id: int, admin: dict = Depends(get_current_admin
     if not payload:
         raise HTTPException(status_code=404, detail="База не найдена")
     return payload
+
+
+def api_admin_camp_shifts(camp_id: int, admin: dict = Depends(get_current_admin)):
+    _ensure_admin_shift_access(admin, camp_id)
+    settings = admin_repo.get_camp_shift_settings(camp_id) or {
+        "camp_id": camp_id,
+        "time_zone": "Asia/Irkutsk",
+        "booking_hold_hours": 4,
+        "night_release_after_shift_minutes": 60,
+        "escalation_step_minutes": 15,
+        "escalation_repeats_before_manager": 2,
+    }
+    rules = admin_repo.list_camp_shift_rules(camp_id)
+    staff_items = admin_repo.list_admin_staff(camp_id)
+    staff = [
+        {
+            "id": item.get("id"),
+            "display_name": item.get("display_name") or item.get("email") or f"Сотрудник #{item.get('id')}",
+            "role_key": item.get("role_key") or item.get("default_role_key") or "administrator",
+            "role_label": crm_domain.STAFF_ROLE_LABELS.get(item.get("role_key") or item.get("default_role_key") or "administrator", item.get("role_key") or "administrator"),
+            "is_active": bool(item.get("is_active")),
+            "notifications_enabled": bool(item.get("notifications_enabled", True)),
+            "has_telegram_link": bool(item.get("telegram_chat_id")),
+        }
+        for item in staff_items
+        if bool(item.get("is_active"))
+    ]
+    return {
+        "settings": settings,
+        "rules": rules,
+        "overview": _build_shift_overview(str(settings.get("time_zone") or "Asia/Irkutsk"), rules),
+        "staff": staff,
+    }
+
+
+def api_admin_update_shift_settings(
+    camp_id: int,
+    payload: AdminShiftSettingsUpdateRequest,
+    admin: dict = Depends(get_current_admin),
+):
+    _ensure_admin_shift_access(admin, camp_id)
+    before = admin_repo.get_camp_shift_settings(camp_id)
+    admin_repo.save_camp_shift_settings(camp_id, payload.model_dump())
+    after = admin_repo.get_camp_shift_settings(camp_id)
+    log_crm_audit_event(
+        actor_type="camp_admin",
+        actor_id=admin.get("id"),
+        actor_display=admin.get("display_name"),
+        camp_id=camp_id,
+        target_type="shift_settings",
+        target_id=camp_id,
+        action_type="shift_settings_update",
+        action_label="Обновил параметры смен",
+        old_value=before,
+        new_value=after,
+        is_sensitive=True,
+        was_auto_applied=True,
+    )
+    return {"ok": True, "item": after}
+
+
+def api_admin_create_shift_rule(
+    camp_id: int,
+    payload: AdminShiftRuleUpsertRequest,
+    admin: dict = Depends(get_current_admin),
+):
+    _ensure_admin_shift_access(admin, camp_id)
+    if not admin_repo.get_admin_staff_member(camp_id, payload.admin_id):
+        raise HTTPException(status_code=400, detail="Сотрудник не привязан к этой базе")
+    if payload.weekday < 0 or payload.weekday > 6:
+        raise HTTPException(status_code=400, detail="Некорректный день недели")
+    _parse_shift_time(payload.starts_at)
+    _parse_shift_time(payload.ends_at)
+    rule_id = admin_repo.create_camp_shift_rule(camp_id, payload.model_dump(), int(admin["id"]))
+    rule = admin_repo.get_camp_shift_rule(camp_id, rule_id)
+    log_crm_audit_event(
+        actor_type="camp_admin",
+        actor_id=admin.get("id"),
+        actor_display=admin.get("display_name"),
+        camp_id=camp_id,
+        target_type="shift_rule",
+        target_id=rule_id,
+        action_type="shift_rule_create",
+        action_label="Создал правило смены",
+        new_value=rule,
+        is_sensitive=True,
+        was_auto_applied=True,
+    )
+    return {"ok": True, "id": rule_id, "item": rule}
+
+
+def api_admin_update_shift_rule(
+    camp_id: int,
+    rule_id: int,
+    payload: AdminShiftRuleUpsertRequest,
+    admin: dict = Depends(get_current_admin),
+):
+    _ensure_admin_shift_access(admin, camp_id)
+    before = admin_repo.get_camp_shift_rule(camp_id, rule_id)
+    if not before:
+        raise HTTPException(status_code=404, detail="Правило смены не найдено")
+    if not admin_repo.get_admin_staff_member(camp_id, payload.admin_id):
+        raise HTTPException(status_code=400, detail="Сотрудник не привязан к этой базе")
+    if payload.weekday < 0 or payload.weekday > 6:
+        raise HTTPException(status_code=400, detail="Некорректный день недели")
+    _parse_shift_time(payload.starts_at)
+    _parse_shift_time(payload.ends_at)
+    changed = admin_repo.update_camp_shift_rule(camp_id, rule_id, payload.model_dump())
+    if not changed:
+        raise HTTPException(status_code=404, detail="Правило смены не найдено")
+    after = admin_repo.get_camp_shift_rule(camp_id, rule_id)
+    log_crm_audit_event(
+        actor_type="camp_admin",
+        actor_id=admin.get("id"),
+        actor_display=admin.get("display_name"),
+        camp_id=camp_id,
+        target_type="shift_rule",
+        target_id=rule_id,
+        action_type="shift_rule_update",
+        action_label="Обновил правило смены",
+        old_value=before,
+        new_value=after,
+        is_sensitive=True,
+        was_auto_applied=True,
+    )
+    return {"ok": True, "item": after}
+
+
+def api_admin_delete_shift_rule(camp_id: int, rule_id: int, admin: dict = Depends(get_current_admin)):
+    _ensure_admin_shift_access(admin, camp_id)
+    before = admin_repo.get_camp_shift_rule(camp_id, rule_id)
+    if not before:
+        raise HTTPException(status_code=404, detail="Правило смены не найдено")
+    if not admin_repo.delete_camp_shift_rule(camp_id, rule_id):
+        raise HTTPException(status_code=404, detail="Правило смены не найдено")
+    log_crm_audit_event(
+        actor_type="camp_admin",
+        actor_id=admin.get("id"),
+        actor_display=admin.get("display_name"),
+        camp_id=camp_id,
+        target_type="shift_rule",
+        target_id=rule_id,
+        action_type="shift_rule_delete",
+        action_label="Удалил правило смены",
+        old_value=before,
+        is_sensitive=True,
+        was_auto_applied=True,
+    )
+    return {"ok": True}
 
 
 def api_admin_update_camp_profile(
