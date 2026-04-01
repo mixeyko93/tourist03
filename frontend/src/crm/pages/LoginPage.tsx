@@ -3,6 +3,7 @@ import { useState, type FormEvent } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router";
 import { motion } from "motion/react";
 import { getCrmSession, saveCrmSession } from "../session";
+import { crmPath } from "../paths";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -10,15 +11,16 @@ export default function LoginPage() {
   const [email, setEmail] = useState("manager@tourist03.ru");
   const [password, setPassword] = useState("tourist03-demo");
   const session = getCrmSession();
+  const homePath = crmPath("/");
 
   if (session) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={homePath} replace />;
   }
 
   const nextPath =
     typeof (location.state as { from?: unknown } | null)?.from === "string"
       ? (location.state as { from: string }).from
-      : "/";
+      : homePath;
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

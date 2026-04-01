@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router";
 import { useTheme } from "next-themes";
 import { clearCrmSession, getCrmSession } from "../session";
+import { crmPath } from "../paths";
 
 const navItems = [
   { label: "Сводка", path: "/" },
@@ -27,8 +28,15 @@ export default function AppLayout() {
     setMounted(true);
   }, []);
 
+  const basePath = crmPath("/");
+  const loginPath = crmPath("/login");
+  const navLinks = navItems.map((item) => ({
+    ...item,
+    to: crmPath(item.path),
+  }));
+
   if (!session) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+    return <Navigate to={loginPath} replace state={{ from: location.pathname }} />;
   }
 
   return (
@@ -73,7 +81,7 @@ export default function AppLayout() {
             type="button"
             onClick={() => {
               clearCrmSession();
-              navigate("/login", { replace: true });
+              navigate(loginPath, { replace: true });
             }}
             className="rounded-2xl border border-border bg-background/70 px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5D3B3]/60"
           >
@@ -90,11 +98,11 @@ export default function AppLayout() {
             }`}
           >
             <nav className="flex flex-1 flex-col gap-2">
-              {navItems.map((item) => (
+              {navLinks.map((item) => (
                 <NavLink
-                  key={item.path}
-                  to={item.path}
-                  end={item.path === "/"}
+                  key={item.to}
+                  to={item.to}
+                  end={item.to === basePath}
                   className={({ isActive }) =>
                     [
                       "rounded-2xl border px-4 py-3 text-sm font-medium transition",

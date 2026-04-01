@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router";
+import { Navigate, createBrowserRouter, type RouteObject } from "react-router";
 import LegacyMapPage from "./routes/LegacyMapPage";
 import AppLayout from "./components/AppLayout";
 import LoginPage from "./pages/LoginPage";
@@ -9,34 +9,28 @@ import RoomsPage from "./pages/RoomsPage";
 import GuestsPage from "./pages/GuestsPage";
 import ServicesPage from "./pages/ServicesPage";
 import SettingsPage from "./pages/SettingsPage";
+import { crmPath } from "./paths";
 
-function detectBasename() {
-  if (typeof window === "undefined") {
-    return "/admincamps";
-  }
-
-  const { pathname } = window.location;
-  if (pathname === "/react-map" || pathname.startsWith("/react-map/")) {
-    return "/react-map";
-  }
-  if (pathname === "/admincamps" || pathname.startsWith("/admincamps/")) {
-    return "/admincamps";
-  }
-  return "/admincamps";
+function RootRedirect() {
+  return <Navigate to="/admincamps" replace />;
 }
 
-export const router = createBrowserRouter(
-  [
+function LoginRedirect() {
+  return <Navigate to="/admincamps/login" replace />;
+}
+
+function createCrmRoutes(base: "/admincamps" | "/react-map"): RouteObject[] {
+  return [
     {
-      path: "/login",
+      path: crmPath("/login", base),
       Component: LoginPage,
     },
     {
-      path: "/map",
+      path: crmPath("/map", base),
       Component: LegacyMapPage,
     },
     {
-      path: "/",
+      path: crmPath("/", base),
       Component: AppLayout,
       children: [
         { index: true, Component: DashboardPage },
@@ -48,8 +42,18 @@ export const router = createBrowserRouter(
         { path: "settings", Component: SettingsPage },
       ],
     },
-  ],
+  ];
+}
+
+export const router = createBrowserRouter([
   {
-    basename: detectBasename(),
+    path: "/",
+    Component: RootRedirect,
   },
-);
+  {
+    path: "/login",
+    Component: LoginRedirect,
+  },
+  ...createCrmRoutes("/admincamps"),
+  ...createCrmRoutes("/react-map"),
+]);
