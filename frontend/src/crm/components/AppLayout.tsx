@@ -6,7 +6,7 @@ import { clearCrmSession, getCrmSession } from "../session";
 import { crmPath } from "../paths";
 
 const navItems = [
-  { label: "Сводка", path: "/" },
+  { label: "Сводка", path: "/dashboard" },
   { label: "Календарь", path: "/calendar" },
   { label: "Брони", path: "/bookings" },
   { label: "Номера и цены", path: "/rooms" },
@@ -28,7 +28,7 @@ export default function AppLayout() {
     setMounted(true);
   }, []);
 
-  const basePath = crmPath("/");
+  const dashboardPath = crmPath("/dashboard");
   const loginPath = crmPath("/login");
   const navLinks = navItems.map((item) => ({
     ...item,
@@ -102,7 +102,7 @@ export default function AppLayout() {
                 <NavLink
                   key={item.to}
                   to={item.to}
-                  end={item.to === basePath}
+                  end={item.to === dashboardPath}
                   className={({ isActive }) =>
                     [
                       "rounded-2xl border px-4 py-3 text-sm font-medium transition",

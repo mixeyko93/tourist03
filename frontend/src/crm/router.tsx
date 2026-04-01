@@ -11,15 +11,11 @@ import ServicesPage from "./pages/ServicesPage";
 import SettingsPage from "./pages/SettingsPage";
 import { crmPath } from "./paths";
 
-function RootRedirect() {
-  return <Navigate to="/admincamps" replace />;
+function DashboardRedirect({ base = "" }: { base?: "" | "/react-map" }) {
+  return <Navigate to={crmPath("/dashboard", base)} replace />;
 }
 
-function LoginRedirect() {
-  return <Navigate to="/admincamps/login" replace />;
-}
-
-function createCrmRoutes(base: "/admincamps" | "/react-map"): RouteObject[] {
+function createCrmRoutes(base: "" | "/react-map"): RouteObject[] {
   return [
     {
       path: crmPath("/login", base),
@@ -30,10 +26,11 @@ function createCrmRoutes(base: "/admincamps" | "/react-map"): RouteObject[] {
       Component: LegacyMapPage,
     },
     {
-      path: crmPath("/", base),
+      path: base || "/",
       Component: AppLayout,
       children: [
-        { index: true, Component: DashboardPage },
+        { index: true, Component: () => <DashboardRedirect base={base} /> },
+        { path: "dashboard", Component: DashboardPage },
         { path: "calendar", Component: CalendarPage },
         { path: "bookings", Component: BookingsPage },
         { path: "rooms", Component: RoomsPage },
@@ -46,14 +43,6 @@ function createCrmRoutes(base: "/admincamps" | "/react-map"): RouteObject[] {
 }
 
 export const router = createBrowserRouter([
-  {
-    path: "/",
-    Component: RootRedirect,
-  },
-  {
-    path: "/login",
-    Component: LoginRedirect,
-  },
-  ...createCrmRoutes("/admincamps"),
+  ...createCrmRoutes(""),
   ...createCrmRoutes("/react-map"),
 ]);

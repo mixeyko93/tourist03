@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 from tourist03.config import BASE_DIR, STATIC_DIR, TEMPLATES, templates
 
@@ -56,8 +56,10 @@ def superadmin_page():
 
 
 def admin_camps_page(request: Request):
-    _ = request
-    return react_map_page()
+    target = "/" + str(request.path_params.get("path") or "").lstrip("/")
+    if target == "/":
+        target = "/login"
+    return RedirectResponse(url=target, status_code=302)
 
 
 def react_map_page():

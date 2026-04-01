@@ -11,7 +11,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("manager@tourist03.ru");
   const [password, setPassword] = useState("tourist03-demo");
   const session = getCrmSession();
-  const homePath = crmPath("/");
+  const homePath = crmPath("/dashboard");
 
   if (session) {
     return <Navigate to={homePath} replace />;
