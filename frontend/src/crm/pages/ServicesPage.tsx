@@ -34,7 +34,7 @@ export default function ServicesPage() {
         title="Дополнительные услуги"
         description="Каталог платных и бесплатных сервисов, которые можно продавать вместе с размещением."
         actions={
-          <button type="button" className="brand-button gap-2">
+          <button type="button" className="brand-button w-full gap-2 sm:w-auto">
             <Plus className="h-4 w-4" />
             Добавить услугу
           </button>
@@ -71,11 +71,11 @@ export default function ServicesPage() {
                 <p className="text-sm text-muted-foreground">{service.price}</p>
               </div>
 
-              <div className="mt-8 flex items-center justify-end gap-2">
-                <button type="button" className="soft-button px-4 py-2.5">
+              <div className="mt-8 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+                <button type="button" className="soft-button w-full px-4 py-2.5 sm:w-auto">
                   Изменить
                 </button>
-                <button type="button" className="rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-2.5 text-sm font-medium text-rose-300 transition hover:bg-rose-500/18">
+                <button type="button" className="w-full rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-2.5 text-sm font-medium text-rose-300 transition hover:bg-rose-500/18 sm:w-auto">
                   Удалить
                 </button>
               </div>

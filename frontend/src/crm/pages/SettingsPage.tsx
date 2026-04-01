@@ -21,12 +21,12 @@ export default function SettingsPage() {
 
       <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
         <aside className="glass-card p-3">
-          <nav className="space-y-1">
+          <nav className="flex gap-1 overflow-x-auto pb-1 lg:block lg:space-y-1">
             {tabs.map((tab, index) => (
               <button
                 key={tab.id}
                 type="button"
-                className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left text-sm font-medium transition ${
+                className={`flex shrink-0 items-center gap-3 rounded-2xl border px-4 py-3 text-left text-sm font-medium transition lg:w-full ${
                   index === 0
                     ? "border-[#E5D3B3]/25 bg-[#E5D3B3]/10 text-foreground"
                     : "border-transparent text-muted-foreground hover:border-border hover:bg-accent hover:text-foreground"
@@ -93,7 +93,7 @@ export default function SettingsPage() {
                 </label>
               </div>
 
-              <div className="mt-5 flex items-center justify-between rounded-3xl border border-border bg-background/65 px-5 py-4">
+              <div className="mt-5 flex flex-col gap-4 rounded-3xl border border-border bg-background/65 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h3 className="text-sm font-medium text-foreground">Размещение с животными</h3>
                   <p className="mt-1 text-sm text-muted-foreground">Разрешить гостям приезжать с питомцами</p>

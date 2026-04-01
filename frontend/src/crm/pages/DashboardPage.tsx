@@ -20,12 +20,12 @@ export default function DashboardPage() {
         description="Премиальный обзор текущей загрузки, динамики выручки и ближайших бронирований без переключения между разделами."
         actions={
           <>
-            <select className="soft-input min-w-52 pr-10">
+            <select className="soft-input w-full min-w-0 pr-10 sm:min-w-52">
               <option>Гостиный Дворъ</option>
               <option>Ангир</option>
               <option>Байкал Резиденс</option>
             </select>
-            <button type="button" className="brand-outline">
+            <button type="button" className="brand-outline w-full sm:w-auto">
               Скачать отчёт
             </button>
           </>
@@ -68,7 +68,8 @@ export default function DashboardPage() {
           </div>
 
           <div className="mt-8 grid gap-5 lg:grid-cols-[1fr_220px]">
-            <div className="flex items-end gap-3">
+            <div className="-mx-1 overflow-x-auto pb-2">
+              <div className="flex min-w-[560px] items-end gap-3 px-1">
               {revenueSeries.map((item) => (
                 <div key={item.month} className="flex flex-1 flex-col items-center gap-3">
                   <div className="flex h-64 w-full items-end rounded-[1.6rem] border border-border bg-background/55 p-2">
@@ -83,6 +84,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
               ))}
+              </div>
             </div>
 
             <div className="space-y-3 rounded-[1.8rem] border border-border bg-background/65 p-4">
@@ -124,7 +126,7 @@ export default function DashboardPage() {
           <div className="mt-6 space-y-3">
             {recentBookings.map((booking) => (
               <article key={booking.id} className="rounded-[1.4rem] border border-border bg-background/65 p-4">
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-semibold text-foreground">{booking.guest}</p>
@@ -135,7 +137,7 @@ export default function DashboardPage() {
                     <p className="mt-1 text-sm text-muted-foreground">{booking.room}</p>
                     <p className="mt-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">{booking.dates}</p>
                   </div>
-                  <p className="text-sm font-semibold text-foreground">{booking.amount}</p>
+                  <p className="text-sm font-semibold text-foreground sm:text-right">{booking.amount}</p>
                 </div>
               </article>
             ))}

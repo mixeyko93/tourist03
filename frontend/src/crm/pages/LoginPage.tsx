@@ -32,7 +32,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-4 py-10">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-4 py-4 sm:py-8 lg:py-10">
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute left-1/2 top-0 h-72 w-72 -translate-x-1/2 rounded-full bg-[#E5D3B3]/18 blur-3xl" />
         <div className="absolute bottom-0 right-0 h-72 w-72 rounded-full bg-sky-500/10 blur-3xl" />
@@ -40,15 +40,15 @@ export default function LoginPage() {
       </div>
 
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass-card relative w-full max-w-5xl overflow-hidden">
-        <div className="grid min-h-[680px] lg:grid-cols-[1.08fr_0.92fr]">
-          <section className="crm-ambient flex flex-col justify-between border-b border-border px-6 py-8 lg:border-b-0 lg:border-r lg:px-8 lg:py-10">
+        <div className="grid lg:min-h-[680px] lg:grid-cols-[1.08fr_0.92fr]">
+          <section className="order-2 crm-ambient flex flex-col justify-between border-t border-border px-5 py-6 sm:px-6 lg:order-1 lg:border-t-0 lg:border-r lg:px-8 lg:py-10">
             <div className="space-y-8">
-              <span className="inline-flex rounded-full border border-[#E5D3B3]/30 bg-[#E5D3B3]/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.26em] text-[#E5D3B3]">
+              <span className="inline-flex rounded-full border border-[#E5D3B3]/30 bg-[#E5D3B3]/10 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.26em] text-[#E5D3B3] sm:text-xs">
                 Premium Control Room
               </span>
 
               <div className="space-y-4">
-                <h1 className="max-w-xl text-4xl font-semibold tracking-[-0.06em] text-foreground md:text-5xl">
+                <h1 className="max-w-xl text-3xl font-semibold tracking-[-0.06em] text-foreground sm:text-4xl md:text-5xl">
                   Управляйте бронированиями, загрузкой и сервисом базы в одном интерфейсе.
                 </h1>
                 <p className="max-w-lg text-base leading-7 text-muted-foreground">
@@ -79,18 +79,18 @@ export default function LoginPage() {
                 <article key={item.title} className="rounded-3xl border border-border bg-card/55 p-4 backdrop-blur-lg">
                   <item.icon className="h-5 w-5 text-[#E5D3B3]" />
                   <h2 className="mt-5 text-sm font-semibold text-foreground">{item.title}</h2>
-                  <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.text}</p>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground sm:line-clamp-none">{item.text}</p>
                 </article>
               ))}
             </div>
           </section>
 
-          <section className="flex items-center px-5 py-8 sm:px-6 lg:px-8">
+          <section className="order-1 flex items-center px-4 py-5 sm:px-6 sm:py-7 lg:order-2 lg:px-8">
             <div className="mx-auto w-full max-w-md">
-              <div className="glass-card rounded-[2rem] p-6 sm:p-8">
+              <div className="glass-card rounded-[2rem] p-5 sm:p-8">
                 <div className="space-y-2 text-center">
                   <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#E5D3B3]">Tourist_03 CRM</p>
-                  <h2 className="text-3xl font-semibold tracking-[-0.05em] text-foreground">Вход в систему</h2>
+                  <h2 className="text-2xl font-semibold tracking-[-0.05em] text-foreground sm:text-3xl">Вход в систему</h2>
                   <p className="text-sm leading-6 text-muted-foreground">
                     Используйте демонстрационные данные или войдите под своей учётной записью.
                   </p>
@@ -127,7 +127,7 @@ export default function LoginPage() {
                     </div>
                   </label>
 
-                  <div className="flex items-center justify-between rounded-2xl border border-border bg-background/60 px-4 py-3 text-sm">
+                  <div className="flex flex-col gap-1 rounded-2xl border border-border bg-background/60 px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
                     <span className="text-muted-foreground">Demo user</span>
                     <span className="font-medium text-foreground">manager@tourist03.ru</span>
                   </div>

@@ -21,7 +21,7 @@ export default function BookingsPage() {
         title="Управление бронями"
         description="Фильтрация, контроль статусов и быстрое создание новой брони внутри одного интерфейса."
         actions={
-          <button type="button" className="brand-button gap-2" onClick={() => setIsCreateOpen(true)}>
+          <button type="button" className="brand-button w-full gap-2 sm:w-auto" onClick={() => setIsCreateOpen(true)}>
             <Plus className="h-4 w-4" />
             Создать бронь
           </button>
@@ -29,13 +29,13 @@ export default function BookingsPage() {
       />
 
       <section className="glass-card p-5">
-        <div className="flex flex-col gap-3 xl:flex-row xl:flex-wrap xl:items-center">
-          <div className="relative min-w-52 flex-1 xl:max-w-xs">
+        <div className="grid gap-3 md:grid-cols-2 xl:flex xl:flex-wrap xl:items-center">
+          <div className="relative min-w-0 flex-1 xl:max-w-xs">
             <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input type="search" className="soft-input pl-11" placeholder="Поиск по гостю или номеру" />
           </div>
 
-          <div className="relative min-w-52">
+          <div className="relative min-w-0">
             <select className="soft-input appearance-none pr-10">
               <option>Гостиный Дворъ</option>
               <option>Ангир</option>
@@ -43,24 +43,66 @@ export default function BookingsPage() {
             <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           </div>
 
-          <label className="relative min-w-44">
+          <label className="relative min-w-0">
             <CalendarRange className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input type="text" className="soft-input pl-11" placeholder="дд.мм.гггг" />
           </label>
 
-          <label className="relative min-w-44">
+          <label className="relative min-w-0">
             <CalendarRange className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input type="text" className="soft-input pl-11" placeholder="дд.мм.гггг" />
           </label>
 
-          <button type="button" className="soft-button gap-2">
+          <button type="button" className="soft-button w-full gap-2 md:col-span-2 xl:w-auto">
             <Filter className="h-4 w-4 text-[#E5D3B3]" />
             Фильтровать
           </button>
         </div>
       </section>
 
-      <section className="glass-card overflow-hidden">
+      <section className="glass-card overflow-hidden md:hidden">
+        <div className="space-y-3 p-4">
+          {bookingRows.map((booking) => (
+            <article key={booking.id} className="rounded-[1.4rem] border border-border bg-background/65 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">{booking.room}</p>
+                  <p className="mt-1 text-xs uppercase tracking-[0.18em] text-muted-foreground">{booking.id}</p>
+                </div>
+                <span className={`rounded-full border px-3 py-1 text-xs font-medium ${statusClasses[booking.status]}`}>
+                  {booking.status}
+                </span>
+              </div>
+              <div className="mt-4 grid gap-3 text-sm">
+                <div className="rounded-2xl border border-border bg-card/55 px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Даты</p>
+                  <p className="mt-1 text-foreground">
+                    {booking.checkIn}
+                    {" -> "}
+                    {booking.checkOut}
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-2xl border border-border bg-card/55 px-3 py-2">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Гости</p>
+                    <p className="mt-1 font-medium text-foreground">{booking.guests}</p>
+                  </div>
+                  <div className="rounded-2xl border border-border bg-card/55 px-3 py-2">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Источник</p>
+                    <p className="mt-1 font-medium text-foreground">{booking.source}</p>
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-border bg-card/55 px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Оплата</p>
+                  <p className="mt-1 text-foreground">{booking.payment}</p>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="glass-card hidden overflow-hidden md:block">
         <div className="overflow-x-auto">
           <table className="min-w-full border-collapse text-left">
             <thead className="bg-background/70">

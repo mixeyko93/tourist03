@@ -24,14 +24,55 @@ export default function GuestsPage() {
             <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input type="search" className="soft-input pl-11" placeholder="Поиск по имени или телефону" />
           </div>
-          <button type="button" className="soft-button gap-2 self-start">
+          <button type="button" className="soft-button w-full gap-2 self-start sm:w-auto">
             <Filter className="h-4 w-4 text-[#E5D3B3]" />
             Фильтровать
           </button>
         </div>
       </section>
 
-      <section className="glass-card overflow-hidden">
+      <section className="glass-card overflow-hidden md:hidden">
+        <div className="space-y-3 p-4">
+          {guestRows.map((guest) => (
+            <article key={guest.id} className="rounded-[1.4rem] border border-border bg-background/65 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">{guest.name}</p>
+                  <div className="mt-2 flex flex-col gap-1 text-xs text-muted-foreground">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Phone className="h-3.5 w-3.5 text-[#E5D3B3]" />
+                      {guest.phone}
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 break-all">
+                      <Mail className="h-3.5 w-3.5 shrink-0 text-[#E5D3B3]" />
+                      {guest.email}
+                    </span>
+                  </div>
+                </div>
+                <span className={`rounded-full border px-3 py-1 text-xs font-medium ${guestStatusClasses[guest.status]}`}>
+                  {guest.status}
+                </span>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="rounded-2xl border border-border bg-card/55 px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Визиты</p>
+                  <p className="mt-1 font-medium text-foreground">{guest.visits}</p>
+                </div>
+                <div className="rounded-2xl border border-border bg-card/55 px-3 py-2">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Последний визит</p>
+                  <p className="mt-1 font-medium text-foreground">{guest.lastVisit}</p>
+                </div>
+              </div>
+              <div className="mt-3 rounded-2xl border border-border bg-card/55 px-3 py-2">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Сумма</p>
+                <p className="mt-1 font-semibold text-foreground">{guest.totalSpent}</p>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="glass-card hidden overflow-hidden md:block">
         <div className="overflow-x-auto">
           <table className="min-w-full border-collapse text-left">
             <thead className="bg-background/70">

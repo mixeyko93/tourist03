@@ -46,21 +46,25 @@ export default function CalendarPage() {
             <h2 className="text-xl font-semibold tracking-[-0.04em] text-foreground sm:ml-2">Март 2026</h2>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="grid gap-3 sm:grid-cols-2 xl:flex xl:flex-wrap xl:items-center">
             <div className="relative">
-              <select className="soft-input min-w-52 appearance-none pr-10">
+              <select className="soft-input w-full min-w-0 appearance-none pr-10 sm:min-w-52">
                 <option>Гостиный Дворъ</option>
               </select>
               <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             </div>
             <div className="relative">
-              <select className="soft-input min-w-44 appearance-none pr-10">
+              <select className="soft-input w-full min-w-0 appearance-none pr-10 sm:min-w-44">
                 <option>Все номера</option>
               </select>
               <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             </div>
           </div>
         </div>
+
+        <p className="mt-4 text-sm text-muted-foreground md:hidden">
+          На телефоне календарь прокручивается горизонтально, чтобы сохранить читаемость размещений по дням.
+        </p>
 
         <div className="mt-5 flex flex-wrap items-center gap-4 text-xs font-medium text-muted-foreground">
           {[
