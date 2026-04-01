@@ -34,7 +34,7 @@ export default function DashboardPage() {
 
       <section className="grid gap-4 md:grid-cols-3">
         {dashboardStats.map((stat, index) => {
-          const icon = [CalendarClock, Users, BedDouble][index] ?? Sparkles;
+          const Icon = [CalendarClock, Users, BedDouble][index] ?? Sparkles;
           return (
             <article key={stat.label} className="glass-card p-5">
               <div className="flex items-start justify-between gap-4">
@@ -43,7 +43,7 @@ export default function DashboardPage() {
                   <p className="text-4xl font-semibold tracking-[-0.06em] text-foreground">{stat.value}</p>
                 </div>
                 <span className="rounded-2xl border border-[#E5D3B3]/30 bg-[#E5D3B3]/10 p-3 text-[#E5D3B3]">
-                  {icon({ className: "h-5 w-5" })}
+                  <Icon className="h-5 w-5" />
                 </span>
               </div>
               <div className="mt-6 flex items-center justify-between text-sm">
