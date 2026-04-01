@@ -10,7 +10,7 @@ class AdminLoginRequest(BaseModel):
 
 
 class SuperAdminLoginRequest(BaseModel):
-    key: str
+    key: Optional[str] = None
     login: Optional[str] = None
     password: Optional[str] = None
 

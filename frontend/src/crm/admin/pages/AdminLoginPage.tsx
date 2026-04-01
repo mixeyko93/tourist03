@@ -1,4 +1,4 @@
-import { ArrowRight, KeyRound, LockKeyhole, ShieldCheck, UserRound } from "lucide-react";
+import { ArrowRight, LockKeyhole, ShieldCheck, UserRound } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router";
 import { PageMotion } from "../../components/PageMotion";
@@ -12,7 +12,6 @@ export default function AdminLoginPage() {
   const location = useLocation();
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
-  const [key, setKey] = useState("");
   const [sessionState, setSessionState] = useState<SessionState>("checking");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
@@ -40,7 +39,7 @@ export default function AdminLoginPage() {
     setPending(true);
     setError("");
     try {
-      const response = await loginSuperadminSession({ login, password, key });
+      const response = await loginSuperadminSession({ login, password });
       if (!response.authenticated) {
         throw new Error("Нет доступа");
       }
@@ -88,7 +87,7 @@ export default function AdminLoginPage() {
                 {
                   icon: ShieldCheck,
                   title: "Контур доступа",
-                  text: "Вход защищён тройной проверкой: логин, пароль и ключ суперадмина.",
+                  text: "Вход защищён служебными реквизитами суперадминистратора без лишних шагов.",
                 },
                 {
                   icon: UserRound,
@@ -96,7 +95,7 @@ export default function AdminLoginPage() {
                   text: "Карточки пользователей, история действий и учётные записи управляющих в одном месте.",
                 },
                 {
-                  icon: KeyRound,
+                  icon: LockKeyhole,
                   title: "Быстрый контроль",
                   text: "После входа открывается справочник баз и дальнейшая работа без лишних переключений.",
                 },
@@ -117,7 +116,7 @@ export default function AdminLoginPage() {
                   <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#E5D3B3]">Tourist_03 Superadmin</p>
                   <h2 className="text-2xl font-semibold tracking-[-0.05em] text-foreground sm:text-3xl">Вход в систему</h2>
                   <p className="text-sm leading-6 text-muted-foreground">
-                    Авторизуйтесь по служебным реквизитам, чтобы открыть панель суперадмина.
+                    Авторизуйтесь по логину и паролю, чтобы открыть панель суперадмина.
                   </p>
                 </div>
 
@@ -151,22 +150,6 @@ export default function AdminLoginPage() {
                         placeholder="Введите пароль"
                         value={password}
                         onChange={(event) => setPassword(event.target.value)}
-                        required
-                      />
-                    </div>
-                  </label>
-
-                  <label className="block space-y-2">
-                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Ключ доступа</span>
-                    <div className="relative">
-                      <KeyRound className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-                      <input
-                        id="superadmin-key"
-                        type="password"
-                        className="soft-input pl-12"
-                        placeholder="Введите ключ"
-                        value={key}
-                        onChange={(event) => setKey(event.target.value)}
                         required
                       />
                     </div>

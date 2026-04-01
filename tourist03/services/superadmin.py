@@ -38,10 +38,10 @@ def superadmin_login(payload: SuperAdminLoginRequest, request: Request):
         request.session["superadmin"] = True
         return {"ok": True, "authenticated": True}
 
-    if not is_valid_superadmin_key(payload.key):
-        raise HTTPException(status_code=401, detail="Нет доступа")
-
-    if superadmin_credentials_required() and not is_valid_superadmin_credentials(payload.login or "", payload.password or ""):
+    if superadmin_credentials_required():
+        if not is_valid_superadmin_credentials(payload.login or "", payload.password or ""):
+            raise HTTPException(status_code=401, detail="Нет доступа")
+    elif not is_valid_superadmin_key(payload.key or ""):
         raise HTTPException(status_code=401, detail="Нет доступа")
 
     request.session["superadmin"] = True

@@ -241,10 +241,10 @@ class ApiHttpFlowTests(unittest.IsolatedAsyncioTestCase):
             stack.enter_context(patch("tourist03.security.SUPERADMIN_LOGIN", "admin"))
             stack.enter_context(patch("tourist03.security.SUPERADMIN_PASSWORD", "super-pass"))
 
-            missing_creds = await self.client.post("/api/superadmin/session", json={"key": "super-key"})
+            missing_creds = await self.client.post("/api/superadmin/session", json={"login": "admin"})
             valid_creds = await self.client.post(
                 "/api/superadmin/session",
-                json={"key": "super-key", "login": "admin", "password": "super-pass"},
+                json={"login": "admin", "password": "super-pass"},
             )
 
         self.assertEqual(missing_creds.status_code, 401)

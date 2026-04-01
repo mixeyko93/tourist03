@@ -210,7 +210,6 @@ class UiSmokeTests(unittest.TestCase):
             page.wait_for_selector("#superadmin-login", timeout=5000)
             page.fill("#superadmin-login", self.superadmin_login)
             page.fill("#superadmin-password", self.superadmin_password)
-            page.fill("#superadmin-key", self.superadmin_key)
             page.click("#superadmin-submit")
             page.wait_for_url(f"{self.base_url}/admin/bases", timeout=10000)
             page.wait_for_selector("table tbody tr", timeout=10000)

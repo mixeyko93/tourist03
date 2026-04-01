@@ -6,7 +6,6 @@ export type SuperadminSessionResponse = {
 export type SuperadminLoginPayload = {
   login: string;
   password: string;
-  key: string;
 };
 
 async function parseSessionResponse(response: Response): Promise<SuperadminSessionResponse> {
