@@ -28,7 +28,7 @@ http://45.153.71.21 {
   }
 
   @root path /
-  rewrite @root /admincamps
+  redir @root /admincamps 302
 
   reverse_proxy app:8000
 }
