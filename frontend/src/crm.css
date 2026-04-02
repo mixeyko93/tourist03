@@ -150,11 +150,12 @@
 
   .glass-card {
     @apply rounded-3xl border border-border bg-card/82 shadow-xl backdrop-blur-xl;
+    min-width: 0;
     box-shadow: var(--brand-shadow);
   }
 
   .soft-input {
-    @apply w-full rounded-2xl border border-input bg-background/80 px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground transition focus:border-[#E5D3B3]/55 focus:outline-none focus:ring-2 focus:ring-[#E5D3B3]/35;
+    @apply w-full min-w-0 rounded-2xl border border-input bg-background/80 px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground transition focus:border-[#E5D3B3]/55 focus:outline-none focus:ring-2 focus:ring-[#E5D3B3]/35;
   }
 
   .soft-button {
@@ -171,11 +172,12 @@
 
   .admin-card {
     @apply rounded-3xl border border-border bg-card/88 shadow-xl backdrop-blur-xl;
+    min-width: 0;
     box-shadow: var(--brand-shadow);
   }
 
   .admin-input {
-    @apply w-full rounded-xl border border-input bg-background/82 px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20;
+    @apply w-full min-w-0 rounded-xl border border-input bg-background/82 px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20;
   }
 
   .admin-button {
@@ -192,6 +194,7 @@
 
   .admin-table-shell {
     @apply overflow-x-auto;
+    scrollbar-gutter: stable both-edges;
   }
 
   .admin-table {
@@ -204,10 +207,15 @@
 
   .admin-table th {
     @apply px-6 py-4 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground;
+    vertical-align: top;
+    overflow-wrap: anywhere;
   }
 
   .admin-table td {
     @apply px-6 py-4 text-sm text-muted-foreground;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   .admin-table tbody tr {
@@ -223,5 +231,11 @@
     background:
       radial-gradient(circle at top left, rgba(255, 255, 255, 0.55), transparent 22%),
       linear-gradient(180deg, #f8f2e7 0%, #efe5d7 100%);
+  }
+
+  .crm-copy-safe {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 }

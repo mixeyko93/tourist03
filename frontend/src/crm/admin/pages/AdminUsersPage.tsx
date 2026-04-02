@@ -106,7 +106,7 @@ export default function AdminUsersPage() {
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Клиентская база</p>
               <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-foreground">Пользователи</h2>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-                Реальный список клиентов с телефонами, email, подтверждением контактов и полной историей бронирований.
+                Реальный список клиентов с телефонами, эл. почтой, подтверждением контактов и полной историей бронирований.
               </p>
             </div>
 
@@ -115,7 +115,7 @@ export default function AdminUsersPage() {
                 <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
                   className="admin-input pl-10"
-                  placeholder="Поиск по имени, телефону или email"
+                  placeholder="Поиск по имени, телефону или эл. почте"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                 />
@@ -136,7 +136,7 @@ export default function AdminUsersPage() {
           <table className="admin-table min-w-[940px]">
             <thead>
               <tr>
-                {["ID", "Имя", "Телефон", "Email", "Статус", "Создан"].map((label) => (
+                {["ID", "Имя", "Телефон", "Эл. почта", "Статус", "Создан"].map((label) => (
                   <th key={label}>
                     <span className="inline-flex items-center gap-1">
                       {label}
@@ -157,7 +157,7 @@ export default function AdminUsersPage() {
                     <td>{user.id}</td>
                     <td className="font-medium text-foreground">{user.name || "Без имени"}</td>
                     <td>{user.phone || "—"}</td>
-                    <td>{user.email || "—"}</td>
+                    <td className="crm-copy-safe">{user.email || "—"}</td>
                     <td>{formatStatus(user)}</td>
                     <td>{formatDateTime(user.created_at)}</td>
                   </tr>
@@ -200,7 +200,7 @@ export default function AdminUsersPage() {
                       <Phone className="h-4 w-4 text-blue-500" />
                       {history.user.phone || "Телефон не указан"}
                     </p>
-                    <p className="text-muted-foreground">{history.user.email || "Email не указан"}</p>
+                    <p className="crm-copy-safe text-muted-foreground">{history.user.email || "Эл. почта не указана"}</p>
                     <p className="text-muted-foreground">Создан: {formatDateTime(history.user.created_at)}</p>
                   </div>
                 </div>
@@ -227,7 +227,7 @@ export default function AdminUsersPage() {
                   </div>
                   <div className="mt-4 space-y-2 text-sm text-muted-foreground">
                     <p>Телефон: {history.user.phone_verified ? "подтверждён" : "не подтверждён"}</p>
-                    <p>Email: {history.user.email_verified ? "подтверждён" : "не подтверждён"}</p>
+                    <p>Эл. почта: {history.user.email_verified ? "подтверждена" : "не подтверждена"}</p>
                     <p>Последняя активность: {formatDateTime(history.events[0]?.created_at)}</p>
                   </div>
                 </div>
@@ -300,7 +300,7 @@ export default function AdminUsersPage() {
                           <tr key={`${event.id}-${event.created_at}`}>
                             <td>{formatDateTime(event.created_at)}</td>
                             <td className="font-medium text-foreground">{event.event_type}</td>
-                            <td>{formatEventData(event.payload)}</td>
+                            <td className="crm-copy-safe">{formatEventData(event.payload)}</td>
                           </tr>
                         ))
                       ) : (

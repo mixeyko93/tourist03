@@ -167,7 +167,7 @@ export default function AdminLoginPage() {
                     className="brand-button w-full gap-2"
                     disabled={pending || sessionState === "checking"}
                   >
-                    {pending || sessionState === "checking" ? "Проверка доступа..." : "Войти в superadmin"}
+                    {pending || sessionState === "checking" ? "Проверка доступа..." : "Войти в панель"}
                     <ArrowRight className="h-4 w-4" />
                   </button>
                 </form>

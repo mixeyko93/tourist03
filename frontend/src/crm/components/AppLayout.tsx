@@ -175,8 +175,8 @@ export default function AppLayout() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <header className="relative z-20 flex h-16 shrink-0 items-center justify-between border-b border-border bg-card/85 px-4 backdrop-blur-xl md:px-6">
-        <div className="flex items-center gap-3">
+      <header className="relative z-20 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-border bg-card/85 px-4 backdrop-blur-xl md:px-6">
+        <div className="flex min-w-0 items-center gap-3">
           <button
             type="button"
             onClick={() => setSidebarOpen((value) => !value)}
@@ -185,13 +185,13 @@ export default function AppLayout() {
           >
             <Menu className="h-5 w-5" />
           </button>
-          <div>
+          <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#E5D3B3]">Tourist_03 CRM</p>
-            <p className="text-sm text-muted-foreground">Панель управления базой отдыха</p>
+            <p className="truncate text-sm text-muted-foreground">Панель управления базой отдыха</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex min-w-0 items-center gap-3">
           {mounted ? (
             <button
               type="button"
@@ -252,7 +252,7 @@ export default function AppLayout() {
         </div>
       </header>
 
-      <div className="relative flex flex-1 overflow-hidden">
+      <div className="relative flex min-w-0 flex-1 overflow-hidden">
         <div className={`relative hidden shrink-0 transition-[width] duration-300 lg:block ${sidebarOpen ? "w-56" : "w-0"}`}>
           <aside
             className={`absolute inset-y-0 left-0 flex h-full w-56 flex-col border-r border-border bg-card/80 px-3 py-4 backdrop-blur-xl transition-transform duration-300 ${
@@ -280,8 +280,8 @@ export default function AppLayout() {
           {navContent}
         </aside>
 
-        <main className="crm-ambient relative flex-1 overflow-y-auto px-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] md:px-6 md:py-6 lg:px-8">
-          <div className="mx-auto flex min-h-full w-full max-w-[1600px] flex-col gap-6">
+        <main className="crm-ambient relative min-w-0 flex-1 overflow-y-auto px-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] md:px-6 md:py-6 lg:px-8">
+          <div className="mx-auto flex min-h-full min-w-0 w-full max-w-[1600px] flex-col gap-6">
             <Outlet />
           </div>
         </main>

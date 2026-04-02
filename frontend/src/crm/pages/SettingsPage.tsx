@@ -522,7 +522,7 @@ export default function SettingsPage() {
       return;
     }
     if (!staffForm.email.trim() || !staffForm.displayName.trim()) {
-      setStaffFormError("Заполните email и имя сотрудника.");
+      setStaffFormError("Заполните эл. почту и имя сотрудника.");
       return;
     }
     if (!editingStaff && !staffForm.password.trim()) {
@@ -812,7 +812,7 @@ export default function SettingsPage() {
                 <input
                   type="search"
                   className="soft-input pl-11"
-                  placeholder="Поиск по имени, email, телефону или роли"
+                  placeholder="Поиск по имени, эл. почте, телефону или роли"
                   value={teamSearch}
                   onChange={(event) => setTeamSearch(event.target.value)}
                 />
@@ -1093,7 +1093,7 @@ export default function SettingsPage() {
 
           <div className="grid gap-4 md:grid-cols-2">
             <label className="space-y-2">
-              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Email</span>
+              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Эл. почта</span>
               <input className="soft-input" value={staffForm.email} onChange={(event) => setStaffForm((current) => ({ ...current, email: event.target.value }))} required />
             </label>
             <label className="space-y-2">

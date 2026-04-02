@@ -180,7 +180,7 @@ export default function AdminBasesPage() {
                         <AdminStatusBadge tone={statusTones[statusKey] || "neutral"}>{formatStatus(base.status)}</AdminStatusBadge>
                       </td>
                       <td className="text-muted-foreground">#{base.id}</td>
-                      <td className="font-medium text-foreground">{base.name || "Без названия"}</td>
+                      <td className="crm-copy-safe font-medium text-foreground">{base.name || "Без названия"}</td>
                       <td>{base.lake_name || "—"}</td>
                       <td>
                         <span className="inline-flex items-center gap-2">
@@ -188,8 +188,8 @@ export default function AdminBasesPage() {
                           {formatCoordinates(base)}
                         </span>
                       </td>
-                      <td className="max-w-[260px] leading-6">{base.owner || "Не указан"}</td>
-                      <td className="max-w-[260px] leading-6">{base.manager || "Не указан"}</td>
+                      <td className="crm-copy-safe max-w-[260px] leading-6">{base.owner || "Не указан"}</td>
+                      <td className="crm-copy-safe max-w-[260px] leading-6">{base.manager || "Не указан"}</td>
                       <td>
                         {linkedAdmins.length ? (
                           <div className="flex max-w-[260px] flex-wrap gap-2">
@@ -244,7 +244,7 @@ export default function AdminBasesPage() {
                 </div>
                 <div className="flex shrink-0 flex-col items-start gap-2 text-xs text-muted-foreground lg:items-end">
                   <span>{event.created_at ? new Date(event.created_at).toLocaleString("ru-RU") : "—"}</span>
-                  <span>{event.action_url || "Без действия"}</span>
+                  <span className="crm-copy-safe">{event.action_url ? "Открыть в CRM" : "Без действия"}</span>
                 </div>
               </div>
             ))

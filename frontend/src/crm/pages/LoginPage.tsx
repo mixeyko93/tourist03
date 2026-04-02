@@ -128,13 +128,13 @@ export default function LoginPage() {
                   ) : null}
 
                   <label className="block space-y-2">
-                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Email</span>
+                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Эл. почта</span>
                     <div className="relative">
                       <Mail className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                       <input
                         type="email"
                         className="soft-input pl-12"
-                        placeholder="email@company.ru"
+                        placeholder="name@company.ru"
                         value={email}
                         onChange={(event) => setEmail(event.target.value)}
                         disabled={isSubmitting || isCheckingSession}

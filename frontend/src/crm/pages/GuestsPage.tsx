@@ -136,7 +136,7 @@ export default function GuestsPage() {
             <input
               type="search"
               className="soft-input pl-11"
-              placeholder="Поиск по имени, телефону или email"
+              placeholder="Поиск по имени, телефону или эл. почте"
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
             />
@@ -203,7 +203,7 @@ export default function GuestsPage() {
                       </span>
                       <span className="inline-flex items-center gap-1.5 break-all">
                         <Mail className="h-3.5 w-3.5 shrink-0 text-[#E5D3B3]" />
-                        {guest.email || "Email не указан"}
+                        {guest.email || "Эл. почта не указана"}
                       </span>
                     </div>
                   </div>
@@ -274,7 +274,7 @@ export default function GuestsPage() {
                           </span>
                           <span className="inline-flex items-center gap-1.5">
                             <Mail className="h-3.5 w-3.5 text-[#E5D3B3]" />
-                            {guest.email || "Email не указан"}
+                            {guest.email || "Эл. почта не указана"}
                           </span>
                         </div>
                       </div>
@@ -317,7 +317,7 @@ export default function GuestsPage() {
                 <p className="mt-2 text-sm font-medium text-foreground">{selectedGuest.phone || "Не указан"}</p>
               </div>
               <div className="rounded-3xl border border-border bg-background/65 p-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Email</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Эл. почта</p>
                 <p className="mt-2 text-sm font-medium text-foreground">{selectedGuest.email || "Не указан"}</p>
               </div>
               <div className="rounded-3xl border border-border bg-background/65 p-4">

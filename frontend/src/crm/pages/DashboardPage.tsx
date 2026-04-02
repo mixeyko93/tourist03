@@ -16,6 +16,13 @@ function formatCurrency(value: number) {
   return `${new Intl.NumberFormat("ru-RU").format(value)} ₽`;
 }
 
+function formatDateLabel(value: string) {
+  if (!value) return "Не указано";
+  const [year, month, day] = value.split("-");
+  if (!year || !month || !day) return value;
+  return `${day}.${month}.${year}`;
+}
+
 function bookingTone(status: string) {
   if (status === "completed") return "completed";
   if (status === "confirmed" || status === "checked_in") return "confirmed";
@@ -43,6 +50,17 @@ function bookingStatusLabel(status: string) {
 
 function bookingGuest(booking: CrmBooking) {
   return booking.guest_name || booking.user_name || booking.guest_phone || booking.user_phone || `Бронь #${booking.id}`;
+}
+
+function bookingSourceLabel(source: string) {
+  const labels: Record<string, string> = {
+    crm: "CRM",
+    webapp: "Мини-приложение",
+    app: "Приложение",
+    site: "Сайт",
+    telegram: "Телеграм",
+  };
+  return labels[source] || source || "Не указан";
 }
 
 function nightsBetween(checkIn: string, checkOut: string) {
@@ -350,10 +368,10 @@ export default function DashboardPage() {
                         </div>
                         <p className="mt-1 truncate text-sm text-muted-foreground">{booking.room_name || "Без апартамента"}</p>
                         <p className="mt-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                          {booking.check_in} → {booking.check_out}
+                          {formatDateLabel(booking.check_in)} → {formatDateLabel(booking.check_out)}
                         </p>
                       </div>
-                      <p className="text-sm font-semibold text-foreground sm:text-right">{booking.source || "crm"}</p>
+                      <p className="text-sm font-semibold text-foreground sm:text-right">{bookingSourceLabel(booking.source)}</p>
                     </div>
                   </article>
                 ))}

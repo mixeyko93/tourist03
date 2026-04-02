@@ -626,7 +626,7 @@ export default function BookingsPage() {
             <EmptyState
               icon={CalendarRange}
               title="Пока нет ни одной брони"
-              description="Здесь будут только реальные заказы из CRM, сайта, Telegram Mini App и других подключённых каналов."
+              description="Здесь будут только реальные заказы из CRM, сайта, мини-приложения Telegram и других подключённых каналов."
             />
           </div>
         )}
@@ -673,7 +673,7 @@ export default function BookingsPage() {
             </label>
 
             <label className="space-y-2">
-              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Email</span>
+              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Эл. почта</span>
               <input
                 type="email"
                 className="soft-input"
