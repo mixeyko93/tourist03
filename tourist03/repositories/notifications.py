@@ -28,6 +28,31 @@ def get_staff_account_by_chat_id(chat_id: int):
         return dict(row) if row else None
 
 
+def get_superadmin_account_by_chat_id(chat_id: int):
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT
+                id,
+                login,
+                display_name,
+                phone,
+                is_root,
+                telegram_chat_id,
+                telegram_username
+            FROM auth.superadmin_accounts
+            WHERE telegram_chat_id = %s
+              AND archived_at IS NULL
+              AND is_active = TRUE
+            LIMIT 1
+            """,
+            (int(chat_id),),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+
 def list_staff_camp_ids(admin_id: int) -> list[int]:
     with _db_conn("crm") as conn:
         cur = conn.cursor()
@@ -53,10 +78,12 @@ def list_recent_open_events_for_admin(admin_id: int, camp_ids: list[int], *, lim
                 e.id,
                 e.camp_id,
                 c.name AS camp_name,
+                e.recipient_scope,
                 e.event_type,
                 e.title,
                 e.body,
                 e.action_url,
+                e.metadata,
                 e.severity,
                 e.status,
                 e.created_at
@@ -82,6 +109,45 @@ def list_recent_open_events_for_admin(admin_id: int, camp_ids: list[int], *, lim
             LIMIT %s
             """,
             (int(admin_id), camp_ids, safe_limit),
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+
+def list_recent_open_events_for_superadmin(account_id: int, *, limit: int = 5):
+    safe_limit = max(1, min(int(limit or 5), 20))
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT
+                e.id,
+                e.camp_id,
+                c.name AS camp_name,
+                e.recipient_scope,
+                e.event_type,
+                e.title,
+                e.body,
+                e.action_url,
+                e.severity,
+                e.status,
+                e.metadata,
+                e.created_at
+            FROM crm.notification_events e
+            LEFT JOIN catalog.camps c ON c.id = e.camp_id
+            WHERE e.recipient_scope = 'superadmin'
+              AND e.channel = 'in_app'
+              AND e.status <> 'closed'
+              AND (
+                    e.recipient_admin_id = %s
+                    OR e.recipient_admin_id IS NULL
+              )
+            ORDER BY
+                CASE e.severity WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END,
+                e.created_at DESC,
+                e.id DESC
+            LIMIT %s
+            """,
+            (int(account_id), safe_limit),
         )
         return [dict(row) for row in cur.fetchall()]
 
@@ -176,40 +242,108 @@ def list_manager_telegram_recipients(camp_id: int, *, exclude_admin_ids: Optiona
         return [dict(row) for row in cur.fetchall()]
 
 
+def list_active_superadmin_telegram_recipients(*, exclude_account_ids: Optional[list[int]] = None, root_only: bool = False):
+    conditions = [
+        "archived_at IS NULL",
+        "is_active = TRUE",
+        "telegram_chat_id IS NOT NULL",
+    ]
+    params: list = []
+    if root_only:
+        conditions.append("is_root = TRUE")
+    if exclude_account_ids:
+        normalized = [int(value) for value in exclude_account_ids if value is not None]
+        if normalized:
+            conditions.append("NOT (id = ANY(%s))")
+            params.append(normalized)
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT
+                id,
+                login,
+                display_name,
+                is_root,
+                telegram_chat_id,
+                telegram_username
+            FROM auth.superadmin_accounts
+            WHERE {' AND '.join(conditions)}
+            ORDER BY is_root DESC, display_name ASC, id ASC
+            """,
+            tuple(params),
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+
 def list_pending_telegram_notifications(*, limit: int = 100):
     safe_limit = max(1, min(int(limit or 100), 500))
     with _db_conn("crm") as conn:
         cur = conn.cursor()
         cur.execute(
             """
-            SELECT
-                e.id,
-                e.camp_id,
-                c.name AS camp_name,
-                e.recipient_admin_id,
-                a.display_name AS recipient_name,
-                a.telegram_chat_id,
-                a.telegram_username,
-                e.event_type,
-                e.title,
-                e.body,
-                e.action_url,
-                e.action_payload,
-                e.severity,
-                e.status,
-                e.metadata,
-                e.created_at
-            FROM crm.notification_events e
-            JOIN auth.camp_admin_accounts a ON a.id = e.recipient_admin_id
-            LEFT JOIN catalog.camps c ON c.id = e.camp_id
-            WHERE e.recipient_scope = 'crm'
-              AND e.channel = 'telegram'
-              AND e.status = 'new'
-              AND a.archived_at IS NULL
-              AND a.is_active = TRUE
-              AND a.notifications_enabled = TRUE
-              AND a.telegram_chat_id IS NOT NULL
-            ORDER BY e.created_at ASC, e.id ASC
+            SELECT *
+            FROM (
+                SELECT
+                    e.id,
+                    e.camp_id,
+                    c.name AS camp_name,
+                    e.recipient_scope,
+                    e.recipient_admin_id,
+                    a.display_name AS recipient_name,
+                    a.telegram_chat_id,
+                    a.telegram_username,
+                    e.event_type,
+                    e.title,
+                    e.body,
+                    e.action_url,
+                    e.action_payload,
+                    e.severity,
+                    e.status,
+                    e.metadata,
+                    e.created_at
+                FROM crm.notification_events e
+                JOIN auth.camp_admin_accounts a ON a.id = e.recipient_admin_id
+                LEFT JOIN catalog.camps c ON c.id = e.camp_id
+                WHERE e.recipient_scope = 'crm'
+                  AND e.channel = 'telegram'
+                  AND e.status = 'new'
+                  AND a.archived_at IS NULL
+                  AND a.is_active = TRUE
+                  AND a.notifications_enabled = TRUE
+                  AND a.telegram_chat_id IS NOT NULL
+
+                UNION ALL
+
+                SELECT
+                    e.id,
+                    e.camp_id,
+                    c.name AS camp_name,
+                    e.recipient_scope,
+                    e.recipient_admin_id,
+                    COALESCE(sa.display_name, sa.login) AS recipient_name,
+                    sa.telegram_chat_id,
+                    sa.telegram_username,
+                    e.event_type,
+                    e.title,
+                    e.body,
+                    e.action_url,
+                    e.action_payload,
+                    e.severity,
+                    e.status,
+                    e.metadata,
+                    e.created_at
+                FROM crm.notification_events e
+                JOIN auth.superadmin_accounts sa ON sa.id = e.recipient_admin_id
+                LEFT JOIN catalog.camps c ON c.id = e.camp_id
+                WHERE e.recipient_scope = 'superadmin'
+                  AND e.channel = 'telegram'
+                  AND e.status = 'new'
+                  AND sa.archived_at IS NULL
+                  AND sa.is_active = TRUE
+                  AND sa.telegram_chat_id IS NOT NULL
+            ) AS q
+            ORDER BY q.created_at ASC, q.id ASC
             LIMIT %s
             """,
             (safe_limit,),

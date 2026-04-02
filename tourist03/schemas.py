@@ -180,6 +180,7 @@ class AdminCampProfileUpdateRequest(BaseModel):
     support_whatsapp: Optional[str] = None
     support_telegram: Optional[str] = None
     notifications_enabled: bool = True
+    media: List[Dict[str, Any]] = []
 
 
 class AdminRoomUpsertRequest(BaseModel):
@@ -204,6 +205,7 @@ class AdminRoomUpsertRequest(BaseModel):
     discount_pct: int = 0
     discount_from_nights: int = 0
     description: Optional[str] = None
+    media: List[Dict[str, Any]] = []
 
 
 class AdminServiceUpsertRequest(BaseModel):

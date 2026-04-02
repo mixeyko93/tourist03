@@ -13,6 +13,7 @@ from tourist03.domain import bookings as booking_domain
 from tourist03.domain import crm as crm_domain
 from tourist03.repositories import admin as admin_repo
 from tourist03.repositories import notifications as notification_repo
+from tourist03.storage import _normalize_move
 from tourist03.schemas import (
     AdminCampProfileUpdateRequest,
     AdminChangeRequestCreateRequest,
@@ -140,6 +141,7 @@ def _camp_profile_payload_from_snapshot(snapshot: dict | None) -> dict:
         "support_whatsapp": settings.get("support_whatsapp"),
         "support_telegram": settings.get("support_telegram"),
         "notifications_enabled": bool(settings.get("notifications_enabled", True)),
+        "media": _normalize_media_payload(snapshot.get("media") or []),
     }
 
 
@@ -167,7 +169,161 @@ def _room_payload_from_snapshot(snapshot: dict | None) -> dict:
         "discount_pct": int(snapshot.get("discount_pct") or 0),
         "discount_from_nights": int(snapshot.get("discount_from_nights") or 0),
         "description": snapshot.get("description"),
+        "media": _normalize_media_payload(snapshot.get("media") or []),
     }
+
+
+def _normalize_media_payload(raw_media: Any, *, max_images: int = 20) -> list[dict]:
+    items: list[dict] = []
+    image_count = 0
+    video_seen = False
+    source = raw_media if isinstance(raw_media, list) else []
+    for raw in source:
+        if not isinstance(raw, dict):
+            continue
+        url = str(raw.get("url") or "").strip()
+        if not url:
+            continue
+        media_type = str(raw.get("media_type") or "").strip().lower()
+        if media_type not in {"image", "video"}:
+            media_type = "video" if any(url.lower().split("?", 1)[0].endswith(ext) for ext in (".mp4", ".mov", ".webm", ".m4v")) else "image"
+        if media_type == "video":
+            if video_seen:
+                continue
+            video_seen = True
+        else:
+            if image_count >= max_images:
+                continue
+            image_count += 1
+        source_kind = str(raw.get("source_kind") or "").strip().lower()
+        if source_kind not in {"upload", "external"}:
+            source_kind = "external" if media_type == "video" and not url.startswith("/static/uploads/") else "upload"
+        items.append(
+            {
+                "media_type": media_type,
+                "url": url,
+                "poster_url": str(raw.get("poster_url") or "").strip() or None,
+                "source_kind": source_kind,
+                "cover": bool(raw.get("cover")) if media_type == "image" else False,
+                "sort": len(items),
+            }
+        )
+    image_items = [item for item in items if item.get("media_type") == "image"]
+    if image_items and not any(bool(item.get("cover")) for item in image_items):
+        image_items[0]["cover"] = True
+    return items
+
+
+def _media_key(item: dict) -> tuple[str, str]:
+    return (str(item.get("media_type") or "image").strip().lower(), str(item.get("url") or "").strip())
+
+
+def _new_pending_media_items(before_items: list[dict], after_items: list[dict]) -> list[dict]:
+    before_status = {_media_key(item): str(item.get("moderation_status") or "").strip().lower() for item in before_items}
+    result: list[dict] = []
+    for item in after_items:
+        if str(item.get("moderation_status") or "").strip().lower() != "pending":
+            continue
+        if before_status.get(_media_key(item)) == "pending":
+            continue
+        result.append(item)
+    return result
+
+
+def _notify_superadmins_about_media_review(
+    *,
+    camp_id: int,
+    camp_name: str,
+    actor_admin: dict,
+    pending_items: list[dict],
+    entity_type: str,
+    room_id: Optional[int] = None,
+    room_name: Optional[str] = None,
+) -> None:
+    if not pending_items:
+        return
+    recipients = notification_repo.list_active_superadmin_telegram_recipients()
+    if not recipients:
+        return
+
+    actor_label = actor_admin.get("display_name") or actor_admin.get("email") or "Сотрудник CRM"
+    for item in pending_items:
+        media_id = item.get("id")
+        media_label = "видео" if str(item.get("media_type") or "").lower() == "video" else "фото"
+        location_label = (room_name or "общий контент базы") if entity_type == "room" else "карточка базы"
+        title = "Новый контент ждёт модерации"
+        body = (
+            f"{actor_label} загрузил {media_label}.\n"
+            f"База: {camp_name}\n"
+            f"Раздел: {location_label}\n"
+            "Проверьте материал и примите решение."
+        )
+        metadata = {
+            "entity_type": entity_type,
+            "media_id": media_id,
+            "room_id": room_id,
+            "room_name": room_name,
+            "media_type": item.get("media_type"),
+        }
+        for recipient in recipients:
+            for channel in ("in_app", "telegram"):
+                create_notification_event(
+                    event_type="superadmin_media_moderation",
+                    title=title,
+                    body=body,
+                    channel=channel,
+                    recipient_scope="superadmin",
+                    recipient_admin_id=int(recipient["id"]),
+                    camp_id=camp_id,
+                    action_url="/admin/moderation",
+                    action_payload={
+                        "entity_type": entity_type,
+                        "media_id": media_id,
+                        "camp_id": camp_id,
+                        "room_id": room_id,
+                    },
+                    severity="warning",
+                    metadata=metadata,
+                )
+
+
+def _extract_camp_pending_media_notifications(before_snapshot: dict | None, after_snapshot: dict | None) -> list[dict]:
+    before_items = (before_snapshot or {}).get("media") or []
+    after_items = (after_snapshot or {}).get("media") or []
+    return _new_pending_media_items(before_items, after_items)
+
+
+def _extract_room_pending_media_notifications(before_snapshot: dict | None, after_snapshot: dict | None) -> list[dict]:
+    before_items = (before_snapshot or {}).get("media") or []
+    after_items = (after_snapshot or {}).get("media") or []
+    return _new_pending_media_items(before_items, after_items)
+
+
+def _emit_superadmin_media_notifications_from_snapshot(camp_id: int, actor_admin: dict, snapshot: dict) -> None:
+    operation = str(snapshot.get("operation") or "").strip()
+    if operation == "camp_profile_update":
+        before = snapshot.get("before") or {}
+        after = snapshot.get("after") or {}
+        _notify_superadmins_about_media_review(
+            camp_id=camp_id,
+            camp_name=((after.get("camp") or {}) or {}).get("name") or f"База #{camp_id}",
+            actor_admin=actor_admin,
+            pending_items=_extract_camp_pending_media_notifications(before, after),
+            entity_type="camp",
+        )
+    elif operation in {"room_create", "room_update"}:
+        before = snapshot.get("before") or {}
+        after = snapshot.get("after") or {}
+        room_id = int(snapshot.get("target_id") or after.get("id") or 0) or None
+        _notify_superadmins_about_media_review(
+            camp_id=camp_id,
+            camp_name=(admin_repo.get_admin_camp_profile(camp_id) or {}).get("camp", {}).get("name") or f"База #{camp_id}",
+            actor_admin=actor_admin,
+            pending_items=_extract_room_pending_media_notifications(before, after),
+            entity_type="room",
+            room_id=room_id,
+            room_name=after.get("name") or before.get("name") or (f"Апартамент #{room_id}" if room_id else "Апартамент"),
+        )
 
 
 def _reviewer_candidates(camp_id: int, permission_key: Optional[str]) -> list[dict]:
@@ -508,6 +664,7 @@ def _normalize_room_payload(raw_payload: dict) -> dict:
         "discount_pct": int(raw_payload.get("discount_pct") or 0),
         "discount_from_nights": int(raw_payload.get("discount_from_nights") or 0),
         "description": raw_payload.get("description"),
+        "media": _normalize_media_payload(raw_payload.get("media") or [], max_images=5),
     }
 
 
@@ -698,7 +855,7 @@ def _apply_change_request_payload(camp_id: int, payload: dict, actor_admin: dict
         }
 
     if operation == "camp_profile_update":
-        admin_repo.save_admin_camp_profile(camp_id, payload.get("after") or {})
+        admin_repo.save_admin_camp_profile(camp_id, {**(payload.get("after") or {}), "normalize_move": _normalize_move})
         return {
             "operation": operation,
             "target_id": str(camp_id),
@@ -707,7 +864,7 @@ def _apply_change_request_payload(camp_id: int, payload: dict, actor_admin: dict
         }
 
     if operation == "room_create":
-        room_id = admin_repo.create_admin_room(camp_id, payload.get("after") or {})
+        room_id = admin_repo.create_admin_room(camp_id, {**(payload.get("after") or {}), "normalize_move": _normalize_move})
         return {
             "operation": operation,
             "target_id": str(room_id),
@@ -716,7 +873,7 @@ def _apply_change_request_payload(camp_id: int, payload: dict, actor_admin: dict
 
     if operation == "room_update":
         room_id = int(payload.get("room_id") or 0)
-        if not admin_repo.update_admin_room(camp_id, room_id, payload.get("after") or {}):
+        if not admin_repo.update_admin_room(camp_id, room_id, {**(payload.get("after") or {}), "normalize_move": _normalize_move}):
             raise HTTPException(status_code=404, detail="Апартамент не найден")
         return {
             "operation": operation,
@@ -755,7 +912,7 @@ def _rollback_change_request_payload(camp_id: int, request_item: dict, actor_adm
         return {"operation": operation, "restored_rule_id": str(restored_rule_id), "rolled_back_to": admin_repo.get_camp_shift_rule(camp_id, restored_rule_id)}
 
     if operation == "camp_profile_update":
-        admin_repo.save_admin_camp_profile(camp_id, payload.get("before") or {})
+        admin_repo.save_admin_camp_profile(camp_id, {**(payload.get("before") or {}), "normalize_move": _normalize_move})
         return {"operation": operation, "rolled_back_to": admin_repo.get_admin_camp_profile(camp_id)}
 
     if operation == "room_create":
@@ -768,7 +925,7 @@ def _rollback_change_request_payload(camp_id: int, request_item: dict, actor_adm
 
     if operation == "room_update":
         room_id = int(applied_snapshot.get("target_id") or payload.get("room_id") or request_item.get("target_id") or 0)
-        if not admin_repo.update_admin_room(camp_id, room_id, _room_payload_from_snapshot(payload.get("before") or {})):
+        if not admin_repo.update_admin_room(camp_id, room_id, {**_room_payload_from_snapshot(payload.get("before") or {}), "normalize_move": _normalize_move}):
             raise HTTPException(status_code=409, detail="Не удалось откатить изменение апартамента")
         return {"operation": operation, "rolled_back_to": admin_repo.get_admin_room(camp_id, room_id)}
 
@@ -834,6 +991,7 @@ def process_change_request_decision(request_item: dict, actor_admin: dict, *, ac
         if str(request_item.get("status") or "") != "pending_review":
             raise HTTPException(status_code=409, detail="Подтверждать можно только изменения со статусом «На подтверждении»")
         applied_snapshot = _apply_change_request_payload(camp_id, request_item.get("payload") or {}, actor_admin)
+        _emit_superadmin_media_notifications_from_snapshot(camp_id, actor_admin, applied_snapshot)
         admin_repo.update_change_request(
             int(request_item["id"]),
             status="approved",
@@ -1229,6 +1387,7 @@ def api_admin_create_change_request(
     applied_snapshot = None
     if normalized_apply_mode == "apply_with_responsibility":
         applied_snapshot = _apply_change_request_payload(camp_id, prepared["payload"], admin)
+        _emit_superadmin_media_notifications_from_snapshot(camp_id, admin, applied_snapshot)
 
     request_id = admin_repo.create_change_request(
         camp_id,
@@ -1967,7 +2126,7 @@ def api_admin_update_camp_profile(
     before = admin_repo.get_admin_camp_profile(camp_id)
     if not before:
         raise HTTPException(status_code=404, detail="База не найдена")
-    admin_repo.save_admin_camp_profile(camp_id, payload.model_dump())
+    admin_repo.save_admin_camp_profile(camp_id, {**payload.model_dump(), "normalize_move": _normalize_move})
     after = admin_repo.get_admin_camp_profile(camp_id)
     log_crm_audit_event(
         actor_type="camp_admin",
@@ -1991,6 +2150,13 @@ def api_admin_update_camp_profile(
         severity="info",
         action_url="/settings",
         action_payload={"camp_id": camp_id, "tab": "profile"},
+    )
+    _notify_superadmins_about_media_review(
+        camp_id=camp_id,
+        camp_name=(after.get("camp") or {}).get("name") or f"База #{camp_id}",
+        actor_admin=admin,
+        pending_items=_extract_camp_pending_media_notifications(before, after),
+        entity_type="camp",
     )
     return {"ok": True, "item": after}
 
@@ -2238,7 +2404,7 @@ def api_admin_create_room(
     admin: dict = Depends(get_current_admin),
 ):
     _ensure_admin_camp_access(admin, camp_id)
-    room_id = admin_repo.create_admin_room(camp_id, payload.model_dump())
+    room_id = admin_repo.create_admin_room(camp_id, {**payload.model_dump(), "normalize_move": _normalize_move})
     room = admin_repo.get_admin_room(camp_id, room_id)
     log_crm_audit_event(
         actor_type="camp_admin",
@@ -2264,6 +2430,16 @@ def api_admin_create_room(
         action_payload={"camp_id": camp_id, "room_id": room_id},
         metadata={"room_id": room_id},
     )
+    room_payload = room or {}
+    _notify_superadmins_about_media_review(
+        camp_id=camp_id,
+        camp_name=(admin_repo.get_admin_camp_profile(camp_id) or {}).get("camp", {}).get("name") or f"База #{camp_id}",
+        actor_admin=admin,
+        pending_items=_extract_room_pending_media_notifications(None, room_payload),
+        entity_type="room",
+        room_id=room_id,
+        room_name=room_payload.get("name") or f"Апартамент #{room_id}",
+    )
     return {"ok": True, "id": room_id}
 
 
@@ -2277,7 +2453,7 @@ def api_admin_update_room(
     before = admin_repo.get_admin_room(camp_id, room_id)
     if not before:
         raise HTTPException(status_code=404, detail="Апартамент не найден")
-    changed = admin_repo.update_admin_room(camp_id, room_id, payload.model_dump())
+    changed = admin_repo.update_admin_room(camp_id, room_id, {**payload.model_dump(), "normalize_move": _normalize_move})
     if not changed:
         raise HTTPException(status_code=404, detail="Апартамент не найден")
     after = admin_repo.get_admin_room(camp_id, room_id)
@@ -2305,6 +2481,15 @@ def api_admin_update_room(
         action_url="/rooms",
         action_payload={"camp_id": camp_id, "room_id": room_id},
         metadata={"room_id": room_id},
+    )
+    _notify_superadmins_about_media_review(
+        camp_id=camp_id,
+        camp_name=(admin_repo.get_admin_camp_profile(camp_id) or {}).get("camp", {}).get("name") or f"База #{camp_id}",
+        actor_admin=admin,
+        pending_items=_extract_room_pending_media_notifications(before, after),
+        entity_type="room",
+        room_id=room_id,
+        room_name=after.get("name") or f"Апартамент #{room_id}",
     )
     return {"ok": True}
 

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -19,6 +21,7 @@ from tourist03.security import (
     get_root_superadmin,
     get_superadmin_session_principal,
     hash_password,
+    issue_superadmin_telegram_link_code,
     is_valid_superadmin_credentials,
     is_local_superadmin_bypass,
     is_valid_superadmin_key,
@@ -68,6 +71,21 @@ def _serialize_session(principal: Optional[dict]):
     }
 
 
+def _principal_public(account: dict | None) -> dict | None:
+    if not account:
+        return None
+    return {
+        "id": account.get("id"),
+        "login": account.get("login") or "",
+        "display_name": account.get("display_name") or "",
+        "is_root": bool(account.get("is_root")),
+        "is_active": bool(account.get("is_active")),
+        "telegram_chat_id": account.get("telegram_chat_id"),
+        "telegram_username": account.get("telegram_username") or None,
+        "has_telegram_link": bool(account.get("telegram_chat_id")),
+    }
+
+
 def superadmin_session(request: Request):
     return _serialize_session(get_superadmin_session_principal(request))
 
@@ -83,13 +101,7 @@ def superadmin_login(payload: SuperAdminLoginRequest, request: Request):
     account = superadmin_repo.get_superadmin_account_by_login(login) if login else None
 
     if account and account.get("archived_at") is None and bool(account.get("is_active")) and verify_password(password, account.get("password_hash") or ""):
-        principal = {
-            "id": account["id"],
-            "login": account.get("login") or "",
-            "display_name": account.get("display_name") or "",
-            "is_root": bool(account.get("is_root")),
-            "is_active": bool(account.get("is_active")),
-        }
+        principal = _principal_public(account)
         _set_superadmin_session(request, principal)
         log_crm_audit_event(
             actor_type="superadmin",
@@ -104,13 +116,7 @@ def superadmin_login(payload: SuperAdminLoginRequest, request: Request):
 
     bootstrap_account = _bootstrap_root_superadmin(login, password)
     if bootstrap_account:
-        principal = {
-            "id": bootstrap_account["id"],
-            "login": bootstrap_account.get("login") or "",
-            "display_name": bootstrap_account.get("display_name") or "",
-            "is_root": bool(bootstrap_account.get("is_root")),
-            "is_active": bool(bootstrap_account.get("is_active")),
-        }
+        principal = _principal_public(bootstrap_account)
         _set_superadmin_session(request, principal)
         log_crm_audit_event(
             actor_type="superadmin",
@@ -268,11 +274,51 @@ def superadmin_list_media_queue(search: Optional[str] = None, status: Optional[s
 
 def superadmin_update_media_moderation(entity_type: str, media_id: int, payload: SuperAdminMediaModerationRequest, request: Request):
     actor = get_superadmin_session_principal(request) or {}
+    superadmin_update_media_moderation_by_account(
+        actor,
+        entity_type=entity_type,
+        media_id=media_id,
+        status_value=payload.status,
+        comment=payload.comment,
+    )
+    return {"ok": True}
+
+
+def superadmin_issue_telegram_link(request: Request):
+    principal = get_superadmin_session_principal(request) or {}
+    account_id = principal.get("id")
+    if not account_id:
+        raise HTTPException(status_code=400, detail="Эта superadmin-сессия не поддерживает Telegram-привязку")
+    code = issue_superadmin_telegram_link_code(int(account_id))
+    from tourist03.config import STAFF_BOT_USERNAME
+
+    deep_link = f"https://t.me/{STAFF_BOT_USERNAME}?start={code}" if STAFF_BOT_USERNAME else None
+    log_crm_audit_event(
+        actor_type="superadmin",
+        actor_id=principal.get("id"),
+        actor_display=principal.get("display_name") or principal.get("login"),
+        target_type="superadmin_account",
+        target_id=account_id,
+        action_type="superadmin_telegram_link_issue",
+        action_label="Сгенерировал код привязки Telegram",
+        was_auto_applied=True,
+    )
+    return {"ok": True, "code": code, "command": f"/start {code}", "deep_link": deep_link}
+
+
+def superadmin_update_media_moderation_by_account(
+    account: dict,
+    *,
+    entity_type: str,
+    media_id: int,
+    status_value: str,
+    comment: Optional[str] = None,
+):
     current = catalog_repo.get_public_media_item(entity_type, media_id)
     if not current:
         raise HTTPException(status_code=404, detail="Медиаматериал не найден")
 
-    next_status = (payload.status or "").strip().lower()
+    next_status = (status_value or "").strip().lower()
     if next_status not in {"pending", "approved", "rejected"}:
         raise HTTPException(status_code=400, detail="Недопустимый статус модерации")
 
@@ -280,14 +326,14 @@ def superadmin_update_media_moderation(entity_type: str, media_id: int, payload:
         entity_type,
         media_id,
         moderation_status=next_status,
-        moderation_comment=(payload.comment or "").strip() or None,
-        approved_by_superadmin_id=actor.get("id"),
+        moderation_comment=(comment or "").strip() or None,
+        approved_by_superadmin_id=account.get("id"),
     )
     updated = catalog_repo.get_public_media_item(entity_type, media_id)
     log_crm_audit_event(
         actor_type="superadmin",
-        actor_id=actor.get("id"),
-        actor_display=actor.get("display_name") or actor.get("login"),
+        actor_id=account.get("id"),
+        actor_display=account.get("display_name") or account.get("login"),
         camp_id=current.get("camp_id"),
         target_type="public_media",
         target_id=f"{entity_type}:{media_id}",
@@ -299,13 +345,13 @@ def superadmin_update_media_moderation(entity_type: str, media_id: int, payload:
         },
         new_value={
             "moderation_status": updated.get("moderation_status") if updated else next_status,
-            "moderation_comment": updated.get("moderation_comment") if updated else (payload.comment or "").strip() or None,
+            "moderation_comment": updated.get("moderation_comment") if updated else (comment or "").strip() or None,
             "entity_type": entity_type,
             "media_type": current.get("media_type"),
             "url": current.get("url"),
         },
     )
-    return {"ok": True}
+    return updated or {"ok": True}
 
 
 def superadmin_list_root_accounts(request: Request, include_archived: bool = False):

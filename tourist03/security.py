@@ -241,6 +241,27 @@ def issue_admin_telegram_link_code(admin_id: int, *, ttl_minutes: int = 15) -> s
     return code
 
 
+def issue_superadmin_telegram_link_code(account_id: int, *, ttl_minutes: int = 15) -> str:
+    if not account_id:
+        raise ValueError("account_id is required")
+    code = f"sa_{secrets.token_urlsafe(12)}"
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=max(int(ttl_minutes or 15), 1))
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE auth.superadmin_accounts
+            SET telegram_link_code = %s,
+                telegram_link_code_expires_at = %s,
+                updated_at = NOW()
+            WHERE id = %s
+            """,
+            (code, expires_at, int(account_id)),
+        )
+        conn.commit()
+    return code
+
+
 def link_admin_telegram_account(
     code: str,
     *,
@@ -286,6 +307,53 @@ def link_admin_telegram_account(
         )
         conn.commit()
         return {"id": row["id"], "email": row["email"], "display_name": row["display_name"]}
+
+
+def link_superadmin_telegram_account(
+    code: str,
+    *,
+    telegram_user_id: int,
+    telegram_chat_id: int,
+    telegram_username: Optional[str] = None,
+) -> Optional[dict]:
+    token = (code or "").strip()
+    if not token:
+        return None
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT id, login, display_name, telegram_link_code_expires_at
+            FROM auth.superadmin_accounts
+            WHERE telegram_link_code = %s
+              AND archived_at IS NULL
+              AND is_active = TRUE
+            """,
+            (token,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+
+        expires_at = row.get("telegram_link_code_expires_at")
+        if expires_at is None or expires_at < datetime.now(timezone.utc):
+            return None
+
+        cur.execute(
+            """
+            UPDATE auth.superadmin_accounts
+            SET telegram_user_id = %s,
+                telegram_chat_id = %s,
+                telegram_username = %s,
+                telegram_link_code = NULL,
+                telegram_link_code_expires_at = NULL,
+                updated_at = NOW()
+            WHERE id = %s
+            """,
+            (int(telegram_user_id), int(telegram_chat_id), (telegram_username or "").strip() or None, row["id"]),
+        )
+        conn.commit()
+        return {"id": row["id"], "login": row["login"], "display_name": row["display_name"]}
 
 
 def issue_user_token(user_id: int) -> str:
@@ -397,6 +465,9 @@ def _superadmin_public(row: Optional[dict]) -> Optional[dict]:
         "display_name": row.get("display_name") or "",
         "is_root": bool(row.get("is_root")),
         "is_active": bool(row.get("is_active", True)),
+        "telegram_chat_id": row.get("telegram_chat_id"),
+        "telegram_username": row.get("telegram_username") or None,
+        "has_telegram_link": bool(row.get("telegram_chat_id")),
     }
 
 
@@ -413,6 +484,11 @@ def _get_superadmin_account_by_id(account_id: int) -> Optional[dict]:
                 phone,
                 is_active,
                 is_root,
+                telegram_user_id,
+                telegram_chat_id,
+                telegram_username,
+                telegram_link_code,
+                telegram_link_code_expires_at,
                 created_by_id,
                 archived_at,
                 created_at,
@@ -555,7 +631,9 @@ __all__ = [
     "is_valid_superadmin_key",
     "issue_user_token",
     "issue_admin_telegram_link_code",
+    "issue_superadmin_telegram_link_code",
     "link_admin_telegram_account",
+    "link_superadmin_telegram_account",
     "log_crm_audit_event",
     "log_user_event",
     "verify_password",

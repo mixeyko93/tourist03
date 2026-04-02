@@ -1,3 +1,5 @@
+import type { CrmMediaItem } from "./mediaTools";
+
 export type CrmSession = {
   id: number;
   email: string;
@@ -96,6 +98,7 @@ export type CrmRoomOption = {
   description?: string | null;
   photo_main?: string | null;
   photos?: Array<{ url: string; cover: boolean; sort: number }>;
+  media?: CrmMediaItem[];
 };
 
 export type CrmCreateBookingPayload = {
@@ -143,6 +146,7 @@ export type CrmCampProfile = {
     notifications_enabled?: boolean;
   };
   photos: Array<{ id?: number; url: string; cover?: number; sort?: number }>;
+  media?: CrmMediaItem[];
 };
 
 export type CrmGuestBooking = {
@@ -381,6 +385,7 @@ export type CrmCampProfileUpdatePayload = {
   support_whatsapp?: string;
   support_telegram?: string;
   notifications_enabled: boolean;
+  media?: CrmMediaItem[];
 };
 
 export type CrmRoomUpsertPayload = {
@@ -405,6 +410,7 @@ export type CrmRoomUpsertPayload = {
   discount_pct: number;
   discount_from_nights: number;
   description?: string;
+  media?: CrmMediaItem[];
 };
 
 export type CrmServiceUpsertPayload = {
@@ -858,6 +864,24 @@ export async function saveCrmCampProfile(campId: number, payload: CrmCampProfile
   });
   await assertOk(response);
   return (await response.json()) as { ok: boolean; item: CrmCampProfile };
+}
+
+export async function uploadCrmMedia(file: File, options: { campId?: number; roomIndex?: number } = {}) {
+  const body = new FormData();
+  body.set("file", file);
+  if (options.campId) {
+    body.set("camp_id", String(options.campId));
+  }
+  if (options.roomIndex !== undefined) {
+    body.set("room_idx", String(options.roomIndex));
+  }
+  const response = await fetch("/api/admin/upload", {
+    method: "POST",
+    credentials: "same-origin",
+    body,
+  });
+  await assertOk(response);
+  return (await response.json()) as { url: string };
 }
 
 export async function createCrmRoom(campId: number, payload: CrmRoomUpsertPayload) {

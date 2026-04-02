@@ -12,11 +12,13 @@ import {
   Users2,
 } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { MediaEditorSection } from "../components/MediaEditorSection";
 import { EmptyState } from "../components/EmptyState";
 import { ModalShell } from "../components/ModalShell";
 import { PageMotion } from "../components/PageMotion";
 import { SectionHeading } from "../components/SectionHeading";
 import { SensitiveChangeModal } from "../components/SensitiveChangeModal";
+import { buildMediaItems, captureVideoPosterFile, splitMediaItems } from "../mediaTools";
 import {
   createCrmChangeRequest,
   createCrmStaff,
@@ -26,6 +28,7 @@ import {
   fetchCrmStaff,
   issueCrmStaffTelegramLink,
   saveCrmCampProfile,
+  uploadCrmMedia,
   updateCrmStaff,
   type CrmAuditEntry,
   type CrmCamp,
@@ -53,6 +56,10 @@ type ProfileForm = {
   supportWhatsapp: string;
   supportTelegram: string;
   notificationsEnabled: boolean;
+  photos: string[];
+  videoUrl: string;
+  videoPosterUrl: string;
+  videoSourceKind: "upload" | "external";
 };
 
 type StaffForm = {
@@ -93,6 +100,10 @@ const emptyProfileForm: ProfileForm = {
   supportWhatsapp: "",
   supportTelegram: "",
   notificationsEnabled: true,
+  photos: [],
+  videoUrl: "",
+  videoPosterUrl: "",
+  videoSourceKind: "upload",
 };
 
 const defaultRolePermissions: Record<string, string[]> = {
@@ -141,6 +152,7 @@ const tabOptions: Array<{ key: SettingsTab; label: string }> = [
 ];
 
 function mapProfileForm(payload: Awaited<ReturnType<typeof fetchCrmCampProfile>>): ProfileForm {
+  const media = splitMediaItems(payload.media, payload.photos.map((photo) => photo.url));
   return {
     name: payload.camp.name || "",
     lakeName: payload.camp.lake_name || "",
@@ -158,6 +170,10 @@ function mapProfileForm(payload: Awaited<ReturnType<typeof fetchCrmCampProfile>>
     supportWhatsapp: payload.settings.support_whatsapp || "",
     supportTelegram: payload.settings.support_telegram || "",
     notificationsEnabled: payload.settings.notifications_enabled ?? true,
+    photos: media.photos,
+    videoUrl: media.videoUrl,
+    videoPosterUrl: media.videoPosterUrl,
+    videoSourceKind: media.videoSourceKind,
   };
 }
 
@@ -179,6 +195,7 @@ function toProfilePayload(form: ProfileForm): CrmCampProfileUpdatePayload {
     support_whatsapp: form.supportWhatsapp,
     support_telegram: form.supportTelegram,
     notifications_enabled: form.notificationsEnabled,
+    media: buildMediaItems(form.photos, form.videoUrl, form.videoPosterUrl, form.videoSourceKind),
   };
 }
 
@@ -272,6 +289,7 @@ export default function SettingsPage() {
   const [loadedCancellationPolicy, setLoadedCancellationPolicy] = useState("");
   const [isProfileLoading, setIsProfileLoading] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileUploadKey, setProfileUploadKey] = useState<null | "photos" | "video" | "poster">(null);
   const [profileError, setProfileError] = useState("");
   const [profileSuccess, setProfileSuccess] = useState("");
   const [profilePendingApproval, setProfilePendingApproval] = useState(false);
@@ -465,6 +483,84 @@ export default function SettingsPage() {
       setProfileError(error instanceof Error ? error.message : "Не удалось сохранить настройки");
     } finally {
       setIsSavingProfile(false);
+    }
+  }
+
+  async function uploadProfilePhotos(files: FileList | null) {
+    if (!selectedCampId || !files?.length) {
+      return;
+    }
+    try {
+      setProfileUploadKey("photos");
+      setProfileError("");
+      const uploaded = await Promise.all(Array.from(files).slice(0, Math.max(0, 20 - profileForm.photos.length)).map((file) => uploadCrmMedia(file, { campId: selectedCampId })));
+      setProfileForm((current) => ({
+        ...current,
+        photos: [...current.photos, ...uploaded.map((item) => item.url)].slice(0, 20),
+      }));
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : "Не удалось загрузить фотографии базы");
+    } finally {
+      setProfileUploadKey(null);
+    }
+  }
+
+  async function uploadProfileVideo(files: FileList | null) {
+    if (!selectedCampId || !files?.length) {
+      return;
+    }
+    try {
+      setProfileUploadKey("video");
+      setProfileError("");
+      const uploaded = await uploadCrmMedia(files[0], { campId: selectedCampId });
+      setProfileForm((current) => ({
+        ...current,
+        videoUrl: uploaded.url,
+        videoSourceKind: "upload",
+      }));
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : "Не удалось загрузить видео базы");
+    } finally {
+      setProfileUploadKey(null);
+    }
+  }
+
+  async function uploadProfilePoster(files: FileList | null) {
+    if (!selectedCampId || !files?.length) {
+      return;
+    }
+    try {
+      setProfileUploadKey("poster");
+      setProfileError("");
+      const uploaded = await uploadCrmMedia(files[0], { campId: selectedCampId });
+      setProfileForm((current) => ({
+        ...current,
+        videoPosterUrl: uploaded.url,
+      }));
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : "Не удалось загрузить обложку видео");
+    } finally {
+      setProfileUploadKey(null);
+    }
+  }
+
+  async function captureProfilePoster(videoEl: HTMLVideoElement | null) {
+    if (!selectedCampId) {
+      return;
+    }
+    try {
+      setProfileUploadKey("poster");
+      setProfileError("");
+      const file = await captureVideoPosterFile(videoEl, `camp-${selectedCampId}`);
+      const uploaded = await uploadCrmMedia(file, { campId: selectedCampId });
+      setProfileForm((current) => ({
+        ...current,
+        videoPosterUrl: uploaded.url,
+      }));
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : "Не удалось выбрать кадр для обложки");
+    } finally {
+      setProfileUploadKey(null);
     }
   }
 
@@ -788,6 +884,32 @@ export default function SettingsPage() {
                   </div>
                 </div>
               </section>
+
+              <MediaEditorSection
+                title="Фото и видео базы"
+                description="Загружайте изображения, видео и обложки прямо из CRM. Новый публичный контент попадёт в очередь модерации суперадмина."
+                photos={profileForm.photos}
+                videoUrl={profileForm.videoUrl}
+                videoPosterUrl={profileForm.videoPosterUrl}
+                videoSourceKind={profileForm.videoSourceKind}
+                uploadPhotoLabel="Добавить фото базы"
+                photoLimitLabel="До 20 фотографий. Первое фото станет обложкой базы после модерации."
+                photoUploading={profileUploadKey === "photos"}
+                videoUploading={profileUploadKey === "video"}
+                posterUploading={profileUploadKey === "poster"}
+                onPhotosUpload={uploadProfilePhotos}
+                onPhotoRemove={(index) =>
+                  setProfileForm((current) => ({
+                    ...current,
+                    photos: current.photos.filter((_, photoIndex) => photoIndex !== index),
+                  }))
+                }
+                onVideoUpload={uploadProfileVideo}
+                onPosterUpload={uploadProfilePoster}
+                onCapturePoster={captureProfilePoster}
+                onVideoSourceKindChange={(next) => setProfileForm((current) => ({ ...current, videoSourceKind: next }))}
+                onVideoUrlChange={(next) => setProfileForm((current) => ({ ...current, videoUrl: next }))}
+              />
 
               <div className="flex flex-col gap-3 sm:flex-row">
                 <button type="submit" className="brand-button gap-2 disabled:cursor-not-allowed disabled:opacity-60" disabled={isSavingProfile}>

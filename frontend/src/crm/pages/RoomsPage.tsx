@@ -1,15 +1,18 @@
 import { BedDouble, Check, ChevronDown, Image as ImageIcon, Plus, Trash2, Users } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
+import { MediaEditorSection } from "../components/MediaEditorSection";
 import { EmptyState } from "../components/EmptyState";
 import { ModalShell } from "../components/ModalShell";
 import { PageMotion } from "../components/PageMotion";
 import { SectionHeading } from "../components/SectionHeading";
 import { SensitiveChangeModal } from "../components/SensitiveChangeModal";
+import { buildMediaItems, captureVideoPosterFile, splitMediaItems } from "../mediaTools";
 import {
   createCrmChangeRequest,
   deleteCrmRoom,
   fetchCrmCampRooms,
   fetchCrmCamps,
+  uploadCrmMedia,
   type CrmCamp,
   type CrmRoomOption,
   type CrmRoomUpsertPayload,
@@ -38,6 +41,10 @@ type RoomFormState = {
   discountPct: string;
   discountFromNights: string;
   description: string;
+  photos: string[];
+  videoUrl: string;
+  videoPosterUrl: string;
+  videoSourceKind: "upload" | "external";
 };
 
 const emptyRoomForm: RoomFormState = {
@@ -63,6 +70,10 @@ const emptyRoomForm: RoomFormState = {
   discountPct: "0",
   discountFromNights: "0",
   description: "",
+  photos: [],
+  videoUrl: "",
+  videoPosterUrl: "",
+  videoSourceKind: "upload",
 };
 
 function formatCurrency(value: number | null | undefined) {
@@ -83,6 +94,7 @@ function buildFeatureList(room: CrmRoomOption) {
 }
 
 function toRoomForm(room: CrmRoomOption): RoomFormState {
+  const media = splitMediaItems(room.media, (room.photos || []).map((item) => item.url));
   return {
     id: room.id,
     name: room.name || "",
@@ -106,6 +118,10 @@ function toRoomForm(room: CrmRoomOption): RoomFormState {
     discountPct: String(room.discount_pct ?? 0),
     discountFromNights: String(room.discount_from_nights ?? 0),
     description: room.description || "",
+    photos: media.photos,
+    videoUrl: media.videoUrl,
+    videoPosterUrl: media.videoPosterUrl,
+    videoSourceKind: media.videoSourceKind,
   };
 }
 
@@ -132,6 +148,7 @@ function toRoomPayload(form: RoomFormState): CrmRoomUpsertPayload {
     discount_pct: Number(form.discountPct || 0),
     discount_from_nights: Number(form.discountFromNights || 0),
     description: form.description,
+    media: buildMediaItems(form.photos, form.videoUrl, form.videoPosterUrl, form.videoSourceKind),
   };
 }
 
@@ -145,6 +162,7 @@ export default function RoomsPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [roomUploadKey, setRoomUploadKey] = useState<null | "photos" | "video" | "poster">(null);
   const [deleteRoomId, setDeleteRoomId] = useState<number | null>(null);
   const [formError, setFormError] = useState("");
   const [roomForm, setRoomForm] = useState<RoomFormState>(emptyRoomForm);
@@ -256,6 +274,102 @@ export default function RoomsPage() {
     }
   }
 
+  async function uploadRoomPhotos(files: FileList | null) {
+    if (!selectedCampId || !files?.length) {
+      return;
+    }
+    try {
+      setRoomUploadKey("photos");
+      setFormError("");
+      const uploaded = await Promise.all(
+        Array.from(files)
+          .slice(0, Math.max(0, 5 - roomForm.photos.length))
+          .map((file) =>
+            uploadCrmMedia(file, {
+              campId: selectedCampId,
+              roomIndex: roomForm.id ? Number(roomForm.id) : undefined,
+            }),
+          ),
+      );
+      setRoomForm((current) => ({
+        ...current,
+        photos: [...current.photos, ...uploaded.map((item) => item.url)].slice(0, 5),
+      }));
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Не удалось загрузить фотографии апартамента");
+    } finally {
+      setRoomUploadKey(null);
+    }
+  }
+
+  async function uploadRoomVideo(files: FileList | null) {
+    if (!selectedCampId || !files?.length) {
+      return;
+    }
+    try {
+      setRoomUploadKey("video");
+      setFormError("");
+      const uploaded = await uploadCrmMedia(files[0], {
+        campId: selectedCampId,
+        roomIndex: roomForm.id ? Number(roomForm.id) : undefined,
+      });
+      setRoomForm((current) => ({
+        ...current,
+        videoUrl: uploaded.url,
+        videoSourceKind: "upload",
+      }));
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Не удалось загрузить видео апартамента");
+    } finally {
+      setRoomUploadKey(null);
+    }
+  }
+
+  async function uploadRoomPoster(files: FileList | null) {
+    if (!selectedCampId || !files?.length) {
+      return;
+    }
+    try {
+      setRoomUploadKey("poster");
+      setFormError("");
+      const uploaded = await uploadCrmMedia(files[0], {
+        campId: selectedCampId,
+        roomIndex: roomForm.id ? Number(roomForm.id) : undefined,
+      });
+      setRoomForm((current) => ({
+        ...current,
+        videoPosterUrl: uploaded.url,
+      }));
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Не удалось загрузить обложку видео");
+    } finally {
+      setRoomUploadKey(null);
+    }
+  }
+
+  async function captureRoomPoster(videoEl: HTMLVideoElement | null) {
+    if (!selectedCampId) {
+      return;
+    }
+    try {
+      setRoomUploadKey("poster");
+      setFormError("");
+      const file = await captureVideoPosterFile(videoEl, roomForm.id ? `room-${roomForm.id}` : "room-new");
+      const uploaded = await uploadCrmMedia(file, {
+        campId: selectedCampId,
+        roomIndex: roomForm.id ? Number(roomForm.id) : undefined,
+      });
+      setRoomForm((current) => ({
+        ...current,
+        videoPosterUrl: uploaded.url,
+      }));
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Не удалось выбрать кадр для обложки");
+    } finally {
+      setRoomUploadKey(null);
+    }
+  }
+
   async function submitSensitiveRoomChange(applyMode: "pending_review" | "apply_with_responsibility", comment: string) {
     if (!selectedCampId || !pendingApproval) {
       return;
@@ -356,12 +470,15 @@ export default function RoomsPage() {
         </section>
       ) : hasRooms ? (
         <div className="grid gap-6 xl:grid-cols-2">
-          {rooms.map((room) => (
+          {rooms.map((room) => {
+            const previewMedia = splitMediaItems(room.media, (room.photos || []).map((item) => item.url));
+            const previewImage = room.photo_main || previewMedia.photos[0] || null;
+            return (
             <article key={room.id} className="glass-card overflow-hidden transition hover:-translate-y-0.5">
               <div className="grid md:grid-cols-[220px_1fr]">
                 <div className="relative flex min-h-56 items-center justify-center border-b border-border bg-background/70 md:border-b-0 md:border-r">
-                  {room.photo_main ? (
-                    <img src={room.photo_main} alt={room.name || "Апартамент"} className="absolute inset-0 h-full w-full object-cover" />
+                  {previewImage ? (
+                    <img src={previewImage} alt={room.name || "Апартамент"} className="absolute inset-0 h-full w-full object-cover" />
                   ) : (
                     <>
                       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(229,211,179,0.22),transparent_38%)]" />
@@ -439,7 +556,8 @@ export default function RoomsPage() {
                 </div>
               </div>
             </article>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <section className="glass-card p-6">
@@ -459,7 +577,7 @@ export default function RoomsPage() {
           }
         }}
         title={roomForm.id ? "Редактирование апартамента" : "Новый апартамент"}
-        description="Изменения сохраняются сразу в рабочую карточку базы. Позже сюда добавим медиа, подтверждения и согласования."
+        description="Тарифы и медиаматериалы апартамента можно обновлять прямо из CRM. Публичный контент уходит на модерацию суперадмину."
       >
         <form onSubmit={handleSubmit}>
           <div className="grid gap-4 md:grid-cols-2">
@@ -563,6 +681,34 @@ export default function RoomsPage() {
               <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Описание</span>
               <textarea className="soft-input min-h-32 resize-none" value={roomForm.description} onChange={(event) => setRoomForm((current) => ({ ...current, description: event.target.value }))} />
             </label>
+          </div>
+
+          <div className="mt-6">
+            <MediaEditorSection
+              title="Фото и видео апартамента"
+              description="Добавляйте фото, видео и обложку прямо в карточку апартамента. Новый контент попадёт в очередь модерации суперадмину."
+              photos={roomForm.photos}
+              videoUrl={roomForm.videoUrl}
+              videoPosterUrl={roomForm.videoPosterUrl}
+              videoSourceKind={roomForm.videoSourceKind}
+              uploadPhotoLabel="Добавить фото апартамента"
+              photoLimitLabel="До 5 фотографий. Первое фото станет обложкой апартамента после модерации."
+              photoUploading={roomUploadKey === "photos"}
+              videoUploading={roomUploadKey === "video"}
+              posterUploading={roomUploadKey === "poster"}
+              onPhotosUpload={uploadRoomPhotos}
+              onPhotoRemove={(index) =>
+                setRoomForm((current) => ({
+                  ...current,
+                  photos: current.photos.filter((_, photoIndex) => photoIndex !== index),
+                }))
+              }
+              onVideoUpload={uploadRoomVideo}
+              onPosterUpload={uploadRoomPoster}
+              onCapturePoster={captureRoomPoster}
+              onVideoSourceKindChange={(next) => setRoomForm((current) => ({ ...current, videoSourceKind: next }))}
+              onVideoUrlChange={(next) => setRoomForm((current) => ({ ...current, videoUrl: next }))}
+            />
           </div>
 
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">

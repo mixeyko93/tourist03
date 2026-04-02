@@ -15,6 +15,9 @@ export type SuperadminPrincipal = {
   display_name?: string | null;
   is_root?: boolean;
   is_active?: boolean;
+  telegram_chat_id?: number | null;
+  telegram_username?: string | null;
+  has_telegram_link?: boolean;
 };
 
 export type SuperadminBaseStatus = "active" | "disabled" | "archived";
@@ -238,6 +241,8 @@ export type SuperadminRootAccount = {
   phone?: string | null;
   is_active: boolean;
   is_root: boolean;
+  telegram_chat_id?: number | null;
+  telegram_username?: string | null;
   created_by_id?: number | null;
   archived_at?: string | null;
   created_at?: string | null;
@@ -337,6 +342,15 @@ export async function logoutSuperadminSession() {
     credentials: "same-origin",
   });
   return parseSessionResponse(response);
+}
+
+export async function issueSuperadminTelegramLink() {
+  const response = await fetch("/api/superadmin/telegram-link", {
+    method: "POST",
+    credentials: "same-origin",
+  });
+  await assertOk(response);
+  return (await response.json()) as { ok: boolean; code: string; command: string; deep_link: string | null };
 }
 
 export async function fetchSuperadminBases(

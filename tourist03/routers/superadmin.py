@@ -163,6 +163,13 @@ router.add_api_route(
     responses=error_responses(400, 401, 404, 422, 500),
 )
 router.add_api_route(
+    "/api/superadmin/telegram-link",
+    superadmin_service.superadmin_issue_telegram_link,
+    methods=["POST"],
+    dependencies=superadmin_guard,
+    responses=error_responses(400, 401, 500),
+)
+router.add_api_route(
     "/api/superadmin/superadmins",
     superadmin_service.superadmin_list_root_accounts,
     methods=["GET"],

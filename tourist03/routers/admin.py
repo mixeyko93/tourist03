@@ -1,10 +1,13 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from tourist03.api_responses import error_responses
 from tourist03.dto.bookings import AdminBookingCreateResponseDTO, AdminBookingDTO
 from tourist03.dto.common import OkResponseDTO
+from tourist03.dto.catalog import UploadResponseDTO
 from tourist03.schemas import AdminMeResponse
+from tourist03.security import get_current_admin
 from tourist03.services import admin as admin_service
+from tourist03.services import catalog as catalog_service
 
 
 router = APIRouter()
@@ -225,4 +228,12 @@ router.add_api_route(
     admin_service.api_admin_delete_service,
     methods=["DELETE"],
     responses=error_responses(401, 403, 404, 409, 422, 500),
+)
+router.add_api_route(
+    "/api/admin/upload",
+    catalog_service.api_upload,
+    methods=["POST"],
+    dependencies=[Depends(get_current_admin)],
+    response_model=UploadResponseDTO,
+    responses=error_responses(400, 401, 422, 500),
 )

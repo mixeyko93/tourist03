@@ -131,6 +131,9 @@ class SuperAdminPrincipalDTO(BaseModel):
     display_name: Optional[str] = None
     is_root: bool = False
     is_active: bool = True
+    telegram_chat_id: Optional[int] = None
+    telegram_username: Optional[str] = None
+    has_telegram_link: bool = False
 
 
 class SuperAdminSessionResponseDTO(OkResponseDTO):
@@ -145,6 +148,8 @@ class SuperAdminRootAccountDTO(BaseModel):
     phone: Optional[str] = None
     is_active: bool
     is_root: bool
+    telegram_chat_id: Optional[int] = None
+    telegram_username: Optional[str] = None
     created_by_id: Optional[int] = None
     archived_at: Optional[datetime] = None
     created_at: Optional[datetime] = None

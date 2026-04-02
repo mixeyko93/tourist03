@@ -121,6 +121,76 @@ def list_room_media(camp_id: int, room_id: int, fallback_photos: Optional[list[d
     return rows or _derive_media_from_photo_rows(fallback_photos or [])
 
 
+def save_camp_media(camp_id: int, items: list[dict], normalize_move):
+    conn = _pg_connect("catalog")
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT id, name FROM catalog.camps WHERE id = %s", (camp_id,))
+        camp_row = cur.fetchone()
+        if not camp_row:
+            return None
+        camp_name = str(camp_row.get("name") or "").strip() or f"camp_{camp_id}"
+        existing_items = list_camp_media(camp_id)
+        fallback_photos = list_camp_photos(camp_id)
+        media_items = _normalize_media_items(items or [], fallback_photos, existing_items)
+        media_items = _move_media_assets(
+            media_items,
+            camp_id=camp_id,
+            room_id=None,
+            camp_name=camp_name,
+            room_name=None,
+            normalize_move=normalize_move,
+        )
+        _replace_camp_media(cur, camp_id, media_items)
+        cover_url = _sync_legacy_camp_photos(cur, camp_id, media_items)
+        cur.execute("UPDATE catalog.camps SET photo_main=%s WHERE id=%s", (cover_url, camp_id))
+        conn.commit()
+        return list_camp_media(camp_id)
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def save_room_media(camp_id: int, room_id: int, items: list[dict], normalize_move):
+    conn = _pg_connect("catalog")
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT id, name FROM catalog.camps WHERE id = %s", (camp_id,))
+        camp_row = cur.fetchone()
+        cur.execute("SELECT id, name FROM catalog.rooms WHERE camp_id = %s AND id = %s", (camp_id, room_id))
+        room_row = cur.fetchone()
+        if not camp_row or not room_row:
+            return None
+        camp_name = str(camp_row.get("name") or "").strip() or f"camp_{camp_id}"
+        room_name = str(room_row.get("name") or "").strip() or f"room_{room_id}"
+        existing_items = list_room_media(camp_id, room_id)
+        fallback_photos = list_room_media(camp_id, room_id)
+        media_items = _normalize_media_items(items or [], fallback_photos, existing_items)
+        media_items = _move_media_assets(
+            media_items,
+            camp_id=camp_id,
+            room_id=room_id,
+            camp_name=camp_name,
+            room_name=room_name,
+            normalize_move=normalize_move,
+        )
+        _replace_room_media(cur, camp_id, room_id, media_items)
+        cover_url, room_urls = _sync_legacy_room_photos(cur, camp_id, room_id, media_items)
+        cur.execute(
+            "UPDATE catalog.rooms SET photo_main=%s, photos_json=%s::jsonb WHERE id=%s AND camp_id=%s",
+            (cover_url, json.dumps(room_urls, ensure_ascii=False), room_id, camp_id),
+        )
+        conn.commit()
+        return list_room_media(camp_id, room_id)
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def _list_camp_media_rows(cur, camp_id: int):
     cur.execute(
         """

@@ -5,10 +5,17 @@ from zoneinfo import ZoneInfo
 from aiogram import Bot
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from tourist03.config import CRM_BASE_URL, STAFF_BOT_USERNAME, logger
+from tourist03.config import CRM_BASE_URL, STAFF_BOT_USERNAME, SUPERADMIN_BASE_URL, logger
 from tourist03.repositories import admin as admin_repo
 from tourist03.repositories import notifications as notification_repo
-from tourist03.security import _get_admin_camp_ids, create_notification_event, link_admin_telegram_account, log_crm_audit_event
+from tourist03.security import (
+    _get_admin_camp_ids,
+    create_notification_event,
+    link_admin_telegram_account,
+    link_superadmin_telegram_account,
+    log_crm_audit_event,
+)
+from tourist03.services import superadmin as superadmin_service
 
 
 DEFAULT_SHIFT_SETTINGS = {
@@ -149,11 +156,14 @@ def _booking_escalation_body(booking: dict, *, attempt_no: int, waiting_minutes:
     )
 
 
-def _event_url(action_url: Optional[str]) -> Optional[str]:
+def _event_url(action_url: Optional[str], *, recipient_scope: Optional[str] = None) -> Optional[str]:
     normalized = (action_url or "").strip()
     if not normalized:
         return None
-    base = (CRM_BASE_URL or "https://crm.turist03.ru").rstrip("/")
+    if recipient_scope == "superadmin" or normalized.startswith("/admin"):
+        base = (SUPERADMIN_BASE_URL or "https://superadmin.turist03.ru").rstrip("/")
+    else:
+        base = (CRM_BASE_URL or "https://crm.turist03.ru").rstrip("/")
     if normalized.startswith("http://") or normalized.startswith("https://"):
         return normalized
     if not normalized.startswith("/"):
@@ -198,12 +208,54 @@ def link_staff_account_by_code(code: str, *, telegram_user_id: int, telegram_cha
     return linked
 
 
+def link_superadmin_account_by_code(code: str, *, telegram_user_id: int, telegram_chat_id: int, telegram_username: Optional[str] = None):
+    linked = link_superadmin_telegram_account(
+        code,
+        telegram_user_id=telegram_user_id,
+        telegram_chat_id=telegram_chat_id,
+        telegram_username=telegram_username,
+    )
+    if not linked:
+        return None
+
+    log_crm_audit_event(
+        actor_type="superadmin_bot",
+        actor_id=int(linked["id"]),
+        actor_display=linked.get("display_name") or linked.get("login"),
+        target_type="superadmin_account",
+        target_id=linked["id"],
+        action_type="superadmin_telegram_link_complete",
+        action_label="Подключил бот уведомлений CRM",
+        comment=f"Telegram @{telegram_username}" if telegram_username else "Подключение через код",
+        was_auto_applied=True,
+    )
+    create_notification_event(
+        event_type="superadmin_telegram_linked",
+        title="Суперадмин подключил бот уведомлений CRM",
+        body=f"{linked.get('display_name') or linked.get('login')} теперь получает Telegram-уведомления по модерации и системным событиям.",
+        channel="in_app",
+        recipient_scope="superadmin",
+        recipient_admin_id=int(linked["id"]),
+        severity="info",
+        metadata={"superadmin_id": int(linked["id"])},
+    )
+    return linked
+
+
 def get_staff_open_events_for_chat(chat_id: int, *, limit: int = 5):
     account = notification_repo.get_staff_account_by_chat_id(int(chat_id))
     if not account:
         return None, []
     camp_ids = notification_repo.list_staff_camp_ids(int(account["id"]))
     items = notification_repo.list_recent_open_events_for_admin(int(account["id"]), camp_ids, limit=limit)
+    return account, items
+
+
+def get_superadmin_open_events_for_chat(chat_id: int, *, limit: int = 5):
+    account = notification_repo.get_superadmin_account_by_chat_id(int(chat_id))
+    if not account:
+        return None, []
+    items = notification_repo.list_recent_open_events_for_superadmin(int(account["id"]), limit=limit)
     return account, items
 
 
@@ -351,8 +403,32 @@ def format_staff_events_digest(account: dict, items: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def format_superadmin_events_digest(account: dict, items: list[dict]) -> str:
+    superadmin_label = account.get("display_name") or account.get("login") or "Суперадминистратор"
+    if not items:
+        return (
+            f"📭 <b>Открытых событий нет</b>\n\n"
+            f"{superadmin_label}, по системе сейчас нет непрочитанных событий, требующих вашего внимания."
+        )
+    lines = [f"🛡️ <b>События для {superadmin_label}</b>"]
+    for item in items:
+        severity_badge = "🚨" if item.get("severity") == "critical" else "⚠️" if item.get("severity") == "warning" else "🛎️"
+        lines.extend(
+            [
+                "",
+                f"{severity_badge} <b>{item.get('title') or 'Событие superadmin'}</b>",
+                str(item.get("body") or "").strip(),
+                f"Статус: {EVENT_STATUS_LABELS.get(str(item.get('status') or 'new'), str(item.get('status') or 'Новое'))}",
+            ]
+        )
+        if item.get("camp_name"):
+            lines.append(f"База: {item['camp_name']}")
+    return "\n".join(lines)
+
+
 def build_staff_event_keyboard(event: dict):
-    url = _event_url(event.get("action_url"))
+    recipient_scope = str(event.get("recipient_scope") or "").strip().lower() or "crm"
+    url = _event_url(event.get("action_url"), recipient_scope=recipient_scope)
     metadata = event.get("metadata") or {}
     request_id = int(metadata.get("change_request_id") or 0) if metadata.get("change_request_id") else 0
     rows: list[list[InlineKeyboardButton]] = []
@@ -367,9 +443,20 @@ def build_staff_event_keyboard(event: dict):
         rows.append([InlineKeyboardButton(text="Уточнить", callback_data=f"cr:clarify:{request_id}")])
     elif request_id and event.get("event_type") == "change_request_applied":
         rows.append([InlineKeyboardButton(text="Откатить", callback_data=f"cr:rollback:init:{request_id}")])
+    elif recipient_scope == "superadmin" and event.get("event_type") == "superadmin_media_moderation":
+        entity_type = str(metadata.get("entity_type") or "").strip().lower()
+        media_id = int(metadata.get("media_id") or 0) if metadata.get("media_id") else 0
+        if entity_type in {"camp", "room"} and media_id:
+            rows.append(
+                [
+                    InlineKeyboardButton(text="Одобрить", callback_data=f"sa:media:approved:{entity_type}:{media_id}"),
+                    InlineKeyboardButton(text="Отклонить", callback_data=f"sa:media:rejected:{entity_type}:{media_id}"),
+                ]
+            )
+            rows.append([InlineKeyboardButton(text="Вернуть на модерацию", callback_data=f"sa:media:pending:{entity_type}:{media_id}")])
 
     if url:
-        rows.append([InlineKeyboardButton(text="Открыть в CRM", url=url)])
+        rows.append([InlineKeyboardButton(text="Открыть в панели", url=url)])
     if not rows:
         return None
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -382,7 +469,7 @@ def build_staff_rollback_confirm_keyboard(request_id: int, *, action_url: Option
             InlineKeyboardButton(text="Отмена", callback_data=f"cr:rollback:cancel:{request_id}"),
         ]
     ]
-    url = _event_url(action_url)
+    url = _event_url(action_url, recipient_scope="crm")
     if url:
         rows.append([InlineKeyboardButton(text="Открыть в CRM", url=url)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -413,12 +500,22 @@ def build_staff_start_text() -> str:
     bot_hint = f" @{STAFF_BOT_USERNAME}" if STAFF_BOT_USERNAME else ""
     return (
         f"👋 <b>Бот уведомлений CRM Tourist_03{bot_hint}</b>\n\n"
-        "Я отправляю служебные уведомления по новым заявкам, сменам и критичным изменениям CRM.\n\n"
+        "Я отправляю уведомления по новым заявкам, сменам, критичным изменениям CRM и модерации контента.\n\n"
         "Чтобы подключить учётку:\n"
-        "1. Откройте CRM.\n"
-        "2. Сгенерируйте код привязки в карточке сотрудника.\n"
-        "3. Отправьте сюда /link КОД или откройте deep-link из CRM.\n\n"
+        "1. Откройте CRM или панель суперадмина.\n"
+        "2. Сгенерируйте код привязки Telegram.\n"
+        "3. Отправьте сюда /link КОД или откройте deep-link из панели.\n\n"
         "Команды:\n"
         "/events — показать последние открытые события\n"
         "/help — помощь"
+    )
+
+
+def apply_superadmin_media_action(account: dict, *, entity_type: str, media_id: int, status_value: str):
+    return superadmin_service.superadmin_update_media_moderation_by_account(
+        account,
+        entity_type=entity_type,
+        media_id=media_id,
+        status_value=status_value,
+        comment="Решение принято через бот уведомлений CRM",
     )

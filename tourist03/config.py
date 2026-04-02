@@ -33,6 +33,7 @@ SUPERADMIN_LOCAL_BYPASS = os.getenv("SUPERADMIN_LOCAL_BYPASS", "").strip().lower
 SIM_VERIFY_CODE = os.getenv("SIM_VERIFY_CODE", "0000")
 TERMS_VERSION = os.getenv("TERMS_VERSION", "2026-01-04")
 CRM_BASE_URL = os.getenv("CRM_BASE_URL", "https://crm.turist03.ru")
+SUPERADMIN_BASE_URL = os.getenv("SUPERADMIN_BASE_URL", "https://superadmin.turist03.ru")
 STAFF_BOT_TOKEN = os.getenv("STAFF_BOT_TOKEN", "").strip()
 STAFF_BOT_USERNAME = os.getenv("STAFF_BOT_USERNAME", "").strip()
 STAFF_BOT_POLL_INTERVAL = int(os.getenv("STAFF_BOT_POLL_INTERVAL", "60"))

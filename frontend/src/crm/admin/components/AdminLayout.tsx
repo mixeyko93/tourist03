@@ -1,10 +1,11 @@
-import { Moon, Sun } from "lucide-react";
+import { Link2, Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router";
 import { useTheme } from "next-themes";
 import { crmPath } from "../../paths";
-import { fetchSuperadminSession, logoutSuperadminSession, type SuperadminSessionResponse } from "../session";
+import { fetchSuperadminSession, issueSuperadminTelegramLink, logoutSuperadminSession, type SuperadminSessionResponse } from "../session";
 import { useDocumentTitle } from "../../components/useDocumentTitle";
+import { AdminModal } from "./AdminModal";
 
 const baseAdminTabs = [
   { label: "Базы и номера", path: "/admin/bases" },
@@ -27,6 +28,9 @@ export default function AdminLayout() {
   const [authState, setAuthState] = useState<"loading" | "authenticated" | "unauthenticated">("loading");
   const [authError, setAuthError] = useState("");
   const [session, setSession] = useState<SuperadminSessionResponse | null>(null);
+  const [telegramLinkInfo, setTelegramLinkInfo] = useState<null | { code: string; command: string; deep_link: string | null }>(null);
+  const [telegramError, setTelegramError] = useState("");
+  const [isIssuingTelegramCode, setIsIssuingTelegramCode] = useState(false);
   const loginPath = crmPath("/admin/login");
   const isRoot = Boolean(session?.account?.is_root);
   const adminTabs = isRoot ? [...baseAdminTabs, ...rootOnlyTabs] : baseAdminTabs;
@@ -68,6 +72,32 @@ export default function AdminLayout() {
     return <Navigate to={crmPath("/admin/bases")} replace />;
   }
 
+  async function handleIssueTelegramLink() {
+    try {
+      setIsIssuingTelegramCode(true);
+      setTelegramError("");
+      const response = await issueSuperadminTelegramLink();
+      setTelegramLinkInfo(response);
+      setSession((current) =>
+        current
+          ? {
+              ...current,
+              account: current.account
+                ? {
+                    ...current.account,
+                    has_telegram_link: current.account.has_telegram_link || false,
+                  }
+                : current.account,
+            }
+          : current,
+      );
+    } catch (error: unknown) {
+      setTelegramError(error instanceof Error ? error.message : "Не удалось выпустить код привязки Telegram");
+    } finally {
+      setIsIssuingTelegramCode(false);
+    }
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <header className="sticky top-0 z-20 border-b border-border bg-card/88 backdrop-blur-xl">
@@ -98,6 +128,10 @@ export default function AdminLayout() {
                   {authError || (session?.account?.is_root ? "Root-доступ ко всей системе" : "Доступ к панели суперадмина")}
                 </p>
               </div>
+              <button type="button" className="admin-button gap-2" onClick={handleIssueTelegramLink} disabled={isIssuingTelegramCode}>
+                <Link2 className="h-4 w-4" />
+                {session?.account?.has_telegram_link ? "Обновить привязку Telegram" : "Подключить Telegram"}
+              </button>
               <button
                 id="superadmin-logout-btn"
                 type="button"
@@ -140,6 +174,34 @@ export default function AdminLayout() {
           <Outlet />
         </div>
       </main>
+
+      <AdminModal
+        open={Boolean(telegramLinkInfo) || Boolean(telegramError)}
+        title="Подключение Telegram"
+        onClose={() => {
+          setTelegramLinkInfo(null);
+          setTelegramError("");
+        }}
+      >
+        <div className="space-y-4">
+          {telegramError ? <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">{telegramError}</div> : null}
+          {telegramLinkInfo ? (
+            <>
+              <div className="rounded-2xl border border-border bg-background/70 px-4 py-3 text-sm text-muted-foreground">
+                Код привязки: <span className="font-semibold text-foreground">{telegramLinkInfo.code}</span>
+              </div>
+              <div className="rounded-2xl border border-border bg-background/70 px-4 py-3 text-sm text-muted-foreground">
+                Команда для бота: <span className="font-semibold text-foreground">{telegramLinkInfo.command}</span>
+              </div>
+              {telegramLinkInfo.deep_link ? (
+                <a href={telegramLinkInfo.deep_link} target="_blank" rel="noreferrer" className="admin-primary-button inline-flex w-full justify-center">
+                  Открыть бот уведомлений CRM
+                </a>
+              ) : null}
+            </>
+          ) : null}
+        </div>
+      </AdminModal>
     </div>
   );
 }

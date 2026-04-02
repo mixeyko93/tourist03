@@ -307,6 +307,7 @@ def get_admin_camp_profile(camp_id: int):
     if not camp:
         return None
     photos = catalog_repo.list_camp_photos(camp_id)
+    media = catalog_repo.list_camp_media(camp_id)
     with _db_conn("crm") as conn:
         cur = conn.cursor()
         cur.execute(
@@ -333,12 +334,15 @@ def get_admin_camp_profile(camp_id: int):
             (camp_id,),
         )
         settings = dict(cur.fetchone() or {})
-    return {"camp": camp, "settings": settings, "photos": photos}
+    return {"camp": camp, "settings": settings, "photos": photos, "media": media}
 
 
 def list_admin_camp_rooms(camp_id: int):
     context = catalog_repo.get_camp_room_listing_context(camp_id)
-    return context.get("rooms") or []
+    rooms = context.get("rooms") or []
+    for room in rooms:
+        room["media"] = catalog_repo.list_room_media(camp_id, int(room.get("id") or 0), room.get("photos") or [])
+    return rooms
 
 
 def save_admin_camp_profile(camp_id: int, payload: dict):
@@ -415,6 +419,8 @@ def save_admin_camp_profile(camp_id: int, payload: dict):
         )
         conn.commit()
 
+    if payload.get("media") is not None:
+        catalog_repo.save_camp_media(camp_id, payload.get("media") or [], payload.get("normalize_move"))
     return changed
 
 
@@ -465,6 +471,8 @@ def create_admin_room(camp_id: int, payload: dict) -> int:
         )
         room_id = cur.fetchone()["id"]
         conn.commit()
+    if payload.get("media") is not None:
+        catalog_repo.save_room_media(camp_id, int(room_id), payload.get("media") or [], payload.get("normalize_move"))
         return int(room_id)
 
 
@@ -531,6 +539,8 @@ def update_admin_room(camp_id: int, room_id: int, payload: dict) -> bool:
         )
         changed = cur.rowcount > 0
         conn.commit()
+    if changed and payload.get("media") is not None:
+        catalog_repo.save_room_media(camp_id, room_id, payload.get("media") or [], payload.get("normalize_move"))
         return changed
 
 
@@ -547,7 +557,10 @@ def get_admin_room(camp_id: int, room_id: int):
             (room_id, camp_id),
         )
         row = cur.fetchone()
-        return dict(row) if row else None
+        item = dict(row) if row else None
+    if item:
+        item["media"] = catalog_repo.list_room_media(camp_id, room_id, item.get("photos") or [])
+    return item
 
 
 def room_has_any_booking(camp_id: int, room_id: int) -> bool:
