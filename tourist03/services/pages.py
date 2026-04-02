@@ -2,10 +2,11 @@ import os
 import socket
 import subprocess
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from fastapi import Request
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 
 from tourist03.config import BASE_DIR, STATIC_DIR, TEMPLATES, templates
 
@@ -62,10 +63,28 @@ def admin_camps_page(request: Request):
     return RedirectResponse(url=target, status_code=302)
 
 
-def react_map_page():
+def _react_shell_title(request: Request) -> str:
+    host = (request.url.hostname or "").lower()
+    path = request.url.path or "/"
+    is_superadmin = host.startswith("superadmin.") or path.startswith("/admin")
+    if is_superadmin:
+        if path.startswith("/admin/login"):
+            return "Tourist03 Superadmin — Вход"
+        return "Tourist03 Superadmin"
+    if path.startswith("/login"):
+        return "Tourist03 CRM — Вход"
+    return "Tourist03 CRM"
+
+
+def react_map_page(request: Request):
     react_index = os.path.join(STATIC_DIR, "react-map", "index.html")
     if os.path.exists(react_index):
-        return FileResponse(react_index)
+        try:
+            html = Path(react_index).read_text(encoding="utf-8")
+            html = html.replace("<title>Tourist03 Панель</title>", f"<title>{_react_shell_title(request)}</title>", 1)
+            return HTMLResponse(content=html)
+        except Exception:
+            return FileResponse(react_index)
     return JSONResponse({"detail": "React map build is missing"}, status_code=503)
 
 

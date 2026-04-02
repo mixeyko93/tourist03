@@ -34,7 +34,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 WEBAPP_URL = os.getenv("WEBAPP_URL", "").strip()
 
 if not BOT_TOKEN and not STAFF_BOT_TOKEN:
-    raise RuntimeError("Укажите токен клиентского или staff-бота в переменных окружения.")
+    raise RuntimeError("Укажите токен клиентского бота или бота уведомлений CRM в переменных окружения.")
 if BOT_TOKEN and not WEBAPP_URL:
     raise RuntimeError("Укажите URL мини-приложения в переменной окружения WEBAPP_URL.")
 
@@ -134,7 +134,7 @@ async def _handle_staff_link(message: Message, code: str) -> None:
     staff_label = linked.get("display_name") or linked.get("email") or "Сотрудник"
     await message.answer(
         f"✅ <b>Привязка выполнена</b>\n\n"
-        f"{staff_label}, staff-бот подключён к вашей учётке.\n"
+        f"{staff_label}, бот уведомлений CRM подключён к вашей учётке.\n"
         "Теперь вы будете получать уведомления по новым заявкам, сменам и критичным изменениям.",
         reply_markup=crm_button("/events"),
     )
@@ -190,7 +190,7 @@ async def staff_callback_router(callback: CallbackQuery) -> None:
 
     account = _staff_account_for_chat(callback.message.chat.id if callback.message else callback.from_user.id)
     if not account:
-        await callback.answer("Сначала привяжите staff-бот к своей учётке CRM.", show_alert=True)
+        await callback.answer("Сначала привяжите бот уведомлений CRM к своей учётке.", show_alert=True)
         return
 
     parts = raw.split(":")
@@ -244,7 +244,7 @@ async def staff_callback_router(callback: CallbackQuery) -> None:
             account,
             request_id,
             action=action_key,
-            comment="Подтверждено через staff-бот" if action_key in {"approve", "rollback"} else "Решение принято через staff-бот",
+            comment="Подтверждено через бот уведомлений CRM" if action_key in {"approve", "rollback"} else "Решение принято через бот уведомлений CRM",
         )
         if callback.message:
             await callback.message.edit_reply_markup(reply_markup=crm_button(f"/approvals?request_id={request_id}"))
@@ -309,11 +309,11 @@ async def _staff_background_loop(bot: Bot) -> None:
             created = enqueue_booking_escalations()
             delivered = await deliver_pending_telegram_notifications(bot)
             if created or delivered:
-                logger.info("Staff-бот обработал очередь: создано=%s, отправлено=%s", created, delivered)
+                logger.info("Бот уведомлений CRM обработал очередь: создано=%s, отправлено=%s", created, delivered)
         except asyncio.CancelledError:
             raise
         except Exception:
-            logger.exception("Фоновая обработка staff-бота завершилась с ошибкой")
+            logger.exception("Фоновая обработка бота уведомлений CRM завершилась с ошибкой")
         await asyncio.sleep(poll_interval)
 
 
@@ -329,11 +329,11 @@ async def _run_staff_bot() -> None:
     try:
         try:
             await bot.delete_webhook(drop_pending_updates=True)
-            logger.info("Webhook staff-бота удалён, перехожу на polling.")
+            logger.info("Webhook бота уведомлений CRM удалён, перехожу на polling.")
         except Exception:
-            logger.exception("Не удалось удалить webhook staff-бота")
+            logger.exception("Не удалось удалить webhook бота уведомлений CRM")
 
-        logger.info("Staff-бот запущен.")
+        logger.info("Бот уведомлений CRM запущен.")
         await dispatcher.start_polling(
             bot,
             allowed_updates=dispatcher.resolve_used_update_types(),

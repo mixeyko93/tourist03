@@ -1081,11 +1081,11 @@ export default function SettingsPage() {
                   rel="noreferrer"
                 >
                   <Link2 className="h-4 w-4" />
-                  Открыть staff-бота
+                  Открыть бот уведомлений
                 </a>
               ) : (
                 <p className="mt-2 text-xs text-emerald-100/75">
-                  Укажите `STAFF_BOT_USERNAME`, чтобы CRM могла открыть бота одной кнопкой.
+                  Укажите `STAFF_BOT_USERNAME`, чтобы CRM могла открыть бот уведомлений одной кнопкой.
                 </p>
               )}
             </div>
@@ -1224,7 +1224,7 @@ export default function SettingsPage() {
             <div className="rounded-3xl border border-border bg-background/65 p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="text-sm font-medium text-foreground">Привязка к staff-боту</p>
+                  <p className="text-sm font-medium text-foreground">Привязка к боту уведомлений</p>
                   <p className="text-sm text-muted-foreground">Сгенерируйте одноразовый код, чтобы сотрудник подключил Telegram к своей учётке.</p>
                 </div>
                 <button

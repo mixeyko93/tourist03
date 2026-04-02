@@ -181,13 +181,13 @@ def link_staff_account_by_code(code: str, *, telegram_user_id: int, telegram_cha
             target_type="staff_account",
             target_id=linked["id"],
             action_type="staff_telegram_link_complete",
-            action_label="Подключил staff-бот",
+            action_label="Подключил бот уведомлений CRM",
             comment=f"Telegram @{telegram_username}" if telegram_username else "Подключение через код",
             was_auto_applied=True,
         )
         create_notification_event(
             event_type="staff_telegram_linked",
-            title="Сотрудник подключил staff-бот",
+            title="Сотрудник подключил бот уведомлений CRM",
             body=f"{linked.get('display_name') or linked.get('email')} теперь получает Telegram-уведомления.",
             channel="in_app",
             recipient_scope="crm",
@@ -402,7 +402,7 @@ async def deliver_pending_telegram_notifications(bot: Bot, *, limit: int = 100) 
                 disable_web_page_preview=True,
             )
         except Exception:
-            logger.exception("Не удалось доставить staff-событие %s в Telegram", event.get("id"))
+            logger.exception("Не удалось доставить служебное уведомление %s в Telegram", event.get("id"))
             continue
         if notification_repo.mark_telegram_notification_sent(int(event["id"])):
             sent_count += 1
@@ -412,7 +412,7 @@ async def deliver_pending_telegram_notifications(bot: Bot, *, limit: int = 100) 
 def build_staff_start_text() -> str:
     bot_hint = f" @{STAFF_BOT_USERNAME}" if STAFF_BOT_USERNAME else ""
     return (
-        f"👋 <b>Staff-бот Tourist_03{bot_hint}</b>\n\n"
+        f"👋 <b>Бот уведомлений CRM Tourist_03{bot_hint}</b>\n\n"
         "Я отправляю служебные уведомления по новым заявкам, сменам и критичным изменениям CRM.\n\n"
         "Чтобы подключить учётку:\n"
         "1. Откройте CRM.\n"
