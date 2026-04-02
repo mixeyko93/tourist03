@@ -19,6 +19,7 @@ import AdminUsersPage from "./admin/pages/AdminUsersPage";
 import AdminAccountsPage from "./admin/pages/AdminAccountsPage";
 import AdminArchivePage from "./admin/pages/AdminArchivePage";
 import AdminLoginPage from "./admin/pages/AdminLoginPage";
+import AdminModerationPage from "./admin/pages/AdminModerationPage";
 import AdminSuperadminsPage from "./admin/pages/AdminSuperadminsPage";
 import AdminAuditPage from "./admin/pages/AdminAuditPage";
 import { crmPath } from "./paths";
@@ -73,6 +74,7 @@ function createAdminRoutes(base: "" | "/react-map"): RouteObject[] {
         { path: "bases/:id", Component: AdminBaseEditPage },
         { path: "users", Component: AdminUsersPage },
         { path: "accounts", Component: AdminAccountsPage },
+        { path: "moderation", Component: AdminModerationPage },
         { path: "superadmins", Component: AdminSuperadminsPage },
         { path: "audit", Component: AdminAuditPage },
         { path: "archive", Component: AdminArchivePage },

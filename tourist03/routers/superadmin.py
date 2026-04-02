@@ -7,6 +7,7 @@ from tourist03.dto.superadmin import (
     SuperAdminCampSummaryDTO,
     SuperAdminCreateAccountResponseDTO,
     SuperAdminCreateRootAccountResponseDTO,
+    SuperAdminMediaQueueItemDTO,
     SuperAdminRootAccountDTO,
     SuperAdminSystemEventDTO,
     SuperAdminSessionResponseDTO,
@@ -144,6 +145,22 @@ router.add_api_route(
     dependencies=superadmin_guard,
     response_model=list[SuperAdminSystemEventDTO],
     responses=error_responses(401, 500),
+)
+router.add_api_route(
+    "/api/superadmin/media",
+    superadmin_service.superadmin_list_media_queue,
+    methods=["GET"],
+    dependencies=superadmin_guard,
+    response_model=list[SuperAdminMediaQueueItemDTO],
+    responses=error_responses(401, 500),
+)
+router.add_api_route(
+    "/api/superadmin/media/{entity_type}/{media_id}/moderation",
+    superadmin_service.superadmin_update_media_moderation,
+    methods=["PATCH"],
+    dependencies=superadmin_guard,
+    response_model=SuperAdminUpdateAccountResponseDTO,
+    responses=error_responses(400, 401, 404, 422, 500),
 )
 router.add_api_route(
     "/api/superadmin/superadmins",

@@ -177,6 +177,7 @@ def get_camp_editor_context(camp_id: int):
     if not camp:
         return None
     photos = catalog_repo.list_camp_photos(camp_id)
+    media = catalog_repo.list_camp_media(camp_id)
     room_context = catalog_repo.get_camp_room_listing_context(camp_id)
 
     with _db_conn("crm") as conn:
@@ -199,9 +200,12 @@ def get_camp_editor_context(camp_id: int):
         linked_accounts = [dict(row) for row in cur.fetchall()]
 
     rooms = room_context.get("rooms") if room_context else []
+    for room in rooms:
+        room["media"] = catalog_repo.list_room_media(camp_id, int(room["id"]), room.get("photos") or [])
     return {
         "camp": camp,
         "photos": photos,
+        "media": media,
         "rooms": rooms,
         "linked_accounts": linked_accounts,
     }

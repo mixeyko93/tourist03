@@ -1,9 +1,12 @@
 import {
   Bath,
   BedDouble,
+  Camera,
   ChevronDown,
+  Clapperboard,
   House,
   ImagePlus,
+  Link2,
   MapPinned,
   Plus,
   Sailboat,
@@ -29,6 +32,7 @@ import {
   updateSuperadminCampStatus,
   uploadSuperadminMedia,
   type SuperadminBaseEditor,
+  type SuperadminMediaItem,
 } from "../session";
 import { type AdminBaseApartment, type AdminBaseDraft, createEmptyAdminBaseDraft, createEmptyApartment } from "../baseDraft";
 
@@ -50,10 +54,13 @@ const accentBackgrounds = [
 type ApartmentCardProps = {
   apartment: AdminBaseApartment;
   index: number;
-  uploading: boolean;
+  uploadingKey: string | null;
   onChange: (next: AdminBaseApartment) => void;
   onRemove: () => void;
   onAddPhotos: (files: FileList | null, index: number) => void;
+  onAddVideo: (files: FileList | null, index: number) => void;
+  onAddPoster: (files: FileList | null, index: number) => void;
+  onCapturePoster: (videoEl: HTMLVideoElement | null, index: number) => void;
 };
 
 function numberFromText(value: string) {
@@ -152,6 +159,62 @@ function markerSizeToApi(value: AdminBaseDraft["markerSize"]) {
   return value === "VIP" ? "vip" : "standard";
 }
 
+function splitMediaItems(media: SuperadminMediaItem[] | undefined, fallbackPhotos: string[]) {
+  const photos = (media || [])
+    .filter((item) => item.media_type === "image" && item.url)
+    .sort((left, right) => Number(left.sort || 0) - Number(right.sort || 0))
+    .map((item) => item.url);
+  const video = (media || []).find((item) => item.media_type === "video" && item.url);
+  return {
+    photos: photos.length ? photos : fallbackPhotos,
+    videoUrl: video?.url || "",
+    videoPosterUrl: video?.poster_url || "",
+    videoSourceKind: video?.source_kind === "external" ? "external" : "upload",
+  } as const;
+}
+
+function buildMediaItems(photos: string[], videoUrl: string, videoPosterUrl: string, videoSourceKind: "upload" | "external") {
+  const items: SuperadminMediaItem[] = photos.map((url, index) => ({
+    media_type: "image",
+    url,
+    cover: index === 0,
+    sort: index,
+    source_kind: "upload",
+  }));
+  if (videoUrl.trim()) {
+    items.push({
+      media_type: "video",
+      url: videoUrl.trim(),
+      poster_url: videoPosterUrl.trim() || undefined,
+      source_kind: videoSourceKind,
+      cover: false,
+      sort: items.length,
+    });
+  }
+  return items;
+}
+
+async function captureVideoPosterFile(videoEl: HTMLVideoElement | null, fileNamePrefix: string) {
+  if (!videoEl) {
+    throw new Error("Сначала откройте видео и выберите кадр.");
+  }
+  const canvas = document.createElement("canvas");
+  const width = Math.max(videoEl.videoWidth || 0, 1);
+  const height = Math.max(videoEl.videoHeight || 0, 1);
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("Не удалось подготовить кадр для обложки.");
+  }
+  context.drawImage(videoEl, 0, 0, width, height);
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+  if (!blob) {
+    throw new Error("Не удалось сформировать изображение обложки.");
+  }
+  return new File([blob], `${fileNamePrefix}-poster.png`, { type: "image/png" });
+}
+
 function housingTypeFromApi(value?: string | null) {
   if ((value || "").toLowerCase() === "houses") return "Домики";
   if ((value || "").toLowerCase() === "rooms") return "Отель";
@@ -165,6 +228,10 @@ function housingTypeToApi(value: string) {
 }
 
 function roomToApartment(room: SuperadminBaseEditor["rooms"][number], index: number): AdminBaseApartment {
+  const media = splitMediaItems(
+    room.media,
+    (room.photos || []).map((item) => item.url),
+  );
   return {
     id: String(room.id || `room-${index + 1}`),
     unitType: room.room_type || "Апартамент",
@@ -183,7 +250,10 @@ function roomToApartment(room: SuperadminBaseEditor["rooms"][number], index: num
     extraGuestPrice: String(room.price_child ?? 0),
     quantity: "1",
     bookingWindow: String(room.discount_from_nights ?? 0),
-    photos: (room.photos || []).map((item) => item.url),
+    photos: media.photos,
+    videoUrl: media.videoUrl,
+    videoPosterUrl: media.videoPosterUrl,
+    videoSourceKind: media.videoSourceKind,
   };
 }
 
@@ -191,6 +261,7 @@ function campEditorToDraft(payload: SuperadminBaseEditor): AdminBaseDraft {
   const camp = payload.camp;
   const owner = splitContact(camp.owner);
   const manager = splitContact(camp.manager);
+  const media = splitMediaItems(payload.media, payload.photos.map((photo) => photo.url));
   return {
     id: String(camp.id),
     status: statusToLabel(camp.status),
@@ -217,7 +288,10 @@ function campEditorToDraft(payload: SuperadminBaseEditor): AdminBaseDraft {
     markerIcon: markerIconFromEmoji(camp.emoji),
     description: camp.description || "",
     minPrice: formatPriceLabel(camp.min_price),
-    gallery: payload.photos.map((photo) => photo.url),
+    gallery: media.photos,
+    videoUrl: media.videoUrl,
+    videoPosterUrl: media.videoPosterUrl,
+    videoSourceKind: media.videoSourceKind,
     apartments: payload.rooms.length ? payload.rooms.map(roomToApartment) : [createEmptyApartment(1)],
   };
 }
@@ -251,6 +325,7 @@ function apartmentToRoomPayload(apartment: AdminBaseApartment) {
       cover: photoIndex === 0,
       sort: photoIndex,
     })),
+    media: buildMediaItems(apartment.photos, apartment.videoUrl, apartment.videoPosterUrl, apartment.videoSourceKind),
   };
 }
 
@@ -291,12 +366,175 @@ function buildCampPayload(draft: AdminBaseDraft) {
     pools_shared_count: numberFromText(draft.poolsShared),
     beds_count: numberFromText(draft.beds),
     photos: draft.gallery.map((url, index) => ({ url, cover: index === 0, sort: index })),
+    media: buildMediaItems(draft.gallery, draft.videoUrl, draft.videoPosterUrl, draft.videoSourceKind),
     rooms,
   };
 }
 
-function ApartmentCard({ apartment, index, uploading, onChange, onRemove, onAddPhotos }: ApartmentCardProps) {
-  const inputRef = useRef<HTMLInputElement | null>(null);
+function uploadKey(scope: "camp" | "room", kind: "photo" | "video" | "poster", roomId?: string) {
+  return scope === "camp" ? `camp-${kind}` : `room-${roomId || "new"}-${kind}`;
+}
+
+function VideoPanel({
+  title,
+  videoUrl,
+  posterUrl,
+  sourceKind,
+  uploadingKey,
+  videoKey,
+  posterKey,
+  onSourceChange,
+  onUrlChange,
+  onUploadVideo,
+  onUploadPoster,
+  onCapturePoster,
+}: {
+  title: string;
+  videoUrl: string;
+  posterUrl: string;
+  sourceKind: "upload" | "external";
+  uploadingKey: string | null;
+  videoKey: string;
+  posterKey: string;
+  onSourceChange: (next: "upload" | "external") => void;
+  onUrlChange: (next: string) => void;
+  onUploadVideo: (files: FileList | null) => void;
+  onUploadPoster: (files: FileList | null) => void;
+  onCapturePoster: (videoEl: HTMLVideoElement | null) => void;
+}) {
+  const videoInputRef = useRef<HTMLInputElement | null>(null);
+  const posterInputRef = useRef<HTMLInputElement | null>(null);
+  const videoPreviewRef = useRef<HTMLVideoElement | null>(null);
+  const canCapture = sourceKind === "upload" && Boolean(videoUrl);
+
+  return (
+    <div className="rounded-3xl border border-border bg-background/60 p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-foreground">{title}</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">Можно загрузить файл до 100 МБ или добавить внешнюю ссылку. Новый контент уйдёт на модерацию.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => onSourceChange("upload")}
+            className={`rounded-xl border px-3 py-2 text-sm font-semibold transition ${
+              sourceKind === "upload" ? "border-blue-500 bg-blue-500 text-white" : "border-border bg-background/70 text-muted-foreground hover:bg-accent"
+            }`}
+          >
+            Файл
+          </button>
+          <button
+            type="button"
+            onClick={() => onSourceChange("external")}
+            className={`rounded-xl border px-3 py-2 text-sm font-semibold transition ${
+              sourceKind === "external" ? "border-blue-500 bg-blue-500 text-white" : "border-border bg-background/70 text-muted-foreground hover:bg-accent"
+            }`}
+          >
+            Ссылка
+          </button>
+        </div>
+      </div>
+
+      <input
+        ref={videoInputRef}
+        type="file"
+        accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm,.m4v"
+        className="hidden"
+        onChange={(event) => {
+          onUploadVideo(event.target.files);
+          event.currentTarget.value = "";
+        }}
+      />
+      <input
+        ref={posterInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(event) => {
+          onUploadPoster(event.target.files);
+          event.currentTarget.value = "";
+        }}
+      />
+
+      <div className="mt-5 grid gap-4 xl:grid-cols-[1fr_320px]">
+        <div className="space-y-4">
+          {sourceKind === "external" ? (
+            <AdminField label="Ссылка на видео" hint="Поддерживаются внешние ссылки на VK Видео, RuTube, YouTube или прямой файл.">
+              <div className="relative">
+                <Link2 className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input className="admin-input pl-10" value={videoUrl} onChange={(event) => onUrlChange(event.target.value)} placeholder="https://..." />
+              </div>
+            </AdminField>
+          ) : null}
+
+          <div className="rounded-3xl border border-border bg-card/60 p-4">
+            {sourceKind === "upload" && videoUrl ? (
+              <video ref={videoPreviewRef} src={videoUrl} poster={posterUrl || undefined} className="max-h-72 w-full rounded-2xl bg-black object-contain" controls preload="metadata" />
+            ) : sourceKind === "external" && videoUrl ? (
+              <div className="flex min-h-48 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border bg-background/70 px-5 py-6 text-center">
+                <Clapperboard className="h-8 w-8 text-blue-400" />
+                <p className="text-sm font-medium text-foreground">Внешнее видео подключено по ссылке</p>
+                <a href={videoUrl} target="_blank" rel="noreferrer" className="text-sm text-blue-400 hover:text-blue-300">
+                  Открыть источник
+                </a>
+              </div>
+            ) : (
+              <div className="flex min-h-48 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border bg-background/70 px-5 py-6 text-center">
+                <Clapperboard className="h-8 w-8 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Видео пока не добавлено.</p>
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {sourceKind === "upload" ? (
+              <button type="button" className="admin-button gap-2" onClick={() => videoInputRef.current?.click()} disabled={uploadingKey === videoKey}>
+                <Clapperboard className="h-4 w-4" />
+                {uploadingKey === videoKey ? "Загрузка..." : "Загрузить видео"}
+              </button>
+            ) : null}
+            <button type="button" className="admin-button gap-2" onClick={() => posterInputRef.current?.click()} disabled={uploadingKey === posterKey}>
+              <ImagePlus className="h-4 w-4" />
+              {uploadingKey === posterKey ? "Загрузка..." : "Загрузить обложку"}
+            </button>
+            <button type="button" className="admin-button gap-2" onClick={() => onCapturePoster(videoPreviewRef.current)} disabled={!canCapture || uploadingKey === posterKey}>
+              <Camera className="h-4 w-4" />
+              Выбрать кадр
+            </button>
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-border bg-card/55 p-4">
+          <p className="text-sm font-semibold text-foreground">Обложка видео</p>
+          <div className="mt-4 flex min-h-56 items-center justify-center overflow-hidden rounded-2xl border border-dashed border-border bg-background/70">
+            {posterUrl ? (
+              <img src={posterUrl} alt="Обложка видео" className="h-full w-full object-cover" />
+            ) : (
+              <div className="px-6 text-center text-sm text-muted-foreground">Загрузите отдельную обложку или выберите кадр из видео.</div>
+            )}
+          </div>
+          <p className="mt-3 text-xs leading-5 text-muted-foreground">
+            Обложка используется в карточке базы и в модерации. Для внешних ссылок лучше загрузить её вручную.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ApartmentCard({
+  apartment,
+  index,
+  uploadingKey,
+  onChange,
+  onRemove,
+  onAddPhotos,
+  onAddVideo,
+  onAddPoster,
+  onCapturePoster,
+}: ApartmentCardProps) {
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
 
   const update = <K extends keyof AdminBaseApartment>(field: K, value: AdminBaseApartment[K]) => {
     onChange({ ...apartment, [field]: value });
@@ -305,7 +543,7 @@ function ApartmentCard({ apartment, index, uploading, onChange, onRemove, onAddP
   return (
     <div className="rounded-3xl border border-border bg-background/65 p-5">
       <input
-        ref={inputRef}
+        ref={photoInputRef}
         type="file"
         multiple
         accept="image/*"
@@ -400,22 +638,47 @@ function ApartmentCard({ apartment, index, uploading, onChange, onRemove, onAddP
         </AdminField>
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-3">
-        {apartment.photos.map((photo, photoIndex) => (
-          <div key={`${apartment.id}-${photo}`} className={`relative h-20 w-28 overflow-hidden rounded-2xl border border-border bg-gradient-to-br ${accentBackgrounds[photoIndex % accentBackgrounds.length]}`}>
-            <img src={photo} alt={apartment.name || `Фото ${photoIndex + 1}`} className="absolute inset-0 h-full w-full object-cover" />
-            {photoIndex === 0 ? (
-              <div className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-card/85 px-2 py-1 text-[11px] font-semibold text-foreground">
-                <Star className="h-3 w-3 text-blue-500" />
-                Обложка
-              </div>
-            ) : null}
-          </div>
-        ))}
-        <button type="button" className="admin-button min-h-20 min-w-28 justify-center gap-2" onClick={() => inputRef.current?.click()} disabled={uploading}>
-          <ImagePlus className="h-4 w-4" />
-          {uploading ? "Загрузка..." : "Фото"}
-        </button>
+      <div className="mt-4 rounded-3xl border border-border bg-card/40 p-4">
+        <div className="flex flex-wrap gap-3">
+          {apartment.photos.map((photo, photoIndex) => (
+            <div key={`${apartment.id}-${photo}`} className={`relative h-20 w-28 overflow-hidden rounded-2xl border border-border bg-gradient-to-br ${accentBackgrounds[photoIndex % accentBackgrounds.length]}`}>
+              <img src={photo} alt={apartment.name || `Фото ${photoIndex + 1}`} className="absolute inset-0 h-full w-full object-cover" />
+              {photoIndex === 0 ? (
+                <div className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-card/85 px-2 py-1 text-[11px] font-semibold text-foreground">
+                  <Star className="h-3 w-3 text-blue-500" />
+                  Обложка
+                </div>
+              ) : null}
+            </div>
+          ))}
+          <button
+            type="button"
+            className="admin-button min-h-20 min-w-28 justify-center gap-2"
+            onClick={() => photoInputRef.current?.click()}
+            disabled={uploadingKey === uploadKey("room", "photo", apartment.id)}
+          >
+            <ImagePlus className="h-4 w-4" />
+            {uploadingKey === uploadKey("room", "photo", apartment.id) ? "Загрузка..." : "Фото"}
+          </button>
+        </div>
+        <p className="mt-3 text-xs text-muted-foreground">До 5 фотографий. Первое фото станет обложкой апартамента после модерации.</p>
+      </div>
+
+      <div className="mt-5">
+        <VideoPanel
+          title="Видео апартамента"
+          videoUrl={apartment.videoUrl}
+          posterUrl={apartment.videoPosterUrl}
+          sourceKind={apartment.videoSourceKind}
+          uploadingKey={uploadingKey}
+          videoKey={uploadKey("room", "video", apartment.id)}
+          posterKey={uploadKey("room", "poster", apartment.id)}
+          onSourceChange={(next) => update("videoSourceKind", next)}
+          onUrlChange={(next) => update("videoUrl", next)}
+          onUploadVideo={(files) => onAddVideo(files, index)}
+          onUploadPoster={(files) => onAddPoster(files, index)}
+          onCapturePoster={(videoEl) => onCapturePoster(videoEl, index)}
+        />
       </div>
     </div>
   );
@@ -430,7 +693,7 @@ export default function AdminBaseEditPage() {
   const [linkedAccounts, setLinkedAccounts] = useState<SuperadminBaseEditor["linked_accounts"]>([]);
   const [isLoading, setIsLoading] = useState(!isNew);
   const [isSaving, setIsSaving] = useState(false);
-  const [uploadingTarget, setUploadingTarget] = useState<string | "camp" | null>(null);
+  const [uploadingTarget, setUploadingTarget] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
@@ -578,54 +841,126 @@ export default function AdminBaseEditPage() {
     }
   }
 
-  async function handleCampPhotoUpload(files: FileList | null) {
+  async function uploadFiles(files: FileList | null, target: string, options: { roomIndex?: number; onUploaded: (urls: string[]) => void }) {
     if (!files?.length) {
       return;
     }
     try {
-      setUploadingTarget("camp");
+      setUploadingTarget(target);
       setErrorMessage("");
       const campId = !isNew ? Number(draft.id) : undefined;
       const urls: string[] = [];
       for (const file of Array.from(files)) {
-        const uploaded = await uploadSuperadminMedia(file, { campId });
+        const uploaded = await uploadSuperadminMedia(file, { campId, roomIndex: options.roomIndex });
         urls.push(uploaded.url);
       }
-      setDraft((current) => ({
-        ...current,
-        gallery: [...current.gallery, ...urls].slice(0, 20),
-      }));
+      options.onUploaded(urls);
     } catch (error: unknown) {
-      setErrorMessage(error instanceof Error ? error.message : "Не удалось загрузить фотографии базы");
+      setErrorMessage(error instanceof Error ? error.message : "Не удалось загрузить медиа");
     } finally {
       setUploadingTarget(null);
     }
   }
 
+  async function handleCampPhotoUpload(files: FileList | null) {
+    return uploadFiles(files, uploadKey("camp", "photo"), {
+      onUploaded: (urls) => {
+        setDraft((current) => ({
+          ...current,
+          gallery: [...current.gallery, ...urls].slice(0, 20),
+        }));
+      },
+    });
+  }
+
+  async function handleCampVideoUpload(files: FileList | null) {
+    return uploadFiles(files, uploadKey("camp", "video"), {
+      onUploaded: (urls) => {
+        setDraft((current) => ({
+          ...current,
+          videoUrl: urls[0] || current.videoUrl,
+          videoSourceKind: "upload",
+        }));
+      },
+    });
+  }
+
+  async function handleCampPosterUpload(files: FileList | null) {
+    return uploadFiles(files, uploadKey("camp", "poster"), {
+      onUploaded: (urls) => {
+        setDraft((current) => ({
+          ...current,
+          videoPosterUrl: urls[0] || current.videoPosterUrl,
+        }));
+      },
+    });
+  }
+
   async function handleApartmentPhotoUpload(files: FileList | null, apartmentIndex: number) {
-    if (!files?.length) {
-      return;
-    }
     const targetId = draft.apartments[apartmentIndex]?.id || `room-${apartmentIndex}`;
+    return uploadFiles(files, uploadKey("room", "photo", targetId), {
+      roomIndex: apartmentIndex,
+      onUploaded: (urls) => {
+        setDraft((current) => ({
+          ...current,
+          apartments: current.apartments.map((apartment, index) =>
+            index === apartmentIndex ? { ...apartment, photos: [...apartment.photos, ...urls].slice(0, 5) } : apartment,
+          ),
+        }));
+      },
+    });
+  }
+
+  async function handleApartmentVideoUpload(files: FileList | null, apartmentIndex: number) {
+    const targetId = draft.apartments[apartmentIndex]?.id || `room-${apartmentIndex}`;
+    return uploadFiles(files, uploadKey("room", "video", targetId), {
+      roomIndex: apartmentIndex,
+      onUploaded: (urls) => {
+        setDraft((current) => ({
+          ...current,
+          apartments: current.apartments.map((apartment, index) =>
+            index === apartmentIndex ? { ...apartment, videoUrl: urls[0] || apartment.videoUrl, videoSourceKind: "upload" } : apartment,
+          ),
+        }));
+      },
+    });
+  }
+
+  async function handleApartmentPosterUpload(files: FileList | null, apartmentIndex: number) {
+    const targetId = draft.apartments[apartmentIndex]?.id || `room-${apartmentIndex}`;
+    return uploadFiles(files, uploadKey("room", "poster", targetId), {
+      roomIndex: apartmentIndex,
+      onUploaded: (urls) => {
+        setDraft((current) => ({
+          ...current,
+          apartments: current.apartments.map((apartment, index) =>
+            index === apartmentIndex ? { ...apartment, videoPosterUrl: urls[0] || apartment.videoPosterUrl } : apartment,
+          ),
+        }));
+      },
+    });
+  }
+
+  async function captureCampPoster(videoEl: HTMLVideoElement | null) {
     try {
-      setUploadingTarget(targetId);
-      setErrorMessage("");
-      const campId = !isNew ? Number(draft.id) : undefined;
-      const urls: string[] = [];
-      for (const file of Array.from(files)) {
-        const uploaded = await uploadSuperadminMedia(file, { campId, roomIndex: apartmentIndex });
-        urls.push(uploaded.url);
-      }
-      setDraft((current) => ({
-        ...current,
-        apartments: current.apartments.map((apartment, index) =>
-          index === apartmentIndex ? { ...apartment, photos: [...apartment.photos, ...urls].slice(0, 5) } : apartment,
-        ),
-      }));
+      const file = await captureVideoPosterFile(videoEl, `camp-${draft.id || "new"}`);
+      const data = new DataTransfer();
+      data.items.add(file);
+      await handleCampPosterUpload(data.files);
     } catch (error: unknown) {
-      setErrorMessage(error instanceof Error ? error.message : "Не удалось загрузить фотографии апартамента");
-    } finally {
-      setUploadingTarget(null);
+      setErrorMessage(error instanceof Error ? error.message : "Не удалось получить кадр из видео");
+    }
+  }
+
+  async function captureApartmentPoster(videoEl: HTMLVideoElement | null, apartmentIndex: number) {
+    try {
+      const apartment = draft.apartments[apartmentIndex];
+      const file = await captureVideoPosterFile(videoEl, apartment?.id || `room-${apartmentIndex + 1}`);
+      const data = new DataTransfer();
+      data.items.add(file);
+      await handleApartmentPosterUpload(data.files, apartmentIndex);
+    } catch (error: unknown) {
+      setErrorMessage(error instanceof Error ? error.message : "Не удалось получить кадр из видео");
     }
   }
 
@@ -653,7 +988,7 @@ export default function AdminBaseEditPage() {
               {draft.id === "new" ? "Создание базы отдыха" : `Редактирование базы «${draft.name || "Без названия"}»`}
             </h2>
             <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-              Полный редактор каталога: контакты, публикация, фотографии, визуальный маркер и структура апартаментов.
+              Полный редактор каталога: контакты, публикация, фотографии, видео, визуальный маркер и структура апартаментов.
             </p>
           </div>
 
@@ -704,6 +1039,7 @@ export default function AdminBaseEditPage() {
               <AdminStatusBadge tone={draft.status === "Активный" ? "success" : draft.status === "Отключен" ? "warning" : "neutral"}>
                 {draft.status}
               </AdminStatusBadge>
+              <AdminStatusBadge tone="info">Новый контент отправится на модерацию</AdminStatusBadge>
               {linkedAccounts.length ? (
                 <div className="flex flex-wrap gap-2">
                   {linkedAccounts.map((account) => (
@@ -769,11 +1105,7 @@ export default function AdminBaseEditPage() {
               <div className="grid gap-4 xl:grid-cols-6">
                 <AdminField label="Тип жилья" className="xl:col-span-2">
                   <div className="relative">
-                    <select
-                      className="admin-input appearance-none pr-10"
-                      value={draft.accommodationType}
-                      onChange={(event) => updateField("accommodationType", event.target.value)}
-                    >
+                    <select className="admin-input appearance-none pr-10" value={draft.accommodationType} onChange={(event) => updateField("accommodationType", event.target.value)}>
                       {["Апартаменты", "Домики", "Отель"].map((option) => (
                         <option key={option}>{option}</option>
                       ))}
@@ -811,7 +1143,7 @@ export default function AdminBaseEditPage() {
             <div className="space-y-5 border-t border-border pt-8">
               <div className="flex flex-wrap items-center gap-3">
                 <Star className="h-5 w-5 text-blue-500" />
-                <h3 className="text-lg font-semibold text-foreground">Фотографии и визуальный маркер</h3>
+                <h3 className="text-lg font-semibold text-foreground">Фото, видео и визуальный маркер</h3>
               </div>
 
               <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
@@ -829,12 +1161,17 @@ export default function AdminBaseEditPage() {
                         </div>
                       </div>
                     ))}
-                    <button type="button" className="admin-button min-h-28 min-w-36 justify-center gap-2" onClick={() => galleryInputRef.current?.click()} disabled={uploadingTarget === "camp"}>
+                    <button
+                      type="button"
+                      className="admin-button min-h-28 min-w-36 justify-center gap-2"
+                      onClick={() => galleryInputRef.current?.click()}
+                      disabled={uploadingTarget === uploadKey("camp", "photo")}
+                    >
                       <ImagePlus className="h-4 w-4" />
-                      {uploadingTarget === "camp" ? "Загрузка..." : "Загрузить фото"}
+                      {uploadingTarget === uploadKey("camp", "photo") ? "Загрузка..." : "Загрузить фото"}
                     </button>
                   </div>
-                  <p className="mt-3 text-xs text-muted-foreground">До 20 фотографий. Первое фото используется как обложка в карточке базы.</p>
+                  <p className="mt-3 text-xs text-muted-foreground">До 20 фотографий. В публичную карточку попадут только одобренные изображения.</p>
                 </div>
 
                 <div className="rounded-3xl border border-border bg-background/60 p-5">
@@ -892,6 +1229,21 @@ export default function AdminBaseEditPage() {
                   </div>
                 </div>
               </div>
+
+              <VideoPanel
+                title="Видео базы"
+                videoUrl={draft.videoUrl}
+                posterUrl={draft.videoPosterUrl}
+                sourceKind={draft.videoSourceKind}
+                uploadingKey={uploadingTarget}
+                videoKey={uploadKey("camp", "video")}
+                posterKey={uploadKey("camp", "poster")}
+                onSourceChange={(next) => updateField("videoSourceKind", next)}
+                onUrlChange={(next) => updateField("videoUrl", next)}
+                onUploadVideo={(files) => handleCampVideoUpload(files)}
+                onUploadPoster={(files) => handleCampPosterUpload(files)}
+                onCapturePoster={(videoEl) => captureCampPoster(videoEl)}
+              />
             </div>
 
             <div className="space-y-3 border-t border-border pt-8">
@@ -920,10 +1272,13 @@ export default function AdminBaseEditPage() {
                     key={apartment.id}
                     apartment={apartment}
                     index={index}
-                    uploading={uploadingTarget === apartment.id}
+                    uploadingKey={uploadingTarget}
                     onChange={(next) => updateApartment(index, next)}
                     onRemove={() => removeApartment(index)}
                     onAddPhotos={handleApartmentPhotoUpload}
+                    onAddVideo={handleApartmentVideoUpload}
+                    onAddPoster={handleApartmentPosterUpload}
+                    onCapturePoster={captureApartmentPoster}
                   />
                 ))}
               </div>

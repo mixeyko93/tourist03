@@ -84,6 +84,25 @@ class SuperAdminSystemEventDTO(BaseModel):
     closed_at: Optional[datetime] = None
 
 
+class SuperAdminMediaQueueItemDTO(BaseModel):
+    entity_type: str
+    media_id: int
+    camp_id: Optional[int] = None
+    camp_name: Optional[str] = None
+    room_id: Optional[int] = None
+    room_name: Optional[str] = None
+    media_type: str
+    url: str
+    poster_url: Optional[str] = None
+    source_kind: Optional[str] = None
+    moderation_status: Optional[str] = None
+    moderation_comment: Optional[str] = None
+    cover: bool = False
+    sort: int = 0
+    approved_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+
+
 class SuperAdminAccountCampDTO(BaseModel):
     camp_id: int
     camp_name: Optional[str] = None

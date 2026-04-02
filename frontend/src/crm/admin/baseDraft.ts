@@ -19,6 +19,9 @@ export type AdminBaseApartment = {
   quantity: string;
   bookingWindow: string;
   photos: string[];
+  videoUrl: string;
+  videoPosterUrl: string;
+  videoSourceKind: "upload" | "external";
 };
 
 export type AdminBaseDraft = {
@@ -48,6 +51,9 @@ export type AdminBaseDraft = {
   description: string;
   minPrice: string;
   gallery: string[];
+  videoUrl: string;
+  videoPosterUrl: string;
+  videoSourceKind: "upload" | "external";
   apartments: AdminBaseApartment[];
 };
 
@@ -71,6 +77,9 @@ export function createEmptyApartment(index: number): AdminBaseApartment {
     quantity: "1",
     bookingWindow: "3",
     photos: [],
+    videoUrl: "",
+    videoPosterUrl: "",
+    videoSourceKind: "upload",
   };
 }
 
@@ -102,6 +111,9 @@ export function createEmptyAdminBaseDraft(): AdminBaseDraft {
     description: "",
     minPrice: "0 ₽",
     gallery: [],
+    videoUrl: "",
+    videoPosterUrl: "",
+    videoSourceKind: "upload",
     apartments: [createEmptyApartment(1)],
   };
 }

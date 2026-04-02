@@ -815,6 +815,38 @@ MIGRATIONS = (
           AND lower(status) NOT IN ({IGNORED_STATUS_SQL});
         """,
     ),
+    MigrationStep(
+        version="0005_public_media_pipeline",
+        sql="""
+        ALTER TABLE catalog.camp_media ADD COLUMN IF NOT EXISTS poster_url TEXT;
+        ALTER TABLE catalog.camp_media ADD COLUMN IF NOT EXISTS source_kind TEXT NOT NULL DEFAULT 'upload';
+        ALTER TABLE catalog.camp_media ADD COLUMN IF NOT EXISTS moderation_status TEXT NOT NULL DEFAULT 'approved';
+        ALTER TABLE catalog.camp_media ADD COLUMN IF NOT EXISTS moderation_comment TEXT;
+        ALTER TABLE catalog.camp_media ADD COLUMN IF NOT EXISTS approved_by_superadmin_id INTEGER;
+        ALTER TABLE catalog.camp_media ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ;
+
+        ALTER TABLE catalog.room_media ADD COLUMN IF NOT EXISTS poster_url TEXT;
+        ALTER TABLE catalog.room_media ADD COLUMN IF NOT EXISTS source_kind TEXT NOT NULL DEFAULT 'upload';
+        ALTER TABLE catalog.room_media ADD COLUMN IF NOT EXISTS moderation_status TEXT NOT NULL DEFAULT 'approved';
+        ALTER TABLE catalog.room_media ADD COLUMN IF NOT EXISTS moderation_comment TEXT;
+        ALTER TABLE catalog.room_media ADD COLUMN IF NOT EXISTS approved_by_superadmin_id INTEGER;
+        ALTER TABLE catalog.room_media ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ;
+
+        UPDATE catalog.camp_media
+        SET moderation_status = 'approved'
+        WHERE moderation_status IS NULL OR moderation_status = '';
+
+        UPDATE catalog.room_media
+        SET moderation_status = 'approved'
+        WHERE moderation_status IS NULL OR moderation_status = '';
+
+        CREATE INDEX IF NOT EXISTS idx_camp_media_status_created
+        ON catalog.camp_media(moderation_status, created_at DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_room_media_status_created
+        ON catalog.room_media(moderation_status, created_at DESC);
+        """,
+    ),
 )
 
 

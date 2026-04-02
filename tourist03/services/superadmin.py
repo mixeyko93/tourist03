@@ -4,11 +4,13 @@ from typing import Optional
 from fastapi import HTTPException, Request, status
 
 from tourist03.config import SUPERADMIN_LOGIN, logger
+from tourist03.repositories import catalog as catalog_repo
 from tourist03.repositories import superadmin as superadmin_repo
 from tourist03.schemas import (
     SuperAdminCreateAccountRequest,
     SuperAdminCreateSuperadminRequest,
     SuperAdminLoginRequest,
+    SuperAdminMediaModerationRequest,
     SuperAdminUpdateAccountRequest,
     SuperAdminUpdateSuperadminRequest,
 )
@@ -258,6 +260,52 @@ def superadmin_list_users(search: Optional[str] = None):
 
 def superadmin_list_events(search: Optional[str] = None, camp_id: Optional[int] = None, limit: int = 20):
     return superadmin_repo.list_recent_events(search=search, camp_id=camp_id, limit=limit)
+
+
+def superadmin_list_media_queue(search: Optional[str] = None, status: Optional[str] = None, limit: int = 120):
+    return catalog_repo.list_public_media_queue(search=search, status=status, limit=limit)
+
+
+def superadmin_update_media_moderation(entity_type: str, media_id: int, payload: SuperAdminMediaModerationRequest, request: Request):
+    actor = get_superadmin_session_principal(request) or {}
+    current = catalog_repo.get_public_media_item(entity_type, media_id)
+    if not current:
+        raise HTTPException(status_code=404, detail="Медиаматериал не найден")
+
+    next_status = (payload.status or "").strip().lower()
+    if next_status not in {"pending", "approved", "rejected"}:
+        raise HTTPException(status_code=400, detail="Недопустимый статус модерации")
+
+    catalog_repo.update_public_media_moderation(
+        entity_type,
+        media_id,
+        moderation_status=next_status,
+        moderation_comment=(payload.comment or "").strip() or None,
+        approved_by_superadmin_id=actor.get("id"),
+    )
+    updated = catalog_repo.get_public_media_item(entity_type, media_id)
+    log_crm_audit_event(
+        actor_type="superadmin",
+        actor_id=actor.get("id"),
+        actor_display=actor.get("display_name") or actor.get("login"),
+        camp_id=current.get("camp_id"),
+        target_type="public_media",
+        target_id=f"{entity_type}:{media_id}",
+        action_type="moderation",
+        action_label="Изменён статус модерации контента",
+        old_value={
+            "moderation_status": current.get("moderation_status"),
+            "moderation_comment": current.get("moderation_comment"),
+        },
+        new_value={
+            "moderation_status": updated.get("moderation_status") if updated else next_status,
+            "moderation_comment": updated.get("moderation_comment") if updated else (payload.comment or "").strip() or None,
+            "entity_type": entity_type,
+            "media_type": current.get("media_type"),
+            "url": current.get("url"),
+        },
+    )
+    return {"ok": True}
 
 
 def superadmin_list_root_accounts(request: Request, include_archived: bool = False):

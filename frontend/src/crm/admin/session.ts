@@ -50,6 +50,18 @@ export type SuperadminCampPhoto = {
   cover?: number | boolean | null;
 };
 
+export type SuperadminMediaItem = {
+  id?: number;
+  media_type: "image" | "video";
+  url: string;
+  poster_url?: string | null;
+  source_kind?: "upload" | "external" | null;
+  moderation_status?: string | null;
+  moderation_comment?: string | null;
+  cover?: boolean | number | null;
+  sort?: number | null;
+};
+
 export type SuperadminRoom = {
   id?: number;
   camp_id?: number | null;
@@ -77,6 +89,7 @@ export type SuperadminRoom = {
   description?: string | null;
   photo_main?: string | null;
   photos?: Array<{ url: string; cover: boolean | number; sort: number }>;
+  media?: SuperadminMediaItem[];
 };
 
 export type SuperadminBaseEditor = {
@@ -106,6 +119,7 @@ export type SuperadminBaseEditor = {
     beds_count?: number | null;
   };
   photos: SuperadminCampPhoto[];
+  media?: SuperadminMediaItem[];
   rooms: SuperadminRoom[];
   linked_accounts: Array<{
     id: number;
@@ -121,6 +135,7 @@ export type SuperadminAccount = {
   display_name: string;
   is_active: boolean;
   created_at?: string | null;
+  archived_at?: string | null;
   camps: Array<{ camp_id: number; camp_name?: string | null }>;
 };
 
@@ -195,6 +210,25 @@ export type SuperadminSystemEvent = {
   created_at?: string | null;
   read_at?: string | null;
   closed_at?: string | null;
+};
+
+export type SuperadminMediaQueueItem = {
+  entity_type: "camp" | "room";
+  media_id: number;
+  camp_id?: number | null;
+  camp_name?: string | null;
+  room_id?: number | null;
+  room_name?: string | null;
+  media_type: "image" | "video";
+  url: string;
+  poster_url?: string | null;
+  source_kind?: "upload" | "external" | null;
+  moderation_status?: string | null;
+  moderation_comment?: string | null;
+  cover?: boolean;
+  sort?: number | null;
+  approved_at?: string | null;
+  created_at?: string | null;
 };
 
 export type SuperadminRootAccount = {
@@ -467,6 +501,41 @@ export async function fetchSuperadminEvents(
   );
   await assertOk(response);
   return (await response.json()) as SuperadminSystemEvent[];
+}
+
+export async function fetchSuperadminMediaQueue(
+  params: { search?: string; status?: string; limit?: number; signal?: AbortSignal } = {},
+): Promise<SuperadminMediaQueueItem[]> {
+  const response = await fetch(
+    `/api/superadmin/media${buildQuery({
+      search: params.search,
+      status: params.status,
+      limit: params.limit,
+    })}`,
+    {
+      credentials: "same-origin",
+      signal: params.signal,
+    },
+  );
+  await assertOk(response);
+  return (await response.json()) as SuperadminMediaQueueItem[];
+}
+
+export async function updateSuperadminMediaModeration(
+  entityType: "camp" | "room",
+  mediaId: number,
+  payload: { status: "pending" | "approved" | "rejected"; comment?: string },
+) {
+  const response = await fetch(`/api/superadmin/media/${entityType}/${mediaId}/moderation`, {
+    method: "PATCH",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  await assertOk(response);
+  return (await response.json()) as { ok: boolean };
 }
 
 export async function fetchRootSuperadminAccounts(

@@ -228,8 +228,8 @@ class UiSmokeTests(unittest.TestCase):
 
             page.get_by_role("link", name="Архив").click()
             page.wait_for_url(f"{self.base_url}/admin/archive", timeout=10000)
-            page.wait_for_selector("text=Архив баз отдыха", timeout=10000)
-            self.assertGreater(page.locator("text=Восстановление возвращает базу").count(), 0)
+            page.wait_for_selector("text=Единый архив системы", timeout=10000)
+            self.assertGreater(page.locator("text=Восстановление базы возвращает её").count(), 0)
 
             page.click("#superadmin-logout-btn")
             page.wait_for_url(f"{self.base_url}/admin/login", timeout=10000)

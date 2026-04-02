@@ -57,6 +57,11 @@ class SuperAdminUpdateSuperadminRequest(BaseModel):
     is_root: Optional[bool] = None
 
 
+class SuperAdminMediaModerationRequest(BaseModel):
+    status: str
+    comment: Optional[str] = None
+
+
 class CampStatusUpdateRequest(BaseModel):
     status: str
 

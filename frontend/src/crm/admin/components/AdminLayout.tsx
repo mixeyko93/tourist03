@@ -10,6 +10,7 @@ const baseAdminTabs = [
   { label: "Базы и номера", path: "/admin/bases" },
   { label: "Пользователи", path: "/admin/users" },
   { label: "Учётные записи", path: "/admin/accounts" },
+  { label: "Модерация", path: "/admin/moderation" },
   { label: "Архив", path: "/admin/archive" },
 ];
 

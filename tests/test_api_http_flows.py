@@ -404,7 +404,7 @@ class ApiHttpFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.json(), {"detail": "Нет доступа"})
 
-    async def test_upload_rejects_non_image_file_for_superadmin(self):
+    async def test_upload_rejects_non_media_file_for_superadmin(self):
         self._override_superadmin()
 
         response = await self.client.post(
@@ -415,7 +415,7 @@ class ApiHttpFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json(),
-            {"detail": "Разрешена загрузка только изображений JPG, PNG, GIF, WEBP или AVIF"},
+            {"detail": "Разрешена загрузка только изображений JPG, PNG, GIF, WEBP, AVIF или видео MP4, MOV, WEBM"},
         )
 
     async def test_upload_saves_image_for_superadmin(self):
@@ -432,6 +432,23 @@ class ApiHttpFlowTests(unittest.IsolatedAsyncioTestCase):
             body = response.json()
             self.assertTrue(body["url"].startswith("/static/uploads/camp_4/rooms/room_2/"))
 
+            relative_path = body["url"].removeprefix("/static/uploads/")
+            saved_path = Path(temp_dir) / relative_path
+            self.assertTrue(saved_path.exists())
+
+    async def test_upload_saves_video_for_superadmin(self):
+        self._override_superadmin()
+
+        with tempfile.TemporaryDirectory() as temp_dir, patch("tourist03.services.catalog.UPLOAD_DIR", temp_dir):
+            response = await self.client.post(
+                "/api/upload",
+                files={"file": ("clip.mp4", b"\x00\x00\x00\x18ftypmp42", "video/mp4")},
+                data={"camp_id": "6"},
+            )
+
+            self.assertEqual(response.status_code, 200)
+            body = response.json()
+            self.assertTrue(body["url"].startswith("/static/uploads/camp_6/"))
             relative_path = body["url"].removeprefix("/static/uploads/")
             saved_path = Path(temp_dir) / relative_path
             self.assertTrue(saved_path.exists())

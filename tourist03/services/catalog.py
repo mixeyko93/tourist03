@@ -2,6 +2,7 @@ import json
 from datetime import date, datetime
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlparse
 
 from fastapi import HTTPException, Query, Request
 from fastapi.responses import JSONResponse
@@ -13,15 +14,31 @@ from tourist03.schemas import CampStatusUpdateRequest
 from tourist03.storage import _normalize_move, _room_photos_from_fs
 
 
-ALLOWED_UPLOAD_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"}
+IMAGE_UPLOAD_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"}
+VIDEO_UPLOAD_EXTENSIONS = {".mp4", ".mov", ".webm", ".m4v"}
+ALLOWED_UPLOAD_EXTENSIONS = IMAGE_UPLOAD_EXTENSIONS | VIDEO_UPLOAD_EXTENSIONS
 ALLOWED_UPLOAD_CONTENT_TYPES = {
     "image/jpeg",
     "image/png",
     "image/webp",
     "image/gif",
     "image/avif",
+    "video/mp4",
+    "video/quicktime",
+    "video/webm",
 }
-MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024
+IMAGE_MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024
+VIDEO_MAX_UPLOAD_SIZE_BYTES = 100 * 1024 * 1024
+
+
+def _looks_like_external_video_url(value: str) -> bool:
+    raw = (value or "").strip()
+    if not raw:
+        return False
+    parsed = urlparse(raw)
+    host = (parsed.netloc or "").lower()
+    path = (parsed.path or "").lower()
+    return any(marker in host for marker in ("youtube.com", "youtu.be", "rutube.ru", "vkvideo.ru", "vk.com")) or Path(path).suffix.lower() in VIDEO_UPLOAD_EXTENSIONS
 
 
 def _parse_json_list(value):
@@ -327,12 +344,15 @@ async def api_upload(request: Request):
     suffix = (Path(file.filename or "").suffix or "").lower()
     content_type = (getattr(file, "content_type", "") or "").strip().lower()
     if suffix not in ALLOWED_UPLOAD_EXTENSIONS:
-        raise HTTPException(status_code=400, detail="Разрешена загрузка только изображений JPG, PNG, GIF, WEBP или AVIF")
+        raise HTTPException(status_code=400, detail="Разрешена загрузка только изображений JPG, PNG, GIF, WEBP, AVIF или видео MP4, MOV, WEBM")
     if content_type and content_type not in ALLOWED_UPLOAD_CONTENT_TYPES:
-        raise HTTPException(status_code=400, detail="Разрешена загрузка только изображений")
+        raise HTTPException(status_code=400, detail="Разрешена загрузка только изображений и видео")
 
-    payload = await file.read(MAX_UPLOAD_SIZE_BYTES + 1)
-    if len(payload) > MAX_UPLOAD_SIZE_BYTES:
+    max_size = VIDEO_MAX_UPLOAD_SIZE_BYTES if suffix in VIDEO_UPLOAD_EXTENSIONS else IMAGE_MAX_UPLOAD_SIZE_BYTES
+    payload = await file.read(max_size + 1)
+    if len(payload) > max_size:
+        if suffix in VIDEO_UPLOAD_EXTENSIONS:
+            raise HTTPException(status_code=400, detail="Видео слишком большое. Максимум 100 МБ")
         raise HTTPException(status_code=400, detail="Файл слишком большой")
 
     filename = datetime.now().strftime("%Y%m%d-%H%M%S%f") + suffix
