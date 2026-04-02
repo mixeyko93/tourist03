@@ -597,7 +597,7 @@ def upsert_bootstrap_superadmin(*, login: str, password_hash: str, display_name:
 
 
 def list_superadmin_accounts(*, include_archived: bool = False):
-    where_sql = "" if include_archived else "WHERE archived_at IS NULL"
+    where_sql = "" if include_archived else "WHERE a.archived_at IS NULL"
     with _db_conn("crm") as conn:
         cur = conn.cursor()
         cur.execute(

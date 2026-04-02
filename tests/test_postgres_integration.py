@@ -112,9 +112,11 @@ class PostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
             TRUNCATE TABLE
                 auth.user_tokens,
                 auth.user_events,
+                crm.audit_log,
                 crm.bookings,
                 crm.camp_admin_links,
                 auth.camp_admin_accounts,
+                auth.superadmin_accounts,
                 auth.users,
                 catalog.room_photos,
                 catalog.camp_photos,
@@ -173,6 +175,21 @@ class PostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
             (account["id"], camp_id),
         )
         return {"id": int(account["id"]), "email": email, "password": password}
+
+    def _seed_superadmin_account(self, *, login="root", password="secret123", display_name="Root Superadmin", is_root=True):
+        password_hash = self.security.hash_password(password)
+        self._execute(
+            """
+            INSERT INTO auth.superadmin_accounts (login, password_hash, display_name, is_active, is_root)
+            VALUES (%s, %s, %s, TRUE, %s)
+            """,
+            (login, password_hash, display_name, is_root),
+        )
+        account = self._fetch_one(
+            "SELECT id FROM auth.superadmin_accounts WHERE login = %s",
+            (login,),
+        )
+        return {"id": int(account["id"]), "login": login, "password": password}
 
     async def _register_user_and_get_token(self, *, phone="+79990000001", name="User"):
         start_response = await self.client.post(
@@ -544,6 +561,22 @@ class PostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
             duplicate_response.json(),
             {"detail": "Учётная запись с таким логином уже существует"},
         )
+
+    async def test_superadmin_list_root_accounts_uses_real_database_query(self):
+        seeded = self._seed_superadmin_account(login="chief", display_name="Главный супер")
+
+        response = await self.client.get(
+            "/api/superadmin/superadmins",
+            headers={"x-superadmin-key": os.environ["SUPERADMIN_API_KEY"]},
+        )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertEqual(len(payload), 1)
+        self.assertEqual(payload[0]["id"], seeded["id"])
+        self.assertEqual(payload[0]["login"], "chief")
+        self.assertEqual(payload[0]["display_name"], "Главный супер")
+        self.assertTrue(payload[0]["is_root"])
 
 
 if __name__ == "__main__":
