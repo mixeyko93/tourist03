@@ -3,14 +3,19 @@ import { useEffect, useState } from "react";
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router";
 import { useTheme } from "next-themes";
 import { crmPath } from "../../paths";
-import { fetchSuperadminSession, logoutSuperadminSession } from "../session";
+import { fetchSuperadminSession, logoutSuperadminSession, type SuperadminSessionResponse } from "../session";
 import { useDocumentTitle } from "../../components/useDocumentTitle";
 
-const adminTabs = [
+const baseAdminTabs = [
   { label: "Базы и номера", path: "/admin/bases" },
   { label: "Пользователи", path: "/admin/users" },
   { label: "Учётные записи", path: "/admin/accounts" },
   { label: "Архив", path: "/admin/archive" },
+];
+
+const rootOnlyTabs = [
+  { label: "Суперадмины", path: "/admin/superadmins" },
+  { label: "Системный журнал", path: "/admin/audit" },
 ];
 
 export default function AdminLayout() {
@@ -20,7 +25,10 @@ export default function AdminLayout() {
   const [mounted, setMounted] = useState(false);
   const [authState, setAuthState] = useState<"loading" | "authenticated" | "unauthenticated">("loading");
   const [authError, setAuthError] = useState("");
+  const [session, setSession] = useState<SuperadminSessionResponse | null>(null);
   const loginPath = crmPath("/admin/login");
+  const isRoot = Boolean(session?.account?.is_root);
+  const adminTabs = isRoot ? [...baseAdminTabs, ...rootOnlyTabs] : baseAdminTabs;
   const activeTab = adminTabs.find((item) => location.pathname === crmPath(item.path));
 
   useDocumentTitle(activeTab ? `${activeTab.label} — Tourist03 Superadmin` : "Tourist03 Superadmin");
@@ -32,8 +40,9 @@ export default function AdminLayout() {
   useEffect(() => {
     const controller = new AbortController();
     fetchSuperadminSession(controller.signal)
-      .then((session) => {
-        setAuthState(session.authenticated ? "authenticated" : "unauthenticated");
+      .then((nextSession) => {
+        setSession(nextSession);
+        setAuthState(nextSession.authenticated ? "authenticated" : "unauthenticated");
       })
       .catch(() => {
         setAuthError("Не удалось проверить superadmin-сессию");
@@ -54,6 +63,10 @@ export default function AdminLayout() {
     return <Navigate to={loginPath} replace state={{ from: location.pathname }} />;
   }
 
+  if (!isRoot && rootOnlyTabs.some((item) => location.pathname === crmPath(item.path))) {
+    return <Navigate to={crmPath("/admin/bases")} replace />;
+  }
+
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <header className="sticky top-0 z-20 border-b border-border bg-card/88 backdrop-blur-xl">
@@ -62,7 +75,7 @@ export default function AdminLayout() {
             <div className="min-w-0 space-y-1">
               <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">Tourist_03 Superadmin</p>
               <h1 className="text-lg font-semibold tracking-[-0.04em] text-foreground">Суперадмин. Администрирование CRM</h1>
-              <p className="text-sm text-muted-foreground">Централизованное управление базами отдыха, пользователями и учётными записями управляющих.</p>
+              <p className="text-sm text-muted-foreground">Централизованное управление базами отдыха, пользователями, управляющими и superadmin-учётками.</p>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -77,8 +90,12 @@ export default function AdminLayout() {
                 </button>
               ) : null}
               <div className="hidden rounded-xl border border-border bg-background/70 px-3 py-2 md:block">
-                <p className="text-sm font-medium text-foreground">Суперадминистратор</p>
-                <p className="text-xs text-muted-foreground">{authError || "Полный доступ к CRM и справочникам"}</p>
+                <p className="text-sm font-medium text-foreground">
+                  {session?.account?.display_name || session?.account?.login || "Суперадминистратор"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {authError || (session?.account?.is_root ? "Root-доступ ко всей системе" : "Доступ к панели суперадмина")}
+                </p>
               </div>
               <button
                 id="superadmin-logout-btn"

@@ -3,8 +3,11 @@ from fastapi import APIRouter, Depends
 from tourist03.api_responses import error_responses
 from tourist03.dto.superadmin import (
     SuperAdminAccountDTO,
+    SuperAdminAuditRecordDTO,
     SuperAdminCampSummaryDTO,
     SuperAdminCreateAccountResponseDTO,
+    SuperAdminCreateRootAccountResponseDTO,
+    SuperAdminRootAccountDTO,
     SuperAdminSystemEventDTO,
     SuperAdminSessionResponseDTO,
     SuperAdminUpdateAccountResponseDTO,
@@ -141,6 +144,54 @@ router.add_api_route(
     dependencies=superadmin_guard,
     response_model=list[SuperAdminSystemEventDTO],
     responses=error_responses(401, 500),
+)
+router.add_api_route(
+    "/api/superadmin/superadmins",
+    superadmin_service.superadmin_list_root_accounts,
+    methods=["GET"],
+    dependencies=superadmin_guard,
+    response_model=list[SuperAdminRootAccountDTO],
+    responses=error_responses(401, 403, 500),
+)
+router.add_api_route(
+    "/api/superadmin/superadmins",
+    superadmin_service.create_root_superadmin_account,
+    methods=["POST"],
+    dependencies=superadmin_guard,
+    response_model=SuperAdminCreateRootAccountResponseDTO,
+    responses=error_responses(400, 401, 403, 409, 422, 500),
+)
+router.add_api_route(
+    "/api/superadmin/superadmins/{account_id}",
+    superadmin_service.update_root_superadmin_account,
+    methods=["PATCH"],
+    dependencies=superadmin_guard,
+    response_model=SuperAdminUpdateAccountResponseDTO,
+    responses=error_responses(400, 401, 403, 404, 409, 422, 500),
+)
+router.add_api_route(
+    "/api/superadmin/superadmins/{account_id}",
+    superadmin_service.archive_root_superadmin_account,
+    methods=["DELETE"],
+    dependencies=superadmin_guard,
+    response_model=SuperAdminUpdateAccountResponseDTO,
+    responses=error_responses(401, 403, 404, 409, 500),
+)
+router.add_api_route(
+    "/api/superadmin/superadmins/{account_id}/restore",
+    superadmin_service.restore_root_superadmin_account,
+    methods=["POST"],
+    dependencies=superadmin_guard,
+    response_model=SuperAdminUpdateAccountResponseDTO,
+    responses=error_responses(401, 403, 404, 409, 500),
+)
+router.add_api_route(
+    "/api/superadmin/audit-log",
+    superadmin_service.superadmin_list_audit_records,
+    methods=["GET"],
+    dependencies=superadmin_guard,
+    response_model=list[SuperAdminAuditRecordDTO],
+    responses=error_responses(401, 403, 500),
 )
 router.add_api_route(
     "/api/admincamps/accounts/{account_id}",

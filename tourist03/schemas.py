@@ -39,6 +39,24 @@ class SuperAdminUpdateAccountRequest(BaseModel):
     camp_ids: Optional[List[int]] = None
 
 
+class SuperAdminCreateSuperadminRequest(BaseModel):
+    login: str
+    password: str
+    display_name: str
+    phone: Optional[str] = None
+    is_active: bool = True
+    is_root: bool = False
+
+
+class SuperAdminUpdateSuperadminRequest(BaseModel):
+    login: Optional[str] = None
+    password: Optional[str] = None
+    display_name: Optional[str] = None
+    phone: Optional[str] = None
+    is_active: Optional[bool] = None
+    is_root: Optional[bool] = None
+
+
 class CampStatusUpdateRequest(BaseModel):
     status: str
 

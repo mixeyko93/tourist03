@@ -106,5 +106,52 @@ class SuperAdminUpdateAccountResponseDTO(OkResponseDTO):
     pass
 
 
+class SuperAdminPrincipalDTO(BaseModel):
+    id: Optional[int] = None
+    login: Optional[str] = None
+    display_name: Optional[str] = None
+    is_root: bool = False
+    is_active: bool = True
+
+
 class SuperAdminSessionResponseDTO(OkResponseDTO):
     authenticated: bool
+    account: Optional[SuperAdminPrincipalDTO] = None
+
+
+class SuperAdminRootAccountDTO(BaseModel):
+    id: int
+    login: str
+    display_name: str
+    phone: Optional[str] = None
+    is_active: bool
+    is_root: bool
+    created_by_id: Optional[int] = None
+    archived_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class SuperAdminCreateRootAccountResponseDTO(StatusResponseDTO):
+    superadmin_id: int
+
+
+class SuperAdminAuditRecordDTO(BaseModel):
+    id: int
+    actor_type: str
+    actor_id: Optional[int] = None
+    actor_display: Optional[str] = None
+    camp_id: Optional[int] = None
+    camp_name: Optional[str] = None
+    target_type: str
+    target_id: Optional[str] = None
+    action_type: str
+    action_label: str
+    changed_field: Optional[str] = None
+    old_value: Any = None
+    new_value: Any = None
+    comment: Optional[str] = None
+    is_sensitive: bool = False
+    was_auto_applied: bool = False
+    metadata: Any = None
+    created_at: Optional[datetime] = None

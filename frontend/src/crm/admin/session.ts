@@ -1,11 +1,20 @@
 export type SuperadminSessionResponse = {
   ok: boolean;
   authenticated: boolean;
+  account?: SuperadminPrincipal | null;
 };
 
 export type SuperadminLoginPayload = {
   login: string;
   password: string;
+};
+
+export type SuperadminPrincipal = {
+  id?: number | null;
+  login?: string | null;
+  display_name?: string | null;
+  is_root?: boolean;
+  is_active?: boolean;
 };
 
 export type SuperadminBaseStatus = "active" | "disabled" | "archived";
@@ -188,6 +197,49 @@ export type SuperadminSystemEvent = {
   closed_at?: string | null;
 };
 
+export type SuperadminRootAccount = {
+  id: number;
+  login: string;
+  display_name: string;
+  phone?: string | null;
+  is_active: boolean;
+  is_root: boolean;
+  created_by_id?: number | null;
+  archived_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export type SuperadminRootAccountPayload = {
+  login: string;
+  password?: string;
+  display_name: string;
+  phone?: string;
+  is_active?: boolean;
+  is_root?: boolean;
+};
+
+export type SuperadminAuditRecord = {
+  id: number;
+  actor_type: string;
+  actor_id?: number | null;
+  actor_display?: string | null;
+  camp_id?: number | null;
+  camp_name?: string | null;
+  target_type: string;
+  target_id?: string | null;
+  action_type: string;
+  action_label: string;
+  changed_field?: string | null;
+  old_value?: unknown;
+  new_value?: unknown;
+  comment?: string | null;
+  is_sensitive?: boolean;
+  was_auto_applied?: boolean;
+  metadata?: unknown;
+  created_at?: string | null;
+};
+
 function buildQuery(params: Record<string, string | number | boolean | null | undefined>) {
   const query = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
@@ -221,6 +273,7 @@ async function parseSessionResponse(response: Response): Promise<SuperadminSessi
   return {
     ok: Boolean(payload?.ok),
     authenticated: Boolean(payload?.authenticated),
+    account: (payload?.account as SuperadminPrincipal | null | undefined) ?? null,
   };
 }
 
@@ -414,4 +467,89 @@ export async function fetchSuperadminEvents(
   );
   await assertOk(response);
   return (await response.json()) as SuperadminSystemEvent[];
+}
+
+export async function fetchRootSuperadminAccounts(
+  params: { includeArchived?: boolean; signal?: AbortSignal } = {},
+): Promise<SuperadminRootAccount[]> {
+  const response = await fetch(
+    `/api/superadmin/superadmins${buildQuery({ include_archived: params.includeArchived ? true : undefined })}`,
+    {
+      credentials: "same-origin",
+      signal: params.signal,
+    },
+  );
+  await assertOk(response);
+  return (await response.json()) as SuperadminRootAccount[];
+}
+
+export async function createRootSuperadminAccount(payload: SuperadminRootAccountPayload) {
+  const response = await fetch("/api/superadmin/superadmins", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  await assertOk(response);
+  return (await response.json()) as { status: string; superadmin_id: number };
+}
+
+export async function updateRootSuperadminAccount(accountId: number, payload: SuperadminRootAccountPayload) {
+  const response = await fetch(`/api/superadmin/superadmins/${accountId}`, {
+    method: "PATCH",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  await assertOk(response);
+  return (await response.json()) as { ok: boolean };
+}
+
+export async function archiveRootSuperadminAccount(accountId: number) {
+  const response = await fetch(`/api/superadmin/superadmins/${accountId}`, {
+    method: "DELETE",
+    credentials: "same-origin",
+  });
+  await assertOk(response);
+  return (await response.json()) as { ok: boolean };
+}
+
+export async function restoreRootSuperadminAccount(accountId: number) {
+  const response = await fetch(`/api/superadmin/superadmins/${accountId}/restore`, {
+    method: "POST",
+    credentials: "same-origin",
+  });
+  await assertOk(response);
+  return (await response.json()) as { ok: boolean };
+}
+
+export async function fetchSuperadminAuditLog(
+  params: {
+    search?: string;
+    actorType?: string;
+    targetType?: string;
+    campId?: number | null;
+    limit?: number;
+    signal?: AbortSignal;
+  } = {},
+): Promise<SuperadminAuditRecord[]> {
+  const response = await fetch(
+    `/api/superadmin/audit-log${buildQuery({
+      search: params.search,
+      actor_type: params.actorType,
+      target_type: params.targetType,
+      camp_id: params.campId ?? undefined,
+      limit: params.limit,
+    })}`,
+    {
+      credentials: "same-origin",
+      signal: params.signal,
+    },
+  );
+  await assertOk(response);
+  return (await response.json()) as SuperadminAuditRecord[];
 }

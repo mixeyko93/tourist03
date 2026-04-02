@@ -219,7 +219,8 @@ class ApiHttpFlowTests(unittest.IsolatedAsyncioTestCase):
             users_response = await self.client.get("/api/users")
 
         self.assertEqual(login_response.status_code, 200)
-        self.assertEqual(login_response.json(), {"ok": True, "authenticated": True})
+        self.assertEqual(login_response.json()["ok"], True)
+        self.assertEqual(login_response.json()["authenticated"], True)
         self.assertEqual(users_response.status_code, 200)
         self.assertEqual(len(users_response.json()), 1)
 
@@ -231,7 +232,8 @@ class ApiHttpFlowTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(login_response.status_code, 200)
         self.assertEqual(logout_response.status_code, 200)
-        self.assertEqual(logout_response.json(), {"ok": True, "authenticated": False})
+        self.assertEqual(logout_response.json()["ok"], True)
+        self.assertEqual(logout_response.json()["authenticated"], False)
         self.assertEqual(users_response.status_code, 401)
         self.assertEqual(users_response.json(), {"detail": "Нет доступа"})
 
@@ -250,7 +252,8 @@ class ApiHttpFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(missing_creds.status_code, 401)
         self.assertEqual(missing_creds.json(), {"detail": "Нет доступа"})
         self.assertEqual(valid_creds.status_code, 200)
-        self.assertEqual(valid_creds.json(), {"ok": True, "authenticated": True})
+        self.assertEqual(valid_creds.json()["ok"], True)
+        self.assertEqual(valid_creds.json()["authenticated"], True)
 
     async def test_catalog_available_rooms_marks_booked_rooms(self):
         with ExitStack() as stack:

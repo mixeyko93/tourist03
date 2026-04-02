@@ -388,6 +388,90 @@ def _get_admin_camp_ids(admin_id: int) -> list[int]:
         return [row["camp_id"] for row in cur.fetchall()]
 
 
+def _superadmin_public(row: Optional[dict]) -> Optional[dict]:
+    if not row:
+        return None
+    return {
+        "id": row.get("id"),
+        "login": row.get("login") or "",
+        "display_name": row.get("display_name") or "",
+        "is_root": bool(row.get("is_root")),
+        "is_active": bool(row.get("is_active", True)),
+    }
+
+
+def _get_superadmin_account_by_id(account_id: int) -> Optional[dict]:
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT
+                id,
+                login,
+                password_hash,
+                display_name,
+                phone,
+                is_active,
+                is_root,
+                created_by_id,
+                archived_at,
+                created_at,
+                updated_at
+            FROM auth.superadmin_accounts
+            WHERE id = %s
+            """,
+            (int(account_id),),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+
+def get_superadmin_session_principal(request: Request) -> Optional[dict]:
+    superadmin_id = request.session.get("superadmin_account_id")
+    if superadmin_id:
+        row = _get_superadmin_account_by_id(int(superadmin_id))
+        if row and row.get("archived_at") is None and bool(row.get("is_active")):
+            request.session["superadmin"] = True
+            return _superadmin_public(row)
+
+        request.session.pop("superadmin_account_id", None)
+        request.session.pop("superadmin", None)
+
+    session_principal = request.session.get("superadmin_principal")
+    if isinstance(session_principal, dict) and session_principal.get("login"):
+        request.session["superadmin"] = True
+        return {
+            "id": session_principal.get("id"),
+            "login": session_principal.get("login") or "",
+            "display_name": session_principal.get("display_name") or "",
+            "is_root": bool(session_principal.get("is_root")),
+            "is_active": bool(session_principal.get("is_active", True)),
+        }
+
+    if is_local_superadmin_bypass(request):
+        request.session["superadmin"] = True
+        return {
+            "id": None,
+            "login": "local-bypass",
+            "display_name": "Локальный суперадмин",
+            "is_root": True,
+            "is_active": True,
+        }
+
+    header_token = extract_superadmin_header_token(request)
+    if is_valid_superadmin_key(header_token):
+        request.session["superadmin"] = True
+        return {
+            "id": None,
+            "login": "api-key",
+            "display_name": "API суперадмин",
+            "is_root": True,
+            "is_active": True,
+        }
+
+    return None
+
+
 def extract_superadmin_header_token(request: Request) -> str:
     return (
         request.headers.get("x-superadmin-key")
@@ -439,18 +523,17 @@ def is_local_superadmin_bypass(request: Request) -> bool:
 
 
 def get_superadmin(request: Request):
-    if request.session.get("superadmin") is True:
-        return True
-
-    if is_local_superadmin_bypass(request):
-        request.session["superadmin"] = True
-        return True
-
-    header_token = extract_superadmin_header_token(request)
-    if is_valid_superadmin_key(header_token):
-        request.session["superadmin"] = True
-        return True
+    principal = get_superadmin_session_principal(request)
+    if principal:
+        return principal
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Нет доступа")
+
+
+def get_root_superadmin(request: Request):
+    principal = get_superadmin(request)
+    if not principal.get("is_root"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа")
+    return principal
 
 
 __all__ = [
@@ -462,6 +545,8 @@ __all__ = [
     "get_current_admin",
     "get_current_user",
     "get_superadmin",
+    "get_root_superadmin",
+    "get_superadmin_session_principal",
     "is_valid_superadmin_credentials",
     "superadmin_credentials_required",
     "hash_password",
@@ -475,4 +560,6 @@ __all__ = [
     "log_user_event",
     "verify_password",
     "is_local_superadmin_bypass",
+    "_superadmin_public",
+    "_get_superadmin_account_by_id",
 ]

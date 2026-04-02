@@ -4,6 +4,17 @@ from typing import Optional
 from tourist03.db import _db_conn
 from tourist03.repositories import catalog as catalog_repo
 
+_MISSING = object()
+
+
+def _decode_json_value(value):
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except Exception:
+            return value
+    return value
+
 
 def get_user_history_user(user_id: int):
     with _db_conn("auth") as conn:
@@ -473,3 +484,332 @@ def list_accounts():
             }
         )
     return accounts
+
+
+def count_active_root_superadmins() -> int:
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT COUNT(*) AS count
+            FROM auth.superadmin_accounts
+            WHERE archived_at IS NULL
+              AND is_active = TRUE
+              AND is_root = TRUE
+            """
+        )
+        row = cur.fetchone()
+        return int(row["count"] if row else 0)
+
+
+def get_superadmin_account_by_id(account_id: int):
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT
+                id,
+                login,
+                password_hash,
+                display_name,
+                phone,
+                is_active,
+                is_root,
+                created_by_id,
+                archived_at,
+                created_at,
+                updated_at
+            FROM auth.superadmin_accounts
+            WHERE id = %s
+            """,
+            (account_id,),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+
+def get_superadmin_account_by_login(login: str):
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT
+                id,
+                login,
+                password_hash,
+                display_name,
+                phone,
+                is_active,
+                is_root,
+                created_by_id,
+                archived_at,
+                created_at,
+                updated_at
+            FROM auth.superadmin_accounts
+            WHERE lower(login) = lower(%s)
+            ORDER BY archived_at NULLS FIRST, id DESC
+            LIMIT 1
+            """,
+            (login,),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+
+def upsert_bootstrap_superadmin(*, login: str, password_hash: str, display_name: str):
+    existing = get_superadmin_account_by_login(login)
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        if existing:
+            cur.execute(
+                """
+                UPDATE auth.superadmin_accounts
+                SET
+                    password_hash = %s,
+                    display_name = %s,
+                    is_active = TRUE,
+                    is_root = TRUE,
+                    archived_at = NULL,
+                    updated_at = NOW()
+                WHERE id = %s
+                """,
+                (password_hash, display_name, existing["id"]),
+            )
+            account_id = existing["id"]
+        else:
+            cur.execute(
+                """
+                INSERT INTO auth.superadmin_accounts (
+                    login,
+                    password_hash,
+                    display_name,
+                    is_active,
+                    is_root
+                )
+                VALUES (%s, %s, %s, TRUE, TRUE)
+                RETURNING id
+                """,
+                (login, password_hash, display_name),
+            )
+            account_id = cur.fetchone()["id"]
+        conn.commit()
+    return get_superadmin_account_by_id(account_id)
+
+
+def list_superadmin_accounts(*, include_archived: bool = False):
+    where_sql = "" if include_archived else "WHERE archived_at IS NULL"
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT
+                a.id,
+                a.login,
+                a.display_name,
+                a.phone,
+                a.is_active,
+                a.is_root,
+                a.created_by_id,
+                a.archived_at,
+                a.created_at,
+                a.updated_at,
+                creator.display_name AS created_by_display
+            FROM auth.superadmin_accounts AS a
+            LEFT JOIN auth.superadmin_accounts AS creator ON creator.id = a.created_by_id
+            {where_sql}
+            ORDER BY a.is_root DESC, a.created_at DESC, a.id DESC
+            """
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+
+def create_superadmin_account(
+    *,
+    login: str,
+    password_hash: str,
+    display_name: str,
+    phone: Optional[str],
+    is_active: bool,
+    is_root: bool,
+    created_by_id: Optional[int],
+):
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO auth.superadmin_accounts (
+                login,
+                password_hash,
+                display_name,
+                phone,
+                is_active,
+                is_root,
+                created_by_id
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (login, password_hash, display_name, phone, bool(is_active), bool(is_root), created_by_id),
+        )
+        account_id = cur.fetchone()["id"]
+        conn.commit()
+    return account_id
+
+
+def superadmin_login_exists(login: str, account_id: Optional[int] = None) -> bool:
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        if account_id is None:
+            cur.execute(
+                """
+                SELECT 1
+                FROM auth.superadmin_accounts
+                WHERE lower(login) = lower(%s)
+                  AND archived_at IS NULL
+                """,
+                (login,),
+            )
+        else:
+            cur.execute(
+                """
+                SELECT 1
+                FROM auth.superadmin_accounts
+                WHERE lower(login) = lower(%s)
+                  AND id <> %s
+                  AND archived_at IS NULL
+                """,
+                (login, account_id),
+            )
+        return bool(cur.fetchone())
+
+
+def update_superadmin_account(
+    account_id: int,
+    *,
+    login=_MISSING,
+    display_name=_MISSING,
+    phone=_MISSING,
+    password_hash=_MISSING,
+    is_active: Optional[bool] = None,
+    is_root: Optional[bool] = None,
+    archived_at=_MISSING,
+):
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        updates = []
+        params = []
+        if login is not _MISSING:
+            updates.append("login = %s")
+            params.append(login)
+        if display_name is not _MISSING:
+            updates.append("display_name = %s")
+            params.append(display_name)
+        if phone is not _MISSING:
+            updates.append("phone = %s")
+            params.append(phone)
+        if password_hash is not _MISSING:
+            updates.append("password_hash = %s")
+            params.append(password_hash)
+        if is_active is not None:
+            updates.append("is_active = %s")
+            params.append(bool(is_active))
+        if is_root is not None:
+            updates.append("is_root = %s")
+            params.append(bool(is_root))
+        if archived_at is not _MISSING:
+            updates.append("archived_at = %s")
+            params.append(archived_at)
+        updates.append("updated_at = NOW()")
+        cur.execute(
+            f"""
+            UPDATE auth.superadmin_accounts
+            SET {', '.join(updates)}
+            WHERE id = %s
+            """,
+            tuple([*params, account_id]),
+        )
+        conn.commit()
+
+
+def list_system_audit(
+    *,
+    search: Optional[str] = None,
+    actor_type: Optional[str] = None,
+    target_type: Optional[str] = None,
+    camp_id: Optional[int] = None,
+    limit: int = 100,
+):
+    conditions = ["1 = 1"]
+    params: list = []
+
+    normalized_search = (search or "").strip()
+    if normalized_search:
+        pattern = f"%{normalized_search}%"
+        conditions.append(
+            """
+            (
+                COALESCE(a.actor_display, '') ILIKE %s OR
+                COALESCE(a.action_label, '') ILIKE %s OR
+                COALESCE(a.comment, '') ILIKE %s OR
+                COALESCE(a.target_type, '') ILIKE %s OR
+                COALESCE(c.name, '') ILIKE %s
+            )
+            """
+        )
+        params.extend([pattern, pattern, pattern, pattern, pattern])
+
+    if actor_type:
+        conditions.append("a.actor_type = %s")
+        params.append(actor_type)
+
+    if target_type:
+        conditions.append("a.target_type = %s")
+        params.append(target_type)
+
+    if camp_id is not None:
+        conditions.append("a.camp_id = %s")
+        params.append(int(camp_id))
+
+    safe_limit = max(1, min(int(limit or 100), 500))
+    params.append(safe_limit)
+
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT
+                a.id,
+                a.actor_type,
+                a.actor_id,
+                a.actor_display,
+                a.camp_id,
+                c.name AS camp_name,
+                a.target_type,
+                a.target_id,
+                a.action_type,
+                a.action_label,
+                a.changed_field,
+                a.old_value,
+                a.new_value,
+                a.comment,
+                a.is_sensitive,
+                a.was_auto_applied,
+                a.metadata,
+                a.created_at
+            FROM crm.audit_log AS a
+            LEFT JOIN catalog.camps AS c ON c.id = a.camp_id
+            WHERE {' AND '.join(conditions)}
+            ORDER BY a.created_at DESC, a.id DESC
+            LIMIT %s
+            """,
+            tuple(params),
+        )
+        rows = [dict(row) for row in cur.fetchall()]
+
+    items = []
+    for row in rows:
+        row["old_value"] = _decode_json_value(row.get("old_value"))
+        row["new_value"] = _decode_json_value(row.get("new_value"))
+        row["metadata"] = _decode_json_value(row.get("metadata"))
+        items.append(row)
+    return items
