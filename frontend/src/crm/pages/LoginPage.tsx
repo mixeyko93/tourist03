@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "react-router";
 import { motion } from "motion/react";
 import { fetchCrmSession, loginCrmSession } from "../session";
 import { crmPath } from "../paths";
+import { useDocumentTitle } from "../components/useDocumentTitle";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -14,6 +15,8 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const homePath = crmPath("/calendar");
+
+  useDocumentTitle("Tourist03 CRM — Вход");
 
   const nextPath =
     typeof (location.state as { from?: unknown } | null)?.from === "string"

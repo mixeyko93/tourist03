@@ -4,6 +4,7 @@ import { NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-route
 import { useTheme } from "next-themes";
 import { crmPath } from "../../paths";
 import { fetchSuperadminSession, logoutSuperadminSession } from "../session";
+import { useDocumentTitle } from "../../components/useDocumentTitle";
 
 const adminTabs = [
   { label: "Базы и номера", path: "/admin/bases" },
@@ -20,6 +21,9 @@ export default function AdminLayout() {
   const [authState, setAuthState] = useState<"loading" | "authenticated" | "unauthenticated">("loading");
   const [authError, setAuthError] = useState("");
   const loginPath = crmPath("/admin/login");
+  const activeTab = adminTabs.find((item) => location.pathname === crmPath(item.path));
+
+  useDocumentTitle(activeTab ? `${activeTab.label} — Tourist03 Superadmin` : "Tourist03 Superadmin");
 
   useEffect(() => {
     setMounted(true);

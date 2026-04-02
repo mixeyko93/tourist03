@@ -4,6 +4,7 @@ import { NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-route
 import { useTheme } from "next-themes";
 import { fetchCrmEventCenterSummary, fetchCrmSession, logoutCrmSession, type CrmSession } from "../session";
 import { crmPath } from "../paths";
+import { useDocumentTitle } from "./useDocumentTitle";
 
 const navItems = [
   { label: "Календарь", path: "/calendar" },
@@ -31,6 +32,9 @@ export default function AppLayout() {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [eventNewCount, setEventNewCount] = useState(0);
   const calendarPath = crmPath("/calendar");
+  const activeNavItem = navItems.find((item) => location.pathname === crmPath(item.path));
+
+  useDocumentTitle(activeNavItem ? `${activeNavItem.label} — Tourist03 CRM` : "Tourist03 CRM");
 
   useEffect(() => {
     setMounted(true);

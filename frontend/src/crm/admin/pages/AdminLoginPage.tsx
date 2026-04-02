@@ -4,6 +4,7 @@ import { Navigate, useLocation, useNavigate } from "react-router";
 import { PageMotion } from "../../components/PageMotion";
 import { crmPath } from "../../paths";
 import { fetchSuperadminSession, loginSuperadminSession } from "../session";
+import { useDocumentTitle } from "../../components/useDocumentTitle";
 
 type SessionState = "checking" | "ready" | "authenticated";
 
@@ -17,6 +18,7 @@ export default function AdminLoginPage() {
   const [error, setError] = useState("");
 
   const homePath = crmPath("/admin/bases");
+  useDocumentTitle("Tourist03 Superadmin — Вход");
   const nextPath =
     typeof (location.state as { from?: unknown } | null)?.from === "string"
       ? (location.state as { from: string }).from
