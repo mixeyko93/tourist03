@@ -52,7 +52,18 @@ def update_camp_status(camp_id: int, status: str) -> bool:
     conn = _pg_connect("catalog")
     try:
         cur = conn.cursor()
-        cur.execute("UPDATE catalog.camps SET status = %s WHERE id = %s", (status, camp_id))
+        cur.execute(
+            """
+            UPDATE catalog.camps
+            SET status = %s,
+                archived_at = CASE
+                    WHEN %s = 'archived' THEN NOW()
+                    ELSE NULL
+                END
+            WHERE id = %s
+            """,
+            (status, status, camp_id),
+        )
         changed = cur.rowcount > 0
         conn.commit()
         return changed

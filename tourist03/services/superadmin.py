@@ -1,3 +1,5 @@
+from typing import Optional
+
 from fastapi import HTTPException, Request
 
 from tourist03.config import logger
@@ -66,8 +68,15 @@ def superadmin_user_history(user_id: int):
     return {"user": user, "bookings": bookings, "events": events, "payments": []}
 
 
-def superadmin_list_camps():
-    return superadmin_repo.list_camps()
+def superadmin_list_camps(status: Optional[str] = None, archived_only: bool = False, search: Optional[str] = None):
+    return superadmin_repo.list_camps(status=status, archived_only=archived_only, search=search)
+
+
+def superadmin_camp_editor(camp_id: int):
+    item = superadmin_repo.get_camp_editor_context(camp_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="База не найдена")
+    return item
 
 
 def create_camp_admin_account(payload: SuperAdminCreateAccountRequest):
@@ -144,3 +153,11 @@ def update_camp_admin_account(account_id: int, payload: SuperAdminUpdateAccountR
 
 def superadmin_list_accounts():
     return superadmin_repo.list_accounts()
+
+
+def superadmin_list_users(search: Optional[str] = None):
+    return superadmin_repo.list_users(search=search)
+
+
+def superadmin_list_events(search: Optional[str] = None, camp_id: Optional[int] = None, limit: int = 20):
+    return superadmin_repo.list_recent_events(search=search, camp_id=camp_id, limit=limit)

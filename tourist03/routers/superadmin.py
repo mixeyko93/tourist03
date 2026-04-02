@@ -5,9 +5,11 @@ from tourist03.dto.superadmin import (
     SuperAdminAccountDTO,
     SuperAdminCampSummaryDTO,
     SuperAdminCreateAccountResponseDTO,
+    SuperAdminSystemEventDTO,
     SuperAdminSessionResponseDTO,
     SuperAdminUpdateAccountResponseDTO,
     SuperAdminUserHistoryResponseDTO,
+    SuperAdminUserSummaryDTO,
 )
 from tourist03.security import get_superadmin
 from tourist03.services import superadmin as superadmin_service
@@ -52,6 +54,13 @@ router.add_api_route(
     dependencies=superadmin_guard,
     response_model=list[SuperAdminCampSummaryDTO],
     responses=error_responses(401, 500),
+)
+router.add_api_route(
+    "/api/superadmin/camps/{camp_id}",
+    superadmin_service.superadmin_camp_editor,
+    methods=["GET"],
+    dependencies=superadmin_guard,
+    responses=error_responses(401, 404, 422, 500),
 )
 router.add_api_route(
     "/api/superadmin/accounts",
@@ -116,6 +125,22 @@ router.add_api_route(
     dependencies=superadmin_guard,
     response_model=SuperAdminUpdateAccountResponseDTO,
     responses=error_responses(400, 401, 404, 409, 422, 500),
+)
+router.add_api_route(
+    "/api/superadmin/users",
+    superadmin_service.superadmin_list_users,
+    methods=["GET"],
+    dependencies=superadmin_guard,
+    response_model=list[SuperAdminUserSummaryDTO],
+    responses=error_responses(401, 500),
+)
+router.add_api_route(
+    "/api/superadmin/events",
+    superadmin_service.superadmin_list_events,
+    methods=["GET"],
+    dependencies=superadmin_guard,
+    response_model=list[SuperAdminSystemEventDTO],
+    responses=error_responses(401, 500),
 )
 router.add_api_route(
     "/api/admincamps/accounts/{account_id}",
