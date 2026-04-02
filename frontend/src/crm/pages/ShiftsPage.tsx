@@ -4,13 +4,11 @@ import { EmptyState } from "../components/EmptyState";
 import { ModalShell } from "../components/ModalShell";
 import { PageMotion } from "../components/PageMotion";
 import { SectionHeading } from "../components/SectionHeading";
+import { SensitiveChangeModal } from "../components/SensitiveChangeModal";
 import {
-  createCrmShiftRule,
-  deleteCrmShiftRule,
+  createCrmChangeRequest,
   fetchCrmCamps,
   fetchCrmShifts,
-  saveCrmShiftSettings,
-  updateCrmShiftRule,
   type CrmCamp,
   type CrmShiftRule,
   type CrmShiftRuleUpsertPayload,
@@ -34,6 +32,15 @@ type ShiftRuleForm = {
   isNightShift: boolean;
   isActive: boolean;
   comment: string;
+};
+
+type PendingSensitiveChange = {
+  title: string;
+  description: string;
+  operation: string;
+  payload: Record<string, unknown>;
+  successPending: string;
+  successApplied: string;
 };
 
 const weekdayLabels = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
@@ -141,6 +148,8 @@ export default function ShiftsPage() {
   const [ruleError, setRuleError] = useState("");
   const [isSavingRule, setIsSavingRule] = useState(false);
   const [deletingRuleId, setDeletingRuleId] = useState<number | null>(null);
+  const [pendingChange, setPendingChange] = useState<PendingSensitiveChange | null>(null);
+  const [isSubmittingChange, setIsSubmittingChange] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -253,18 +262,14 @@ export default function ShiftsPage() {
       setErrorMessage("Сначала выберите базу.");
       return;
     }
-    try {
-      setIsSavingSettings(true);
-      setErrorMessage("");
-      setSuccessMessage("");
-      await saveCrmShiftSettings(selectedCampId, toSettingsPayload(settingsForm));
-      setSuccessMessage("Параметры смен обновлены.");
-      setReloadKey((value) => value + 1);
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Не удалось сохранить параметры смен");
-    } finally {
-      setIsSavingSettings(false);
-    }
+    setPendingChange({
+      title: "Чувствительное изменение параметров смен",
+      description: "Изменение SLA и ночной логики влияет на обработку заявок, эскалации и заморозку дат. Решите, отправлять ли его управляющему на подтверждение или применять сразу под свою ответственность.",
+      operation: "shift_settings_update",
+      payload: toSettingsPayload(settingsForm) as Record<string, unknown>,
+      successPending: "Параметры смен отправлены на подтверждение.",
+      successApplied: "Параметры смен применены под вашу ответственность.",
+    });
   }
 
   async function handleSaveRule(event: FormEvent<HTMLFormElement>) {
@@ -277,39 +282,62 @@ export default function ShiftsPage() {
       setRuleError("Выберите сотрудника.");
       return;
     }
-    try {
-      setIsSavingRule(true);
-      setRuleError("");
-      const payload = toRulePayload(ruleForm);
-      if (editingRule) {
-        await updateCrmShiftRule(selectedCampId, editingRule.id, payload);
-      } else {
-        await createCrmShiftRule(selectedCampId, payload);
-      }
-      setIsRuleModalOpen(false);
-      setEditingRule(null);
-      setReloadKey((value) => value + 1);
-    } catch (error) {
-      setRuleError(error instanceof Error ? error.message : "Не удалось сохранить правило смены");
-    } finally {
-      setIsSavingRule(false);
-    }
+    setPendingChange({
+      title: editingRule ? "Согласование изменения смены" : "Согласование новой смены",
+      description: "График смен влияет на ночной сценарий, эскалации и распределение заявок. Это изменение должно быть подтверждено или применено под ответственность инициатора.",
+      operation: editingRule ? "shift_rule_update" : "shift_rule_create",
+      payload: editingRule
+        ? ({ rule_id: editingRule.id, data: toRulePayload(ruleForm) } as Record<string, unknown>)
+        : (toRulePayload(ruleForm) as Record<string, unknown>),
+      successPending: editingRule ? "Изменение смены отправлено на подтверждение." : "Новая смена отправлена на подтверждение.",
+      successApplied: editingRule ? "Изменение смены применено под вашу ответственность." : "Новая смена применена под вашу ответственность.",
+    });
+    setIsRuleModalOpen(false);
+    setEditingRule(null);
+    setRuleError("");
   }
 
   async function handleDeleteRule(rule: CrmShiftRule) {
     if (!selectedCampId) {
       return;
     }
+    setDeletingRuleId(rule.id);
+    setPendingChange({
+      title: "Согласование удаления смены",
+      description: "Удаление смены меняет логику назначения ответственного и ночную обработку заявок. Это действие нужно согласовать или применить под ответственность.",
+      operation: "shift_rule_delete",
+      payload: { rule_id: rule.id },
+      successPending: `Удаление смены отправлено на подтверждение: ${describeRule(rule)}`,
+      successApplied: `Удаление смены применено под вашу ответственность: ${describeRule(rule)}`,
+    });
+  }
+
+  async function submitSensitiveChange(applyMode: "pending_review" | "apply_with_responsibility", comment: string) {
+    if (!selectedCampId || !pendingChange) {
+      return;
+    }
     try {
-      setDeletingRuleId(rule.id);
+      setIsSubmittingChange(true);
       setErrorMessage("");
-      await deleteCrmShiftRule(selectedCampId, rule.id);
-      setSuccessMessage(`Правило смены удалено: ${describeRule(rule)}`);
-      setReloadKey((value) => value + 1);
+      setSuccessMessage("");
+      await createCrmChangeRequest(selectedCampId, {
+        operation: pendingChange.operation,
+        payload: pendingChange.payload,
+        request_comment: comment || undefined,
+        apply_mode: applyMode,
+      });
+      setSuccessMessage(applyMode === "pending_review" ? pendingChange.successPending : pendingChange.successApplied);
+      if (applyMode === "apply_with_responsibility") {
+        setReloadKey((value) => value + 1);
+      }
+      setPendingChange(null);
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Не удалось удалить правило смены");
+      setErrorMessage(error instanceof Error ? error.message : "Не удалось обработать чувствительное изменение");
     } finally {
+      setIsSubmittingChange(false);
       setDeletingRuleId(null);
+      setIsSavingSettings(false);
+      setIsSavingRule(false);
     }
   }
 
@@ -693,6 +721,21 @@ export default function ShiftsPage() {
           </div>
         </form>
       </ModalShell>
+
+      <SensitiveChangeModal
+        open={Boolean(pendingChange)}
+        title={pendingChange?.title || "Чувствительное изменение"}
+        description={pendingChange?.description || ""}
+        loading={isSubmittingChange}
+        onClose={() => {
+          if (!isSubmittingChange) {
+            setPendingChange(null);
+            setDeletingRuleId(null);
+          }
+        }}
+        onConfirm={(comment) => submitSensitiveChange("pending_review", comment)}
+        onApply={(comment) => submitSensitiveChange("apply_with_responsibility", comment)}
+      />
     </PageMotion>
   );
 }

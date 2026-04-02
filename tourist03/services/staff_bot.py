@@ -21,7 +21,7 @@ DEFAULT_SHIFT_SETTINGS = {
 
 EVENT_STATUS_LABELS = {
     "new": "Новое",
-    "seen": "Просмотрено",
+    "viewed": "Просмотрено",
     "in_progress": "В работе",
     "closed": "Закрыто",
 }
@@ -353,18 +353,39 @@ def format_staff_events_digest(account: dict, items: list[dict]) -> str:
 
 def build_staff_event_keyboard(event: dict):
     url = _event_url(event.get("action_url"))
-    if not url:
-        return None
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
+    metadata = event.get("metadata") or {}
+    request_id = int(metadata.get("change_request_id") or 0) if metadata.get("change_request_id") else 0
+    rows: list[list[InlineKeyboardButton]] = []
+
+    if request_id and event.get("event_type") == "change_request_pending_review":
+        rows.append(
             [
-                InlineKeyboardButton(
-                    text="Открыть в CRM",
-                    url=url,
-                )
+                InlineKeyboardButton(text="Подтвердить", callback_data=f"cr:approve:{request_id}"),
+                InlineKeyboardButton(text="Отклонить", callback_data=f"cr:reject:{request_id}"),
             ]
+        )
+        rows.append([InlineKeyboardButton(text="Уточнить", callback_data=f"cr:clarify:{request_id}")])
+    elif request_id and event.get("event_type") == "change_request_applied":
+        rows.append([InlineKeyboardButton(text="Откатить", callback_data=f"cr:rollback:init:{request_id}")])
+
+    if url:
+        rows.append([InlineKeyboardButton(text="Открыть в CRM", url=url)])
+    if not rows:
+        return None
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def build_staff_rollback_confirm_keyboard(request_id: int, *, action_url: Optional[str] = None):
+    rows = [
+        [
+            InlineKeyboardButton(text="Подтвердить откат", callback_data=f"cr:rollback:confirm:{request_id}"),
+            InlineKeyboardButton(text="Отмена", callback_data=f"cr:rollback:cancel:{request_id}"),
         ]
-    )
+    ]
+    url = _event_url(action_url)
+    if url:
+        rows.append([InlineKeyboardButton(text="Открыть в CRM", url=url)])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 async def deliver_pending_telegram_notifications(bot: Bot, *, limit: int = 100) -> int:

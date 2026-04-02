@@ -333,6 +333,30 @@ export type CrmEventCenterSummary = {
   critical_count: number;
 };
 
+export type CrmChangeRequest = {
+  id: number;
+  camp_id: number;
+  camp_name: string | null;
+  created_by_admin_id: number;
+  created_by_display: string | null;
+  created_by_email: string | null;
+  reviewer_admin_id: number | null;
+  reviewer_display: string | null;
+  reviewer_email: string | null;
+  target_type: string;
+  target_id: string | null;
+  change_kind: string;
+  status: string;
+  summary: string;
+  request_comment: string | null;
+  reviewer_comment: string | null;
+  payload: Record<string, unknown> | null;
+  applied_snapshot: Record<string, unknown> | null;
+  created_at: string;
+  decided_at: string | null;
+  updated_at: string;
+};
+
 export type CrmCampProfileUpdatePayload = {
   name: string;
   lake_name?: string;
@@ -422,6 +446,18 @@ export type CrmShiftRuleUpsertPayload = {
   ends_at: string;
   is_night_shift: boolean;
   is_active: boolean;
+  comment?: string;
+};
+
+export type CrmChangeRequestCreatePayload = {
+  operation: string;
+  payload: Record<string, unknown>;
+  request_comment?: string;
+  apply_mode: "pending_review" | "apply_with_responsibility";
+};
+
+export type CrmChangeRequestDecisionPayload = {
+  action: "approve" | "reject" | "clarify" | "rollback";
   comment?: string;
 };
 
@@ -616,6 +652,66 @@ export async function updateCrmEventStatus(eventId: number, payload: CrmEventSta
   });
   await assertOk(response);
   return (await response.json()) as { ok: boolean; item: CrmEventCenterItem };
+}
+
+export async function fetchCrmChangeRequests(
+  params: {
+    campId?: number | null;
+    search?: string;
+    status?: string;
+    changeKind?: string;
+    limit?: number;
+  },
+  signal?: AbortSignal,
+): Promise<{ items: CrmChangeRequest[]; status_labels: Record<string, string>; change_kind_labels: Record<string, string> }> {
+  const query = new URLSearchParams();
+  if (params.campId) {
+    query.set("camp_id", String(params.campId));
+  }
+  if (params.search) {
+    query.set("search", params.search);
+  }
+  if (params.status) {
+    query.set("status", params.status);
+  }
+  if (params.changeKind) {
+    query.set("change_kind", params.changeKind);
+  }
+  if (params.limit) {
+    query.set("limit", String(params.limit));
+  }
+  const response = await fetch(`/api/admin/change-requests?${query.toString()}`, {
+    credentials: "same-origin",
+    signal,
+  });
+  await assertOk(response);
+  return (await response.json()) as { items: CrmChangeRequest[]; status_labels: Record<string, string>; change_kind_labels: Record<string, string> };
+}
+
+export async function createCrmChangeRequest(campId: number, payload: CrmChangeRequestCreatePayload) {
+  const response = await fetch(`/api/admin/camps/${campId}/change-requests`, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  await assertOk(response);
+  return (await response.json()) as { ok: boolean; item: CrmChangeRequest };
+}
+
+export async function updateCrmChangeRequest(requestId: number, payload: CrmChangeRequestDecisionPayload) {
+  const response = await fetch(`/api/admin/change-requests/${requestId}`, {
+    method: "PATCH",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  await assertOk(response);
+  return (await response.json()) as { ok: boolean; item: CrmChangeRequest };
 }
 
 export async function fetchCrmGuests(

@@ -1,5 +1,5 @@
 from datetime import date, datetime, time, timedelta
-from typing import Optional
+from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
 from fastapi import Depends, HTTPException, Request, status
@@ -12,6 +12,8 @@ from tourist03.repositories import admin as admin_repo
 from tourist03.repositories import notifications as notification_repo
 from tourist03.schemas import (
     AdminCampProfileUpdateRequest,
+    AdminChangeRequestCreateRequest,
+    AdminChangeRequestDecisionRequest,
     AdminCreateBookingRequest,
     AdminLoginRequest,
     AdminNotificationStatusUpdateRequest,
@@ -100,6 +102,96 @@ def _ensure_admin_shift_access(admin: dict, camp_id: int):
     )
     if "manage_shift_schedule" not in permission_keys and not link.get("can_manage_staff"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для управления сменами")
+    return link, permission_keys
+
+
+def _change_kind_permission_key(change_kind: str) -> Optional[str]:
+    mapping = {
+        "shift_schedule": "manage_shift_schedule",
+        "pricing": "manage_pricing",
+        "cancellation_policy": "manage_cancellation_policy",
+        "camp_visibility": "manage_camp_visibility",
+        "archive": "manage_camp_visibility",
+    }
+    return mapping.get((change_kind or "").strip())
+
+
+def _camp_profile_payload_from_snapshot(snapshot: dict | None) -> dict:
+    snapshot = snapshot or {}
+    camp = snapshot.get("camp") or {}
+    settings = snapshot.get("settings") or {}
+    return {
+        "name": camp.get("name") or "",
+        "lake_name": camp.get("lake_name"),
+        "address": camp.get("address"),
+        "phone": camp.get("phone"),
+        "site_url": camp.get("site_url"),
+        "description": camp.get("description"),
+        "time_zone": settings.get("time_zone"),
+        "check_in_time": settings.get("check_in_time"),
+        "check_out_time": settings.get("check_out_time"),
+        "cancellation_policy": settings.get("cancellation_policy"),
+        "arrival_instructions": settings.get("arrival_instructions"),
+        "payment_instructions": settings.get("payment_instructions"),
+        "admin_contact_phone": settings.get("admin_contact_phone"),
+        "support_whatsapp": settings.get("support_whatsapp"),
+        "support_telegram": settings.get("support_telegram"),
+        "notifications_enabled": bool(settings.get("notifications_enabled", True)),
+    }
+
+
+def _room_payload_from_snapshot(snapshot: dict | None) -> dict:
+    snapshot = snapshot or {}
+    return {
+        "name": snapshot.get("name") or "",
+        "room_type": snapshot.get("room_type"),
+        "floors": int(snapshot.get("floors") or 1),
+        "floor": int(snapshot.get("floor") or 1),
+        "beds_single": int(snapshot.get("beds_single") or 0),
+        "beds_double": int(snapshot.get("beds_double") or 0),
+        "bath_type": snapshot.get("bath_type"),
+        "wc_type": snapshot.get("wc_type"),
+        "bbq_type": snapshot.get("bbq_type"),
+        "kitchen_type": snapshot.get("kitchen_type"),
+        "gazebo_type": snapshot.get("gazebo_type"),
+        "terrace_type": snapshot.get("terrace_type"),
+        "pool_type": snapshot.get("pool_type"),
+        "balcony_type": snapshot.get("balcony_type"),
+        "has_ac": bool(snapshot.get("has_ac")),
+        "price_adult": int(snapshot.get("price_adult") or 0),
+        "price_child": int(snapshot.get("price_child") or 0),
+        "price": int(snapshot.get("price") or 0),
+        "discount_pct": int(snapshot.get("discount_pct") or 0),
+        "discount_from_nights": int(snapshot.get("discount_from_nights") or 0),
+        "description": snapshot.get("description"),
+    }
+
+
+def _reviewer_candidates(camp_id: int, permission_key: Optional[str]) -> list[dict]:
+    candidates: list[dict] = []
+    for item in admin_repo.list_admin_staff(camp_id):
+        if not bool(item.get("is_active")):
+            continue
+        role_key = (item.get("role_key") or item.get("default_role_key") or "administrator").strip() or "administrator"
+        permission_keys = item.get("permission_keys") or list(crm_domain.DEFAULT_ROLE_PERMISSIONS.get(role_key, ()))
+        if item.get("can_manage_staff") or item.get("is_primary") or (permission_key and permission_key in permission_keys):
+            candidates.append(dict(item))
+    return candidates
+
+
+def _ensure_change_request_review_access(admin: dict, request_item: dict):
+    camp_id = int(request_item.get("camp_id") or 0)
+    link = admin_repo.get_admin_camp_link(int(admin["id"]), camp_id)
+    if not link:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа к выбранной базе")
+    permission_keys = _effective_permission_keys(
+        int(admin["id"]),
+        camp_id,
+        role_key=link.get("role_key") or admin.get("default_role_key"),
+    )
+    permission_key = _change_kind_permission_key(str(request_item.get("change_kind") or ""))
+    if not (link.get("can_manage_staff") or link.get("is_primary") or (permission_key and permission_key in permission_keys)):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав для согласования изменений")
     return link, permission_keys
 
 
@@ -262,7 +354,8 @@ def _publish_crm_event(
     if camp_id and severity in {"warning", "critical"}:
         recipients = notification_repo.list_active_staff_telegram_recipients(
             int(camp_id),
-            exclude_admin_ids=[actor_id] if actor_id is not None else None,
+            admin_ids=[int(recipient_admin_id)] if recipient_admin_id is not None else None,
+            exclude_admin_ids=[actor_id] if actor_id is not None and recipient_admin_id is None else None,
         )
         for recipient in recipients:
             create_notification_event(
@@ -282,6 +375,546 @@ def _publish_crm_event(
                     **(metadata or {}),
                 },
             )
+
+
+def _publish_targeted_staff_event(
+    *,
+    camp_id: int,
+    recipient_admin_id: int,
+    event_type: str,
+    title: str,
+    body: str,
+    action_url: Optional[str] = None,
+    action_payload: Optional[dict] = None,
+    severity: str = "info",
+    metadata: Optional[dict] = None,
+) -> None:
+    create_notification_event(
+        event_type=event_type,
+        title=title,
+        body=body,
+        channel="in_app",
+        recipient_scope="crm",
+        recipient_admin_id=recipient_admin_id,
+        camp_id=camp_id,
+        action_url=action_url,
+        action_payload=action_payload,
+        severity=severity,
+        metadata=metadata or {},
+    )
+    recipients = notification_repo.list_active_staff_telegram_recipients(camp_id, admin_ids=[recipient_admin_id])
+    for recipient in recipients:
+        create_notification_event(
+            event_type=event_type,
+            title=title,
+            body=body,
+            channel="telegram",
+            recipient_scope="crm",
+            recipient_admin_id=int(recipient["id"]),
+            camp_id=camp_id,
+            action_url=action_url,
+            action_payload=action_payload,
+            severity=severity,
+            metadata=metadata or {},
+        )
+
+
+def _normalize_room_payload(raw_payload: dict) -> dict:
+    return {
+        "name": str(raw_payload.get("name") or "").strip(),
+        "room_type": raw_payload.get("room_type"),
+        "floors": int(raw_payload.get("floors") or 1),
+        "floor": int(raw_payload.get("floor") or 1),
+        "beds_single": int(raw_payload.get("beds_single") or 0),
+        "beds_double": int(raw_payload.get("beds_double") or 0),
+        "bath_type": raw_payload.get("bath_type"),
+        "wc_type": raw_payload.get("wc_type"),
+        "bbq_type": raw_payload.get("bbq_type"),
+        "kitchen_type": raw_payload.get("kitchen_type"),
+        "gazebo_type": raw_payload.get("gazebo_type"),
+        "terrace_type": raw_payload.get("terrace_type"),
+        "pool_type": raw_payload.get("pool_type"),
+        "balcony_type": raw_payload.get("balcony_type"),
+        "has_ac": bool(raw_payload.get("has_ac")),
+        "price_adult": int(raw_payload.get("price_adult") or 0),
+        "price_child": int(raw_payload.get("price_child") or 0),
+        "price": int(raw_payload.get("price") or 0),
+        "discount_pct": int(raw_payload.get("discount_pct") or 0),
+        "discount_from_nights": int(raw_payload.get("discount_from_nights") or 0),
+        "description": raw_payload.get("description"),
+    }
+
+
+def _normalize_shift_rule_payload(raw_payload: dict) -> dict:
+    weekday_value = int(raw_payload.get("weekday") or 0)
+    if weekday_value < 0 or weekday_value > 6:
+        raise HTTPException(status_code=400, detail="Некорректный день недели")
+    starts_at = str(raw_payload.get("starts_at") or "").strip()
+    ends_at = str(raw_payload.get("ends_at") or "").strip()
+    _parse_shift_time(starts_at)
+    _parse_shift_time(ends_at)
+    return {
+        "admin_id": int(raw_payload.get("admin_id") or 0),
+        "weekday": weekday_value,
+        "starts_at": starts_at,
+        "ends_at": ends_at,
+        "is_night_shift": bool(raw_payload.get("is_night_shift")),
+        "is_active": bool(raw_payload.get("is_active", True)),
+        "comment": (raw_payload.get("comment") or "").strip() or None,
+    }
+
+
+def _prepare_change_request_payload(camp_id: int, admin: dict, operation: str, raw_payload: dict) -> dict:
+    normalized_operation = (operation or "").strip()
+    if normalized_operation == "shift_settings_update":
+        _ensure_admin_shift_access(admin, camp_id)
+        before = admin_repo.get_camp_shift_settings(camp_id) or {
+            "camp_id": camp_id,
+            "time_zone": "Asia/Irkutsk",
+            "booking_hold_hours": 4,
+            "night_release_after_shift_minutes": 60,
+            "escalation_step_minutes": 15,
+            "escalation_repeats_before_manager": 2,
+        }
+        after = {
+            "time_zone": str(raw_payload.get("time_zone") or "Asia/Irkutsk"),
+            "booking_hold_hours": int(raw_payload.get("booking_hold_hours") or 4),
+            "night_release_after_shift_minutes": int(raw_payload.get("night_release_after_shift_minutes") or 60),
+            "escalation_step_minutes": int(raw_payload.get("escalation_step_minutes") or 15),
+            "escalation_repeats_before_manager": int(raw_payload.get("escalation_repeats_before_manager") or 2),
+        }
+        return {
+            "change_kind": "shift_schedule",
+            "target_type": "shift_settings",
+            "target_id": str(camp_id),
+            "summary": "Изменение параметров смен и эскалаций",
+            "payload": {"operation": normalized_operation, "before": before, "after": after},
+        }
+
+    if normalized_operation == "shift_rule_create":
+        _ensure_admin_shift_access(admin, camp_id)
+        after = _normalize_shift_rule_payload(raw_payload)
+        staff = admin_repo.get_admin_staff_member(camp_id, after["admin_id"])
+        if not staff:
+            raise HTTPException(status_code=400, detail="Сотрудник не привязан к этой базе")
+        return {
+            "change_kind": "shift_schedule",
+            "target_type": "shift_rule",
+            "target_id": None,
+            "summary": f"Добавление смены · {staff.get('display_name') or staff.get('email') or 'Сотрудник'} · {_weekday_label(after['weekday'])} · {after['starts_at']} → {after['ends_at']}",
+            "payload": {"operation": normalized_operation, "after": after},
+        }
+
+    if normalized_operation == "shift_rule_update":
+        _ensure_admin_shift_access(admin, camp_id)
+        rule_id = int(raw_payload.get("rule_id") or 0)
+        before = admin_repo.get_camp_shift_rule(camp_id, rule_id)
+        if not before:
+            raise HTTPException(status_code=404, detail="Правило смены не найдено")
+        after = _normalize_shift_rule_payload(raw_payload.get("data") or {})
+        staff = admin_repo.get_admin_staff_member(camp_id, after["admin_id"])
+        if not staff:
+            raise HTTPException(status_code=400, detail="Сотрудник не привязан к этой базе")
+        return {
+            "change_kind": "shift_schedule",
+            "target_type": "shift_rule",
+            "target_id": str(rule_id),
+            "summary": f"Изменение смены · {staff.get('display_name') or staff.get('email') or 'Сотрудник'} · {_weekday_label(after['weekday'])} · {after['starts_at']} → {after['ends_at']}",
+            "payload": {"operation": normalized_operation, "rule_id": rule_id, "before": before, "after": after},
+        }
+
+    if normalized_operation == "shift_rule_delete":
+        _ensure_admin_shift_access(admin, camp_id)
+        rule_id = int(raw_payload.get("rule_id") or 0)
+        before = admin_repo.get_camp_shift_rule(camp_id, rule_id)
+        if not before:
+            raise HTTPException(status_code=404, detail="Правило смены не найдено")
+        return {
+            "change_kind": "shift_schedule",
+            "target_type": "shift_rule",
+            "target_id": str(rule_id),
+            "summary": f"Удаление смены · {before.get('admin_name') or before.get('admin_email') or 'Сотрудник'} · {_weekday_label(int(before.get('weekday') or 0))} · {str(before.get('starts_at') or '')[:5]} → {str(before.get('ends_at') or '')[:5]}",
+            "payload": {"operation": normalized_operation, "rule_id": rule_id, "before": before},
+        }
+
+    if normalized_operation == "camp_profile_update":
+        _ensure_admin_camp_access(admin, camp_id)
+        before = admin_repo.get_admin_camp_profile(camp_id)
+        if not before:
+            raise HTTPException(status_code=404, detail="База не найдена")
+        after = _camp_profile_payload_from_snapshot({"camp": raw_payload, "settings": raw_payload})
+        return {
+            "change_kind": "cancellation_policy",
+            "target_type": "camp_profile",
+            "target_id": str(camp_id),
+            "summary": "Изменение правил отмены и параметров базы",
+            "payload": {
+                "operation": normalized_operation,
+                "before": _camp_profile_payload_from_snapshot(before),
+                "after": after,
+            },
+        }
+
+    if normalized_operation == "room_create":
+        _ensure_admin_camp_access(admin, camp_id)
+        after = _normalize_room_payload(raw_payload)
+        if not after["name"]:
+            raise HTTPException(status_code=400, detail="Укажите название апартамента")
+        return {
+            "change_kind": "pricing",
+            "target_type": "room",
+            "target_id": None,
+            "summary": f"Добавление тарифов апартамента «{after['name']}»",
+            "payload": {"operation": normalized_operation, "after": after},
+        }
+
+    if normalized_operation == "room_update":
+        _ensure_admin_camp_access(admin, camp_id)
+        room_id = int(raw_payload.get("room_id") or 0)
+        before = admin_repo.get_admin_room(camp_id, room_id)
+        if not before:
+            raise HTTPException(status_code=404, detail="Апартамент не найден")
+        after = _normalize_room_payload(raw_payload.get("data") or {})
+        if not after["name"]:
+            raise HTTPException(status_code=400, detail="Укажите название апартамента")
+        return {
+            "change_kind": "pricing",
+            "target_type": "room",
+            "target_id": str(room_id),
+            "summary": f"Изменение тарифов апартамента «{after['name']}»",
+            "payload": {"operation": normalized_operation, "room_id": room_id, "before": before, "after": after},
+        }
+
+    raise HTTPException(status_code=400, detail="Неизвестная операция для согласования")
+
+
+def _apply_change_request_payload(camp_id: int, payload: dict, actor_admin: dict) -> dict:
+    operation = str(payload.get("operation") or "").strip()
+    actor_admin_id = int(actor_admin.get("id") or 0)
+
+    if operation == "shift_settings_update":
+        admin_repo.save_camp_shift_settings(camp_id, payload.get("after") or {})
+        return {
+            "operation": operation,
+            "target_id": str(camp_id),
+            "before": payload.get("before"),
+            "after": admin_repo.get_camp_shift_settings(camp_id),
+        }
+
+    if operation == "shift_rule_create":
+        rule_id = admin_repo.create_camp_shift_rule(camp_id, payload.get("after") or {}, actor_admin_id)
+        return {
+            "operation": operation,
+            "target_id": str(rule_id),
+            "after": admin_repo.get_camp_shift_rule(camp_id, rule_id),
+        }
+
+    if operation == "shift_rule_update":
+        rule_id = int(payload.get("rule_id") or 0)
+        if not admin_repo.update_camp_shift_rule(camp_id, rule_id, payload.get("after") or {}):
+            raise HTTPException(status_code=404, detail="Правило смены не найдено")
+        return {
+            "operation": operation,
+            "target_id": str(rule_id),
+            "before": payload.get("before"),
+            "after": admin_repo.get_camp_shift_rule(camp_id, rule_id),
+        }
+
+    if operation == "shift_rule_delete":
+        rule_id = int(payload.get("rule_id") or 0)
+        if not admin_repo.delete_camp_shift_rule(camp_id, rule_id):
+            raise HTTPException(status_code=404, detail="Правило смены не найдено")
+        return {
+            "operation": operation,
+            "target_id": str(rule_id),
+            "before": payload.get("before"),
+            "after": None,
+        }
+
+    if operation == "camp_profile_update":
+        admin_repo.save_admin_camp_profile(camp_id, payload.get("after") or {})
+        return {
+            "operation": operation,
+            "target_id": str(camp_id),
+            "before": payload.get("before"),
+            "after": admin_repo.get_admin_camp_profile(camp_id),
+        }
+
+    if operation == "room_create":
+        room_id = admin_repo.create_admin_room(camp_id, payload.get("after") or {})
+        return {
+            "operation": operation,
+            "target_id": str(room_id),
+            "after": admin_repo.get_admin_room(camp_id, room_id),
+        }
+
+    if operation == "room_update":
+        room_id = int(payload.get("room_id") or 0)
+        if not admin_repo.update_admin_room(camp_id, room_id, payload.get("after") or {}):
+            raise HTTPException(status_code=404, detail="Апартамент не найден")
+        return {
+            "operation": operation,
+            "target_id": str(room_id),
+            "before": payload.get("before"),
+            "after": admin_repo.get_admin_room(camp_id, room_id),
+        }
+
+    raise HTTPException(status_code=400, detail="Операция не поддерживает применение")
+
+
+def _rollback_change_request_payload(camp_id: int, request_item: dict, actor_admin: dict) -> dict:
+    payload = request_item.get("payload") or {}
+    applied_snapshot = request_item.get("applied_snapshot") or {}
+    operation = str(payload.get("operation") or "").strip()
+    actor_admin_id = int(actor_admin.get("id") or 0)
+
+    if operation == "shift_settings_update":
+        admin_repo.save_camp_shift_settings(camp_id, payload.get("before") or {})
+        return {"operation": operation, "rolled_back_to": admin_repo.get_camp_shift_settings(camp_id)}
+
+    if operation == "shift_rule_create":
+        target_id = int(applied_snapshot.get("target_id") or request_item.get("target_id") or 0)
+        if target_id and not admin_repo.delete_camp_shift_rule(camp_id, target_id):
+            raise HTTPException(status_code=409, detail="Не удалось откатить правило смены")
+        return {"operation": operation, "rolled_back_target_id": str(target_id)}
+
+    if operation == "shift_rule_update":
+        rule_id = int(applied_snapshot.get("target_id") or payload.get("rule_id") or request_item.get("target_id") or 0)
+        if not admin_repo.update_camp_shift_rule(camp_id, rule_id, payload.get("before") or {}):
+            raise HTTPException(status_code=409, detail="Не удалось откатить правило смены")
+        return {"operation": operation, "rolled_back_to": admin_repo.get_camp_shift_rule(camp_id, rule_id)}
+
+    if operation == "shift_rule_delete":
+        restored_rule_id = admin_repo.create_camp_shift_rule(camp_id, payload.get("before") or {}, actor_admin_id)
+        return {"operation": operation, "restored_rule_id": str(restored_rule_id), "rolled_back_to": admin_repo.get_camp_shift_rule(camp_id, restored_rule_id)}
+
+    if operation == "camp_profile_update":
+        admin_repo.save_admin_camp_profile(camp_id, payload.get("before") or {})
+        return {"operation": operation, "rolled_back_to": admin_repo.get_admin_camp_profile(camp_id)}
+
+    if operation == "room_create":
+        room_id = int(applied_snapshot.get("target_id") or request_item.get("target_id") or 0)
+        if admin_repo.room_has_any_booking(camp_id, room_id):
+            raise HTTPException(status_code=409, detail="Нельзя откатить создание апартамента: по нему уже есть брони")
+        if not admin_repo.delete_admin_room(camp_id, room_id):
+            raise HTTPException(status_code=409, detail="Не удалось откатить создание апартамента")
+        return {"operation": operation, "rolled_back_target_id": str(room_id)}
+
+    if operation == "room_update":
+        room_id = int(applied_snapshot.get("target_id") or payload.get("room_id") or request_item.get("target_id") or 0)
+        if not admin_repo.update_admin_room(camp_id, room_id, _room_payload_from_snapshot(payload.get("before") or {})):
+            raise HTTPException(status_code=409, detail="Не удалось откатить изменение апартамента")
+        return {"operation": operation, "rolled_back_to": admin_repo.get_admin_room(camp_id, room_id)}
+
+    raise HTTPException(status_code=400, detail="Эту операцию пока нельзя откатить автоматически")
+
+
+def _notify_change_request_reviewers(camp_id: int, actor_admin: dict, request_item: dict) -> None:
+    permission_key = _change_kind_permission_key(str(request_item.get("change_kind") or ""))
+    action_url = f"/approvals?request_id={request_item.get('id')}"
+    metadata = {
+        "change_request_id": int(request_item["id"]),
+        "change_request_status": str(request_item.get("status") or ""),
+        "change_kind": str(request_item.get("change_kind") or ""),
+    }
+    seen_ids: set[int] = set()
+    for reviewer in _reviewer_candidates(camp_id, permission_key):
+        reviewer_id = int(reviewer["id"])
+        if reviewer_id in seen_ids:
+            continue
+        seen_ids.add(reviewer_id)
+        _publish_crm_event(
+            camp_id=camp_id,
+            admin=actor_admin,
+            event_type="change_request_pending_review",
+            title="Изменение ждёт подтверждения",
+            body=f"{request_item.get('summary') or 'Изменение по базе'}.\n\nОткройте согласование, чтобы подтвердить, отклонить или запросить уточнение.",
+            severity="warning",
+            action_url=action_url,
+            action_payload={"change_request_id": int(request_item["id"])},
+            recipient_admin_id=reviewer_id,
+            metadata=metadata,
+        )
+
+
+def _notify_change_request_initiator(camp_id: int, request_item: dict, *, title: str, body: str, severity: str = "info") -> None:
+    initiator_id = int(request_item.get("created_by_admin_id") or 0)
+    if not initiator_id:
+        return
+    _publish_targeted_staff_event(
+        camp_id=camp_id,
+        recipient_admin_id=initiator_id,
+        event_type="change_request_feedback",
+        title=title,
+        body=body,
+        action_url=f"/approvals?request_id={request_item.get('id')}",
+        action_payload={"change_request_id": int(request_item["id"])},
+        severity=severity,
+        metadata={
+            "change_request_id": int(request_item["id"]),
+            "change_request_status": str(request_item.get("status") or ""),
+            "change_kind": str(request_item.get("change_kind") or ""),
+        },
+    )
+
+
+def process_change_request_decision(request_item: dict, actor_admin: dict, *, action: str, comment: Optional[str] = None) -> dict:
+    normalized_action = (action or "").strip().lower()
+    camp_id = int(request_item.get("camp_id") or 0)
+    if request_item.get("status") == "rolled_back":
+        raise HTTPException(status_code=409, detail="Это изменение уже откатили")
+
+    if normalized_action == "approve":
+        if str(request_item.get("status") or "") != "pending_review":
+            raise HTTPException(status_code=409, detail="Подтверждать можно только изменения со статусом «На подтверждении»")
+        applied_snapshot = _apply_change_request_payload(camp_id, request_item.get("payload") or {}, actor_admin)
+        admin_repo.update_change_request(
+            int(request_item["id"]),
+            status="approved",
+            reviewer_admin_id=int(actor_admin["id"]),
+            reviewer_comment=(comment or "").strip() or "Подтверждено управляющим",
+            applied_snapshot=applied_snapshot,
+        )
+        updated = admin_repo.get_change_request(int(request_item["id"]), [camp_id])
+        log_crm_audit_event(
+            actor_type="camp_admin",
+            actor_id=actor_admin.get("id"),
+            actor_display=actor_admin.get("display_name"),
+            camp_id=camp_id,
+            target_type="change_request",
+            target_id=request_item["id"],
+            action_type="change_request_approve",
+            action_label="Подтвердил изменение",
+            comment=(comment or "").strip() or "Подтверждено управляющим",
+            is_sensitive=True,
+            was_auto_applied=False,
+        )
+        _notify_change_request_initiator(
+            camp_id,
+            updated or request_item,
+            title="Изменение подтверждено",
+            body=f"{request_item.get('summary') or 'Изменение'} подтверждено и применено.",
+            severity="info",
+        )
+        return updated or request_item
+
+    if normalized_action == "reject":
+        if str(request_item.get("status") or "") != "pending_review":
+            raise HTTPException(status_code=409, detail="Отклонять можно только изменения со статусом «На подтверждении»")
+        admin_repo.update_change_request(
+            int(request_item["id"]),
+            status="rejected",
+            reviewer_admin_id=int(actor_admin["id"]),
+            reviewer_comment=(comment or "").strip() or "Изменение отклонено",
+        )
+        updated = admin_repo.get_change_request(int(request_item["id"]), [camp_id])
+        log_crm_audit_event(
+            actor_type="camp_admin",
+            actor_id=actor_admin.get("id"),
+            actor_display=actor_admin.get("display_name"),
+            camp_id=camp_id,
+            target_type="change_request",
+            target_id=request_item["id"],
+            action_type="change_request_reject",
+            action_label="Отклонил изменение",
+            comment=(comment or "").strip() or "Изменение отклонено",
+            is_sensitive=True,
+            was_auto_applied=False,
+        )
+        _notify_change_request_initiator(
+            camp_id,
+            updated or request_item,
+            title="Изменение отклонено",
+            body=f"{request_item.get('summary') or 'Изменение'} отклонено. Проверьте комментарий управляющего и при необходимости отправьте правки заново.",
+            severity="warning",
+        )
+        return updated or request_item
+
+    if normalized_action == "clarify":
+        if str(request_item.get("status") or "") != "pending_review":
+            raise HTTPException(status_code=409, detail="Уточнение можно запросить только для ожидающего изменения")
+        reviewer_comment = (comment or "").strip() or "Нужно уточнение. Проверьте детали изменения и отправьте новую версию."
+        admin_repo.update_change_request(
+            int(request_item["id"]),
+            status="needs_clarification",
+            reviewer_admin_id=int(actor_admin["id"]),
+            reviewer_comment=reviewer_comment,
+        )
+        updated = admin_repo.get_change_request(int(request_item["id"]), [camp_id])
+        log_crm_audit_event(
+            actor_type="camp_admin",
+            actor_id=actor_admin.get("id"),
+            actor_display=actor_admin.get("display_name"),
+            camp_id=camp_id,
+            target_type="change_request",
+            target_id=request_item["id"],
+            action_type="change_request_clarify",
+            action_label="Запросил уточнение",
+            comment=reviewer_comment,
+            is_sensitive=True,
+            was_auto_applied=False,
+        )
+        _notify_change_request_initiator(
+            camp_id,
+            updated or request_item,
+            title="Нужно уточнение по изменению",
+            body=reviewer_comment,
+            severity="warning",
+        )
+        return updated or request_item
+
+    if normalized_action == "rollback":
+        if str(request_item.get("status") or "") not in {"approved", "applied_with_responsibility"}:
+            raise HTTPException(status_code=409, detail="Откат доступен только для уже применённых изменений")
+        rollback_snapshot = _rollback_change_request_payload(camp_id, request_item, actor_admin)
+        admin_repo.update_change_request(
+            int(request_item["id"]),
+            status="rolled_back",
+            reviewer_admin_id=int(actor_admin["id"]),
+            reviewer_comment=(comment or "").strip() or "Откат подтверждён управляющим",
+            applied_snapshot={
+                **(request_item.get("applied_snapshot") or {}),
+                "rollback": rollback_snapshot,
+            },
+        )
+        updated = admin_repo.get_change_request(int(request_item["id"]), [camp_id])
+        log_crm_audit_event(
+            actor_type="camp_admin",
+            actor_id=actor_admin.get("id"),
+            actor_display=actor_admin.get("display_name"),
+            camp_id=camp_id,
+            target_type="change_request",
+            target_id=request_item["id"],
+            action_type="change_request_rollback",
+            action_label="Выполнил откат изменения",
+            comment=(comment or "").strip() or "Откат подтверждён управляющим",
+            is_sensitive=True,
+            was_auto_applied=False,
+        )
+        _notify_change_request_initiator(
+            camp_id,
+            updated or request_item,
+            title="Изменение откатили",
+            body=f"{request_item.get('summary') or 'Изменение'} откатили. Проверьте текущую версию данных в CRM.",
+            severity="warning",
+        )
+        return updated or request_item
+
+    raise HTTPException(status_code=400, detail="Неизвестное действие по согласованию")
+
+
+def get_accessible_change_request_for_admin(admin: dict, request_id: int) -> dict:
+    camp_ids = _get_admin_camp_ids(admin["id"])
+    request_item = admin_repo.get_change_request(request_id, camp_ids)
+    if not request_item:
+        raise HTTPException(status_code=404, detail="Согласование не найдено")
+    return request_item
+
+
+def handle_change_request_action_for_admin(admin: dict, request_id: int, *, action: str, comment: Optional[str] = None) -> dict:
+    request_item = get_accessible_change_request_for_admin(admin, request_id)
+    _ensure_change_request_review_access(admin, request_item)
+    return process_change_request_decision(request_item, admin, action=action, comment=comment)
 
 
 def _parse_shift_time(value: str) -> time:
@@ -474,6 +1107,128 @@ def api_admin_update_event_status(
     if not admin_repo.update_admin_notification_status(event_id, normalized_status):
         raise HTTPException(status_code=404, detail="Событие не найдено")
     updated = admin_repo.get_admin_notification_event(event_id, int(admin["id"]), camp_ids)
+    return {"ok": True, "item": updated}
+
+
+def api_admin_change_requests(
+    camp_id: Optional[int] = None,
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+    change_kind: Optional[str] = None,
+    limit: int = 200,
+    admin: dict = Depends(get_current_admin),
+):
+    camp_ids = _get_admin_camp_ids(admin["id"])
+    if camp_id and camp_id not in camp_ids:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа к выбранной базе")
+
+    normalized_status = (status or "").strip().lower() or None
+    if normalized_status and normalized_status not in crm_domain.CHANGE_REQUEST_STATUS_KEYS:
+        raise HTTPException(status_code=400, detail="Некорректный статус согласования")
+
+    normalized_kind = (change_kind or "").strip().lower() or None
+    if normalized_kind and normalized_kind not in crm_domain.SENSITIVE_CHANGE_KINDS:
+        raise HTTPException(status_code=400, detail="Некорректный тип изменения")
+
+    return {
+        "items": admin_repo.list_change_requests(
+            camp_ids,
+            camp_id=camp_id,
+            search=search,
+            status=normalized_status,
+            change_kind=normalized_kind,
+            limit=limit,
+        ),
+        "status_labels": crm_domain.CHANGE_REQUEST_STATUS_LABELS,
+        "change_kind_labels": crm_domain.SENSITIVE_CHANGE_LABELS,
+    }
+
+
+def api_admin_create_change_request(
+    camp_id: int,
+    payload: AdminChangeRequestCreateRequest,
+    admin: dict = Depends(get_current_admin),
+):
+    _ensure_admin_camp_access(admin, camp_id)
+    normalized_apply_mode = (payload.apply_mode or "").strip().lower()
+    if normalized_apply_mode not in {"pending_review", "apply_with_responsibility"}:
+        raise HTTPException(status_code=400, detail="Некорректный режим применения изменения")
+
+    prepared = _prepare_change_request_payload(camp_id, admin, payload.operation, payload.payload or {})
+    reviewer_permission = _change_kind_permission_key(prepared["change_kind"])
+    reviewer_ids = [int(item["id"]) for item in _reviewer_candidates(camp_id, reviewer_permission)]
+    reviewer_id = reviewer_ids[0] if reviewer_ids else None
+
+    status_value = "pending_review" if normalized_apply_mode == "pending_review" else "applied_with_responsibility"
+    applied_snapshot = None
+    if normalized_apply_mode == "apply_with_responsibility":
+        applied_snapshot = _apply_change_request_payload(camp_id, prepared["payload"], admin)
+
+    request_id = admin_repo.create_change_request(
+        camp_id,
+        created_by_admin_id=int(admin["id"]),
+        reviewer_admin_id=reviewer_id,
+        target_type=prepared["target_type"],
+        target_id=prepared["target_id"],
+        change_kind=prepared["change_kind"],
+        status=status_value,
+        summary=prepared["summary"],
+        request_comment=(payload.request_comment or "").strip() or None,
+        payload=prepared["payload"],
+        applied_snapshot=applied_snapshot,
+    )
+    created = admin_repo.get_change_request(request_id, [camp_id])
+    if not created:
+        raise HTTPException(status_code=500, detail="Не удалось сохранить согласование")
+
+    log_crm_audit_event(
+        actor_type="camp_admin",
+        actor_id=admin.get("id"),
+        actor_display=admin.get("display_name"),
+        camp_id=camp_id,
+        target_type="change_request",
+        target_id=request_id,
+        action_type="change_request_create",
+        action_label="Создал согласование изменения" if normalized_apply_mode == "pending_review" else "Применил изменение под ответственность",
+        comment=(payload.request_comment or "").strip() or None,
+        new_value=created,
+        is_sensitive=True,
+        was_auto_applied=normalized_apply_mode == "apply_with_responsibility",
+    )
+
+    if normalized_apply_mode == "pending_review":
+        _notify_change_request_reviewers(camp_id, admin, created)
+    else:
+        _publish_crm_event(
+            camp_id=camp_id,
+            admin=admin,
+            event_type="change_request_applied",
+            title="Изменение применено под ответственность",
+            body=f"{created.get('summary') or 'Изменение по базе'}.\n\nУправляющий может открыть согласование и при необходимости подтвердить откат.",
+            severity="warning",
+            action_url=f"/approvals?request_id={request_id}",
+            action_payload={"change_request_id": request_id},
+            metadata={
+                "change_request_id": request_id,
+                "change_request_status": created.get("status"),
+                "change_kind": created.get("change_kind"),
+            },
+        )
+
+    return {"ok": True, "item": created}
+
+
+def api_admin_change_request_action(
+    request_id: int,
+    payload: AdminChangeRequestDecisionRequest,
+    admin: dict = Depends(get_current_admin),
+):
+    updated = handle_change_request_action_for_admin(
+        admin,
+        request_id,
+        action=payload.action,
+        comment=payload.comment,
+    )
     return {"ok": True, "item": updated}
 
 

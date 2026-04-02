@@ -16,7 +16,9 @@ import { EmptyState } from "../components/EmptyState";
 import { ModalShell } from "../components/ModalShell";
 import { PageMotion } from "../components/PageMotion";
 import { SectionHeading } from "../components/SectionHeading";
+import { SensitiveChangeModal } from "../components/SensitiveChangeModal";
 import {
+  createCrmChangeRequest,
   createCrmStaff,
   fetchCrmAuditLog,
   fetchCrmCampProfile,
@@ -267,10 +269,12 @@ export default function SettingsPage() {
   const [selectedCampId, setSelectedCampId] = useState<number | null>(null);
   const [isBootLoading, setIsBootLoading] = useState(true);
   const [profileForm, setProfileForm] = useState<ProfileForm>(emptyProfileForm);
+  const [loadedCancellationPolicy, setLoadedCancellationPolicy] = useState("");
   const [isProfileLoading, setIsProfileLoading] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [profileError, setProfileError] = useState("");
   const [profileSuccess, setProfileSuccess] = useState("");
+  const [profilePendingApproval, setProfilePendingApproval] = useState(false);
   const [teamItems, setTeamItems] = useState<CrmStaffMember[]>([]);
   const [teamRoles, setTeamRoles] = useState<CrmStaffRoleMeta[]>([]);
   const [teamPermissions, setTeamPermissions] = useState<CrmStaffPermissionMeta[]>([]);
@@ -340,6 +344,7 @@ export default function SettingsPage() {
     fetchCrmCampProfile(selectedCampId, controller.signal)
       .then((payload) => {
         setProfileForm(mapProfileForm(payload));
+        setLoadedCancellationPolicy(payload.settings.cancellation_policy || "");
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) {
@@ -441,15 +446,52 @@ export default function SettingsPage() {
       setProfileError("Сначала выберите базу.");
       return;
     }
+    const payload = toProfilePayload(profileForm);
+    if ((profileForm.cancellationPolicy || "").trim() !== (loadedCancellationPolicy || "").trim()) {
+      setProfilePendingApproval(true);
+      setProfileError("");
+      setProfileSuccess("");
+      return;
+    }
     try {
       setIsSavingProfile(true);
       setProfileError("");
       setProfileSuccess("");
-      const response = await saveCrmCampProfile(selectedCampId, toProfilePayload(profileForm));
+      const response = await saveCrmCampProfile(selectedCampId, payload);
       setProfileForm(mapProfileForm(response.item));
+      setLoadedCancellationPolicy(response.item.settings.cancellation_policy || "");
       setProfileSuccess("Профиль базы сохранён.");
     } catch (error) {
       setProfileError(error instanceof Error ? error.message : "Не удалось сохранить настройки");
+    } finally {
+      setIsSavingProfile(false);
+    }
+  }
+
+  async function submitProfileSensitiveChange(applyMode: "pending_review" | "apply_with_responsibility", comment: string) {
+    if (!selectedCampId) {
+      return;
+    }
+    try {
+      setIsSavingProfile(true);
+      setProfileError("");
+      setProfileSuccess("");
+      await createCrmChangeRequest(selectedCampId, {
+        operation: "camp_profile_update",
+        payload: toProfilePayload(profileForm) as Record<string, unknown>,
+        request_comment: comment || undefined,
+        apply_mode: applyMode,
+      });
+      setProfilePendingApproval(false);
+      if (applyMode === "apply_with_responsibility") {
+        setLoadedCancellationPolicy(profileForm.cancellationPolicy);
+        setReloadKey((value) => value + 1);
+        setProfileSuccess("Изменение правил отмены применено под вашу ответственность.");
+      } else {
+        setProfileSuccess("Изменение правил отмены отправлено на подтверждение.");
+      }
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : "Не удалось обработать чувствительное изменение");
     } finally {
       setIsSavingProfile(false);
     }
@@ -1275,6 +1317,20 @@ export default function SettingsPage() {
           </div>
         ) : null}
       </ModalShell>
+
+      <SensitiveChangeModal
+        open={profilePendingApproval}
+        title="Согласование правил отмены"
+        description="Правила отмены влияют на клиента, оплату и шаблоны уведомлений. Изменение можно отправить управляющему на подтверждение или применить сразу под вашу ответственность."
+        loading={isSavingProfile}
+        onClose={() => {
+          if (!isSavingProfile) {
+            setProfilePendingApproval(false);
+          }
+        }}
+        onConfirm={(comment) => submitProfileSensitiveChange("pending_review", comment)}
+        onApply={(comment) => submitProfileSensitiveChange("apply_with_responsibility", comment)}
+      />
     </PageMotion>
   );
 }

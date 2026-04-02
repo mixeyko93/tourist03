@@ -43,6 +43,24 @@ router.add_api_route(
     responses=error_responses(400, 401, 403, 404, 422, 500),
 )
 router.add_api_route(
+    "/api/admin/change-requests",
+    admin_service.api_admin_change_requests,
+    methods=["GET"],
+    responses=error_responses(400, 401, 403, 422, 500),
+)
+router.add_api_route(
+    "/api/admin/camps/{camp_id}/change-requests",
+    admin_service.api_admin_create_change_request,
+    methods=["POST"],
+    responses=error_responses(400, 401, 403, 404, 422, 500),
+)
+router.add_api_route(
+    "/api/admin/change-requests/{request_id}",
+    admin_service.api_admin_change_request_action,
+    methods=["PATCH"],
+    responses=error_responses(400, 401, 403, 404, 409, 422, 500),
+)
+router.add_api_route(
     "/api/admin/bookings",
     admin_service.api_admin_bookings,
     methods=["GET"],

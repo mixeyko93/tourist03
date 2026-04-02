@@ -1,5 +1,5 @@
 from datetime import date
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, EmailStr
 
@@ -233,3 +233,15 @@ class AdminShiftRuleUpsertRequest(BaseModel):
 
 class AdminNotificationStatusUpdateRequest(BaseModel):
     status: str
+
+
+class AdminChangeRequestCreateRequest(BaseModel):
+    operation: str
+    payload: Dict[str, Any] = {}
+    request_comment: Optional[str] = None
+    apply_mode: str = "pending_review"
+
+
+class AdminChangeRequestDecisionRequest(BaseModel):
+    action: str
+    comment: Optional[str] = None

@@ -4,15 +4,15 @@ import { EmptyState } from "../components/EmptyState";
 import { ModalShell } from "../components/ModalShell";
 import { PageMotion } from "../components/PageMotion";
 import { SectionHeading } from "../components/SectionHeading";
+import { SensitiveChangeModal } from "../components/SensitiveChangeModal";
 import {
-  createCrmRoom,
+  createCrmChangeRequest,
   deleteCrmRoom,
   fetchCrmCampRooms,
   fetchCrmCamps,
   type CrmCamp,
   type CrmRoomOption,
   type CrmRoomUpsertPayload,
-  updateCrmRoom,
 } from "../session";
 
 type RoomFormState = {
@@ -141,12 +141,14 @@ export default function RoomsPage() {
   const [rooms, setRooms] = useState<CrmRoomOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [deleteRoomId, setDeleteRoomId] = useState<number | null>(null);
   const [formError, setFormError] = useState("");
   const [roomForm, setRoomForm] = useState<RoomFormState>(emptyRoomForm);
+  const [pendingApproval, setPendingApproval] = useState<null | { operation: string; payload: Record<string, unknown>; successPending: string; successApplied: string }>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -221,14 +223,14 @@ export default function RoomsPage() {
       setIsSaving(true);
       setFormError("");
       const payload = toRoomPayload(roomForm);
-      if (roomForm.id) {
-        await updateCrmRoom(selectedCampId, roomForm.id, payload);
-      } else {
-        await createCrmRoom(selectedCampId, payload);
-      }
       setIsModalOpen(false);
+      setPendingApproval({
+        operation: roomForm.id ? "room_update" : "room_create",
+        payload: roomForm.id ? ({ room_id: roomForm.id, data: payload } as Record<string, unknown>) : (payload as Record<string, unknown>),
+        successPending: roomForm.id ? "Изменение тарифов отправлено на подтверждение." : "Новый апартамент отправлен на подтверждение.",
+        successApplied: roomForm.id ? "Изменение тарифов применено под вашу ответственность." : "Новый апартамент применён под вашу ответственность.",
+      });
       setRoomForm(emptyRoomForm);
-      setReloadKey((value) => value + 1);
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Не удалось сохранить апартамент");
     } finally {
@@ -243,12 +245,38 @@ export default function RoomsPage() {
     try {
       setDeleteRoomId(roomId);
       setErrorMessage("");
+      setSuccessMessage("");
       await deleteCrmRoom(selectedCampId, roomId);
+      setSuccessMessage("Апартамент удалён.");
       setReloadKey((value) => value + 1);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Не удалось удалить апартамент");
     } finally {
       setDeleteRoomId(null);
+    }
+  }
+
+  async function submitSensitiveRoomChange(applyMode: "pending_review" | "apply_with_responsibility", comment: string) {
+    if (!selectedCampId || !pendingApproval) {
+      return;
+    }
+    try {
+      setIsSaving(true);
+      setErrorMessage("");
+      setSuccessMessage("");
+      await createCrmChangeRequest(selectedCampId, {
+        operation: pendingApproval.operation,
+        payload: pendingApproval.payload,
+        request_comment: comment || undefined,
+        apply_mode: applyMode,
+      });
+      setSuccessMessage(applyMode === "pending_review" ? pendingApproval.successPending : pendingApproval.successApplied);
+      setReloadKey((value) => value + 1);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Не удалось обработать чувствительное изменение");
+    } finally {
+      setIsSaving(false);
+      setPendingApproval(null);
     }
   }
 
@@ -309,6 +337,12 @@ export default function RoomsPage() {
       {errorMessage ? (
         <section className="rounded-3xl border border-rose-500/30 bg-rose-500/10 px-5 py-4 text-sm text-rose-200">
           {errorMessage}
+        </section>
+      ) : null}
+
+      {successMessage ? (
+        <section className="rounded-3xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-4 text-sm text-emerald-200">
+          {successMessage}
         </section>
       ) : null}
 
@@ -541,6 +575,20 @@ export default function RoomsPage() {
           </div>
         </form>
       </ModalShell>
+
+      <SensitiveChangeModal
+        open={Boolean(pendingApproval)}
+        title="Согласование тарифов апартамента"
+        description="Цены и тарифы влияют на бронирование и витрину базы. Отправьте изменение управляющему или примените его под свою ответственность."
+        loading={isSaving}
+        onClose={() => {
+          if (!isSaving) {
+            setPendingApproval(null);
+          }
+        }}
+        onConfirm={(comment) => submitSensitiveRoomChange("pending_review", comment)}
+        onApply={(comment) => submitSensitiveRoomChange("apply_with_responsibility", comment)}
+      />
     </PageMotion>
   );
 }

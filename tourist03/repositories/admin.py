@@ -1,3 +1,4 @@
+import json
 from datetime import date
 from typing import Optional
 
@@ -1328,6 +1329,230 @@ def list_admin_audit_log(
             tuple(params),
         )
         return [dict(row) for row in cur.fetchall()]
+
+
+def create_change_request(
+    camp_id: int,
+    *,
+    created_by_admin_id: int,
+    reviewer_admin_id: Optional[int],
+    target_type: str,
+    target_id: Optional[str],
+    change_kind: str,
+    status: str,
+    summary: str,
+    request_comment: Optional[str],
+    payload: dict,
+    applied_snapshot: Optional[dict] = None,
+):
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO crm.change_requests (
+                camp_id,
+                created_by_admin_id,
+                reviewer_admin_id,
+                target_type,
+                target_id,
+                change_kind,
+                status,
+                summary,
+                request_comment,
+                payload,
+                applied_snapshot
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb)
+            RETURNING id
+            """,
+            (
+                int(camp_id),
+                int(created_by_admin_id),
+                int(reviewer_admin_id) if reviewer_admin_id else None,
+                target_type,
+                target_id,
+                change_kind,
+                status,
+                summary,
+                request_comment,
+                json.dumps(payload or {}, ensure_ascii=False),
+                json.dumps(applied_snapshot or {}, ensure_ascii=False),
+            ),
+        )
+        request_id = int(cur.fetchone()["id"])
+        conn.commit()
+        return request_id
+
+
+def list_change_requests(
+    camp_ids: list[int],
+    *,
+    camp_id: Optional[int] = None,
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+    change_kind: Optional[str] = None,
+    limit: int = 200,
+):
+    if camp_id:
+        conditions = ["r.camp_id = %s"]
+        params: list = [int(camp_id)]
+    else:
+        if not camp_ids:
+            return []
+        conditions = ["r.camp_id = ANY(%s)"]
+        params = [camp_ids]
+
+    normalized_search = (search or "").strip()
+    if normalized_search:
+        pattern = f"%{normalized_search}%"
+        conditions.append(
+            """
+            (
+                COALESCE(c.name, '') ILIKE %s OR
+                COALESCE(r.summary, '') ILIKE %s OR
+                COALESCE(r.request_comment, '') ILIKE %s OR
+                COALESCE(r.reviewer_comment, '') ILIKE %s OR
+                COALESCE(creator.display_name, '') ILIKE %s OR
+                COALESCE(reviewer.display_name, '') ILIKE %s OR
+                COALESCE(r.target_type, '') ILIKE %s OR
+                COALESCE(r.target_id, '') ILIKE %s
+            )
+            """
+        )
+        params.extend([pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern])
+
+    if status:
+        conditions.append("r.status = %s")
+        params.append(status)
+    if change_kind:
+        conditions.append("r.change_kind = %s")
+        params.append(change_kind)
+
+    safe_limit = max(1, min(int(limit or 200), 500))
+    params.append(safe_limit)
+
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT
+                r.id,
+                r.camp_id,
+                c.name AS camp_name,
+                r.created_by_admin_id,
+                creator.display_name AS created_by_display,
+                creator.email AS created_by_email,
+                r.reviewer_admin_id,
+                reviewer.display_name AS reviewer_display,
+                reviewer.email AS reviewer_email,
+                r.target_type,
+                r.target_id,
+                r.change_kind,
+                r.status,
+                r.summary,
+                r.request_comment,
+                r.reviewer_comment,
+                r.payload,
+                r.applied_snapshot,
+                r.created_at,
+                r.decided_at,
+                r.updated_at
+            FROM crm.change_requests r
+            LEFT JOIN catalog.camps c ON c.id = r.camp_id
+            LEFT JOIN auth.camp_admin_accounts creator ON creator.id = r.created_by_admin_id
+            LEFT JOIN auth.camp_admin_accounts reviewer ON reviewer.id = r.reviewer_admin_id
+            WHERE {' AND '.join(conditions)}
+            ORDER BY r.created_at DESC, r.id DESC
+            LIMIT %s
+            """,
+            tuple(params),
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+
+def get_change_request(request_id: int, camp_ids: list[int]):
+    if not camp_ids:
+        return None
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT
+                r.id,
+                r.camp_id,
+                c.name AS camp_name,
+                r.created_by_admin_id,
+                creator.display_name AS created_by_display,
+                creator.email AS created_by_email,
+                r.reviewer_admin_id,
+                reviewer.display_name AS reviewer_display,
+                reviewer.email AS reviewer_email,
+                r.target_type,
+                r.target_id,
+                r.change_kind,
+                r.status,
+                r.summary,
+                r.request_comment,
+                r.reviewer_comment,
+                r.payload,
+                r.applied_snapshot,
+                r.created_at,
+                r.decided_at,
+                r.updated_at
+            FROM crm.change_requests r
+            LEFT JOIN catalog.camps c ON c.id = r.camp_id
+            LEFT JOIN auth.camp_admin_accounts creator ON creator.id = r.created_by_admin_id
+            LEFT JOIN auth.camp_admin_accounts reviewer ON reviewer.id = r.reviewer_admin_id
+            WHERE r.id = %s
+              AND r.camp_id = ANY(%s)
+            LIMIT 1
+            """,
+            (int(request_id), camp_ids),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+
+def update_change_request(
+    request_id: int,
+    *,
+    status: str,
+    reviewer_admin_id: Optional[int] = None,
+    reviewer_comment: Optional[str] = None,
+    applied_snapshot: Optional[dict] = None,
+):
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE crm.change_requests
+            SET status = %s,
+                reviewer_admin_id = COALESCE(%s, reviewer_admin_id),
+                reviewer_comment = %s,
+                applied_snapshot = CASE
+                    WHEN %s::jsonb = '{}'::jsonb THEN applied_snapshot
+                    ELSE %s::jsonb
+                END,
+                decided_at = CASE
+                    WHEN %s IN ('approved', 'rejected', 'needs_clarification', 'rolled_back') THEN NOW()
+                    ELSE decided_at
+                END,
+                updated_at = NOW()
+            WHERE id = %s
+            """,
+            (
+                status,
+                int(reviewer_admin_id) if reviewer_admin_id else None,
+                reviewer_comment,
+                json.dumps(applied_snapshot or {}, ensure_ascii=False),
+                json.dumps(applied_snapshot or {}, ensure_ascii=False),
+                status,
+                int(request_id),
+            ),
+        )
+        changed = cur.rowcount > 0
+        conn.commit()
+        return changed
 
 
 def list_admin_notification_events(

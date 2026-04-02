@@ -8,10 +8,13 @@ from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, Router
 from aiogram.client.default import DefaultBotProperties
 from aiogram.filters import Command, CommandStart
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, MenuButtonWebApp, Message, WebAppInfo
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, MenuButtonWebApp, Message, WebAppInfo
 
 from tourist03.config import CRM_BASE_URL, STAFF_BOT_POLL_INTERVAL, STAFF_BOT_TOKEN
+from tourist03.repositories import notifications as notification_repo
+from tourist03.services import admin as admin_service
 from tourist03.services.staff_bot import (
+    build_staff_rollback_confirm_keyboard,
     build_staff_event_keyboard,
     build_staff_start_text,
     deliver_pending_telegram_notifications,
@@ -76,6 +79,10 @@ def crm_button(action_url: str = "/events") -> InlineKeyboardMarkup:
             ]
         ]
     )
+
+
+def _staff_account_for_chat(chat_id: int):
+    return notification_repo.get_staff_account_by_chat_id(int(chat_id))
 
 
 @user_router.message(CommandStart())
@@ -170,6 +177,91 @@ async def staff_cmd_events(message: Message) -> None:
             text=format_staff_event_message(item),
             reply_markup=build_staff_event_keyboard(item) or crm_button("/events"),
         )
+
+
+@staff_router.callback_query()
+async def staff_callback_router(callback: CallbackQuery) -> None:
+    raw = (callback.data or "").strip()
+    if not raw.startswith("cr:"):
+        await callback.answer()
+        return
+
+    account = _staff_account_for_chat(callback.message.chat.id if callback.message else callback.from_user.id)
+    if not account:
+        await callback.answer("Сначала привяжите staff-бот к своей учётке CRM.", show_alert=True)
+        return
+
+    parts = raw.split(":")
+    if len(parts) < 3:
+        await callback.answer("Некорректная команда.", show_alert=True)
+        return
+
+    try:
+        if parts[1] == "rollback" and len(parts) >= 4 and parts[2] == "init":
+            request_id = int(parts[3])
+            if callback.message:
+                await callback.message.edit_reply_markup(
+                    reply_markup=build_staff_rollback_confirm_keyboard(
+                        request_id,
+                        action_url=f"/approvals?request_id={request_id}",
+                    )
+                )
+            await callback.answer("Откат вернёт данные к предыдущему состоянию. Подтвердите действие.", show_alert=True)
+            return
+
+        if parts[1] == "rollback" and len(parts) >= 4 and parts[2] == "cancel":
+            request_id = int(parts[3])
+            request_item = admin_service.get_accessible_change_request_for_admin(account, request_id)
+            if callback.message:
+                await callback.message.edit_reply_markup(reply_markup=build_staff_event_keyboard({
+                    "event_type": "change_request_applied",
+                    "metadata": {"change_request_id": request_id},
+                    "action_url": f"/approvals?request_id={request_id}",
+                }) or crm_button(f"/approvals?request_id={request_id}"))
+            await callback.answer("Откат отменён.")
+            return
+
+        action_map = {
+            "approve": ("approve", "Изменение подтверждено."),
+            "reject": ("reject", "Изменение отклонено."),
+            "clarify": ("clarify", "Запрос на уточнение отправлен."),
+            "rollback": ("rollback", "Откат подтверждён."),
+        }
+
+        if parts[1] == "rollback" and len(parts) >= 4 and parts[2] == "confirm":
+            request_id = int(parts[3])
+            action_key, success_text = action_map["rollback"]
+        else:
+            request_id = int(parts[2])
+            if parts[1] not in action_map:
+                await callback.answer("Неизвестное действие.", show_alert=True)
+                return
+            action_key, success_text = action_map[parts[1]]
+
+        updated = admin_service.handle_change_request_action_for_admin(
+            account,
+            request_id,
+            action=action_key,
+            comment="Подтверждено через staff-бот" if action_key in {"approve", "rollback"} else "Решение принято через staff-бот",
+        )
+        if callback.message:
+            await callback.message.edit_reply_markup(reply_markup=crm_button(f"/approvals?request_id={request_id}"))
+            await callback.message.answer(
+                format_staff_event_message(
+                    {
+                        "title": updated.get("summary") or "Согласование обновлено",
+                        "body": f"{success_text}\nСтатус: {updated.get('status')}",
+                        "camp_name": updated.get("camp_name"),
+                        "severity": "info",
+                        "created_at": updated.get("updated_at"),
+                    }
+                ),
+                reply_markup=crm_button(f"/approvals?request_id={request_id}"),
+            )
+        await callback.answer(success_text)
+    except Exception as exc:
+        detail = getattr(exc, "detail", None) or (str(exc).strip() if str(exc).strip() else "Не удалось выполнить действие.")
+        await callback.answer(str(detail), show_alert=True)
 
 
 async def _run_user_bot() -> None:
