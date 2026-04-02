@@ -35,6 +35,10 @@ services:
     environment:
       BOT_TOKEN: ${BOT_TOKEN}
       WEBAPP_URL: ${WEBAPP_URL}
+      CRM_BASE_URL: ${CRM_BASE_URL}
+      STAFF_BOT_TOKEN: ${STAFF_BOT_TOKEN}
+      STAFF_BOT_USERNAME: ${STAFF_BOT_USERNAME}
+      STAFF_BOT_POLL_INTERVAL: ${STAFF_BOT_POLL_INTERVAL}
     depends_on:
       - app
     restart: unless-stopped

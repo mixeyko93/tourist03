@@ -68,6 +68,12 @@ type StaffForm = {
 
 type SettingsTab = "profile" | "team" | "audit";
 
+type TelegramLinkInfo = {
+  code: string;
+  command: string;
+  deepLink: string | null;
+};
+
 const emptyProfileForm: ProfileForm = {
   name: "",
   lakeName: "",
@@ -277,7 +283,7 @@ export default function SettingsPage() {
   const [staffForm, setStaffForm] = useState<StaffForm>(createEmptyStaffForm());
   const [staffFormError, setStaffFormError] = useState("");
   const [isSavingStaff, setIsSavingStaff] = useState(false);
-  const [telegramCode, setTelegramCode] = useState("");
+  const [telegramLinkInfo, setTelegramLinkInfo] = useState<TelegramLinkInfo | null>(null);
   const [issuingTelegramCodeId, setIssuingTelegramCodeId] = useState<number | null>(null);
   const [auditItems, setAuditItems] = useState<CrmAuditEntry[]>([]);
   const [auditActors, setAuditActors] = useState<Array<{ id: number; label: string }>>([]);
@@ -455,7 +461,7 @@ export default function SettingsPage() {
     setStaffForm(createEmptyStaffForm(firstRole));
     setStaffFormError("");
     setTeamSuccess("");
-    setTelegramCode("");
+    setTelegramLinkInfo(null);
     setIsStaffModalOpen(true);
   }
 
@@ -463,7 +469,7 @@ export default function SettingsPage() {
     setEditingStaff(staff);
     setStaffForm(mapStaffForm(staff));
     setStaffFormError("");
-    setTelegramCode("");
+    setTelegramLinkInfo(null);
     setIsStaffModalOpen(true);
   }
 
@@ -495,7 +501,7 @@ export default function SettingsPage() {
       }
       setIsStaffModalOpen(false);
       setEditingStaff(null);
-      setTelegramCode("");
+      setTelegramLinkInfo(null);
       setReloadKey((value) => value + 1);
     } catch (error) {
       setStaffFormError(error instanceof Error ? error.message : "Не удалось сохранить учётку сотрудника");
@@ -512,11 +518,15 @@ export default function SettingsPage() {
       setIssuingTelegramCodeId(staff.id);
       setStaffFormError("");
       setTeamError("");
-      const response = await issueCrmStaffTelegramLink(selectedCampId, staff.id);
-      setTelegramCode(response.code);
       if (!isStaffModalOpen) {
         openEditStaffModal(staff);
       }
+      const response = await issueCrmStaffTelegramLink(selectedCampId, staff.id);
+      setTelegramLinkInfo({
+        code: response.code,
+        command: response.command,
+        deepLink: response.deep_link,
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Не удалось выпустить код привязки Telegram";
       setTeamError(message);
@@ -1003,7 +1013,7 @@ export default function SettingsPage() {
           setIsStaffModalOpen(false);
           setEditingStaff(null);
           setStaffFormError("");
-          setTelegramCode("");
+          setTelegramLinkInfo(null);
         }}
         title={editingStaff ? "Редактирование сотрудника" : "Новая учётка сотрудника"}
         description="Задайте роль, права и параметры уведомлений для команды базы. Все изменения попадут в аудит."
@@ -1013,9 +1023,29 @@ export default function SettingsPage() {
             <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{staffFormError}</div>
           ) : null}
 
-          {telegramCode ? (
+          {telegramLinkInfo ? (
             <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-              Код привязки Telegram: <span className="font-semibold text-emerald-100">{telegramCode}</span>
+              <p>
+                Код привязки Telegram: <span className="font-semibold text-emerald-100">{telegramLinkInfo.code}</span>
+              </p>
+              <p className="mt-2 text-emerald-100/90">
+                Команда для сотрудника: <span className="font-semibold">{telegramLinkInfo.command}</span>
+              </p>
+              {telegramLinkInfo.deepLink ? (
+                <a
+                  className="mt-3 inline-flex items-center gap-2 rounded-xl border border-emerald-300/30 bg-black/20 px-3 py-2 text-sm font-medium text-emerald-50 transition hover:bg-black/30"
+                  href={telegramLinkInfo.deepLink}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <Link2 className="h-4 w-4" />
+                  Открыть staff-бота
+                </a>
+              ) : (
+                <p className="mt-2 text-xs text-emerald-100/75">
+                  Укажите `STAFF_BOT_USERNAME`, чтобы CRM могла открыть бота одной кнопкой.
+                </p>
+              )}
             </div>
           ) : null}
 
@@ -1175,7 +1205,7 @@ export default function SettingsPage() {
                 setIsStaffModalOpen(false);
                 setEditingStaff(null);
                 setStaffFormError("");
-                setTelegramCode("");
+                setTelegramLinkInfo(null);
               }}
             >
               Отмена

@@ -811,7 +811,7 @@ export async function issueCrmStaffTelegramLink(campId: number, staffId: number)
     credentials: "same-origin",
   });
   await assertOk(response);
-  return (await response.json()) as { ok: boolean; code: string };
+  return (await response.json()) as { ok: boolean; code: string; command: string; deep_link: string | null };
 }
 
 export async function saveCrmShiftSettings(campId: number, payload: CrmShiftSettingsUpdatePayload) {

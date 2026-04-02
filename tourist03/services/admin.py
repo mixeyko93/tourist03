@@ -5,9 +5,11 @@ from zoneinfo import ZoneInfo
 from fastapi import Depends, HTTPException, Request, status
 
 from tourist03.booking_db_errors import BookingConflictError, BookingValidationError
+from tourist03.config import STAFF_BOT_USERNAME
 from tourist03.domain import bookings as booking_domain
 from tourist03.domain import crm as crm_domain
 from tourist03.repositories import admin as admin_repo
+from tourist03.repositories import notifications as notification_repo
 from tourist03.schemas import (
     AdminCampProfileUpdateRequest,
     AdminCreateBookingRequest,
@@ -257,6 +259,29 @@ def _publish_crm_event(
             **(metadata or {}),
         },
     )
+    if camp_id and severity in {"warning", "critical"}:
+        recipients = notification_repo.list_active_staff_telegram_recipients(
+            int(camp_id),
+            exclude_admin_ids=[actor_id] if actor_id is not None else None,
+        )
+        for recipient in recipients:
+            create_notification_event(
+                event_type=event_type,
+                title=title,
+                body=body,
+                channel="telegram",
+                recipient_scope="crm",
+                recipient_admin_id=int(recipient["id"]),
+                camp_id=camp_id,
+                action_url=action_url,
+                action_payload=action_payload,
+                severity=severity,
+                metadata={
+                    "actor_id": actor_id,
+                    "actor_display": actor_name,
+                    **(metadata or {}),
+                },
+            )
 
 
 def _parse_shift_time(value: str) -> time:
@@ -1243,7 +1268,8 @@ def api_admin_issue_staff_telegram_link(
         is_sensitive=False,
         was_auto_applied=True,
     )
-    return {"ok": True, "code": code}
+    deep_link = f"https://t.me/{STAFF_BOT_USERNAME}?start={code}" if STAFF_BOT_USERNAME else None
+    return {"ok": True, "code": code, "command": f"/start {code}", "deep_link": deep_link}
 
 
 def api_admin_audit_log(
