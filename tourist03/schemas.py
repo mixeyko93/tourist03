@@ -122,6 +122,7 @@ class BookingAdminUpdateRequest(BaseModel):
     status: Optional[str] = None
     payment_required: Optional[bool] = None
     payment_status: Optional[str] = None
+    comment: Optional[str] = None
 
 
 class AdminCreateBookingRequest(BaseModel):
@@ -130,7 +131,7 @@ class AdminCreateBookingRequest(BaseModel):
     check_in: date
     check_out: date
     guests_count: int = 1
-    status: str = "pending"
+    status: str = "confirmed"
     payment_status: str = "unpaid"
     payment_required: bool = False
     guest_name: Optional[str] = None

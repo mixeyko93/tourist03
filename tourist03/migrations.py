@@ -781,6 +781,40 @@ MIGRATIONS = (
         ON crm.service_order_items(order_id, created_at DESC);
         """,
     ),
+    MigrationStep(
+        version="0004_booking_lifecycle",
+        sql=f"""
+        ALTER TABLE crm.bookings
+        DROP CONSTRAINT IF EXISTS {booking_domain.BOOKING_STATUS_CONSTRAINT};
+
+        ALTER TABLE crm.bookings
+        ADD CONSTRAINT {booking_domain.BOOKING_STATUS_CONSTRAINT}
+        CHECK (status = lower(status) AND status IN ({BOOKING_STATUS_SQL}));
+
+        ALTER TABLE crm.bookings
+        DROP CONSTRAINT IF EXISTS {booking_domain.BOOKING_PAYMENT_STATUS_CONSTRAINT};
+
+        ALTER TABLE crm.bookings
+        ADD CONSTRAINT {booking_domain.BOOKING_PAYMENT_STATUS_CONSTRAINT}
+        CHECK (payment_status = lower(payment_status) AND payment_status IN ({PAYMENT_STATUS_SQL}));
+
+        ALTER TABLE crm.bookings
+        DROP CONSTRAINT IF EXISTS {booking_domain.BOOKING_PAYMENT_REQUIRED_CONSTRAINT};
+
+        ALTER TABLE crm.bookings
+        ADD CONSTRAINT {booking_domain.BOOKING_PAYMENT_REQUIRED_CONSTRAINT}
+        CHECK (
+            payment_required = FALSE
+            OR payment_status IN ('unpaid', 'awaiting_prepayment', 'partially_paid', 'failed')
+        );
+
+        DROP INDEX IF EXISTS idx_crm_bookings_active_room_dates;
+        CREATE INDEX IF NOT EXISTS idx_crm_bookings_active_room_dates
+        ON crm.bookings(camp_id, room_id, check_in, check_out)
+        WHERE room_id IS NOT NULL
+          AND lower(status) NOT IN ({IGNORED_STATUS_SQL});
+        """,
+    ),
 )
 
 

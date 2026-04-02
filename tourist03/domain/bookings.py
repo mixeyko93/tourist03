@@ -4,20 +4,54 @@ from typing import Optional, Sequence
 from fastapi import HTTPException
 
 
-CONFLICT_IGNORED_STATUSES = ("rejected", "cancelled_by_user", "cancelled")
-TERMINAL_BOOKING_STATUSES = ("completed", "rejected", "cancelled_by_user", "cancelled")
-ACTIVE_BOOKING_STATUSES = ("pending", "confirmed", "awaiting_payment")
-ALLOWED_BOOKING_STATUSES = (
-    "pending",
-    "confirmed",
-    "awaiting_payment",
+CONFLICT_IGNORED_STATUSES = (
     "rejected",
-    "completed",
     "cancelled_by_user",
     "cancelled",
+    "cancelled_by_base",
+    "expired_pending",
+    "no_show",
+)
+TERMINAL_BOOKING_STATUSES = (
+    "completed",
+    "rejected",
+    "cancelled_by_user",
+    "cancelled",
+    "cancelled_by_base",
+    "expired_pending",
+    "no_show",
+)
+ACTIVE_BOOKING_STATUSES = ("pending", "awaiting_confirmation", "confirmed", "awaiting_payment", "checked_in")
+ALLOWED_BOOKING_STATUSES = (
+    "pending",
+    "awaiting_confirmation",
+    "confirmed",
+    "awaiting_payment",
+    "checked_in",
+    "rejected",
+    "completed",
+    "no_show",
+    "cancelled_by_user",
+    "cancelled",
+    "cancelled_by_base",
+    "expired_pending",
 )
 ALLOWED_ADMIN_BOOKING_STATUSES = ALLOWED_BOOKING_STATUSES
-ALLOWED_PAYMENT_STATUSES = ("unpaid", "paid", "cash")
+ALLOWED_PAYMENT_STATUSES = (
+    "unpaid",
+    "awaiting_prepayment",
+    "partially_paid",
+    "paid",
+    "cash",
+    "refund_partial",
+    "refund_full",
+    "awaiting_refund",
+    "failed",
+    "chargeback",
+    "overpaid",
+)
+PAYABLE_PAYMENT_STATUSES = ("unpaid", "awaiting_prepayment", "partially_paid", "failed")
+SETTLED_PAYMENT_STATUSES = ("paid", "cash", "refund_partial", "refund_full", "awaiting_refund", "chargeback", "overpaid")
 
 BOOKING_DATE_RANGE_CONSTRAINT = "bookings_check_valid_date_range"
 BOOKING_GUESTS_COUNT_CONSTRAINT = "bookings_check_positive_guests"
@@ -89,7 +123,8 @@ def normalize_admin_payment_status(status: Optional[str], *, allow_none: bool = 
 
 
 def coerce_payment_required(payment_status: Optional[str], payment_required: Optional[bool], *, default: Optional[bool] = None) -> Optional[bool]:
-    if payment_status in ("paid", "cash"):
+    normalized = normalize_payment_status(payment_status, default="", allow_none=True)
+    if normalized in SETTLED_PAYMENT_STATUSES:
         return False
     if payment_required is None:
         return default
@@ -131,11 +166,11 @@ def ensure_editable(
 
 
 def ensure_payable(status: Optional[str], payment_required: bool, payment_status: Optional[str]) -> None:
-    if normalize_booking_status(status, default="") != "confirmed":
+    if normalize_booking_status(status, default="") not in {"confirmed", "awaiting_payment"}:
         raise HTTPException(status_code=400, detail="Оплата доступна после подтверждения брони")
     if not bool(payment_required):
         raise HTTPException(status_code=400, detail="Оплата пока не запрошена администратором")
-    if normalize_payment_status(payment_status, default="", allow_none=True) != "unpaid":
+    if normalize_payment_status(payment_status, default="", allow_none=True) not in PAYABLE_PAYMENT_STATUSES:
         raise HTTPException(status_code=400, detail="Бронь уже оплачена или отмечена как наличная")
 
 
@@ -148,16 +183,26 @@ def rollup_order_status(statuses: Sequence[str]) -> str:
     if all(status in TERMINAL_BOOKING_STATUSES for status in sts):
         if any(status == "completed" for status in sts):
             return "completed"
+        if any(status == "no_show" for status in sts):
+            return "no_show"
         if any(status == "rejected" for status in sts):
             return "rejected"
         if any(status == "cancelled_by_user" for status in sts):
             return "cancelled_by_user"
+        if any(status == "cancelled_by_base" for status in sts):
+            return "cancelled_by_base"
+        if any(status == "expired_pending" for status in sts):
+            return "expired_pending"
         return "cancelled"
 
     if any(status in ("pending", "new", "") for status in sts):
         return "pending"
+    if any(status == "awaiting_confirmation" for status in sts):
+        return "awaiting_confirmation"
     if any(status == "awaiting_payment" for status in sts):
         return "awaiting_payment"
+    if any(status == "checked_in" for status in sts):
+        return "checked_in"
     if any(status == "confirmed" for status in sts):
         return "confirmed"
     return sts[0] or "pending"
@@ -168,10 +213,26 @@ def rollup_order_payment_status(statuses: Sequence[str]) -> str:
     sts = [status for status in sts if status]
     if not sts:
         return "unpaid"
+    if any(status == "failed" for status in sts):
+        return "failed"
     if any(status == "unpaid" for status in sts):
         return "unpaid"
+    if any(status == "awaiting_prepayment" for status in sts):
+        return "awaiting_prepayment"
+    if any(status == "partially_paid" for status in sts):
+        return "partially_paid"
     if any(status == "cash" for status in sts):
         return "cash"
+    if any(status == "awaiting_refund" for status in sts):
+        return "awaiting_refund"
+    if any(status == "refund_partial" for status in sts):
+        return "refund_partial"
+    if any(status == "refund_full" for status in sts):
+        return "refund_full"
+    if any(status == "chargeback" for status in sts):
+        return "chargeback"
+    if any(status == "overpaid" for status in sts):
+        return "overpaid"
     if all(status == "paid" for status in sts):
         return "paid"
     return sts[0] or "unpaid"

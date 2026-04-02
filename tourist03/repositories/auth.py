@@ -144,6 +144,48 @@ def find_user_by_phone(phone: str):
         return dict(row) if row else None
 
 
+def find_user_by_email(email: str):
+    normalized_email = (email or "").strip().lower()
+    if not normalized_email:
+        return None
+    with _db_conn("auth") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT id, name, phone, email, role, phone_verified, email_verified
+            FROM auth.users
+            WHERE lower(email) = lower(%s)
+            LIMIT 1
+            """,
+            (normalized_email,),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+
+def create_shadow_user(name: str, phone: str, email: str | None = None):
+    with _db_conn("auth") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO auth.users (
+                name,
+                phone,
+                email,
+                role,
+                phone_verified,
+                email_verified
+            )
+            VALUES (%s, %s, %s, %s, FALSE, FALSE)
+            RETURNING id, name, phone, email, role, phone_verified, email_verified
+            """,
+            ((name or "").strip() or None, phone or None, (email or "").strip().lower() or None, "user"),
+        )
+        row = cur.fetchone()
+        conn.commit()
+        return dict(row)
+
+
 def revoke_token(token: str):
     with _db_conn("auth") as conn:
         cur = conn.cursor()

@@ -1822,6 +1822,7 @@ def create_admin_booking(
     guest_name: Optional[str],
     guest_phone: Optional[str],
     guest_email: Optional[str],
+    user_id: Optional[int] = None,
 ):
     with _db_conn("crm") as conn:
         cur = conn.cursor()
@@ -1835,10 +1836,11 @@ def create_admin_booking(
                     payment_status, payment_required,
                     guest_name, guest_phone, guest_email
                 )
-                VALUES (NULL, %s, %s, %s, %s, %s, %s, 'crm', %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, 'crm', %s, %s, %s, %s, %s, %s)
                 RETURNING id
                 """,
                 (
+                    user_id,
                     camp_id,
                     room_id,
                     check_in,
@@ -1869,7 +1871,37 @@ def get_booking_by_id(booking_id: int):
     with _db_conn("crm") as conn:
         cur = conn.cursor()
         cur.execute(
-            "SELECT id, camp_id, user_id, status, payment_status, payment_required FROM crm.bookings WHERE id=%s",
+            """
+            SELECT
+                b.id,
+                b.camp_id,
+                c.name AS camp_name,
+                b.room_id,
+                r.name AS room_name,
+                b.check_in,
+                b.check_out,
+                b.guests_count,
+                b.user_id,
+                u.name AS user_name,
+                u.phone AS user_phone,
+                CASE WHEN u.email_verified THEN u.email ELSE '' END AS user_email,
+                b.guest_name,
+                b.guest_phone,
+                b.guest_email,
+                b.status,
+                b.payment_status,
+                b.payment_required,
+                b.comment,
+                b.source,
+                b.created_at,
+                b.updated_at
+            FROM crm.bookings b
+            LEFT JOIN catalog.camps c ON c.id = b.camp_id
+            LEFT JOIN catalog.rooms r ON r.id = b.room_id
+            LEFT JOIN auth.users u ON u.id = b.user_id
+            WHERE b.id = %s
+            LIMIT 1
+            """,
             (booking_id,),
         )
         row = cur.fetchone()
@@ -1882,6 +1914,7 @@ def update_admin_booking(
     status: Optional[str] = None,
     payment_status: Optional[str] = None,
     payment_required: Optional[bool] = None,
+    comment: Optional[str] = None,
 ):
     updates = []
     params = []
@@ -1894,6 +1927,9 @@ def update_admin_booking(
     if payment_required is not None:
         updates.append("payment_required=%s")
         params.append(bool(payment_required))
+    if comment is not None:
+        updates.append("comment=%s")
+        params.append(comment)
     if not updates:
         return False
 

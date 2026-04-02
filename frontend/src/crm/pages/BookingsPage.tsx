@@ -10,8 +10,10 @@ import {
   fetchCrmCampRooms,
   fetchCrmCamps,
   type CrmBooking,
+  type CrmBookingUpdatePayload,
   type CrmCamp,
   type CrmRoomOption,
+  updateCrmBooking,
 } from "../session";
 
 const statusClasses = {
@@ -23,8 +25,16 @@ const statusClasses = {
 
 const paymentLabels: Record<string, string> = {
   unpaid: "Не оплачено",
-  paid: "Оплачено",
+  awaiting_prepayment: "Требуется предоплата",
+  partially_paid: "Частично оплачено",
+  paid: "Оплачено полностью",
   cash: "Оплата на месте",
+  refund_partial: "Возврат частично",
+  refund_full: "Возврат полностью",
+  awaiting_refund: "Ожидает возврата",
+  failed: "Платёж не прошёл",
+  chargeback: "Спор / чарджбэк",
+  overpaid: "Переплата",
 };
 
 const bookingLabels: Record<string, string> = {
@@ -58,10 +68,47 @@ type CreateBookingForm = {
   checkOut: string;
   roomId: string;
   guestsCount: string;
+  status: string;
   paymentStatus: string;
   paymentRequired: boolean;
   comment: string;
 };
+
+type EditBookingForm = {
+  status: string;
+  paymentStatus: string;
+  paymentRequired: boolean;
+  comment: string;
+};
+
+const editableBookingStatuses = [
+  "pending",
+  "awaiting_confirmation",
+  "awaiting_payment",
+  "confirmed",
+  "checked_in",
+  "completed",
+  "no_show",
+  "cancelled_by_user",
+  "cancelled",
+  "cancelled_by_base",
+  "rejected",
+  "expired_pending",
+] as const;
+
+const editablePaymentStatuses = [
+  "unpaid",
+  "awaiting_prepayment",
+  "partially_paid",
+  "paid",
+  "cash",
+  "refund_partial",
+  "refund_full",
+  "awaiting_refund",
+  "failed",
+  "chargeback",
+  "overpaid",
+] as const;
 
 const emptyCreateForm: CreateBookingForm = {
   guestName: "",
@@ -71,6 +118,7 @@ const emptyCreateForm: CreateBookingForm = {
   checkOut: "",
   roomId: "",
   guestsCount: "1",
+  status: "confirmed",
   paymentStatus: "unpaid",
   paymentRequired: false,
   comment: "",
@@ -109,7 +157,7 @@ function getBookingStatusLabel(status: string) {
 }
 
 function getPaymentLabel(paymentStatus: string, paymentRequired: boolean) {
-  if (paymentRequired && paymentStatus === "unpaid") {
+  if (paymentRequired && (paymentStatus === "unpaid" || paymentStatus === "awaiting_prepayment")) {
     return "Нужна предоплата";
   }
   return paymentLabels[paymentStatus] || paymentStatus || "Не указано";
@@ -117,6 +165,19 @@ function getPaymentLabel(paymentStatus: string, paymentRequired: boolean) {
 
 function getSourceLabel(source: string) {
   return sourceLabels[source] || source || "Не указан";
+}
+
+function isPaymentRequiredAvailable(paymentStatus: string) {
+  return ["unpaid", "awaiting_prepayment", "partially_paid", "failed"].includes(paymentStatus);
+}
+
+function getEditFormFromBooking(booking: CrmBooking): EditBookingForm {
+  return {
+    status: booking.status || "pending",
+    paymentStatus: booking.payment_status || "unpaid",
+    paymentRequired: Boolean(booking.payment_required),
+    comment: booking.comment || "",
+  };
 }
 
 export default function BookingsPage() {
@@ -134,6 +195,10 @@ export default function BookingsPage() {
   const [createForm, setCreateForm] = useState<CreateBookingForm>(emptyCreateForm);
   const [createError, setCreateError] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [selectedBooking, setSelectedBooking] = useState<CrmBooking | null>(null);
+  const [editForm, setEditForm] = useState<EditBookingForm | null>(null);
+  const [editError, setEditError] = useState("");
+  const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -222,6 +287,16 @@ export default function BookingsPage() {
     }
   }, [roomOptions, createForm.roomId]);
 
+  useEffect(() => {
+    if (!selectedBooking) {
+      setEditForm(null);
+      return;
+    }
+    const freshBooking = bookings.find((item) => item.id === selectedBooking.id) || selectedBooking;
+    setSelectedBooking(freshBooking);
+    setEditForm(getEditFormFromBooking(freshBooking));
+  }, [bookings, selectedBooking?.id]);
+
   const normalizedQuery = searchQuery.trim().toLowerCase();
   const filteredBookings = bookings.filter((booking) => {
     if (!normalizedQuery) {
@@ -234,6 +309,8 @@ export default function BookingsPage() {
       booking.user_name,
       booking.guest_phone,
       booking.user_phone,
+      booking.guest_email,
+      booking.user_email,
       booking.source,
       booking.comment,
     ]
@@ -247,6 +324,21 @@ export default function BookingsPage() {
   const hasCampOptions = camps.length > 0;
   const hasRoomOptions = roomOptions.length > 0;
   const selectedCamp = camps.find((camp) => camp.id === selectedCampId) || null;
+
+  function openBookingEditor(booking: CrmBooking) {
+    setSelectedBooking(booking);
+    setEditForm(getEditFormFromBooking(booking));
+    setEditError("");
+  }
+
+  function closeBookingEditor() {
+    if (isUpdating) {
+      return;
+    }
+    setSelectedBooking(null);
+    setEditForm(null);
+    setEditError("");
+  }
 
   async function handleCreateSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -268,9 +360,9 @@ export default function BookingsPage() {
         check_in: createForm.checkIn,
         check_out: createForm.checkOut,
         guests_count: Number(createForm.guestsCount || 1),
-        status: "confirmed",
+        status: createForm.status,
         payment_status: createForm.paymentStatus,
-        payment_required: createForm.paymentStatus === "unpaid" ? createForm.paymentRequired : false,
+        payment_required: isPaymentRequiredAvailable(createForm.paymentStatus) ? createForm.paymentRequired : false,
         guest_name: createForm.guestName,
         guest_phone: createForm.guestPhone,
         guest_email: createForm.guestEmail || undefined,
@@ -286,6 +378,32 @@ export default function BookingsPage() {
     }
   }
 
+  async function handleUpdateSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedBooking || !editForm) {
+      return;
+    }
+
+    const payload: CrmBookingUpdatePayload = {
+      status: editForm.status,
+      payment_status: editForm.paymentStatus,
+      payment_required: isPaymentRequiredAvailable(editForm.paymentStatus) ? editForm.paymentRequired : false,
+      comment: editForm.comment.trim() || "",
+    };
+
+    try {
+      setIsUpdating(true);
+      setEditError("");
+      await updateCrmBooking(selectedBooking.id, payload);
+      closeBookingEditor();
+      setReloadKey((value) => value + 1);
+    } catch (error) {
+      setEditError(error instanceof Error ? error.message : "Не удалось обновить бронь");
+    } finally {
+      setIsUpdating(false);
+    }
+  }
+
   return (
     <PageMotion className="space-y-6">
       <SectionHeading
@@ -298,6 +416,7 @@ export default function BookingsPage() {
             className="brand-button w-full gap-2 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
             onClick={() => {
               setCreateError("");
+              setCreateForm(emptyCreateForm);
               setIsCreateOpen(true);
             }}
             disabled={!selectedCampId || !hasRoomOptions}
@@ -421,6 +540,15 @@ export default function BookingsPage() {
                     <p className="mt-1 text-foreground">{getPaymentLabel(booking.payment_status, booking.payment_required)}</p>
                   </div>
 
+                  {booking.user_id ? (
+                    <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-emerald-200/80">Синхронизация</p>
+                      <p className="mt-1 text-sm text-emerald-100">
+                        {booking.user_email ? "Связана с подтверждённым профилем пользователя" : "Связана с профилем по телефону"}
+                      </p>
+                    </div>
+                  ) : null}
+
                   {booking.comment ? (
                     <div className="rounded-2xl border border-border bg-card/55 px-3 py-2">
                       <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Комментарий</p>
@@ -428,6 +556,10 @@ export default function BookingsPage() {
                     </div>
                   ) : null}
                 </div>
+
+                <button type="button" className="soft-button mt-4 w-full" onClick={() => openBookingEditor(booking)}>
+                  Открыть карточку брони
+                </button>
               </article>
             ))}
           </div>
@@ -457,7 +589,7 @@ export default function BookingsPage() {
             <table className="min-w-full border-collapse text-left">
               <thead className="bg-background/70">
                 <tr className="border-b border-border">
-                  {["Гость", "Заезд", "Выезд", "Гости", "Апартамент", "Статус", "Оплата", "Источник"].map((cell) => (
+                  {["Гость", "Заезд", "Выезд", "Гости", "Апартамент", "Статус", "Оплата", "Источник", ""].map((cell) => (
                     <th key={cell} className="px-6 py-4 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                       {cell}
                     </th>
@@ -479,6 +611,11 @@ export default function BookingsPage() {
                     </td>
                     <td className="px-6 py-4 text-sm text-muted-foreground">{getPaymentLabel(booking.payment_status, booking.payment_required)}</td>
                     <td className="px-6 py-4 text-sm text-muted-foreground">{getSourceLabel(booking.source)}</td>
+                    <td className="px-6 py-4 text-right">
+                      <button type="button" className="soft-button" onClick={() => openBookingEditor(booking)}>
+                        Открыть
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -503,7 +640,7 @@ export default function BookingsPage() {
           }
         }}
         title="Новая бронь"
-        description={selectedCamp ? `Ручное создание подтверждённой брони для базы «${selectedCamp.name}».` : "Ручное создание подтверждённой брони."}
+        description={selectedCamp ? `Ручное создание брони для базы «${selectedCamp.name}» с немедленной синхронизацией по телефону.` : "Ручное создание брони."}
       >
         <form onSubmit={handleCreateSubmit}>
           <div className="grid gap-4 md:grid-cols-2">
@@ -559,6 +696,21 @@ export default function BookingsPage() {
             </label>
 
             <label className="space-y-2">
+              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Статус брони</span>
+              <select
+                className="soft-input appearance-none"
+                value={createForm.status}
+                onChange={(event) => setCreateForm((current) => ({ ...current, status: event.target.value }))}
+              >
+                {editableBookingStatuses.map((statusKey) => (
+                  <option key={statusKey} value={statusKey}>
+                    {getBookingStatusLabel(statusKey)}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="space-y-2">
               <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Заезд</span>
               <input
                 type="date"
@@ -606,11 +758,22 @@ export default function BookingsPage() {
               <select
                 className="soft-input appearance-none"
                 value={createForm.paymentStatus}
-                onChange={(event) => setCreateForm((current) => ({ ...current, paymentStatus: event.target.value }))}
+                onChange={(event) =>
+                  setCreateForm((current) => {
+                    const nextStatus = event.target.value;
+                    return {
+                      ...current,
+                      paymentStatus: nextStatus,
+                      paymentRequired: isPaymentRequiredAvailable(nextStatus) ? current.paymentRequired : false,
+                    };
+                  })
+                }
               >
-                <option value="unpaid">Не оплачено</option>
-                <option value="paid">Оплачено</option>
-                <option value="cash">Оплата на месте</option>
+                {editablePaymentStatuses.map((statusKey) => (
+                  <option key={statusKey} value={statusKey}>
+                    {paymentLabels[statusKey]}
+                  </option>
+                ))}
               </select>
             </label>
 
@@ -620,7 +783,7 @@ export default function BookingsPage() {
                 className="h-4 w-4 rounded border-border bg-background"
                 checked={createForm.paymentRequired}
                 onChange={(event) => setCreateForm((current) => ({ ...current, paymentRequired: event.target.checked }))}
-                disabled={createForm.paymentStatus !== "unpaid"}
+                disabled={!isPaymentRequiredAvailable(createForm.paymentStatus)}
               />
               <span className="text-sm text-foreground">Нужна предоплата</span>
             </label>
@@ -645,6 +808,131 @@ export default function BookingsPage() {
             </button>
           </div>
         </form>
+      </ModalShell>
+
+      <ModalShell
+        open={Boolean(selectedBooking && editForm)}
+        onClose={closeBookingEditor}
+        title={selectedBooking ? `Бронь #${selectedBooking.id}` : "Карточка брони"}
+        description={selectedBooking ? `${getBookingGuest(selectedBooking)} · ${selectedBooking.room_name || "Без апартамента"} · ${formatDateLabel(selectedBooking.check_in)} → ${formatDateLabel(selectedBooking.check_out)}` : "Управление жизненным циклом брони."}
+      >
+        {selectedBooking && editForm ? (
+          <form onSubmit={handleUpdateSubmit}>
+            <div className="grid gap-4 md:grid-cols-2">
+              {editError ? (
+                <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200 md:col-span-2">
+                  {editError}
+                </div>
+              ) : null}
+
+              <div className="rounded-2xl border border-border bg-background/60 px-4 py-3 md:col-span-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`rounded-full border px-3 py-1 text-xs font-medium ${statusClasses[bookingStatusTone(selectedBooking.status)]}`}>
+                    {getBookingStatusLabel(selectedBooking.status)}
+                  </span>
+                  <span className="rounded-full border border-border bg-card/60 px-3 py-1 text-xs font-medium text-muted-foreground">
+                    {getPaymentLabel(selectedBooking.payment_status, selectedBooking.payment_required)}
+                  </span>
+                  <span className="rounded-full border border-border bg-card/60 px-3 py-1 text-xs font-medium text-muted-foreground">
+                    {getSourceLabel(selectedBooking.source)}
+                  </span>
+                </div>
+                <div className="mt-3 grid gap-3 text-sm text-muted-foreground md:grid-cols-3">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.18em]">Контакт</p>
+                    <p className="mt-1 text-foreground">{selectedBooking.guest_phone || selectedBooking.user_phone || "Не указан"}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.18em]">Профиль</p>
+                    <p className="mt-1 text-foreground">
+                      {selectedBooking.user_id
+                        ? selectedBooking.user_email
+                          ? "Связана с подтверждённым профилем"
+                          : "Связана с профилем по телефону"
+                        : "Пока без профиля пользователя"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.18em]">Гостей</p>
+                    <p className="mt-1 text-foreground">{selectedBooking.guests_count}</p>
+                  </div>
+                </div>
+              </div>
+
+              <label className="space-y-2">
+                <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Статус брони</span>
+                <select
+                  className="soft-input appearance-none"
+                  value={editForm.status}
+                  onChange={(event) => setEditForm((current) => (current ? { ...current, status: event.target.value } : current))}
+                >
+                  {editableBookingStatuses.map((statusKey) => (
+                    <option key={statusKey} value={statusKey}>
+                      {getBookingStatusLabel(statusKey)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="space-y-2">
+                <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Статус оплаты</span>
+                <select
+                  className="soft-input appearance-none"
+                  value={editForm.paymentStatus}
+                  onChange={(event) =>
+                    setEditForm((current) => {
+                      if (!current) {
+                        return current;
+                      }
+                      const nextStatus = event.target.value;
+                      return {
+                        ...current,
+                        paymentStatus: nextStatus,
+                        paymentRequired: isPaymentRequiredAvailable(nextStatus) ? current.paymentRequired : false,
+                      };
+                    })
+                  }
+                >
+                  {editablePaymentStatuses.map((statusKey) => (
+                    <option key={statusKey} value={statusKey}>
+                      {paymentLabels[statusKey]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="flex items-center gap-3 rounded-2xl border border-border bg-background/60 px-4 py-3 md:col-span-2">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-border bg-background"
+                  checked={editForm.paymentRequired}
+                  onChange={(event) => setEditForm((current) => (current ? { ...current, paymentRequired: event.target.checked } : current))}
+                  disabled={!isPaymentRequiredAvailable(editForm.paymentStatus)}
+                />
+                <span className="text-sm text-foreground">По брони требуется действие по оплате</span>
+              </label>
+
+              <label className="space-y-2 md:col-span-2">
+                <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Комментарий</span>
+                <textarea
+                  className="soft-input min-h-32 resize-none"
+                  placeholder="Внутренние заметки, условия подтверждения, договорённости по оплате"
+                  value={editForm.comment}
+                  onChange={(event) => setEditForm((current) => (current ? { ...current, comment: event.target.value } : current))}
+                />
+              </label>
+            </div>
+
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <button type="button" className="soft-button" onClick={closeBookingEditor} disabled={isUpdating}>
+                Закрыть
+              </button>
+              <button type="submit" className="brand-button disabled:cursor-not-allowed disabled:opacity-60" disabled={isUpdating}>
+                {isUpdating ? "Сохраняем изменения..." : "Сохранить изменения"}
+              </button>
+            </div>
+          </form>
+        ) : null}
       </ModalShell>
     </PageMotion>
   );

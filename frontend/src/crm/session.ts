@@ -113,6 +113,13 @@ export type CrmCreateBookingPayload = {
   comment?: string;
 };
 
+export type CrmBookingUpdatePayload = {
+  status?: string;
+  payment_status?: string;
+  payment_required?: boolean;
+  comment?: string;
+};
+
 export type CrmCampProfile = {
   camp: {
     id: number;
@@ -816,6 +823,19 @@ export async function createCrmBooking(payload: CrmCreateBookingPayload) {
   });
   await assertOk(response);
   return (await response.json()) as { ok: boolean; id: number };
+}
+
+export async function updateCrmBooking(bookingId: number, payload: CrmBookingUpdatePayload) {
+  const response = await fetch(`/api/admin/bookings/${bookingId}`, {
+    method: "PATCH",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  await assertOk(response);
+  return (await response.json()) as { ok: boolean };
 }
 
 export async function fetchCrmCampProfile(campId: number, signal?: AbortSignal): Promise<CrmCampProfile> {

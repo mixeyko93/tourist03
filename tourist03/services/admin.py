@@ -6,6 +6,7 @@ from fastapi import Depends, HTTPException, Request, status
 
 from tourist03.booking_db_errors import BookingConflictError, BookingValidationError
 from tourist03.config import STAFF_BOT_USERNAME
+from tourist03.repositories import auth as auth_repo
 from tourist03.domain import bookings as booking_domain
 from tourist03.domain import crm as crm_domain
 from tourist03.repositories import admin as admin_repo
@@ -317,6 +318,69 @@ def _booking_status_label(status_value: Optional[str]) -> str:
 
 def _payment_status_label(status_value: Optional[str]) -> str:
     return crm_domain.PAYMENT_STATUS_UI_LABELS.get((status_value or "").strip().lower(), (status_value or "").strip() or "Без статуса")
+
+
+def _normalize_guest_email(email_value: Optional[str]) -> Optional[str]:
+    if email_value is None:
+        return None
+    normalized = str(email_value).strip().lower()
+    return normalized or None
+
+
+def _resolve_booking_user_link(*, guest_name: Optional[str], guest_phone: Optional[str], guest_email: Optional[str]) -> tuple[Optional[dict], Optional[dict], str]:
+    normalized_phone = _normalize_phone((guest_phone or "").strip())
+    normalized_email = _normalize_guest_email(guest_email)
+    if not normalized_phone:
+        return None, None, normalized_phone
+
+    existing_user = auth_repo.find_user_by_phone(normalized_phone)
+    if existing_user:
+        return existing_user, None, normalized_phone
+
+    shadow_email = normalized_email
+    if shadow_email and auth_repo.find_user_by_email(shadow_email):
+        shadow_email = None
+
+    shadow_user = auth_repo.create_shadow_user(guest_name or "", normalized_phone, shadow_email)
+    log_user_event(
+        int(shadow_user["id"]),
+        "crm_shadow_profile_created",
+        {
+            "phone": normalized_phone,
+            "email": shadow_email,
+            "display_name": (guest_name or "").strip() or None,
+        },
+    )
+    return shadow_user, shadow_user, normalized_phone
+
+
+def _booking_guest_label_from_row(row: dict) -> str:
+    return (
+        (row.get("guest_name") or "").strip()
+        or (row.get("user_name") or "").strip()
+        or (row.get("guest_phone") or "").strip()
+        or (row.get("user_phone") or "").strip()
+        or f"Бронь #{row.get('id')}"
+    )
+
+
+def _booking_customer_sync_note(row: dict) -> Optional[str]:
+    user_id = row.get("user_id")
+    if not user_id:
+        return None
+    if row.get("user_phone") and not row.get("user_email"):
+        return "Бронь привязана к профилю по телефону, email ждёт подтверждения."
+    return "Бронь синхронизирована с личным кабинетом пользователя."
+
+
+def _booking_event_severity(status_value: Optional[str], payment_status_value: Optional[str]) -> str:
+    normalized_status = booking_domain.normalize_booking_status(status_value, default="")
+    normalized_payment = booking_domain.normalize_payment_status(payment_status_value, default="", allow_none=True)
+    if normalized_status in {"awaiting_payment", "expired_pending", "cancelled", "cancelled_by_base", "rejected", "no_show"}:
+        return "warning"
+    if normalized_payment in {"awaiting_prepayment", "partially_paid", "failed"}:
+        return "warning"
+    return "info"
 
 
 def _publish_crm_event(
@@ -1281,8 +1345,16 @@ def api_admin_create_booking(payload: AdminCreateBookingRequest, admin: dict = D
 
     guest_name = (payload.guest_name or "").strip() or None
     guest_phone = (payload.guest_phone or "").strip() or None
-    guest_email = (str(payload.guest_email).strip().lower() if payload.guest_email is not None else None) if payload.guest_email is not None else None
+    guest_email = _normalize_guest_email(str(payload.guest_email) if payload.guest_email is not None else None)
     comment = (payload.comment or "").strip() or None
+    linked_user, shadow_user, normalized_guest_phone = _resolve_booking_user_link(
+        guest_name=guest_name,
+        guest_phone=guest_phone,
+        guest_email=guest_email,
+    )
+    user_id = int(linked_user["id"]) if linked_user and linked_user.get("id") is not None else None
+    if normalized_guest_phone:
+        guest_phone = normalized_guest_phone
 
     try:
         booking_id = admin_repo.create_admin_booking(
@@ -1298,24 +1370,69 @@ def api_admin_create_booking(payload: AdminCreateBookingRequest, admin: dict = D
             guest_name,
             guest_phone,
             guest_email,
+            user_id,
         )
     except Exception as exc:
         _raise_booking_write_http_error(exc)
-    guest_label = guest_name or guest_phone or guest_email or f"Бронь #{booking_id}"
+    booking = admin_repo.get_booking_by_id(booking_id) or {"id": booking_id, "camp_id": payload.camp_id, "room_id": room_id}
+    guest_label = _booking_guest_label_from_row(booking)
+    sync_note = _booking_customer_sync_note(booking)
+    event_lines = [
+        f"{guest_label} · {payload.check_in.isoformat()} → {payload.check_out.isoformat()} · статус: {_booking_status_label(booking_status)}."
+    ]
+    if sync_note:
+        event_lines.append(sync_note)
     _publish_crm_event(
         camp_id=payload.camp_id,
         admin=admin,
         event_type="booking_created",
         title="В CRM создана новая бронь",
-        body=(
-            f"{guest_label} · {payload.check_in.isoformat()} → {payload.check_out.isoformat()} · "
-            f"статус: {_booking_status_label(booking_status)}."
-        ),
+        body="\n".join(event_lines),
         severity="warning",
         action_url="/bookings",
         action_payload={"booking_id": booking_id, "camp_id": payload.camp_id},
-        metadata={"booking_id": booking_id, "room_id": room_id},
+        metadata={
+            "booking_id": booking_id,
+            "room_id": room_id,
+            "user_id": user_id,
+            "shadow_profile_created": bool(shadow_user),
+        },
     )
+    log_crm_audit_event(
+        actor_type="admin",
+        actor_id=int(admin["id"]),
+        actor_display=admin.get("display_name"),
+        camp_id=payload.camp_id,
+        target_type="booking",
+        target_id=booking_id,
+        action_type="booking_create",
+        action_label="Создал бронь",
+        new_value={
+            "status": booking_status,
+            "payment_status": payment_status,
+            "payment_required": payment_required,
+            "guest_name": guest_name,
+            "guest_phone": guest_phone,
+            "guest_email": guest_email,
+            "user_id": user_id,
+        },
+        comment=comment,
+        metadata={"room_id": room_id, "shadow_profile_created": bool(shadow_user)},
+    )
+    if user_id:
+        log_user_event(
+            user_id,
+            "booking_admin_created",
+            {
+                "booking_id": booking_id,
+                "camp_id": payload.camp_id,
+                "room_id": room_id,
+                "status": booking_status,
+                "payment_status": payment_status,
+                "payment_required": payment_required,
+                "shadow_profile_created": bool(shadow_user),
+            },
+        )
     return {"ok": True, "id": booking_id}
 
 
@@ -1328,20 +1445,24 @@ def api_admin_update_booking(
     if not camp_ids:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа")
 
-    payment_status = booking_domain.normalize_admin_payment_status(payload.payment_status, allow_none=True)
-
     new_status = booking_domain.normalize_admin_booking_status(payload.status) if payload.status is not None else None
     booking = admin_repo.get_booking_by_id(booking_id)
     if not booking:
         raise HTTPException(status_code=404, detail="not found")
     if booking["camp_id"] not in camp_ids:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа к выбранной базе")
+    payment_status = booking_domain.normalize_admin_payment_status(payload.payment_status, allow_none=True)
+    effective_payment_status = payment_status if payment_status is not None else booking.get("payment_status")
 
     payment_required = booking_domain.coerce_payment_required(
-        payment_status,
+        effective_payment_status,
         payload.payment_required,
         default=None,
     )
+    next_comment = ((payload.comment or "").strip() or None) if payload.comment is not None else None
+    next_status = new_status or booking.get("status")
+    next_payment_status = payment_status or booking.get("payment_status")
+    next_payment_required = payment_required if payment_required is not None else bool(booking.get("payment_required"))
 
     try:
         changed = admin_repo.update_admin_booking(
@@ -1349,6 +1470,7 @@ def api_admin_update_booking(
             status=new_status if new_status != booking.get("status") else None,
             payment_status=payment_status if payment_status != booking.get("payment_status") else None,
             payment_required=payment_required if payment_required != booking.get("payment_required") else None,
+            comment=next_comment if next_comment != booking.get("comment") else None,
         )
     except Exception as exc:
         _raise_booking_write_http_error(exc)
@@ -1361,27 +1483,55 @@ def api_admin_update_booking(
             "booking_admin_update",
             {
                 "booking_id": booking_id,
-                "status": new_status,
-                "payment_status": payment_status,
-                "payment_required": payment_required,
+                "status": next_status,
+                "payment_status": next_payment_status,
+                "payment_required": next_payment_required,
                 "admin_id": admin.get("id"),
+                "comment": next_comment if next_comment is not None else booking.get("comment"),
             },
         )
-    next_status = new_status or booking.get("status")
-    next_payment_status = payment_status or booking.get("payment_status")
+    log_crm_audit_event(
+        actor_type="admin",
+        actor_id=int(admin["id"]),
+        actor_display=admin.get("display_name"),
+        camp_id=booking.get("camp_id"),
+        target_type="booking",
+        target_id=booking_id,
+        action_type="booking_update",
+        action_label="Обновил бронь",
+        old_value={
+            "status": booking.get("status"),
+            "payment_status": booking.get("payment_status"),
+            "payment_required": booking.get("payment_required"),
+            "comment": booking.get("comment"),
+        },
+        new_value={
+            "status": next_status,
+            "payment_status": next_payment_status,
+            "payment_required": next_payment_required,
+            "comment": next_comment if next_comment is not None else booking.get("comment"),
+        },
+        comment=next_comment if next_comment is not None else None,
+    )
+    body_lines = [
+        f"Статус: {_booking_status_label(next_status)}.",
+        f"Оплата: {_payment_status_label(next_payment_status)}.",
+    ]
+    if next_payment_required and next_payment_status in {"unpaid", "awaiting_prepayment", "partially_paid", "failed"}:
+        body_lines.append("По брони требуется действие по оплате.")
+    sync_note = _booking_customer_sync_note(booking)
+    if sync_note:
+        body_lines.append(sync_note)
     _publish_crm_event(
         camp_id=booking.get("camp_id"),
         admin=admin,
         event_type="booking_updated",
         title=f"Бронь #{booking_id} обновлена",
-        body=(
-            f"Статус: {_booking_status_label(next_status)}. "
-            f"Оплата: {_payment_status_label(next_payment_status)}."
-        ),
-        severity="info",
+        body=" ".join(body_lines),
+        severity=_booking_event_severity(next_status, next_payment_status),
         action_url="/bookings",
         action_payload={"booking_id": booking_id, "camp_id": booking.get("camp_id")},
-        metadata={"booking_id": booking_id},
+        metadata={"booking_id": booking_id, "user_id": booking.get("user_id")},
     )
     return {"ok": True}
 
