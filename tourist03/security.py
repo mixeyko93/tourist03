@@ -7,7 +7,7 @@ from typing import Any, Optional
 from fastapi import HTTPException, Request, status
 from passlib.context import CryptContext
 
-from tourist03.config import SUPERADMIN_API_KEY, SUPERADMIN_LOGIN, SUPERADMIN_PASSWORD, logger
+from tourist03.config import SUPERADMIN_API_KEY, SUPERADMIN_LOCAL_BYPASS, SUPERADMIN_LOGIN, SUPERADMIN_PASSWORD, logger
 from tourist03.db import _db_conn
 
 
@@ -427,6 +427,8 @@ def is_valid_superadmin_credentials(login: str, password: str) -> bool:
 
 
 def is_local_superadmin_bypass(request: Request) -> bool:
+    if not SUPERADMIN_LOCAL_BYPASS:
+        return False
     if SUPERADMIN_API_KEY:
         return False
     try:

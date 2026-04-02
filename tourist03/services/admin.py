@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import date, datetime, time, timedelta
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
@@ -1464,13 +1466,20 @@ def api_admin_update_booking(
     next_payment_status = payment_status or booking.get("payment_status")
     next_payment_required = payment_required if payment_required is not None else bool(booking.get("payment_required"))
 
+    update_payload = {}
+    if new_status != booking.get("status"):
+        update_payload["status"] = new_status
+    if payment_status != booking.get("payment_status"):
+        update_payload["payment_status"] = payment_status
+    if payment_required != booking.get("payment_required"):
+        update_payload["payment_required"] = payment_required
+    if next_comment != booking.get("comment"):
+        update_payload["comment"] = next_comment
+
     try:
         changed = admin_repo.update_admin_booking(
             booking_id,
-            status=new_status if new_status != booking.get("status") else None,
-            payment_status=payment_status if payment_status != booking.get("payment_status") else None,
-            payment_required=payment_required if payment_required != booking.get("payment_required") else None,
-            comment=next_comment if next_comment != booking.get("comment") else None,
+            **update_payload,
         )
     except Exception as exc:
         _raise_booking_write_http_error(exc)

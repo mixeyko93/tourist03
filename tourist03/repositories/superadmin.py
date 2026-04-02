@@ -141,7 +141,7 @@ def list_camps(*, archived_only: bool = False, search: Optional[str] = None, sta
             LEFT JOIN crm.camp_admin_links l ON l.camp_id = c.id
             LEFT JOIN auth.camp_admin_accounts a ON a.id = l.admin_id
             {where_sql}
-            GROUP BY c.id
+            GROUP BY c.id, room_stats.rooms_count, room_stats.beds_count
             ORDER BY c.archived_at DESC NULLS LAST, c.id DESC
             """,
             tuple(params),

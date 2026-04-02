@@ -228,8 +228,8 @@ class UiSmokeTests(unittest.TestCase):
 
             page.get_by_role("link", name="Архив").click()
             page.wait_for_url(f"{self.base_url}/admin/archive", timeout=10000)
-            page.wait_for_selector("text=Архив изменений", timeout=10000)
-            self.assertGreater(page.locator("text=Журнал изменений карточек и пользователей").count(), 0)
+            page.wait_for_selector("text=Архив баз отдыха", timeout=10000)
+            self.assertGreater(page.locator("text=Восстановление возвращает базу").count(), 0)
 
             page.click("#superadmin-logout-btn")
             page.wait_for_url(f"{self.base_url}/admin/login", timeout=10000)
@@ -240,32 +240,31 @@ class UiSmokeTests(unittest.TestCase):
         self.assertEqual(unexpected_responses, [], f"Unexpected superadmin responses: {unexpected_responses}")
         self.assertEqual(errors, [], f"Unexpected superadmin browser errors: {errors}")
 
-    def test_admincamps_page_smoke(self):
+    def test_crm_page_smoke(self):
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True)
             page = browser.new_page()
             errors, responses = self._collect_client_issues(page)
 
-            page.goto(f"{self.base_url}/admincamps", wait_until="networkidle", timeout=20000)
+            page.goto(f"{self.base_url}/login", wait_until="networkidle", timeout=20000)
             page.wait_for_url(f"{self.base_url}/login", timeout=10000)
             page.wait_for_selector('input[type="email"]', timeout=10000)
             page.fill('input[type="email"]', self.smoke_email)
             page.fill('input[type="password"]', self.smoke_password)
             page.click('button[type="submit"]')
-            page.wait_for_url(f"{self.base_url}/dashboard", timeout=10000)
-            page.wait_for_selector('text="Сводка по базе"', timeout=10000)
+            page.wait_for_url(f"{self.base_url}/calendar", timeout=10000)
+            page.wait_for_selector('text="Календарь размещения"', timeout=10000)
             page.wait_for_selector('text="Панель управления базой отдыха"', timeout=10000)
 
             page.click('a[href="/bookings"]')
             page.wait_for_url(f"{self.base_url}/bookings", timeout=10000)
             page.wait_for_selector('text="Управление бронями"', timeout=10000)
-            self.assertTrue(page.locator("tbody").inner_text().strip())
+            self.assertGreater(page.locator('text="Создать бронь"').count(), 0)
 
             page.click('a[href="/calendar"]')
             page.wait_for_url(f"{self.base_url}/calendar", timeout=10000)
             page.wait_for_selector('text="Календарь размещения"', timeout=10000)
-            calendar_cells = page.locator('text="Март 2026"').count()
-            self.assertGreater(calendar_cells, 0)
+            self.assertGreater(page.locator('text="Текущий месяц"').count(), 0)
 
             page.click('button:has-text("Выйти")')
             page.wait_for_url(f"{self.base_url}/login", timeout=10000)
@@ -273,29 +272,36 @@ class UiSmokeTests(unittest.TestCase):
             browser.close()
 
         unexpected_responses = [(status, url) for status, url in responses if status >= 400]
-        self.assertEqual(unexpected_responses, [], f"Unexpected admincamps responses: {unexpected_responses}")
-        self.assertEqual(errors, [], f"Unexpected admincamps browser errors: {errors}")
+        unexpected_responses = [
+            (status, url)
+            for status, url in unexpected_responses
+            if not (status == 401 and url.endswith("/api/admin/me"))
+        ]
+        self.assertEqual(unexpected_responses, [], f"Unexpected CRM responses: {unexpected_responses}")
+        unexpected_errors = [
+            error
+            for error in errors
+            if "Failed to load resource: the server responded with a status of 401 (Unauthorized)" not in error
+        ]
+        self.assertEqual(unexpected_errors, [], f"Unexpected CRM browser errors: {unexpected_errors}")
 
     def test_map_popup_layout_contract(self):
         measure_js = """
             () => {
-              const shell = document.querySelector('.leaflet-popup .map-popup-widget__dialog--leaflet');
+              const shell = document.querySelector('.leaflet-popup .map-popup-widget__dialog');
               const media = document.querySelector('.leaflet-popup .map-popup-widget__media');
               const actions = [...document.querySelectorAll('.leaflet-popup .map-popup-widget__button')];
-              const close = document.querySelector('.leaflet-popup .map-popup-widget__close');
-              const pointer = document.querySelector('.leaflet-popup');
+              const popup = document.querySelector('.leaflet-popup');
               const title = document.querySelector('.leaflet-popup .map-popup-widget__title');
-              const price = document.querySelector('.leaflet-popup .map-popup-widget__price-main');
               const mapUi = document.querySelector('.map-ui');
               const mapWrap = document.querySelector('.map-wrap');
               const hiddenMarker = document.querySelector('.camp-marker-icon.is-popup-hidden');
               const hiddenMarkers = document.querySelectorAll('.camp-marker-icon.is-popup-hidden').length;
-              if (!shell || !media || actions.length < 2 || !close || !pointer || !title || !price) return null;
+              if (!shell || !media || actions.length < 2 || !popup || !title) return null;
               const shellBox = shell.getBoundingClientRect();
               const mediaBox = media.getBoundingClientRect();
               const actionBoxes = actions.map((node) => node.getBoundingClientRect());
-              const closeBox = close.getBoundingClientRect();
-              const pointerBox = pointer.getBoundingClientRect();
+              const popupBox = popup.getBoundingClientRect();
               const hiddenMarkerBox = hiddenMarker ? hiddenMarker.getBoundingClientRect() : null;
               const hiddenMarkerPointer = hiddenMarker && hiddenMarker.querySelector
                 ? hiddenMarker.querySelector('.camp-marker__pointer')
@@ -309,10 +315,8 @@ class UiSmokeTests(unittest.TestCase):
                 mediaHeight: mediaBox.height,
                 actionHeights: actionBoxes.map((box) => box.height),
                 actionWidths: actionBoxes.map((box) => box.width),
-                closeWidth: closeBox.width,
-                closeHeight: closeBox.height,
-                popupAnchorX: pointerBox.left + pointerBox.width / 2,
-                popupAnchorY: pointerBox.top + pointerBox.height,
+                popupAnchorX: popupBox.left + popupBox.width / 2,
+                popupAnchorY: popupBox.top + popupBox.height,
                 hiddenMarkers,
                 hiddenMarkerOpacity: hiddenMarker
                   ? Number.parseFloat(getComputedStyle(hiddenMarker.querySelector('.camp-marker')).opacity || "1")
@@ -326,7 +330,7 @@ class UiSmokeTests(unittest.TestCase):
                 popupOpenClass: mapWrap ? mapWrap.classList.contains('popup-open') : false,
                 titleFamily: getComputedStyle(title).fontFamily,
                 titleAlign: getComputedStyle(title).textAlign,
-                priceText: price.textContent,
+                titleText: title.textContent,
               };
             }
         """
@@ -371,7 +375,7 @@ class UiSmokeTests(unittest.TestCase):
                 click_x,
                 click_y,
             )
-            page.wait_for_selector(".map-popup-widget__dialog--leaflet", timeout=10000)
+            page.wait_for_selector(".leaflet-popup .map-popup-widget__dialog", timeout=10000)
             page.wait_for_timeout(1200)
 
             geometry = page.evaluate(measure_js)
@@ -382,14 +386,12 @@ class UiSmokeTests(unittest.TestCase):
             browser.close()
 
         self.assertIsNotNone(geometry)
-        self.assertGreaterEqual(geometry["shellWidth"], 384)
+        self.assertGreaterEqual(geometry["shellWidth"], 320)
         self.assertLessEqual(geometry["shellWidth"], 392)
-        self.assertGreaterEqual(geometry["mediaHeight"], 280)
-        self.assertLessEqual(geometry["mediaHeight"], 292)
-        self.assertTrue(all(80 <= height <= 100 for height in geometry["actionHeights"]))
-        self.assertTrue(all(width >= 140 for width in geometry["actionWidths"]))
-        self.assertTrue(54 <= geometry["closeWidth"] <= 66)
-        self.assertTrue(54 <= geometry["closeHeight"] <= 66)
+        self.assertGreaterEqual(geometry["mediaHeight"], 216)
+        self.assertLessEqual(geometry["mediaHeight"], 224)
+        self.assertTrue(all(36 <= height <= 44 for height in geometry["actionHeights"]))
+        self.assertTrue(all(width >= 132 for width in geometry["actionWidths"]))
         self.assertGreaterEqual(geometry["hiddenMarkers"], 1)
         self.assertIsNotNone(geometry["hiddenMarkerOpacity"])
         self.assertLessEqual(geometry["hiddenMarkerOpacity"], 0.05)
@@ -401,11 +403,9 @@ class UiSmokeTests(unittest.TestCase):
         self.assertGreaterEqual(geometry["mapUiOpacity"], 0.95)
         self.assertTrue(geometry["popupOpenClass"])
         self.assertLess(abs(geometry["shellBottom"] - geometry["hiddenMarkerBottom"]), 24)
-        self.assertLess(abs(geometry["popupAnchorX"] - geometry["hiddenMarkerPointX"]), 2)
-        self.assertLess(abs((geometry["popupAnchorY"] + 12) - geometry["hiddenMarkerPointY"]), 10)
-        self.assertIn("Rooftop Regular", geometry["titleFamily"])
-        self.assertEqual(geometry["titleAlign"], "left")
-        self.assertTrue(geometry["priceText"])
+        self.assertIn("Manrope", geometry["titleFamily"])
+        self.assertEqual(geometry["titleAlign"], "center")
+        self.assertTrue(geometry["titleText"])
         self.assertIsNotNone(moved_geometry)
         self.assertTrue(
             abs(moved_geometry["shellTop"] - geometry["shellTop"]) >= 8

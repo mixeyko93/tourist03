@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from tourist03.db import _db_conn
 from tourist03.security import _get_user_by_phone, _get_user_by_phone_email
 

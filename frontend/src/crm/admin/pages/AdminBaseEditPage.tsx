@@ -30,7 +30,7 @@ import {
   uploadSuperadminMedia,
   type SuperadminBaseEditor,
 } from "../session";
-import { type AdminBaseApartment, type AdminBaseDraft, createEmptyAdminBaseDraft, createEmptyApartment } from "../mockData";
+import { type AdminBaseApartment, type AdminBaseDraft, createEmptyAdminBaseDraft, createEmptyApartment } from "../baseDraft";
 
 const markerOptions = [
   { key: "tent", label: "Кемпинг", icon: TentTree, emoji: "🏕️" },
