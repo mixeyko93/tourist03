@@ -323,6 +323,18 @@ export default function ShiftsPage() {
     return map;
   }, [rules]);
 
+  async function refreshShiftsSilently(campId: number) {
+    try {
+      const payload = await fetchCrmShifts(campId);
+      setSettingsForm(mapSettingsForm(payload.settings));
+      setRules(payload.rules);
+      setStaff(payload.staff);
+      setOverview(payload.overview);
+    } catch {
+      // Silent sync should not flash the whole page. The next hard reload will recover state.
+    }
+  }
+
   const periodStart = useMemo(() => {
     if (viewMode === "week") {
       return startOfWeek(focusDate);
@@ -388,9 +400,47 @@ export default function ShiftsPage() {
       setErrorMessage("");
       if (editingRule) {
         await updateCrmShiftRule(selectedCampId, editingRule.id, toRulePayload(ruleForm, activeTarget));
+        setRules((current) =>
+          current.map((item) =>
+            item.id === editingRule.id
+              ? {
+                  ...item,
+                  admin_id: activeTarget.adminId,
+                  admin_name: activeTarget.adminName,
+                  weekday: activeTarget.weekday,
+                  starts_at: ruleForm.startsAt,
+                  ends_at: ruleForm.endsAt,
+                  comment: ruleForm.comment.trim() || null,
+                  comment_author_display: ruleForm.comment.trim() ? "Вы" : null,
+                  comment_author_login: ruleForm.comment.trim() ? "you" : null,
+                  updated_at: new Date().toISOString(),
+                }
+              : item,
+          ),
+        );
         setSuccessMessage("Параметры смены сохранены.");
       } else {
-        await createCrmShiftRule(selectedCampId, toRulePayload(ruleForm, activeTarget));
+        const response = await createCrmShiftRule(selectedCampId, toRulePayload(ruleForm, activeTarget));
+        setRules((current) => [
+          ...current,
+          {
+            id: response.id,
+            camp_id: selectedCampId,
+            admin_id: activeTarget.adminId,
+            admin_name: activeTarget.adminName,
+            admin_email: "",
+            weekday: activeTarget.weekday,
+            starts_at: ruleForm.startsAt,
+            ends_at: ruleForm.endsAt,
+            is_night_shift: false,
+            is_active: true,
+            comment: ruleForm.comment.trim() || null,
+            comment_author_display: ruleForm.comment.trim() ? "Вы" : null,
+            comment_author_login: ruleForm.comment.trim() ? "you" : null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+        ]);
         setSuccessMessage("Смена назначена.");
       }
       setPresetForm((current) => ({
@@ -401,7 +451,7 @@ export default function ShiftsPage() {
       setIsRuleModalOpen(false);
       setEditingRule(null);
       setActiveTarget(null);
-      setReloadKey((value) => value + 1);
+      void refreshShiftsSilently(selectedCampId);
     } catch (error) {
       setRuleError(error instanceof Error ? error.message : "Не удалось сохранить параметры смены");
     } finally {
@@ -418,11 +468,12 @@ export default function ShiftsPage() {
       setRuleError("");
       setErrorMessage("");
       await deleteCrmShiftRule(selectedCampId, rule.id);
+      setRules((current) => current.filter((item) => item.id !== rule.id));
       setSuccessMessage(`Смена удалена: ${describeRule(rule)}`);
       setIsRuleModalOpen(false);
       setEditingRule(null);
       setActiveTarget(null);
-      setReloadKey((value) => value + 1);
+      void refreshShiftsSilently(selectedCampId);
     } catch (error) {
       setRuleError(error instanceof Error ? error.message : "Не удалось удалить смену");
     } finally {
@@ -436,7 +487,7 @@ export default function ShiftsPage() {
     }
     try {
       setErrorMessage("");
-      await createCrmShiftRule(
+      const response = await createCrmShiftRule(
         selectedCampId,
         toRulePayload(
           {
@@ -447,8 +498,28 @@ export default function ShiftsPage() {
           buildTarget(member, date),
         ),
       );
+      setRules((current) => [
+        ...current,
+        {
+          id: response.id,
+          camp_id: selectedCampId,
+          admin_id: member.id,
+          admin_name: member.display_name,
+          admin_email: "",
+          weekday: getWeekdayIndex(date),
+          starts_at: presetForm.startsAt,
+          ends_at: presetForm.endsAt,
+          is_night_shift: false,
+          is_active: true,
+          comment: null,
+          comment_author_display: null,
+          comment_author_login: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+      ]);
       setSuccessMessage(`Смена назначена: ${member.display_name} · ${presetForm.startsAt} → ${presetForm.endsAt}`);
-      setReloadKey((value) => value + 1);
+      void refreshShiftsSilently(selectedCampId);
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Не удалось назначить смену");
     }
