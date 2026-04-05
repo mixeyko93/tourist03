@@ -121,20 +121,20 @@ function buildLoginPageConfig(value: Record<string, unknown> | null | undefined)
     loginTitle: normalizeText(source.loginTitle, loginPageDefaults.loginTitle),
     loginText: normalizeText(source.loginText, loginPageDefaults.loginText),
     submitText: normalizeText(source.submitText, loginPageDefaults.submitText),
-    shellMaxWidth: normalizeInteger(source.shellMaxWidth, loginPageDefaults.shellMaxWidth, 960, 1800),
-    shellMinHeight: normalizeInteger(source.shellMinHeight, loginPageDefaults.shellMinHeight, 560, 1200),
-    shellRadius: normalizeInteger(source.shellRadius, loginPageDefaults.shellRadius, 20, 72),
-    sectionPadding: normalizeInteger(source.sectionPadding, loginPageDefaults.sectionPadding, 20, 72),
-    leftColumnGap: normalizeInteger(source.leftColumnGap, loginPageDefaults.leftColumnGap, 16, 72),
-    heroFontSize: normalizeInteger(source.heroFontSize, loginPageDefaults.heroFontSize, 54, 140),
-    heroMaxWidth: normalizeInteger(source.heroMaxWidth, loginPageDefaults.heroMaxWidth, 360, 900),
-    bodyMaxWidth: normalizeInteger(source.bodyMaxWidth, loginPageDefaults.bodyMaxWidth, 320, 900),
-    featureCardPadding: normalizeInteger(source.featureCardPadding, loginPageDefaults.featureCardPadding, 16, 48),
-    featureCardRadius: normalizeInteger(source.featureCardRadius, loginPageDefaults.featureCardRadius, 18, 40),
-    loginCardWidth: normalizeInteger(source.loginCardWidth, loginPageDefaults.loginCardWidth, 320, 560),
-    loginCardPadding: normalizeInteger(source.loginCardPadding, loginPageDefaults.loginCardPadding, 20, 52),
-    loginCardRadius: normalizeInteger(source.loginCardRadius, loginPageDefaults.loginCardRadius, 20, 48),
-    loginCardGap: normalizeInteger(source.loginCardGap, loginPageDefaults.loginCardGap, 8, 36),
+    shellMaxWidth: normalizeInteger(source.shellMaxWidth, loginPageDefaults.shellMaxWidth, 720, 1800),
+    shellMinHeight: normalizeInteger(source.shellMinHeight, loginPageDefaults.shellMinHeight, 420, 1200),
+    shellRadius: normalizeInteger(source.shellRadius, loginPageDefaults.shellRadius, 12, 72),
+    sectionPadding: normalizeInteger(source.sectionPadding, loginPageDefaults.sectionPadding, 8, 72),
+    leftColumnGap: normalizeInteger(source.leftColumnGap, loginPageDefaults.leftColumnGap, 8, 72),
+    heroFontSize: normalizeInteger(source.heroFontSize, loginPageDefaults.heroFontSize, 28, 140),
+    heroMaxWidth: normalizeInteger(source.heroMaxWidth, loginPageDefaults.heroMaxWidth, 240, 900),
+    bodyMaxWidth: normalizeInteger(source.bodyMaxWidth, loginPageDefaults.bodyMaxWidth, 220, 900),
+    featureCardPadding: normalizeInteger(source.featureCardPadding, loginPageDefaults.featureCardPadding, 8, 48),
+    featureCardRadius: normalizeInteger(source.featureCardRadius, loginPageDefaults.featureCardRadius, 12, 40),
+    loginCardWidth: normalizeInteger(source.loginCardWidth, loginPageDefaults.loginCardWidth, 260, 560),
+    loginCardPadding: normalizeInteger(source.loginCardPadding, loginPageDefaults.loginCardPadding, 12, 52),
+    loginCardRadius: normalizeInteger(source.loginCardRadius, loginPageDefaults.loginCardRadius, 12, 48),
+    loginCardGap: normalizeInteger(source.loginCardGap, loginPageDefaults.loginCardGap, 4, 36),
     featureCards: normalizeFeatureCards(source.featureCards),
   };
 }
@@ -297,6 +297,9 @@ export default function LoginPage() {
   const editorNotice = editorSessionLabel
     ? `Правки будут сохраняться по активной сессии: ${editorSessionLabel}.`
     : "Правки отправляются сразу на сервер. Если сессия недействительна, страница покажет точную ошибку сохранения.";
+  const heroMinFontSize = Math.max(22, Math.round(pageConfig.heroFontSize * 0.44));
+  const heroFluidViewport = Math.max(2.2, Math.min(5.4, pageConfig.heroFontSize / 18));
+  const heroLineHeight = pageConfig.heroFontSize <= 40 ? 1.02 : 0.92;
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-4 py-4 sm:py-8 lg:py-10">
@@ -427,7 +430,7 @@ export default function LoginPage() {
                         onChange={(event) =>
                           setPageConfig((current) => ({
                             ...current,
-                            shellMaxWidth: parseNumberInput(event.target.value, current.shellMaxWidth, 960, 1800),
+                            shellMaxWidth: parseNumberInput(event.target.value, current.shellMaxWidth, 720, 1800),
                           }))
                         }
                       />
@@ -441,7 +444,7 @@ export default function LoginPage() {
                         onChange={(event) =>
                           setPageConfig((current) => ({
                             ...current,
-                            shellMinHeight: parseNumberInput(event.target.value, current.shellMinHeight, 560, 1200),
+                            shellMinHeight: parseNumberInput(event.target.value, current.shellMinHeight, 420, 1200),
                           }))
                         }
                       />
@@ -455,7 +458,7 @@ export default function LoginPage() {
                         onChange={(event) =>
                           setPageConfig((current) => ({
                             ...current,
-                            shellRadius: parseNumberInput(event.target.value, current.shellRadius, 20, 72),
+                            shellRadius: parseNumberInput(event.target.value, current.shellRadius, 12, 72),
                           }))
                         }
                       />
@@ -469,7 +472,7 @@ export default function LoginPage() {
                         onChange={(event) =>
                           setPageConfig((current) => ({
                             ...current,
-                            sectionPadding: parseNumberInput(event.target.value, current.sectionPadding, 20, 72),
+                            sectionPadding: parseNumberInput(event.target.value, current.sectionPadding, 8, 72),
                           }))
                         }
                       />
@@ -483,7 +486,7 @@ export default function LoginPage() {
                         onChange={(event) =>
                           setPageConfig((current) => ({
                             ...current,
-                            leftColumnGap: parseNumberInput(event.target.value, current.leftColumnGap, 16, 72),
+                            leftColumnGap: parseNumberInput(event.target.value, current.leftColumnGap, 8, 72),
                           }))
                         }
                       />
@@ -497,7 +500,7 @@ export default function LoginPage() {
                         onChange={(event) =>
                           setPageConfig((current) => ({
                             ...current,
-                            heroFontSize: parseNumberInput(event.target.value, current.heroFontSize, 54, 140),
+                            heroFontSize: parseNumberInput(event.target.value, current.heroFontSize, 28, 140),
                           }))
                         }
                       />
@@ -511,7 +514,7 @@ export default function LoginPage() {
                         onChange={(event) =>
                           setPageConfig((current) => ({
                             ...current,
-                            heroMaxWidth: parseNumberInput(event.target.value, current.heroMaxWidth, 360, 900),
+                            heroMaxWidth: parseNumberInput(event.target.value, current.heroMaxWidth, 240, 900),
                           }))
                         }
                       />
@@ -525,7 +528,7 @@ export default function LoginPage() {
                         onChange={(event) =>
                           setPageConfig((current) => ({
                             ...current,
-                            bodyMaxWidth: parseNumberInput(event.target.value, current.bodyMaxWidth, 320, 900),
+                            bodyMaxWidth: parseNumberInput(event.target.value, current.bodyMaxWidth, 220, 900),
                           }))
                         }
                       />
@@ -539,7 +542,7 @@ export default function LoginPage() {
                         onChange={(event) =>
                           setPageConfig((current) => ({
                             ...current,
-                            featureCardPadding: parseNumberInput(event.target.value, current.featureCardPadding, 16, 48),
+                            featureCardPadding: parseNumberInput(event.target.value, current.featureCardPadding, 8, 48),
                           }))
                         }
                       />
@@ -553,7 +556,7 @@ export default function LoginPage() {
                         onChange={(event) =>
                           setPageConfig((current) => ({
                             ...current,
-                            featureCardRadius: parseNumberInput(event.target.value, current.featureCardRadius, 18, 40),
+                            featureCardRadius: parseNumberInput(event.target.value, current.featureCardRadius, 12, 40),
                           }))
                         }
                       />
@@ -567,7 +570,7 @@ export default function LoginPage() {
                         onChange={(event) =>
                           setPageConfig((current) => ({
                             ...current,
-                            loginCardWidth: parseNumberInput(event.target.value, current.loginCardWidth, 320, 560),
+                            loginCardWidth: parseNumberInput(event.target.value, current.loginCardWidth, 260, 560),
                           }))
                         }
                       />
@@ -581,7 +584,7 @@ export default function LoginPage() {
                         onChange={(event) =>
                           setPageConfig((current) => ({
                             ...current,
-                            loginCardPadding: parseNumberInput(event.target.value, current.loginCardPadding, 20, 52),
+                            loginCardPadding: parseNumberInput(event.target.value, current.loginCardPadding, 12, 52),
                           }))
                         }
                       />
@@ -595,7 +598,7 @@ export default function LoginPage() {
                         onChange={(event) =>
                           setPageConfig((current) => ({
                             ...current,
-                            loginCardRadius: parseNumberInput(event.target.value, current.loginCardRadius, 20, 48),
+                            loginCardRadius: parseNumberInput(event.target.value, current.loginCardRadius, 12, 48),
                           }))
                         }
                       />
@@ -609,7 +612,7 @@ export default function LoginPage() {
                         onChange={(event) =>
                           setPageConfig((current) => ({
                             ...current,
-                            loginCardGap: parseNumberInput(event.target.value, current.loginCardGap, 8, 36),
+                            loginCardGap: parseNumberInput(event.target.value, current.loginCardGap, 4, 36),
                           }))
                         }
                       />
@@ -680,8 +683,8 @@ export default function LoginPage() {
                   className="font-semibold tracking-[-0.065em] text-foreground"
                   style={{
                     maxWidth: pageConfig.heroMaxWidth,
-                    fontSize: `clamp(3rem, 7vw, ${pageConfig.heroFontSize}px)`,
-                    lineHeight: 0.92,
+                    fontSize: `clamp(${heroMinFontSize}px, ${heroFluidViewport}vw, ${pageConfig.heroFontSize}px)`,
+                    lineHeight: heroLineHeight,
                   }}
                 >
                   {pageConfig.heroTitle}
