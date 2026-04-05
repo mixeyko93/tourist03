@@ -64,7 +64,7 @@ resolve_deploy_password() {
 SERVER="$(build_server)"
 PROJECT_PATH="${DEPLOY_PATH:-/opt/tourist03}"
 RSYNC_RSH="${RSYNC_RSH:-ssh -o StrictHostKeyChecking=accept-new}"
-DEPLOY_CMD="${DEPLOY_CMD:-./.venv/bin/pip install -r requirements.txt && systemctl restart tourist03-app tourist03-bot caddy}"
+DEPLOY_CMD="${DEPLOY_CMD:-./.venv/bin/pip install -r requirements.txt && ./.venv/bin/python -c 'from tourist03.migrations import run_migrations; run_migrations()' && systemctl restart tourist03-app tourist03-bot caddy}"
 
 resolve_deploy_password
 
