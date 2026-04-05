@@ -192,7 +192,7 @@ def create_camp_shift_rule(camp_id: int, payload: dict, actor_admin_id: int) -> 
                 updated_by_admin_id,
                 comment
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
             (
@@ -215,7 +215,7 @@ def create_camp_shift_rule(camp_id: int, payload: dict, actor_admin_id: int) -> 
         return int(rule_id)
 
 
-def update_camp_shift_rule(camp_id: int, rule_id: int, payload: dict, actor_admin_id: int | None = None) -> bool:
+def update_camp_shift_rule(camp_id: int, rule_id: int, payload: dict, actor_admin_id: Optional[int] = None) -> bool:
     with _db_conn("crm") as conn:
         cur = conn.cursor()
         cur.execute(
