@@ -44,6 +44,25 @@ export default function AppLayout() {
   }, []);
 
   useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const syncShellOffset = () => {
+      const isDesktop = window.matchMedia("(min-width: 1024px)").matches;
+      document.body.style.setProperty("--crm-shell-offset", isDesktop && sidebarOpen ? "224px" : "0px");
+    };
+
+    syncShellOffset();
+    window.addEventListener("resize", syncShellOffset);
+
+    return () => {
+      window.removeEventListener("resize", syncShellOffset);
+      document.body.style.removeProperty("--crm-shell-offset");
+    };
+  }, [sidebarOpen]);
+
+  useEffect(() => {
     if (typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches) {
       setSidebarOpen(false);
     }

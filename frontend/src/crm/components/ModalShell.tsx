@@ -1,4 +1,5 @@
 import type { PropsWithChildren } from "react";
+import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
 
 type ModalShellProps = PropsWithChildren<{
@@ -9,14 +10,18 @@ type ModalShellProps = PropsWithChildren<{
 }>;
 
 export function ModalShell({ open, onClose, title, description, children }: ModalShellProps) {
-  return (
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(
     <AnimatePresence>
       {open ? (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-0 backdrop-blur-md sm:items-center sm:p-4"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/55 p-0 backdrop-blur-md sm:items-center sm:p-4 lg:left-[var(--crm-shell-offset,0px)] lg:top-16"
           onClick={onClose}
         >
           <motion.div
@@ -37,6 +42,7 @@ export function ModalShell({ open, onClose, title, description, children }: Moda
           </motion.div>
         </motion.div>
       ) : null}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }
