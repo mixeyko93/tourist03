@@ -90,6 +90,7 @@ export default function CalendarPage() {
   const [reloadKey, setReloadKey] = useState(0);
   const [hasHorizontalOverflow, setHasHorizontalOverflow] = useState(false);
   const [isScrollIndicatorActive, setIsScrollIndicatorActive] = useState(false);
+  const [isGridDragging, setIsGridDragging] = useState(false);
   const [scrollThumbWidth, setScrollThumbWidth] = useState(0);
   const [scrollThumbOffset, setScrollThumbOffset] = useState(0);
   const gridScrollRef = useRef<HTMLDivElement | null>(null);
@@ -98,6 +99,9 @@ export default function CalendarPage() {
   const dragPointerIdRef = useRef<number | null>(null);
   const dragStartXRef = useRef(0);
   const dragStartScrollLeftRef = useRef(0);
+  const gridDragPointerIdRef = useRef<number | null>(null);
+  const gridDragStartXRef = useRef(0);
+  const gridDragStartScrollLeftRef = useRef(0);
 
   const periodStart = useMemo(() => {
     if (viewMode === "week") {
@@ -254,6 +258,7 @@ export default function CalendarPage() {
       if (scrollIndicatorTimeoutRef.current !== null && typeof window !== "undefined") {
         window.clearTimeout(scrollIndicatorTimeoutRef.current);
       }
+      setIsGridDragging(false);
     };
   }, []);
 
@@ -341,6 +346,50 @@ export default function CalendarPage() {
       return;
     }
     dragPointerIdRef.current = null;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+
+  const handleGridPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== "mouse" || event.button !== 0) {
+      return;
+    }
+    const target = event.target as HTMLElement;
+    if (target.closest("[data-booking-block='true']")) {
+      return;
+    }
+
+    const gridNode = gridScrollRef.current;
+    if (!gridNode || gridNode.scrollWidth <= gridNode.clientWidth) {
+      return;
+    }
+
+    gridDragPointerIdRef.current = event.pointerId;
+    gridDragStartXRef.current = event.clientX;
+    gridDragStartScrollLeftRef.current = gridNode.scrollLeft;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setIsGridDragging(true);
+    activateScrollIndicator();
+  };
+
+  const handleGridPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (gridDragPointerIdRef.current !== event.pointerId) {
+      return;
+    }
+    const gridNode = gridScrollRef.current;
+    if (!gridNode) {
+      return;
+    }
+    const deltaX = event.clientX - gridDragStartXRef.current;
+    gridNode.scrollLeft = gridDragStartScrollLeftRef.current - deltaX;
+    syncScrollFromGrid();
+  };
+
+  const stopGridDragging = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (gridDragPointerIdRef.current !== event.pointerId) {
+      return;
+    }
+    gridDragPointerIdRef.current = null;
+    setIsGridDragging(false);
     event.currentTarget.releasePointerCapture(event.pointerId);
   };
 
@@ -498,7 +547,11 @@ export default function CalendarPage() {
             <div
               ref={gridScrollRef}
               onScroll={syncScrollFromGrid}
-              className="crm-calendar-grid-scroll mt-6 overflow-x-auto rounded-3xl border border-border bg-background/55"
+              onPointerDown={handleGridPointerDown}
+              onPointerMove={handleGridPointerMove}
+              onPointerUp={stopGridDragging}
+              onPointerCancel={stopGridDragging}
+              className={`crm-calendar-grid-scroll mt-6 overflow-x-auto rounded-3xl border border-border bg-background/55 ${isGridDragging ? "crm-calendar-grid-scroll--dragging" : ""}`}
             >
               <div style={{ minWidth: calendarContentWidth }}>
                 <div className="flex border-b border-border bg-card/70">
@@ -528,11 +581,12 @@ export default function CalendarPage() {
                           <div key={`${room.id}-${formatDateParam(value)}`} className="h-18 border-r border-border/80 last:border-r-0" />
                         ))}
 
-                        <div className="pointer-events-none absolute inset-0 px-1 py-2">
+                        <div className="absolute inset-0 px-1 py-2">
                           {room.bookings.map((booking) => (
                             <div
                               key={`${room.id}-${booking.id}`}
-                              className={`absolute top-2 flex h-[calc(100%-1rem)] items-center rounded-2xl border px-3 text-xs font-medium shadow-lg shadow-black/10 ${statusClasses[booking.status]}`}
+                              data-booking-block="true"
+                              className={`pointer-events-auto absolute top-2 flex h-[calc(100%-1rem)] items-center rounded-2xl border px-3 text-xs font-medium shadow-lg shadow-black/10 ${statusClasses[booking.status]}`}
                               style={{
                                 left: `calc((100% / ${visibleDates.length}) * ${booking.start_day - 1} + 4px)`,
                                 width: `calc((100% / ${visibleDates.length}) * ${booking.span_days} - 8px)`,

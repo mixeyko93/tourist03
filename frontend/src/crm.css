@@ -211,10 +211,16 @@
   .crm-calendar-grid-scroll {
     scrollbar-width: none;
     -ms-overflow-style: none;
+    cursor: grab;
+    user-select: none;
   }
 
   .crm-calendar-grid-scroll::-webkit-scrollbar {
     display: none;
+  }
+
+  .crm-calendar-grid-scroll--dragging {
+    cursor: grabbing;
   }
 
   .crm-calendar-scrollbar::-webkit-scrollbar {
