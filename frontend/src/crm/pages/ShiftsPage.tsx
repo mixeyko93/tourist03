@@ -483,7 +483,7 @@ export default function ShiftsPage() {
         <>
           <div className="grid gap-4 xl:grid-cols-3">
             <section className="glass-card flex h-full flex-col p-5">
-              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <div className="flex min-h-11 items-start gap-2 text-sm font-medium text-foreground">
                 <UserRoundCheck className="h-4 w-4 text-[#E5D3B3]" />
                 Кто сейчас на смене
               </div>
@@ -507,7 +507,7 @@ export default function ShiftsPage() {
             </section>
 
             <section className="glass-card flex h-full flex-col p-5">
-              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <div className="flex min-h-11 items-start gap-2 text-sm font-medium text-foreground">
                 <AlarmClockCheck className="h-4 w-4 text-[#E5D3B3]" />
                 Следующая смена
               </div>
@@ -527,8 +527,8 @@ export default function ShiftsPage() {
             </section>
 
             <section className="glass-card flex h-full flex-col p-5">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+              <div className="flex min-h-11 items-start justify-between gap-3">
+                <div className="flex items-start gap-2 text-sm font-medium text-foreground">
                   <Clock3 className="h-4 w-4 text-[#E5D3B3]" />
                   <span className="whitespace-nowrap">Время реакции обработки брони</span>
                 </div>
