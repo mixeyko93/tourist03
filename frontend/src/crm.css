@@ -203,6 +203,30 @@
     scrollbar-gutter: stable both-edges;
   }
 
+  .crm-calendar-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--crm-gold) 58%, transparent) color-mix(in oklab, var(--background) 72%, transparent);
+  }
+
+  .crm-calendar-scrollbar::-webkit-scrollbar {
+    height: 12px;
+  }
+
+  .crm-calendar-scrollbar::-webkit-scrollbar-track {
+    background: color-mix(in oklab, var(--background) 72%, transparent);
+    border-radius: 999px;
+  }
+
+  .crm-calendar-scrollbar::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, var(--crm-gold) 58%, transparent);
+    border-radius: 999px;
+    border: 2px solid color-mix(in oklab, var(--background) 72%, transparent);
+  }
+
+  .crm-calendar-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklab, var(--crm-gold) 76%, transparent);
+  }
+
   .admin-table {
     @apply w-full border-collapse text-left;
   }

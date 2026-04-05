@@ -1,4 +1,4 @@
-import { BellRing, Menu, MoonStar, SunMedium, UserCircle2 } from "lucide-react";
+import { BellRing, LogOut, Menu, MoonStar, SunMedium, UserCircle2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router";
 import { useTheme } from "next-themes";
@@ -120,6 +120,18 @@ export default function AppLayout() {
     to: crmPath(item.path),
   }));
 
+  const handleLogout = async () => {
+    try {
+      setIsLoggingOut(true);
+      await logoutCrmSession();
+    } catch {
+      // Даже при сетевой ошибке локально выходим из защищённого контура.
+    } finally {
+      setSession(null);
+      navigate(loginPath, { replace: true });
+    }
+  };
+
   if (isAuthLoading) {
     return (
       <div className="crm-ambient flex min-h-screen items-center justify-center bg-background px-4 text-foreground">
@@ -177,6 +189,31 @@ export default function AppLayout() {
     </nav>
   );
 
+  const sidebarFooter = (
+    <div className="mt-auto space-y-3 border-t border-border/80 pt-4">
+      <div className="rounded-[1.65rem] border border-border bg-background/72 px-4 py-3 shadow-sm">
+        <div className="flex items-center gap-3">
+          <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[#E5D3B3]/25 bg-[#E5D3B3]/10 text-[#E5D3B3]">
+            <UserCircle2 className="h-5 w-5" />
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-base font-semibold text-foreground">{session.name}</p>
+          </div>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        disabled={isLoggingOut}
+        onClick={handleLogout}
+        className="flex w-full items-center justify-center gap-2 rounded-[1.65rem] border border-border bg-background/72 px-4 py-3 text-sm font-semibold text-foreground transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5D3B3]/60"
+      >
+        <LogOut className="h-4 w-4" />
+        {isLoggingOut ? "Выходим..." : "Выйти"}
+      </button>
+    </div>
+  );
+
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <header className="relative z-20 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-border bg-card/85 px-4 backdrop-blur-xl md:px-6">
@@ -227,32 +264,6 @@ export default function AppLayout() {
             ) : null}
           </NavLink>
 
-          <div className="hidden items-center gap-3 rounded-2xl border border-border bg-background/70 px-3 py-2 sm:flex">
-            <UserCircle2 className="h-5 w-5 text-[#E5D3B3]" />
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-foreground">{session.name}</p>
-              <p className="truncate text-xs text-muted-foreground">{session.login}</p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            disabled={isLoggingOut}
-            onClick={async () => {
-              try {
-                setIsLoggingOut(true);
-                await logoutCrmSession();
-              } catch {
-                // Даже при сетевой ошибке локально выходим из защищённого контура.
-              } finally {
-                setSession(null);
-                navigate(loginPath, { replace: true });
-              }
-            }}
-            className="rounded-2xl border border-border bg-background/70 px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5D3B3]/60"
-          >
-            {isLoggingOut ? "Выходим..." : "Выйти"}
-          </button>
         </div>
       </header>
 
@@ -264,6 +275,7 @@ export default function AppLayout() {
             }`}
           >
             {navContent}
+            {sidebarFooter}
           </aside>
         </div>
 
@@ -282,6 +294,7 @@ export default function AppLayout() {
           }`}
         >
           {navContent}
+          {sidebarFooter}
         </aside>
 
         <main className="crm-ambient relative min-w-0 flex-1 overflow-y-auto px-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] md:px-6 md:py-6 lg:px-8">
