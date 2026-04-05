@@ -25,7 +25,7 @@ export type SuperadminBaseStatus = "active" | "disabled" | "archived";
 export type SuperadminLinkedAdmin = {
   id: number;
   display_name?: string | null;
-  email?: string | null;
+  login?: string | null;
   is_active?: boolean | null;
 };
 
@@ -126,7 +126,7 @@ export type SuperadminBaseEditor = {
   rooms: SuperadminRoom[];
   linked_accounts: Array<{
     id: number;
-    email?: string | null;
+    login?: string | null;
     display_name?: string | null;
     is_active?: boolean | null;
   }>;
@@ -134,7 +134,7 @@ export type SuperadminBaseEditor = {
 
 export type SuperadminAccount = {
   id: number;
-  email: string;
+  login: string;
   display_name: string;
   is_active: boolean;
   created_at?: string | null;
@@ -143,7 +143,7 @@ export type SuperadminAccount = {
 };
 
 export type SuperadminAccountPayload = {
-  email: string;
+  login: string;
   password?: string;
   display_name: string;
   is_active?: boolean;

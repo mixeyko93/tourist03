@@ -7,16 +7,25 @@ from tourist03.booking_db_errors import translate_booking_integrity_error
 from tourist03.db import _db_conn
 
 
-def find_admin_account_by_email(email: str):
+def find_admin_account_by_login(login: str):
     with _db_conn("crm") as conn:
         cur = conn.cursor()
         cur.execute(
             """
             SELECT id, email, password_hash, display_name, is_active
             FROM auth.camp_admin_accounts
-            WHERE email = %s
+            WHERE archived_at IS NULL
+              AND (
+                lower(email) = lower(%s)
+                OR (
+                    position('@' in email) > 0
+                    AND split_part(lower(email), '@', 1) = lower(%s)
+                )
+              )
+            ORDER BY CASE WHEN lower(email) = lower(%s) THEN 0 ELSE 1 END, id
+            LIMIT 1
             """,
-            (email,),
+            (login, login, login),
         )
         row = cur.fetchone()
         return dict(row) if row else None
@@ -987,17 +996,25 @@ def _replace_camp_admin_permissions(cur, admin_id: int, camp_id: int, permission
         )
 
 
-def find_admin_account_by_email_lower(email: str):
+def find_admin_account_by_login_lower(login: str):
     with _db_conn("crm") as conn:
         cur = conn.cursor()
         cur.execute(
             """
             SELECT *
             FROM auth.camp_admin_accounts
-            WHERE lower(email) = lower(%s)
+            WHERE archived_at IS NULL
+              AND (
+                lower(email) = lower(%s)
+                OR (
+                    position('@' in email) > 0
+                    AND split_part(lower(email), '@', 1) = lower(%s)
+                )
+              )
+            ORDER BY CASE WHEN lower(email) = lower(%s) THEN 0 ELSE 1 END, id
             LIMIT 1
             """,
-            (email,),
+            (login, login, login),
         )
         row = cur.fetchone()
         return dict(row) if row else None
@@ -1011,6 +1028,7 @@ def list_admin_staff(camp_id: int):
             SELECT
                 a.id,
                 a.email,
+                a.email AS login,
                 a.display_name,
                 a.phone,
                 a.default_role_key,
@@ -1071,17 +1089,24 @@ def get_admin_staff_member(camp_id: int, staff_id: int):
 
 
 def create_or_link_admin_staff(camp_id: int, payload: dict, actor_admin_id: int, password_hash: Optional[str] = None):
-    email = str(payload.get("email") or "").strip().lower()
+    login = str(payload.get("email") or "").strip().lower()
     with _db_conn("crm") as conn:
         cur = conn.cursor()
         cur.execute(
             """
             SELECT *
             FROM auth.camp_admin_accounts
-            WHERE lower(email) = lower(%s)
+            WHERE (
+                lower(email) = lower(%s)
+                OR (
+                    position('@' in email) > 0
+                    AND split_part(lower(email), '@', 1) = lower(%s)
+                )
+            )
+            ORDER BY CASE WHEN lower(email) = lower(%s) THEN 0 ELSE 1 END, id
             LIMIT 1
             """,
-            (email,),
+            (login, login, login),
         )
         existing = cur.fetchone()
 
@@ -1145,7 +1170,7 @@ def create_or_link_admin_staff(camp_id: int, payload: dict, actor_admin_id: int,
                 RETURNING id
                 """,
                 (
-                    email,
+                    login,
                     password_hash,
                     payload.get("display_name"),
                     payload.get("phone"),
@@ -1209,11 +1234,17 @@ def update_admin_staff(camp_id: int, staff_id: int, payload: dict, actor_admin_i
                 """
                 SELECT 1
                 FROM auth.camp_admin_accounts
-                WHERE lower(email) = lower(%s)
+                WHERE (
+                    lower(email) = lower(%s)
+                    OR (
+                        position('@' in email) > 0
+                        AND split_part(lower(email), '@', 1) = lower(%s)
+                    )
+                )
                   AND id <> %s
                 LIMIT 1
                 """,
-                (next_email, staff_id),
+                (next_email, next_email, staff_id),
             )
             if cur.fetchone():
                 raise ValueError("email_conflict")

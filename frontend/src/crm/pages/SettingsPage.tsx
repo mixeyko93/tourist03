@@ -63,7 +63,7 @@ type ProfileForm = {
 };
 
 type StaffForm = {
-  email: string;
+  login: string;
   displayName: string;
   phone: string;
   password: string;
@@ -201,7 +201,7 @@ function toProfilePayload(form: ProfileForm): CrmCampProfileUpdatePayload {
 
 function createEmptyStaffForm(roleKey = "administrator"): StaffForm {
   return {
-    email: "",
+    login: "",
     displayName: "",
     phone: "",
     password: "",
@@ -216,7 +216,7 @@ function createEmptyStaffForm(roleKey = "administrator"): StaffForm {
 
 function mapStaffForm(staff: CrmStaffMember): StaffForm {
   return {
-    email: staff.email,
+    login: staff.login,
     displayName: staff.display_name,
     phone: staff.phone || "",
     password: "",
@@ -231,7 +231,7 @@ function mapStaffForm(staff: CrmStaffMember): StaffForm {
 
 function toStaffPayload(form: StaffForm): CrmStaffUpsertPayload {
   return {
-    email: form.email,
+    login: form.login,
     display_name: form.displayName,
     phone: form.phone || undefined,
     password: form.password || undefined,
@@ -454,7 +454,7 @@ export default function SettingsPage() {
       return teamItems;
     }
     return teamItems.filter((staff) =>
-      [staff.display_name, staff.email, staff.phone, staff.role_label].filter(Boolean).join(" ").toLowerCase().includes(query),
+      [staff.display_name, staff.login, staff.phone, staff.role_label].filter(Boolean).join(" ").toLowerCase().includes(query),
     );
   }, [teamItems, teamSearch]);
 
@@ -617,8 +617,8 @@ export default function SettingsPage() {
       setStaffFormError("Сначала выберите базу.");
       return;
     }
-    if (!staffForm.email.trim() || !staffForm.displayName.trim()) {
-      setStaffFormError("Заполните эл. почту и имя сотрудника.");
+    if (!staffForm.login.trim() || !staffForm.displayName.trim()) {
+      setStaffFormError("Заполните логин и имя сотрудника.");
       return;
     }
     if (!editingStaff && !staffForm.password.trim()) {
@@ -934,7 +934,7 @@ export default function SettingsPage() {
                 <input
                   type="search"
                   className="soft-input pl-11"
-                  placeholder="Поиск по имени, эл. почте, телефону или роли"
+                  placeholder="Поиск по имени, логину, телефону или роли"
                   value={teamSearch}
                   onChange={(event) => setTeamSearch(event.target.value)}
                 />
@@ -974,7 +974,7 @@ export default function SettingsPage() {
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
                       <h2 className="truncate text-lg font-semibold tracking-[-0.03em] text-foreground">{staff.display_name}</h2>
-                      <p className="mt-1 truncate text-sm text-muted-foreground">{staff.email}</p>
+                      <p className="mt-1 truncate text-sm text-muted-foreground">{staff.login}</p>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <span className="rounded-full border border-[#E5D3B3]/25 bg-[#E5D3B3]/10 px-3 py-1 text-xs font-medium text-[#E5D3B3]">
                           {staff.role_label}
@@ -1215,8 +1215,8 @@ export default function SettingsPage() {
 
           <div className="grid gap-4 md:grid-cols-2">
             <label className="space-y-2">
-              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Эл. почта</span>
-              <input className="soft-input" value={staffForm.email} onChange={(event) => setStaffForm((current) => ({ ...current, email: event.target.value }))} required />
+              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Логин</span>
+              <input className="soft-input" value={staffForm.login} onChange={(event) => setStaffForm((current) => ({ ...current, login: event.target.value }))} placeholder="mikhail.stasenko" required />
             </label>
             <label className="space-y-2">
               <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Имя сотрудника</span>

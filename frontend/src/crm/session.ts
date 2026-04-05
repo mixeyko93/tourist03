@@ -2,14 +2,14 @@ import type { CrmMediaItem } from "./mediaTools";
 
 export type CrmSession = {
   id: number;
-  email: string;
+  login: string;
   name: string;
   phone: string;
   defaultRoleKey: string;
 };
 
 export type CrmLoginPayload = {
-  email: string;
+  login: string;
   password: string;
 };
 
@@ -220,7 +220,7 @@ export type CrmStaffPermissionMeta = {
 
 export type CrmStaffMember = {
   id: number;
-  email: string;
+  login: string;
   display_name: string;
   phone: string | null;
   default_role_key: string;
@@ -438,7 +438,7 @@ export type CrmServiceUpsertPayload = {
 };
 
 export type CrmStaffUpsertPayload = {
-  email: string;
+  login: string;
   display_name: string;
   phone?: string;
   password?: string;
@@ -486,7 +486,7 @@ export type CrmEventStatusUpdatePayload = {
 
 type AdminSessionPayload = {
   id: number;
-  email: string;
+  login: string;
   display_name: string;
   phone?: string;
   default_role_key?: string;
@@ -507,7 +507,7 @@ async function assertOk(response: Response) {
 function mapSession(payload: AdminSessionPayload): CrmSession {
   return {
     id: Number(payload.id),
-    email: String(payload.email || ""),
+    login: String(payload.login || ""),
     name: String(payload.display_name || ""),
     phone: String(payload.phone || ""),
     defaultRoleKey: String(payload.default_role_key || "administrator"),

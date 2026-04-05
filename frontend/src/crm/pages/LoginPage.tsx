@@ -1,7 +1,8 @@
 import {
   ArrowRight,
+  Eye,
+  EyeOff,
   LockKeyhole,
-  Mail,
   Moon,
   Mountain,
   RotateCcw,
@@ -10,6 +11,7 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Sun,
+  UserRound,
 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
@@ -178,8 +180,9 @@ export default function LoginPage() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const isEditMode = searchParams.get("edit") === "1";
-  const [email, setEmail] = useState("");
+  const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -255,7 +258,7 @@ export default function LoginPage() {
       setIsSubmitting(true);
       setErrorMessage("");
       await loginCrmSession({
-        email,
+        login,
         password,
       });
       navigate(nextPath, { replace: true });
@@ -730,17 +733,19 @@ export default function LoginPage() {
                     ) : null}
 
                     <label className="block space-y-2">
-                      <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Эл. почта</span>
+                      <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Логин</span>
                       <div className="relative">
-                        <Mail className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                        <UserRound className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                         <input
-                          type="email"
+                          type="text"
                           className="soft-input pl-12"
-                          placeholder="name@company.ru"
-                          value={email}
-                          onChange={(event) => setEmail(event.target.value)}
+                          placeholder="mikhail.stasenko"
+                          value={login}
+                          onChange={(event) => setLogin(event.target.value)}
                           disabled={isSubmitting || isCheckingSession}
                           required
+                          autoCapitalize="none"
+                          autoCorrect="off"
                         />
                       </div>
                     </label>
@@ -750,14 +755,24 @@ export default function LoginPage() {
                       <div className="relative">
                         <LockKeyhole className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                         <input
-                          type="password"
-                          className="soft-input pl-12"
+                          type={showPassword ? "text" : "password"}
+                          className="soft-input pl-12 pr-14"
                           placeholder="Введите пароль"
                           value={password}
                           onChange={(event) => setPassword(event.target.value)}
                           disabled={isSubmitting || isCheckingSession}
                           required
                         />
+                        <button
+                          type="button"
+                          className="absolute right-3 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-white/5 hover:text-foreground"
+                          onClick={() => setShowPassword((value) => !value)}
+                          aria-label={showPassword ? "Скрыть пароль" : "Показать пароль"}
+                          title={showPassword ? "Скрыть пароль" : "Показать пароль"}
+                          disabled={isSubmitting || isCheckingSession}
+                        >
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
                       </div>
                     </label>
 

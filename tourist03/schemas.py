@@ -5,7 +5,7 @@ from pydantic import BaseModel, EmailStr
 
 
 class AdminLoginRequest(BaseModel):
-    email: EmailStr
+    login: str
     password: str
 
 
@@ -21,7 +21,7 @@ class SuperAdminLoginRequest(BaseModel):
 
 class AdminMeResponse(BaseModel):
     id: int
-    email: EmailStr
+    login: str
     display_name: str
     phone: str = ""
     default_role_key: str = "administrator"
@@ -29,14 +29,14 @@ class AdminMeResponse(BaseModel):
 
 
 class SuperAdminCreateAccountRequest(BaseModel):
-    email: EmailStr
+    login: str
     password: str
     display_name: str
     camp_ids: List[int]
 
 
 class SuperAdminUpdateAccountRequest(BaseModel):
-    email: Optional[EmailStr] = None
+    login: Optional[str] = None
     password: Optional[str] = None
     display_name: Optional[str] = None
     is_active: Optional[bool] = None
@@ -231,7 +231,7 @@ class AdminServiceUpsertRequest(BaseModel):
 
 
 class AdminStaffUpsertRequest(BaseModel):
-    email: EmailStr
+    login: str
     display_name: str
     phone: Optional[str] = None
     password: Optional[str] = None

@@ -133,7 +133,7 @@ def list_camps(*, archived_only: bool = False, search: Optional[str] = None, sta
                         json_build_object(
                             'id', a.id,
                             'display_name', a.display_name,
-                            'email', a.email,
+                            'login', a.email,
                             'is_active', a.is_active
                         )
                         ORDER BY a.display_name, a.id
@@ -186,7 +186,7 @@ def get_camp_editor_context(camp_id: int):
             """
             SELECT
                 a.id,
-                a.email,
+                a.email AS login,
                 a.display_name,
                 a.is_active
             FROM crm.camp_admin_links l
@@ -314,18 +314,31 @@ def list_recent_events(*, search: Optional[str] = None, camp_id: Optional[int] =
         return [dict(row) for row in cur.fetchall()]
 
 
-def find_admin_account_by_email(email: str):
+def find_admin_account_by_login(login: str):
     with _db_conn("crm") as conn:
         cur = conn.cursor()
         cur.execute(
-            "SELECT id FROM auth.camp_admin_accounts WHERE lower(email) = lower(%s) AND archived_at IS NULL",
-            (email,),
+            """
+            SELECT id
+            FROM auth.camp_admin_accounts
+            WHERE archived_at IS NULL
+              AND (
+                lower(email) = lower(%s)
+                OR (
+                    position('@' in email) > 0
+                    AND split_part(lower(email), '@', 1) = lower(%s)
+                )
+              )
+            ORDER BY CASE WHEN lower(email) = lower(%s) THEN 0 ELSE 1 END, id
+            LIMIT 1
+            """,
+            (login, login, login),
         )
         row = cur.fetchone()
         return dict(row) if row else None
 
 
-def create_admin_account(email: str, password_hash: str, display_name: str, camp_ids: list[int]):
+def create_admin_account(login: str, password_hash: str, display_name: str, camp_ids: list[int]):
     with _db_conn("crm") as conn:
         cur = conn.cursor()
         cur.execute(
@@ -334,7 +347,7 @@ def create_admin_account(email: str, password_hash: str, display_name: str, camp
             VALUES (%s, %s, %s)
             RETURNING id
             """,
-            (email, password_hash, display_name),
+            (login, password_hash, display_name),
         )
         admin_id = cur.fetchone()["id"]
         linked: set[int] = set()
@@ -373,16 +386,24 @@ def get_admin_account(account_id: int):
         return dict(row) if row else None
 
 
-def admin_email_exists(email: str, account_id: int):
+def admin_login_exists(login: str, account_id: int):
     with _db_conn("crm") as conn:
         cur = conn.cursor()
         cur.execute(
             """
             SELECT 1
             FROM auth.camp_admin_accounts
-            WHERE lower(email) = lower(%s) AND id <> %s AND archived_at IS NULL
+            WHERE (
+                lower(email) = lower(%s)
+                OR (
+                    position('@' in email) > 0
+                    AND split_part(lower(email), '@', 1) = lower(%s)
+                )
+            )
+              AND id <> %s
+              AND archived_at IS NULL
             """,
-            (email, account_id),
+            (login, login, account_id),
         )
         return bool(cur.fetchone())
 
@@ -390,7 +411,7 @@ def admin_email_exists(email: str, account_id: int):
 def update_admin_account(
     account_id: int,
     *,
-    email: Optional[str] = None,
+    login: Optional[str] = None,
     display_name: Optional[str] = None,
     password_hash: Optional[str] = None,
     is_active: Optional[bool] = None,
@@ -400,9 +421,9 @@ def update_admin_account(
         cur = conn.cursor()
         updates = []
         params = []
-        if email is not None:
+        if login is not None:
             updates.append("email=%s")
-            params.append(email)
+            params.append(login)
         if display_name is not None:
             updates.append("display_name=%s")
             params.append(display_name)
@@ -443,7 +464,7 @@ def list_accounts():
             """
             SELECT
                 a.id,
-                a.email,
+                a.email AS login,
                 a.display_name,
                 a.is_active,
                 a.created_at,
@@ -480,7 +501,7 @@ def list_accounts():
         accounts.append(
             {
                 "id": row["id"],
-                "email": row["email"],
+                "login": row["login"],
                 "display_name": row["display_name"],
                 "is_active": row["is_active"],
                 "created_at": row["created_at"],

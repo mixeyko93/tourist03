@@ -21,14 +21,25 @@ from tourist03.security import (
     get_root_superadmin,
     get_superadmin_session_principal,
     hash_password,
+    is_valid_panel_login,
     issue_superadmin_telegram_link_code,
     is_valid_superadmin_credentials,
     is_local_superadmin_bypass,
     is_valid_superadmin_key,
     log_crm_audit_event,
+    normalize_panel_login,
     superadmin_credentials_required,
     verify_password,
 )
+
+
+def _normalize_manager_login_or_400(value: str) -> str:
+    login = normalize_panel_login(value)
+    if not login:
+        raise HTTPException(status_code=400, detail="Логин не может быть пустым")
+    if not is_valid_panel_login(login):
+        raise HTTPException(status_code=400, detail="Логин должен быть в формате mikhail.stasenko")
+    return login
 
 
 def _set_superadmin_session(request: Request, principal: Optional[dict]):
@@ -185,37 +196,35 @@ def superadmin_camp_editor(camp_id: int):
 
 
 def create_camp_admin_account(payload: SuperAdminCreateAccountRequest):
-    email = payload.email.lower().strip()
-    display_name = (payload.display_name or "").strip() or email
+    login = _normalize_manager_login_or_400(payload.login)
+    display_name = (payload.display_name or "").strip() or login
     password_raw = (payload.password or "").strip()
     if not password_raw:
         raise HTTPException(status_code=400, detail="Пароль не может быть пустым")
 
-    logger.info("Запрос на создание учётки управляющего: email=%s, camps=%s", email, payload.camp_ids)
-    if superadmin_repo.find_admin_account_by_email(email):
-        logger.warning("Попытка создать дубликат учётки для email=%s", email)
+    logger.info("Запрос на создание учётки управляющего: login=%s, camps=%s", login, payload.camp_ids)
+    if superadmin_repo.find_admin_account_by_login(login):
+        logger.warning("Попытка создать дубликат учётки для login=%s", login)
         raise HTTPException(status_code=400, detail="Учётная запись с таким логином уже существует")
 
     password_hash = hash_password(password_raw)
     try:
-        admin_id = superadmin_repo.create_admin_account(email, password_hash, display_name, payload.camp_ids)
+        admin_id = superadmin_repo.create_admin_account(login, password_hash, display_name, payload.camp_ids)
     except Exception:
-        logger.exception("Техническая ошибка при создании учётки email=%s", email)
+        logger.exception("Техническая ошибка при создании учётки login=%s", login)
         raise
 
-    logger.info("Учётка управляющего создана: id=%s, email=%s", admin_id, email)
+    logger.info("Учётка управляющего создана: id=%s, login=%s", admin_id, login)
     return {"status": "ok", "admin_id": admin_id}
 
 
 def update_camp_admin_account(account_id: int, payload: SuperAdminUpdateAccountRequest):
-    email = payload.email.lower().strip() if payload.email is not None else None
+    login = _normalize_manager_login_or_400(payload.login) if payload.login is not None else None
     display_name = (payload.display_name or "").strip() if payload.display_name is not None else None
     password_raw = (payload.password or "").strip() if payload.password is not None else None
     is_active = payload.is_active
     camp_ids = payload.camp_ids if payload.camp_ids is not None else None
 
-    if email is not None and not email:
-        raise HTTPException(status_code=400, detail="Email не может быть пустым")
     if display_name is not None and not display_name:
         raise HTTPException(status_code=400, detail="Имя управляющего не может быть пустым")
 
@@ -223,11 +232,11 @@ def update_camp_admin_account(account_id: int, payload: SuperAdminUpdateAccountR
     if not existing:
         raise HTTPException(status_code=404, detail="Учётная запись не найдена")
 
-    next_email = None
-    if email is not None and email != (existing.get("email") or "").lower().strip():
-        if superadmin_repo.admin_email_exists(email, account_id):
-            raise HTTPException(status_code=409, detail="Учётная запись с таким email уже существует")
-        next_email = email
+    next_login = None
+    if login is not None and login != (existing.get("email") or "").lower().strip():
+        if superadmin_repo.admin_login_exists(login, account_id):
+            raise HTTPException(status_code=409, detail="Учётная запись с таким логином уже существует")
+        next_login = login
 
     next_display_name = None
     if display_name is not None and display_name != (existing.get("display_name") or ""):
@@ -242,7 +251,7 @@ def update_camp_admin_account(account_id: int, payload: SuperAdminUpdateAccountR
     try:
         superadmin_repo.update_admin_account(
             account_id,
-            email=next_email,
+            login=next_login,
             display_name=next_display_name,
             password_hash=next_password_hash,
             is_active=next_is_active,

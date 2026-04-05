@@ -474,7 +474,7 @@ class PostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
         login_response = await self.client.post(
             "/api/admin/login",
-            json={"email": admin["email"], "password": admin["password"]},
+            json={"login": admin["email"], "password": admin["password"]},
         )
         self.assertEqual(login_response.status_code, 200, login_response.text)
         self.assertEqual(login_response.json(), {"status": "ok"})
@@ -508,7 +508,7 @@ class PostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
         login_response = await self.client.post(
             "/api/admin/login",
-            json={"email": admin["email"], "password": admin["password"]},
+            json={"login": admin["email"], "password": admin["password"]},
         )
         self.assertEqual(login_response.status_code, 200, login_response.text)
 
@@ -535,7 +535,7 @@ class PostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
             "/api/superadmin/accounts",
             headers={"x-superadmin-key": os.environ["SUPERADMIN_API_KEY"]},
             json={
-                "email": "new-admin@example.com",
+                "login": "new.admin",
                 "password": "strong-password",
                 "display_name": "New Admin",
                 "camp_ids": [camp_id],
@@ -550,7 +550,7 @@ class PostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
             "/api/superadmin/accounts",
             headers={"x-superadmin-key": os.environ["SUPERADMIN_API_KEY"]},
             json={
-                "email": "new-admin@example.com",
+                "login": "new.admin",
                 "password": "strong-password",
                 "display_name": "New Admin",
                 "camp_ids": [camp_id],

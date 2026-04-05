@@ -154,7 +154,7 @@ class UiSmokeTests(unittest.TestCase):
             "/api/superadmin/accounts",
             method="POST",
             payload={
-                "email": cls.smoke_email,
+                "login": cls.smoke_email,
                 "password": cls.smoke_password,
                 "display_name": cls.smoke_display_name,
                 "camp_ids": [cls.smoke_camp_id],
@@ -249,7 +249,7 @@ class UiSmokeTests(unittest.TestCase):
             page.goto(f"{self.base_url}/login", wait_until="networkidle", timeout=20000)
             page.wait_for_url(f"{self.base_url}/login", timeout=10000)
             page.wait_for_selector('input[type="email"]', timeout=10000)
-            page.fill('input[type="email"]', self.smoke_email)
+            page.fill('input[type="text"]', self.smoke_email)
             page.fill('input[type="password"]', self.smoke_password)
             page.click('button[type="submit"]')
             page.wait_for_url(f"{self.base_url}/calendar", timeout=10000)

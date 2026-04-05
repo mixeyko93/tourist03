@@ -36,7 +36,7 @@ function createAccountDraft(account: SuperadminAccount | null): AccountDraft {
   }
   return {
     id: account.id,
-    login: account.email,
+    login: account.login,
     name: account.display_name,
     password: "",
     active: account.is_active,
@@ -110,7 +110,7 @@ export default function AdminAccountsPage() {
       setErrorMessage("");
       setSuccessMessage("");
       if (!draft.login.trim()) {
-        throw new Error("Укажите почту для входа");
+        throw new Error("Укажите логин для входа");
       }
       if (!draft.name.trim()) {
         throw new Error("Укажите имя управляющего");
@@ -123,7 +123,7 @@ export default function AdminAccountsPage() {
       }
 
       const payload = {
-        email: draft.login.trim(),
+        login: draft.login.trim(),
         display_name: draft.name.trim(),
         password: draft.password.trim() || undefined,
         is_active: draft.active,
@@ -200,7 +200,7 @@ export default function AdminAccountsPage() {
                 accounts.map((account) => (
                   <tr key={account.id}>
                     <td>#{account.id}</td>
-                    <td className="crm-copy-safe font-medium text-foreground">{account.email}</td>
+                    <td className="crm-copy-safe font-medium text-foreground">{account.login}</td>
                     <td>{account.display_name}</td>
                     <td>
                       <div className="flex flex-wrap gap-2">
@@ -260,7 +260,7 @@ export default function AdminAccountsPage() {
       >
         <div className="space-y-6">
           <div className="grid gap-4">
-            <AdminField label="Логин (эл. почта)">
+            <AdminField label="Логин">
               <input className="admin-input" value={draft.login} onChange={(event) => setDraft((current) => ({ ...current, login: event.target.value }))} />
             </AdminField>
             <AdminField label={draft.id ? "Новый пароль" : "Пароль"} hint={draft.id ? "Оставьте пустым, чтобы не менять текущий пароль." : "Пароль нужен для первого входа."}>

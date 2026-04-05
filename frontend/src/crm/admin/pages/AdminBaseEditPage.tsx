@@ -1044,7 +1044,7 @@ export default function AdminBaseEditPage() {
                 <div className="flex flex-wrap gap-2">
                   {linkedAccounts.map((account) => (
                     <span key={account.id} className="rounded-full border border-border bg-background/70 px-3 py-1 text-xs text-foreground">
-                      {account.display_name || account.email || `#${account.id}`}
+                      {account.display_name || account.login || `#${account.id}`}
                     </span>
                   ))}
                 </div>

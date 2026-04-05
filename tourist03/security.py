@@ -16,6 +16,8 @@ pwd_context = CryptContext(
     deprecated="auto",
 )
 
+LOGIN_RE = re.compile(r"^[a-z0-9](?:[a-z0-9._-]{1,62}[a-z0-9])?$")
+
 
 def _normalize_phone(phone: str) -> str:
     phone = (phone or "").strip()
@@ -40,6 +42,14 @@ def _normalize_phone(phone: str) -> str:
     if digits.startswith("7"):
         return "+" + digits
     return digits
+
+
+def normalize_panel_login(value: str) -> str:
+    return (value or "").strip().lower()
+
+
+def is_valid_panel_login(value: str) -> bool:
+    return bool(LOGIN_RE.fullmatch(normalize_panel_login(value)))
 
 
 def _get_user_by_phone_email(conn, phone: str, email: str):
@@ -306,7 +316,7 @@ def link_admin_telegram_account(
             (int(telegram_user_id), int(telegram_chat_id), (telegram_username or "").strip() or None, row["id"]),
         )
         conn.commit()
-        return {"id": row["id"], "email": row["email"], "display_name": row["display_name"]}
+        return {"id": row["id"], "login": row["email"], "email": row["email"], "display_name": row["display_name"]}
 
 
 def link_superadmin_telegram_account(
@@ -438,6 +448,7 @@ def get_current_admin(request: Request):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Не авторизован")
     return {
         "id": row["id"],
+        "login": row["email"],
         "email": row["email"],
         "display_name": row["display_name"],
         "phone": row.get("phone") or "",

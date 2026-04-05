@@ -231,7 +231,7 @@ export default function AppLayout() {
             <UserCircle2 className="h-5 w-5 text-[#E5D3B3]" />
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-foreground">{session.name}</p>
-              <p className="truncate text-xs text-muted-foreground">{session.email}</p>
+              <p className="truncate text-xs text-muted-foreground">{session.login}</p>
             </div>
           </div>
 

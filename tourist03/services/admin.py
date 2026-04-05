@@ -38,14 +38,27 @@ from tourist03.security import (
     get_current_admin,
     get_ui_override_editor,
     hash_password,
+    is_valid_panel_login,
     issue_admin_telegram_link_code,
     log_crm_audit_event,
     log_user_event,
+    normalize_panel_login,
     verify_password,
 )
 
 
 ALLOWED_UI_OVERRIDE_KEYS = {"crm_login_page"}
+
+
+def _normalize_admin_login_or_400(value: str, *, allow_legacy_email: bool = False) -> str:
+    login = normalize_panel_login(value)
+    if not login:
+        raise HTTPException(status_code=400, detail="Укажите логин")
+    if allow_legacy_email and "@" in login:
+        return login
+    if not is_valid_panel_login(login):
+        raise HTTPException(status_code=400, detail="Логин должен быть в формате mikhail.stasenko")
+    return login
 
 
 def _raise_booking_write_http_error(exc: Exception):
@@ -361,7 +374,7 @@ def _ensure_change_request_review_access(admin: dict, request_item: dict):
 
 
 def admin_login(req: AdminLoginRequest, request: Request):
-    row = admin_repo.find_admin_account_by_email(req.email.lower().strip())
+    row = admin_repo.find_admin_account_by_login(_normalize_admin_login_or_400(req.login, allow_legacy_email=True))
     if not row or not row["is_active"] or not verify_password(req.password, row["password_hash"]):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неверный логин или пароль")
     request.session["admin_id"] = row["id"]
@@ -2242,7 +2255,7 @@ def api_admin_create_staff(
     admin: dict = Depends(get_current_admin),
 ):
     _ensure_admin_staff_access(admin, camp_id)
-    email = str(payload.email).strip().lower()
+    login = _normalize_admin_login_or_400(payload.login)
     display_name = (payload.display_name or "").strip()
     if not display_name:
         raise HTTPException(status_code=400, detail="Укажите имя сотрудника")
@@ -2258,7 +2271,7 @@ def api_admin_create_staff(
         staff_id = admin_repo.create_or_link_admin_staff(
             camp_id,
             {
-                "email": email,
+                "email": login,
                 "display_name": display_name,
                 "phone": _normalize_phone(payload.phone or ""),
                 "role_key": role_key,
@@ -2297,7 +2310,7 @@ def api_admin_create_staff(
         admin=admin,
         event_type="staff_created",
         title="В команду базы добавлен сотрудник",
-        body=f"{staff.get('display_name') or staff.get('email') or 'Новый сотрудник'} · роль: {staff.get('role_label') or 'Не указана'}.",
+        body=f"{staff.get('display_name') or staff.get('login') or staff.get('email') or 'Новый сотрудник'} · роль: {staff.get('role_label') or 'Не указана'}.",
         severity="warning",
         action_url="/settings",
         action_payload={"camp_id": camp_id, "tab": "team", "staff_id": staff_id},
@@ -2331,7 +2344,7 @@ def api_admin_update_staff(
             camp_id,
             staff_id,
             {
-                "email": str(payload.email).strip().lower(),
+                "email": _normalize_admin_login_or_400(payload.login),
                 "display_name": display_name,
                 "phone": _normalize_phone(payload.phone or ""),
                 "role_key": role_key,
@@ -2346,7 +2359,7 @@ def api_admin_update_staff(
         )
     except ValueError as exc:
         if str(exc) == "email_conflict":
-            raise HTTPException(status_code=409, detail="Учётка с таким email уже существует") from exc
+            raise HTTPException(status_code=409, detail="Учётка с таким логином уже существует") from exc
         raise
     if not changed:
         raise HTTPException(status_code=404, detail="Сотрудник не найден")
@@ -2370,7 +2383,7 @@ def api_admin_update_staff(
         admin=admin,
         event_type="staff_updated",
         title="Учётка сотрудника обновлена",
-        body=f"{after.get('display_name') or after.get('email') or 'Сотрудник'} · роль: {after.get('role_label') or 'Не указана'}.",
+        body=f"{after.get('display_name') or after.get('login') or after.get('email') or 'Сотрудник'} · роль: {after.get('role_label') or 'Не указана'}.",
         severity="warning",
         action_url="/settings",
         action_payload={"camp_id": camp_id, "tab": "team", "staff_id": staff_id},
