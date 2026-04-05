@@ -679,7 +679,6 @@ export default function SettingsPage() {
   return (
     <PageMotion className="space-y-6">
       <SectionHeading
-        eyebrow="Настройки"
         title="Профиль, команда и контроль"
         description="Живой центр управления базой: данные объекта, команда сотрудников, роли, Telegram-привязки и журнал действий."
       />

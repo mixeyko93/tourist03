@@ -194,7 +194,6 @@ export default function DashboardPage() {
   return (
     <PageMotion className="space-y-6">
       <SectionHeading
-        eyebrow="Сводка"
         title="Сводка по базе"
         description="Живой обзор загрузки, ближайших заездов, выручки по базовым тарифам и потока реальных заявок."
         actions={

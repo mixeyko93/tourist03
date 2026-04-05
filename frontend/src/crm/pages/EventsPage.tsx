@@ -219,7 +219,6 @@ export default function EventsPage() {
   return (
     <PageMotion className="space-y-6">
       <SectionHeading
-        eyebrow="События"
         title="Центр событий CRM"
         description="Живая операционная лента: новые заявки, изменения по базе, действия сотрудников и всё, что требует внимания в течение смены."
         actions={

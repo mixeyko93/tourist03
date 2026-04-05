@@ -185,7 +185,6 @@ export default function ApprovalsPage() {
   return (
     <PageMotion className="space-y-6">
       <SectionHeading
-        eyebrow="Согласования"
         title="Подтверждения и откаты"
         description="Живой контур чувствительных изменений: что отправили на подтверждение, что применили под ответственность и что при необходимости можно откатить."
         actions={

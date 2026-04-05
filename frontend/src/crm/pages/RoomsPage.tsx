@@ -400,7 +400,6 @@ export default function RoomsPage() {
   return (
     <PageMotion className="space-y-6">
       <SectionHeading
-        eyebrow="Номера"
         title="Апартаменты и тарифы"
         description="Рабочий список реальных апартаментов по выбранной базе с редактированием тарифов, вместимости и удобств."
         actions={

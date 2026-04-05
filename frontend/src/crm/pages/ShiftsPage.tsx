@@ -349,7 +349,6 @@ export default function ShiftsPage() {
   return (
     <PageMotion className="space-y-6">
       <SectionHeading
-        eyebrow="Смены"
         title="График смен и дежурств"
         description="Рабочий экран базы: кто сейчас на смене, когда следующая пересменка и как CRM должна обрабатывать ночные заявки."
         actions={

@@ -407,7 +407,6 @@ export default function BookingsPage() {
   return (
     <PageMotion className="space-y-6">
       <SectionHeading
-        eyebrow="Брони"
         title="Управление бронями"
         description="Живой список заявок и ручных броней по выбранной базе с быстрым поиском, фильтрами и созданием внутри CRM."
         actions={

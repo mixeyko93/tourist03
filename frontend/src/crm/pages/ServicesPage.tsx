@@ -307,7 +307,6 @@ export default function ServicesPage() {
   return (
     <PageMotion className="space-y-6">
       <SectionHeading
-        eyebrow="Услуги"
         title="Каталог услуг базы"
         description="Реальные услуги, которые менеджеры могут продвигать вместе с проживанием или продавать отдельно по поставщикам."
         actions={

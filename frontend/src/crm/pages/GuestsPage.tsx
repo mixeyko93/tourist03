@@ -124,7 +124,6 @@ export default function GuestsPage() {
   return (
     <PageMotion className="space-y-6">
       <SectionHeading
-        eyebrow="Гости"
         title="База гостей"
         description="Живой список гостей по реальным бронированиям с контактами, историей визитов и оценкой клиентской ценности."
       />
