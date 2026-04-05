@@ -862,6 +862,13 @@ MIGRATIONS = (
         );
         """,
     ),
+    MigrationStep(
+        version="0007_shift_rule_updater",
+        sql="""
+        ALTER TABLE crm.shift_schedule_rules
+        ADD COLUMN IF NOT EXISTS updated_by_admin_id INTEGER;
+        """,
+    ),
 )
 
 
