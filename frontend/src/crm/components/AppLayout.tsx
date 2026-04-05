@@ -168,7 +168,7 @@ export default function AppLayout() {
   }
 
   const navContent = (
-    <nav className="flex flex-1 flex-col gap-2">
+    <nav className="flex min-h-0 flex-col gap-2 overflow-y-auto pr-1">
       {navLinks.map((item) => (
         <NavLink
           key={item.to}
@@ -190,7 +190,7 @@ export default function AppLayout() {
   );
 
   const sidebarFooter = (
-    <div className="mt-auto space-y-3 border-t border-border/80 pt-4">
+    <div className="space-y-3 border-t border-border/80 pt-4">
       <div className="rounded-[1.65rem] border border-border bg-background/72 px-4 py-3 shadow-sm">
         <div className="flex items-center gap-3">
           <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[#E5D3B3]/25 bg-[#E5D3B3]/10 text-[#E5D3B3]">
@@ -270,7 +270,7 @@ export default function AppLayout() {
       <div className="relative flex min-w-0 flex-1 overflow-hidden">
         <div className={`relative hidden shrink-0 transition-[width] duration-300 lg:block ${sidebarOpen ? "w-56" : "w-0"}`}>
           <aside
-            className={`absolute inset-y-0 left-0 flex h-full w-56 flex-col border-r border-border bg-card/80 px-3 py-4 backdrop-blur-xl transition-transform duration-300 ${
+            className={`absolute inset-y-0 left-0 grid h-full w-56 grid-rows-[minmax(0,1fr)_auto] overflow-hidden border-r border-border bg-card/80 px-3 py-4 backdrop-blur-xl transition-transform duration-300 ${
               sidebarOpen ? "translate-x-0" : "-translate-x-full"
             }`}
           >
@@ -289,7 +289,7 @@ export default function AppLayout() {
         ) : null}
 
         <aside
-          className={`fixed inset-y-16 left-0 z-30 flex h-[calc(100dvh-4rem)] w-[86vw] max-w-80 flex-col border-r border-border bg-card/92 px-3 py-4 backdrop-blur-xl transition-transform duration-300 lg:hidden ${
+          className={`fixed inset-y-16 left-0 z-30 grid h-[calc(100dvh-4rem)] w-[86vw] max-w-80 grid-rows-[minmax(0,1fr)_auto] overflow-hidden border-r border-border bg-card/92 px-3 py-4 backdrop-blur-xl transition-transform duration-300 lg:hidden ${
             sidebarOpen ? "translate-x-0" : "-translate-x-full"
           }`}
         >
