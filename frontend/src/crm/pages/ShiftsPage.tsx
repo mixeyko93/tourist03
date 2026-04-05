@@ -1,5 +1,5 @@
-import { AlarmClockCheck, CalendarClock, ChevronDown, ChevronLeft, ChevronRight, Clock3, PencilLine, Save, Trash2, UserRoundCheck } from "lucide-react";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { AlarmClockCheck, CalendarClock, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Clock3, PencilLine, Save, Trash2, UserRoundCheck } from "lucide-react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { EmptyState } from "../components/EmptyState";
 import { ModalShell } from "../components/ModalShell";
 import { PageMotion } from "../components/PageMotion";
@@ -81,6 +81,10 @@ const emptyPresetForm: ShiftPresetForm = {
   endsAt: "18:00",
 };
 
+const monthLabels = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
+const weekdayShortLabels = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+const timeMinuteOptions = ["00", "15", "30", "45"];
+
 function formatDateParam(value: Date) {
   const year = value.getFullYear();
   const month = `${value.getMonth() + 1}`.padStart(2, "0");
@@ -161,6 +165,219 @@ function formatTargetDate(value: Date) {
     day: "numeric",
     month: "long",
   }).format(value);
+}
+
+function formatDateButtonLabel(value: string) {
+  if (!value) {
+    return "Выберите дату";
+  }
+  const date = parseDateParam(value);
+  return new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric" }).format(date);
+}
+
+function getMonthGridStart(value: Date) {
+  return startOfWeek(new Date(value.getFullYear(), value.getMonth(), 1));
+}
+
+function buildCalendarMatrix(viewDate: Date) {
+  const start = getMonthGridStart(viewDate);
+  return Array.from({ length: 35 }, (_, index) => addDays(start, index));
+}
+
+function splitTimeParts(value: string) {
+  const [hours = "09", minutes = "00"] = value.split(":");
+  return { hours, minutes };
+}
+
+type PopoverFieldShellProps = {
+  label: string;
+  open: boolean;
+  onToggle: () => void;
+  value: string;
+  icon: ReactNode;
+  children: ReactNode;
+};
+
+function PopoverFieldShell({ label, open, onToggle, value, icon, children }: PopoverFieldShellProps) {
+  return (
+    <div className="relative space-y-2">
+      <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">{label}</span>
+      <button type="button" className="soft-input flex items-center justify-between gap-3 py-3.5 text-left" onClick={onToggle}>
+        <span className="text-base font-semibold text-foreground">{value}</span>
+        <span className="shrink-0 text-foreground">{icon}</span>
+      </button>
+      {open ? (
+        <div className="absolute left-0 top-[calc(100%+0.65rem)] z-30 w-full min-w-[18rem] rounded-3xl border border-border bg-card/98 p-4 shadow-2xl backdrop-blur-xl">
+          {children}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+type ShiftDateFieldProps = {
+  label: string;
+  value: string;
+  min?: string;
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  onChange: (value: string) => void;
+};
+
+function ShiftDateField({ label, value, min, open, onToggle, onClose, onChange }: ShiftDateFieldProps) {
+  const [viewDate, setViewDate] = useState(() => (value ? parseDateParam(value) : new Date()));
+
+  useEffect(() => {
+    if (open) {
+      setViewDate(value ? parseDateParam(value) : min ? parseDateParam(min) : new Date());
+    }
+  }, [min, open, value]);
+
+  const minDate = min ? parseDateParam(min) : null;
+  const calendarDays = buildCalendarMatrix(viewDate);
+
+  return (
+    <PopoverFieldShell
+      label={label}
+      open={open}
+      onToggle={onToggle}
+      value={formatDateButtonLabel(value)}
+      icon={<CalendarDays className="h-5 w-5" />}
+    >
+      <div className="space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <button type="button" className="soft-button h-11 w-11 rounded-2xl px-0" onClick={() => setViewDate((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))}>
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <div className="rounded-2xl border border-border bg-background/65 px-4 py-2 text-center">
+            <div className="text-lg font-semibold text-foreground">{monthLabels[viewDate.getMonth()]}</div>
+            <div className="text-sm text-muted-foreground">{viewDate.getFullYear()}</div>
+          </div>
+          <button type="button" className="soft-button h-11 w-11 rounded-2xl px-0" onClick={() => setViewDate((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))}>
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-7 gap-2 text-center text-sm font-medium text-muted-foreground">
+          {weekdayShortLabels.map((day) => (
+            <div key={day} className="py-2">
+              {day}
+            </div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-7 gap-2">
+          {calendarDays.map((day) => {
+            const iso = formatDateParam(day);
+            const isCurrentMonth = day.getMonth() === viewDate.getMonth();
+            const isSelected = value === iso;
+            const isDisabled = Boolean(minDate && day < minDate);
+            return (
+              <button
+                key={iso}
+                type="button"
+                disabled={isDisabled}
+                className={`flex h-11 items-center justify-center rounded-2xl border text-sm font-semibold transition ${
+                  isSelected
+                    ? "border-[#E5D3B3]/45 bg-[#E5D3B3] text-slate-900"
+                    : isCurrentMonth
+                      ? "border-border bg-background/65 text-foreground hover:border-[#E5D3B3]/35 hover:bg-[#E5D3B3]/10"
+                      : "border-transparent bg-transparent text-muted-foreground/60 hover:border-border hover:bg-background/45"
+                } ${isDisabled ? "cursor-not-allowed opacity-40" : ""}`}
+                onClick={() => {
+                  if (isDisabled) {
+                    return;
+                  }
+                  onChange(iso);
+                  onClose();
+                }}
+              >
+                {day.getDate()}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </PopoverFieldShell>
+  );
+}
+
+type ShiftTimeFieldProps = {
+  label: string;
+  value: string;
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  onChange: (value: string) => void;
+};
+
+function ShiftTimeField({ label, value, open, onToggle, onClose, onChange }: ShiftTimeFieldProps) {
+  const parts = splitTimeParts(value);
+
+  return (
+    <PopoverFieldShell
+      label={label}
+      open={open}
+      onToggle={onToggle}
+      value={value}
+      icon={<Clock3 className="h-5 w-5" />}
+    >
+      <div className="space-y-4">
+        <div className="rounded-2xl border border-border bg-background/65 px-4 py-3 text-center">
+          <div className="text-2xl font-semibold tracking-[-0.04em] text-foreground">{value}</div>
+          <div className="mt-1 text-sm text-muted-foreground">Выберите часы и минуты</div>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Часы</p>
+          <div className="grid grid-cols-4 gap-2">
+            {Array.from({ length: 24 }, (_, index) => `${index}`.padStart(2, "0")).map((hours) => {
+              const next = `${hours}:${parts.minutes}`;
+              const active = parts.hours === hours;
+              return (
+                <button
+                  key={hours}
+                  type="button"
+                  className={`rounded-2xl border px-3 py-2 text-sm font-semibold transition ${
+                    active ? "border-[#E5D3B3]/45 bg-[#E5D3B3] text-slate-900" : "border-border bg-background/65 text-foreground hover:border-[#E5D3B3]/35 hover:bg-[#E5D3B3]/10"
+                  }`}
+                  onClick={() => onChange(next)}
+                >
+                  {hours}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Минуты</p>
+          <div className="grid grid-cols-4 gap-2">
+            {timeMinuteOptions.map((minutes) => {
+              const next = `${parts.hours}:${minutes}`;
+              const active = parts.minutes === minutes;
+              return (
+                <button
+                  key={minutes}
+                  type="button"
+                  className={`rounded-2xl border px-3 py-2 text-sm font-semibold transition ${
+                    active ? "border-[#E5D3B3]/45 bg-[#E5D3B3] text-slate-900" : "border-border bg-background/65 text-foreground hover:border-[#E5D3B3]/35 hover:bg-[#E5D3B3]/10"
+                  }`}
+                  onClick={() => {
+                    onChange(next);
+                    onClose();
+                  }}
+                >
+                  {minutes}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </PopoverFieldShell>
+  );
 }
 
 function mapSettingsForm(settings: CrmShiftSettings): ShiftSettingsForm {
@@ -245,6 +462,8 @@ export default function ShiftsPage() {
   const [deletingRuleId, setDeletingRuleId] = useState<number | null>(null);
   const [pendingChange, setPendingChange] = useState<PendingSensitiveChange | null>(null);
   const [isSubmittingChange, setIsSubmittingChange] = useState(false);
+  const [activePresetTimeField, setActivePresetTimeField] = useState<"start" | "end" | null>(null);
+  const [activeRulePicker, setActiveRulePicker] = useState<"start" | "date" | "end" | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -416,10 +635,12 @@ export default function ShiftsPage() {
           },
     );
     setRuleError("");
+    setActiveRulePicker(null);
     setIsRuleModalOpen(true);
   }
 
   function openCreateRuleModal() {
+    setActivePresetTimeField(null);
     setIsPresetModalOpen(true);
   }
 
@@ -829,13 +1050,13 @@ export default function ShiftsPage() {
                         return (
                           <div key={`${member.id}-${dateKey}`} className="min-h-28 border-r border-border/80 p-2 last:border-r-0">
                             {cellRules.length ? (
-                              <div className="space-y-2">
+                              <div className="flex h-full flex-col gap-2">
                                 {cellRules.map((rule) => {
                                   return (
                                     <button
                                       key={rule.id}
                                       type="button"
-                                      className="group relative flex w-full flex-col rounded-2xl border border-[#E5D3B3]/22 bg-[#E5D3B3]/10 px-2.5 py-2 text-left transition hover:bg-[#E5D3B3]/16"
+                                      className="group relative flex min-h-24 w-full flex-1 flex-col justify-center rounded-[1.9rem] border border-[#E5D3B3]/22 bg-[#E5D3B3]/10 px-3 py-3 text-left transition hover:bg-[#E5D3B3]/16"
                                       onMouseDown={(event) => {
                                         if (event.button === 2) {
                                           event.preventDefault();
@@ -847,8 +1068,12 @@ export default function ShiftsPage() {
                                       }}
                                     >
                                       {rule.comment ? <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#E5D3B3]" /> : null}
-                                      <span className="pr-3 text-xs font-semibold leading-4 text-foreground">
-                                        {rule.starts_at?.slice(0, 5)} → {rule.ends_at?.slice(0, 5)}
+                                      <span className="pr-3 text-[0.95rem] font-semibold leading-6 tracking-[-0.03em] text-foreground">
+                                        {rule.starts_at?.slice(0, 5)}
+                                        <br />
+                                        <span aria-hidden="true">→</span>
+                                        <br />
+                                        {rule.ends_at?.slice(0, 5)}
                                       </span>
                                       {rule.comment ? (
                                         <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden w-52 -translate-x-1/2 rounded-2xl border border-border bg-card/98 px-3 py-2 text-[11px] leading-4 text-foreground shadow-xl group-hover:block">
@@ -901,7 +1126,10 @@ export default function ShiftsPage() {
 
       <ModalShell
         open={isPresetModalOpen}
-        onClose={() => setIsPresetModalOpen(false)}
+        onClose={() => {
+          setIsPresetModalOpen(false);
+          setActivePresetTimeField(null);
+        }}
         title="Параметры смены"
       >
         <form
@@ -917,14 +1145,22 @@ export default function ShiftsPage() {
           }}
         >
           <div className="grid gap-4 md:grid-cols-2">
-            <label className="space-y-2">
-              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Начало смены</span>
-              <input type="time" className="soft-input" value={presetForm.startsAt} onChange={(event) => setPresetForm((current) => ({ ...current, startsAt: event.target.value }))} />
-            </label>
-            <label className="space-y-2">
-              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Конец смены</span>
-              <input type="time" className="soft-input" value={presetForm.endsAt} onChange={(event) => setPresetForm((current) => ({ ...current, endsAt: event.target.value }))} />
-            </label>
+            <ShiftTimeField
+              label="Начало смены"
+              value={presetForm.startsAt}
+              open={activePresetTimeField === "start"}
+              onToggle={() => setActivePresetTimeField((current) => (current === "start" ? null : "start"))}
+              onClose={() => setActivePresetTimeField(null)}
+              onChange={(value) => setPresetForm((current) => ({ ...current, startsAt: value }))}
+            />
+            <ShiftTimeField
+              label="Конец смены"
+              value={presetForm.endsAt}
+              open={activePresetTimeField === "end"}
+              onToggle={() => setActivePresetTimeField((current) => (current === "end" ? null : "end"))}
+              onClose={() => setActivePresetTimeField(null)}
+              onChange={(value) => setPresetForm((current) => ({ ...current, endsAt: value }))}
+            />
           </div>
 
           <div className="flex flex-col gap-3 border-t border-border pt-2 sm:flex-row sm:justify-end">
@@ -1002,6 +1238,7 @@ export default function ShiftsPage() {
           setEditingRule(null);
           setActiveTarget(null);
           setRuleError("");
+          setActiveRulePicker(null);
         }}
         title="Параметры смены"
       >
@@ -1011,24 +1248,31 @@ export default function ShiftsPage() {
           ) : null}
 
           <div className="grid gap-4 md:grid-cols-3">
-            <label className="space-y-2">
-              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Начало смены</span>
-              <input type="time" className="soft-input" value={ruleForm.startsAt} onChange={(event) => setRuleForm((current) => ({ ...current, startsAt: event.target.value }))} />
-            </label>
-            <label className="space-y-2">
-              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Дата окончания</span>
-              <input
-                type="date"
-                className="soft-input"
-                value={ruleForm.endsOnDate || activeTarget?.shiftDate || ""}
-                min={activeTarget?.shiftDate}
-                onChange={(event) => setRuleForm((current) => ({ ...current, endsOnDate: event.target.value }))}
-              />
-            </label>
-            <label className="space-y-2">
-              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Конец смены</span>
-              <input type="time" className="soft-input" value={ruleForm.endsAt} onChange={(event) => setRuleForm((current) => ({ ...current, endsAt: event.target.value }))} />
-            </label>
+            <ShiftTimeField
+              label="Начало смены"
+              value={ruleForm.startsAt}
+              open={activeRulePicker === "start"}
+              onToggle={() => setActiveRulePicker((current) => (current === "start" ? null : "start"))}
+              onClose={() => setActiveRulePicker(null)}
+              onChange={(value) => setRuleForm((current) => ({ ...current, startsAt: value }))}
+            />
+            <ShiftDateField
+              label="Дата окончания"
+              value={ruleForm.endsOnDate || activeTarget?.shiftDate || ""}
+              min={activeTarget?.shiftDate}
+              open={activeRulePicker === "date"}
+              onToggle={() => setActiveRulePicker((current) => (current === "date" ? null : "date"))}
+              onClose={() => setActiveRulePicker(null)}
+              onChange={(value) => setRuleForm((current) => ({ ...current, endsOnDate: value }))}
+            />
+            <ShiftTimeField
+              label="Конец смены"
+              value={ruleForm.endsAt}
+              open={activeRulePicker === "end"}
+              onToggle={() => setActiveRulePicker((current) => (current === "end" ? null : "end"))}
+              onClose={() => setActiveRulePicker(null)}
+              onChange={(value) => setRuleForm((current) => ({ ...current, endsAt: value }))}
+            />
           </div>
 
           <label className="space-y-2">
