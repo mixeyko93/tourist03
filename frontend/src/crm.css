@@ -64,6 +64,9 @@
   --border: oklch(0.87 0.01 95 / 0.78);
   --input: oklch(0.9 0.008 95 / 0.8);
   --ring: oklch(0.82 0.05 85);
+  --crm-gold: oklch(0.72 0.09 78);
+  --crm-gold-border: oklch(0.84 0.05 84 / 0.78);
+  --crm-gold-surface: oklch(0.94 0.02 90 / 0.72);
   --brand-shadow: 0 28px 80px rgba(20, 18, 13, 0.12);
 }
 
@@ -87,6 +90,9 @@
   --border: oklch(0.36 0.02 264 / 0.7);
   --input: oklch(0.32 0.02 264 / 0.84);
   --ring: oklch(0.8 0.05 85);
+  --crm-gold: oklch(0.87 0.05 84);
+  --crm-gold-border: oklch(0.72 0.03 84 / 0.46);
+  --crm-gold-surface: oklch(0.3 0.02 264 / 0.34);
   --brand-shadow: 0 28px 90px rgba(0, 0, 0, 0.42);
 }
 
@@ -237,5 +243,25 @@
     min-width: 0;
     overflow-wrap: anywhere;
     word-break: break-word;
+  }
+
+  .crm-gold-tone {
+    color: var(--crm-gold);
+    text-shadow: 0 0 0.35px rgba(16, 18, 23, 0.5);
+  }
+
+  .dark .crm-gold-tone {
+    text-shadow: none;
+  }
+
+  .crm-gold-badge {
+    color: var(--crm-gold);
+    border-color: var(--crm-gold-border);
+    background: var(--crm-gold-surface);
+    text-shadow: 0 0 0.35px rgba(16, 18, 23, 0.45);
+  }
+
+  .dark .crm-gold-badge {
+    text-shadow: none;
   }
 }

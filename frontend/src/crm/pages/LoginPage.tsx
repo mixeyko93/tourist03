@@ -1,7 +1,8 @@
-import { ArrowRight, LockKeyhole, Mail, Mountain, ShieldCheck } from "lucide-react";
+import { ArrowRight, LockKeyhole, Mail, Moon, Mountain, ShieldCheck, Sun } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { motion } from "motion/react";
+import { useTheme } from "next-themes";
 import { fetchCrmSession, loginCrmSession } from "../session";
 import { crmPath } from "../paths";
 import { useDocumentTitle } from "../components/useDocumentTitle";
@@ -14,6 +15,8 @@ export default function LoginPage() {
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [isThemeMounted, setIsThemeMounted] = useState(false);
+  const { theme, setTheme } = useTheme();
   const homePath = crmPath("/calendar");
 
   useDocumentTitle("Tourist03 CRM — Вход");
@@ -22,6 +25,10 @@ export default function LoginPage() {
     typeof (location.state as { from?: unknown } | null)?.from === "string"
       ? (location.state as { from: string }).from
       : homePath;
+
+  useEffect(() => {
+    setIsThemeMounted(true);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -69,25 +76,38 @@ export default function LoginPage() {
       </div>
 
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="glass-card relative w-full max-w-5xl overflow-hidden">
+        <div className="absolute right-4 top-4 z-20 sm:right-5 sm:top-5">
+          {isThemeMounted ? (
+            <button
+              type="button"
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              className="admin-icon-button"
+              aria-label="Переключить тему"
+            >
+              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
+          ) : null}
+        </div>
+
         <div className="grid lg:min-h-[680px] lg:grid-cols-[1.08fr_0.92fr]">
-          <section className="order-2 crm-ambient flex flex-col justify-between border-t border-border px-5 py-6 sm:px-6 lg:order-1 lg:border-t-0 lg:border-r lg:px-8 lg:py-10">
-            <div className="space-y-8">
-              <span className="inline-flex rounded-full border border-[#E5D3B3]/30 bg-[#E5D3B3]/10 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.26em] text-[#E5D3B3] sm:text-xs">
+          <section className="order-2 crm-ambient flex flex-col gap-8 border-t border-border px-5 py-6 sm:px-6 sm:py-7 lg:order-1 lg:border-t-0 lg:border-r lg:px-8 lg:py-10">
+            <div className="space-y-6 sm:space-y-7">
+              <span className="crm-gold-badge inline-flex rounded-full border px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.26em] sm:text-xs">
                 Premium Control Room
               </span>
 
-              <div className="space-y-4">
-                <h1 className="max-w-xl text-3xl font-semibold tracking-[-0.06em] text-foreground sm:text-4xl md:text-5xl">
+              <div className="space-y-5">
+                <h1 className="max-w-xl text-3xl font-semibold leading-[0.92] tracking-[-0.065em] text-foreground sm:text-4xl md:text-[4rem]">
                   Управляйте бронированиями, загрузкой и сервисом базы в одном интерфейсе.
                 </h1>
-                <p className="max-w-lg text-base leading-7 text-muted-foreground">
+                <p className="max-w-xl text-base leading-7 text-muted-foreground">
                   Новый CRM-раздел для Tourist_03 объединяет календарь размещения, управление бронями, номерным
                   фондом, услугами и клиентской базой в одном потоке работы.
                 </p>
               </div>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2">
               {[
                 {
                   icon: Mountain,
@@ -99,15 +119,10 @@ export default function LoginPage() {
                   title: "Единый контроль",
                   text: "Настройки, сотрудники и статусы оплат в одном сценарии.",
                 },
-                {
-                  icon: ArrowRight,
-                  title: "Быстрый вход",
-                  text: "Старт без лишних шагов: логин и сразу переход к управлению.",
-                },
               ].map((item) => (
-                <article key={item.title} className="rounded-3xl border border-border bg-card/55 p-4 backdrop-blur-lg">
-                  <item.icon className="h-5 w-5 text-[#E5D3B3]" />
-                  <h2 className="mt-5 text-sm font-semibold text-foreground">{item.title}</h2>
+                <article key={item.title} className="flex h-full flex-col rounded-3xl border border-border bg-card/55 p-5 backdrop-blur-lg">
+                  <item.icon className="crm-gold-tone h-5 w-5" />
+                  <h2 className="mt-6 text-sm font-semibold text-foreground">{item.title}</h2>
                   <p className="mt-2 text-sm leading-6 text-muted-foreground sm:line-clamp-none">{item.text}</p>
                 </article>
               ))}
@@ -118,7 +133,7 @@ export default function LoginPage() {
             <div className="mx-auto w-full max-w-md">
               <div className="glass-card rounded-[2rem] p-5 sm:p-8">
                 <div className="space-y-2 text-center">
-                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#E5D3B3]">Tourist_03 CRM</p>
+                  <p className="crm-gold-tone text-xs font-semibold uppercase tracking-[0.28em]">Tourist_03 CRM</p>
                   <h2 className="text-2xl font-semibold tracking-[-0.05em] text-foreground sm:text-3xl">Вход в систему</h2>
                   <p className="text-sm leading-6 text-muted-foreground">Войдите под своей учётной записью, чтобы открыть рабочее пространство CRM.</p>
                 </div>
