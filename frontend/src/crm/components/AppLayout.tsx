@@ -289,9 +289,10 @@ export default function AppLayout() {
       <div className="relative flex min-w-0 flex-1 overflow-hidden">
         <div className={`relative hidden shrink-0 transition-[width] duration-300 lg:block ${sidebarOpen ? "w-56" : "w-0"}`}>
           <aside
-            className={`absolute inset-y-0 left-0 h-full w-56 overflow-hidden border-r border-border bg-card/80 px-3 py-4 backdrop-blur-xl transition-transform duration-300 ${
+            className={`absolute inset-y-0 left-0 h-full w-56 overflow-hidden border-r border-border bg-card/80 px-3 py-4 backdrop-blur-xl transition-transform duration-300 lg:fixed lg:bottom-0 lg:left-0 lg:top-16 lg:z-10 lg:h-[calc(100dvh-4rem)] ${
               sidebarOpen ? "translate-x-0" : "-translate-x-full"
             }`}
+            style={{ contain: "layout paint" }}
           >
             {navContent}
             {sidebarFooter}
