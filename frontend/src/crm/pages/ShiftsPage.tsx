@@ -378,9 +378,6 @@ export default function ShiftsPage() {
               </select>
               <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             </div>
-            <button type="button" className="soft-button w-full sm:w-auto" onClick={() => setReloadKey((value) => value + 1)}>
-              Обновить смены
-            </button>
           </>
         }
       />
@@ -462,10 +459,10 @@ export default function ShiftsPage() {
             </section>
 
             <section className="glass-card p-5">
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 text-sm font-medium text-foreground">
                   <Clock3 className="h-4 w-4 text-[#E5D3B3]" />
-                  Время реакции
+                  Время реакции обработки брони
                 </div>
                 <button type="button" className="soft-button px-3 py-2 text-xs" onClick={() => setIsSettingsModalOpen(true)}>
                   Изменить
@@ -590,8 +587,8 @@ export default function ShiftsPage() {
       <ModalShell
         open={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}
-        title="Время реакции CRM"
-        description="Настройте SLA обработки заявок: сколько держать бронь, когда включать эскалацию и сколько повторов отправлять до уведомления управляющего."
+        title="Время реакции обработки брони"
+        description="Настройте время реакции обработки заявок: сколько держать бронь, когда включать эскалацию и сколько повторов отправлять до уведомления управляющего."
       >
         <form
           className="space-y-5"
@@ -602,8 +599,8 @@ export default function ShiftsPage() {
               return;
             }
             setPendingChange({
-              title: "Чувствительное изменение времени реакции",
-              description: "Изменение SLA влияет на заморозку заявок, ночную обработку и эскалации. Решите, отправлять ли его управляющему на подтверждение или применять сразу под свою ответственность.",
+              title: "Необходимо согласование управляющего",
+              description: "Изменение этих параметров влияет на заморозку заявок, ночную обработку и эскалацию. Решите, отправлять ли его управляющему на подтверждение или применять сразу под свою ответственность.",
               operation: "shift_settings_update",
               payload: toSettingsPayload(settingsForm) as Record<string, unknown>,
               successPending: "Параметры времени реакции отправлены на подтверждение.",
@@ -632,10 +629,10 @@ export default function ShiftsPage() {
           </div>
 
           <div className="flex flex-col gap-3 border-t border-border pt-2 sm:flex-row sm:justify-end">
-            <button type="button" className="soft-button" onClick={() => setIsSettingsModalOpen(false)}>
+            <button type="button" className="soft-button px-4 py-2.5 text-sm" onClick={() => setIsSettingsModalOpen(false)}>
               Отмена
             </button>
-            <button type="submit" className="brand-button gap-2 justify-center">
+            <button type="submit" className="brand-button gap-2 px-5 py-2.5 text-sm justify-center">
               <Save className="h-4 w-4" />
               Сохранить параметры
             </button>

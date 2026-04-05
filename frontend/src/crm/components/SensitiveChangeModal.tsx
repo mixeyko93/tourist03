@@ -35,33 +35,29 @@ export function SensitiveChangeModal({
   return (
     <ModalShell open={open} onClose={() => !loading && onClose()} title={title} description={description}>
       <div className="space-y-5">
-        <div className="rounded-2xl border border-[#E5D3B3]/25 bg-[#E5D3B3]/10 px-4 py-3 text-sm leading-6 text-[#E5D3B3]">
-          Это чувствительное изменение. Его можно либо отправить управляющему на подтверждение, либо применить сразу под вашу ответственность с полным логированием.
-        </div>
-
         <label className="space-y-2">
           <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Комментарий</span>
           <textarea
             className="soft-input min-h-28 resize-none"
             value={comment}
             onChange={(event) => setComment(event.target.value)}
-            placeholder="Коротко опишите, зачем меняете данные и что это даст базе"
+            placeholder="Коротко опишите цель изменений"
           />
         </label>
 
         <div className="flex flex-col gap-3 border-t border-border pt-2 sm:flex-row sm:justify-end">
-          <button type="button" className="soft-button" onClick={onClose} disabled={loading}>
+          <button type="button" className="soft-button px-4 py-2.5 text-sm" onClick={onClose} disabled={loading}>
             Отмена
           </button>
           <button
             type="button"
-            className="soft-button border-[#E5D3B3]/30 bg-[#E5D3B3]/10 text-foreground hover:bg-[#E5D3B3]/18"
+            className="soft-button px-4 py-2.5 text-sm border-[#E5D3B3]/30 bg-[#E5D3B3]/10 text-foreground hover:bg-[#E5D3B3]/18"
             onClick={() => void onConfirm(comment)}
             disabled={loading}
           >
             {loading ? "Сохраняем..." : confirmLabel}
           </button>
-          <button type="button" className="brand-button" onClick={() => void onApply(comment)} disabled={loading}>
+          <button type="button" className="brand-button px-5 py-2.5 text-sm" onClick={() => void onApply(comment)} disabled={loading}>
             {loading ? "Сохраняем..." : applyLabel}
           </button>
         </div>
