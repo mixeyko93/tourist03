@@ -1,4 +1,4 @@
-import { AlarmClockCheck, CalendarClock, ChevronDown, MoonStar, Plus, Save, Search, Trash2, UserRoundCheck } from "lucide-react";
+import { AlarmClockCheck, CalendarClock, ChevronDown, Clock3, PencilLine, Save, Search, Trash2, UserRoundCheck } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { EmptyState } from "../components/EmptyState";
 import { ModalShell } from "../components/ModalShell";
@@ -137,12 +137,12 @@ export default function ShiftsPage() {
   const [overview, setOverview] = useState<Awaited<ReturnType<typeof fetchCrmShifts>>["overview"] | null>(null);
   const [isBootLoading, setIsBootLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
-  const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
   const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<CrmShiftRule | null>(null);
   const [ruleForm, setRuleForm] = useState<ShiftRuleForm>(emptyRuleForm);
   const [ruleError, setRuleError] = useState("");
@@ -239,6 +239,30 @@ export default function ShiftsPage() {
     );
   }, [rules, searchQuery]);
 
+  const groupedRules = useMemo(() => {
+    const rows = new Map<number, { adminId: number; adminName: string; adminLogin: string; days: CrmShiftRule[][] }>();
+    filteredRules.forEach((rule) => {
+      if (!rows.has(rule.admin_id)) {
+        rows.set(rule.admin_id, {
+          adminId: rule.admin_id,
+          adminName: rule.admin_name,
+          adminLogin: rule.admin_email,
+          days: Array.from({ length: 7 }, () => []),
+        });
+      }
+      rows.get(rule.admin_id)?.days[rule.weekday]?.push(rule);
+    });
+
+    return Array.from(rows.values())
+      .map((row) => ({
+        ...row,
+        days: row.days.map((dayRules) =>
+          [...dayRules].sort((left, right) => `${left.starts_at}-${left.ends_at}`.localeCompare(`${right.starts_at}-${right.ends_at}`)),
+        ),
+      }))
+      .sort((left, right) => left.adminName.localeCompare(right.adminName, "ru"));
+  }, [filteredRules]);
+
   function openCreateRuleModal() {
     setEditingRule(null);
     setRuleForm({
@@ -254,22 +278,6 @@ export default function ShiftsPage() {
     setRuleForm(mapRuleForm(rule));
     setRuleError("");
     setIsRuleModalOpen(true);
-  }
-
-  async function handleSaveSettings(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!selectedCampId) {
-      setErrorMessage("Сначала выберите базу.");
-      return;
-    }
-    setPendingChange({
-      title: "Чувствительное изменение параметров смен",
-      description: "Изменение SLA и ночной логики влияет на обработку заявок, эскалации и заморозку дат. Решите, отправлять ли его управляющему на подтверждение или применять сразу под свою ответственность.",
-      operation: "shift_settings_update",
-      payload: toSettingsPayload(settingsForm) as Record<string, unknown>,
-      successPending: "Параметры смен отправлены на подтверждение.",
-      successApplied: "Параметры смен применены под вашу ответственность.",
-    });
   }
 
   async function handleSaveRule(event: FormEvent<HTMLFormElement>) {
@@ -336,14 +344,12 @@ export default function ShiftsPage() {
     } finally {
       setIsSubmittingChange(false);
       setDeletingRuleId(null);
-      setIsSavingSettings(false);
       setIsSavingRule(false);
     }
   }
 
   const activeRules = overview?.active_rules || [];
   const nextRule = overview?.next_rule || null;
-  const timeZone = overview?.timezone || settingsForm.timeZone;
   const hasCampOptions = camps.length > 0;
 
   return (
@@ -352,51 +358,32 @@ export default function ShiftsPage() {
         title="График смен и дежурств"
         description="Рабочий экран базы: кто сейчас на смене, когда следующая пересменка и как CRM должна обрабатывать ночные заявки."
         actions={
-          <button type="button" className="brand-button w-full gap-2 sm:w-auto" onClick={openCreateRuleModal} disabled={!selectedCampId || !staff.length}>
-            <Plus className="h-4 w-4" />
-            Добавить смену
-          </button>
+          <>
+            <div className="relative w-full min-w-0 sm:min-w-60">
+              <select
+                className="soft-input w-full appearance-none pr-10 disabled:cursor-not-allowed disabled:opacity-60"
+                value={selectedCampId ?? ""}
+                onChange={(event) => setSelectedCampId(event.target.value ? Number(event.target.value) : null)}
+                disabled={!hasCampOptions || isBootLoading}
+              >
+                {hasCampOptions ? (
+                  camps.map((camp) => (
+                    <option key={camp.id} value={camp.id}>
+                      {camp.name}
+                    </option>
+                  ))
+                ) : (
+                  <option value="">Нет доступных баз</option>
+                )}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            </div>
+            <button type="button" className="soft-button w-full sm:w-auto" onClick={() => setReloadKey((value) => value + 1)}>
+              Обновить смены
+            </button>
+          </>
         }
       />
-
-      <section className="glass-card p-5">
-        <div className="grid gap-3 xl:grid-cols-[260px_minmax(0,1fr)_auto] xl:items-center">
-          <div className="relative">
-            <select
-              className="soft-input appearance-none pr-10 disabled:cursor-not-allowed disabled:opacity-60"
-              value={selectedCampId ?? ""}
-              onChange={(event) => setSelectedCampId(event.target.value ? Number(event.target.value) : null)}
-              disabled={!hasCampOptions || isBootLoading}
-            >
-              {hasCampOptions ? (
-                camps.map((camp) => (
-                  <option key={camp.id} value={camp.id}>
-                    {camp.name}
-                  </option>
-                ))
-              ) : (
-                <option value="">Нет доступных баз</option>
-              )}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          </div>
-
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="search"
-              className="soft-input pl-11"
-              placeholder="Поиск по сотруднику, дню недели или комментарию"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-            />
-          </div>
-
-          <button type="button" className="soft-button" onClick={() => setReloadKey((value) => value + 1)}>
-            Обновить смены
-          </button>
-        </div>
-      </section>
 
       {errorMessage ? (
         <section className="rounded-3xl border border-rose-500/30 bg-rose-500/10 px-5 py-4 text-sm text-rose-200">
@@ -432,7 +419,7 @@ export default function ShiftsPage() {
             <section className="glass-card p-5">
               <div className="flex items-center gap-2 text-sm font-medium text-foreground">
                 <UserRoundCheck className="h-4 w-4 text-[#E5D3B3]" />
-                Кто сейчас отвечает
+                Кто сейчас на смене
               </div>
               {activeRules.length ? (
                 <div className="mt-4 space-y-3">
@@ -457,7 +444,7 @@ export default function ShiftsPage() {
             <section className="glass-card p-5">
               <div className="flex items-center gap-2 text-sm font-medium text-foreground">
                 <AlarmClockCheck className="h-4 w-4 text-[#E5D3B3]" />
-                Следующая пересменка
+                Следующая смена
               </div>
               {nextRule ? (
                 <div className="mt-4 rounded-3xl border border-border bg-background/65 p-4">
@@ -465,8 +452,7 @@ export default function ShiftsPage() {
                   <p className="mt-1 text-sm text-muted-foreground">
                     {nextRule.weekday_label} · {nextRule.starts_time} → {nextRule.ends_time}
                   </p>
-                  <p className="mt-3 text-sm text-foreground">Старт: {formatDateTime(nextRule.starts_at, timeZone)}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">Часовой пояс базы: {timeZone}</p>
+                  <p className="mt-3 text-sm text-foreground">Старт: {formatDateTime(nextRule.starts_at, overview?.timezone || settingsForm.timeZone)}</p>
                 </div>
               ) : (
                 <p className="mt-4 text-sm leading-6 text-muted-foreground">
@@ -476,9 +462,14 @@ export default function ShiftsPage() {
             </section>
 
             <section className="glass-card p-5">
-              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                <MoonStar className="h-4 w-4 text-[#E5D3B3]" />
-                Ночная логика CRM
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  <Clock3 className="h-4 w-4 text-[#E5D3B3]" />
+                  Время реакции
+                </div>
+                <button type="button" className="soft-button px-3 py-2 text-xs" onClick={() => setIsSettingsModalOpen(true)}>
+                  Изменить
+                </button>
               </div>
               <div className="mt-4 space-y-3 rounded-3xl border border-border bg-background/65 p-4 text-sm text-muted-foreground">
                 <p>Заморозка заявки: <span className="font-medium text-foreground">{settingsForm.bookingHoldHours} ч.</span></p>
@@ -490,140 +481,167 @@ export default function ShiftsPage() {
           </div>
 
           <section className="glass-card p-6">
-            <form onSubmit={handleSaveSettings} className="space-y-5">
-              <div className="flex items-center gap-3">
-                <CalendarClock className="h-5 w-5 text-[#E5D3B3]" />
-                <h2 className="text-xl font-semibold tracking-[-0.03em] text-foreground">Параметры графика и SLA</h2>
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+              <div>
+                <h2 className="text-xl font-semibold tracking-[-0.03em] text-foreground">Сменный график</h2>
+                <p className="mt-1 text-sm text-muted-foreground">Помесячный принцип здесь не нужен: CRM использует повторяющийся недельный график и определяет, кто на какой смене работает по дням недели.</p>
               </div>
-
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-                <label className="space-y-2">
-                  <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Часовой пояс</span>
-                  <input className="soft-input" value={settingsForm.timeZone} onChange={(event) => setSettingsForm((current) => ({ ...current, timeZone: event.target.value }))} />
-                </label>
-                <label className="space-y-2">
-                  <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Заморозка заявки, ч.</span>
-                  <input type="number" min="1" className="soft-input" value={settingsForm.bookingHoldHours} onChange={(event) => setSettingsForm((current) => ({ ...current, bookingHoldHours: event.target.value }))} />
-                </label>
-                <label className="space-y-2">
-                  <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Ночной запас, мин.</span>
-                  <input type="number" min="0" className="soft-input" value={settingsForm.nightReleaseAfterShiftMinutes} onChange={(event) => setSettingsForm((current) => ({ ...current, nightReleaseAfterShiftMinutes: event.target.value }))} />
-                </label>
-                <label className="space-y-2">
-                  <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Шаг эскалации, мин.</span>
-                  <input type="number" min="1" className="soft-input" value={settingsForm.escalationStepMinutes} onChange={(event) => setSettingsForm((current) => ({ ...current, escalationStepMinutes: event.target.value }))} />
-                </label>
-                <label className="space-y-2">
-                  <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Повторы до управляющего</span>
-                  <input type="number" min="1" className="soft-input" value={settingsForm.escalationRepeatsBeforeManager} onChange={(event) => setSettingsForm((current) => ({ ...current, escalationRepeatsBeforeManager: event.target.value }))} />
-                </label>
-              </div>
-
-              <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-                <button type="submit" className="brand-button gap-2" disabled={isSavingSettings}>
-                  <Save className="h-4 w-4" />
-                  {isSavingSettings ? "Сохраняем..." : "Сохранить параметры"}
-                </button>
-              </div>
-            </form>
-          </section>
-
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.7fr)]">
-            <section className="glass-card p-6">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-xl font-semibold tracking-[-0.03em] text-foreground">Недельный график</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">Повторяющиеся смены, по которым CRM определяет ответственных сотрудников.</p>
+              <div className="flex w-full flex-col gap-3 xl:w-auto xl:min-w-[520px] xl:flex-row">
+                <div className="relative min-w-0 flex-1">
+                  <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    type="search"
+                    className="soft-input pl-11"
+                    placeholder="Поиск по сотруднику, дню недели или комментарию"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                  />
                 </div>
-                <button type="button" className="soft-button" onClick={openCreateRuleModal} disabled={!staff.length}>
-                  Добавить правило
+                <button type="button" className="soft-button gap-2" onClick={openCreateRuleModal} disabled={!staff.length}>
+                  <PencilLine className="h-4 w-4" />
+                  Редактировать график
                 </button>
               </div>
+            </div>
 
-              <div className="mt-5 space-y-3">
-                {filteredRules.length ? (
-                  filteredRules.map((rule) => (
-                    <article key={rule.id} className="rounded-3xl border border-border bg-background/65 p-4">
-                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-foreground">{rule.admin_name}</p>
-                          <p className="mt-1 text-sm text-muted-foreground">{describeRule(rule)}</p>
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            <span className={`rounded-full border px-3 py-1 text-xs font-medium ${rule.is_active ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300" : "border-slate-500/25 bg-slate-500/10 text-slate-300"}`}>
-                              {rule.is_active ? "Активно" : "Выключено"}
-                            </span>
-                            {rule.is_night_shift ? (
-                              <span className="rounded-full border border-violet-500/25 bg-violet-500/10 px-3 py-1 text-xs font-medium text-violet-300">
-                                Ночная смена
-                              </span>
-                            ) : null}
-                          </div>
-                          {rule.comment ? <p className="mt-3 text-sm text-foreground/90">{rule.comment}</p> : null}
-                        </div>
-                        <div className="flex flex-col gap-2 sm:min-w-[140px]">
-                          <button type="button" className="soft-button" onClick={() => openEditRuleModal(rule)}>
-                            Изменить
-                          </button>
-                          <button
-                            type="button"
-                            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-2.5 text-sm font-medium text-rose-300 transition hover:bg-rose-500/18 disabled:cursor-not-allowed disabled:opacity-60"
-                            onClick={() => handleDeleteRule(rule)}
-                            disabled={deletingRuleId === rule.id}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            {deletingRuleId === rule.id ? "Удаляем..." : "Удалить"}
-                          </button>
-                        </div>
+            <div className="mt-5 overflow-x-auto rounded-3xl border border-border bg-background/55">
+              <div className="min-w-[980px]">
+                <div className="grid border-b border-border bg-card/70" style={{ gridTemplateColumns: "260px repeat(7, minmax(0, 1fr))" }}>
+                  <div className="sticky left-0 z-10 border-r border-border bg-card/90 px-5 py-4 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    Сотрудник
+                  </div>
+                  {weekdayLabels.map((label) => (
+                    <div key={label} className="border-r border-border px-4 py-4 text-sm font-semibold text-foreground last:border-r-0">
+                      {label}
+                    </div>
+                  ))}
+                </div>
+
+                {groupedRules.length ? (
+                  groupedRules.map((row) => (
+                    <div key={row.adminId} className="grid border-b border-border last:border-b-0" style={{ gridTemplateColumns: "260px repeat(7, minmax(0, 1fr))" }}>
+                      <div className="sticky left-0 z-10 border-r border-border bg-card/88 px-5 py-5">
+                        <p className="text-sm font-semibold text-foreground">{row.adminName}</p>
+                        <p className="mt-1 text-xs uppercase tracking-[0.18em] text-muted-foreground">{row.adminLogin}</p>
                       </div>
-                    </article>
+
+                      {row.days.map((dayRules, weekdayIndex) => (
+                        <div key={`${row.adminId}-${weekdayIndex}`} className="min-h-36 border-r border-border/80 p-3 last:border-r-0">
+                          {dayRules.length ? (
+                            <div className="space-y-2">
+                              {dayRules.map((rule) => (
+                                <article key={rule.id} className="rounded-2xl border border-border bg-card/75 p-3">
+                                  <p className="text-sm font-semibold text-foreground">
+                                    {rule.starts_at?.slice(0, 5)} → {rule.ends_at?.slice(0, 5)}
+                                  </p>
+                                  <div className="mt-2 flex flex-wrap gap-2">
+                                    <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${rule.is_active ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300" : "border-slate-500/25 bg-slate-500/10 text-slate-300"}`}>
+                                      {rule.is_active ? "Активно" : "Выключено"}
+                                    </span>
+                                    {rule.is_night_shift ? (
+                                      <span className="rounded-full border border-violet-500/25 bg-violet-500/10 px-2.5 py-1 text-[11px] font-medium text-violet-300">
+                                        Ночная
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                  {rule.comment ? <p className="mt-2 text-xs leading-5 text-muted-foreground">{rule.comment}</p> : null}
+                                  <div className="mt-3 flex gap-2">
+                                    <button type="button" className="soft-button px-3 py-2 text-xs" onClick={() => openEditRuleModal(rule)}>
+                                      Изменить
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="inline-flex items-center justify-center gap-2 rounded-2xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs font-medium text-rose-300 transition hover:bg-rose-500/18 disabled:cursor-not-allowed disabled:opacity-60"
+                                      onClick={() => handleDeleteRule(rule)}
+                                      disabled={deletingRuleId === rule.id}
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                      {deletingRuleId === rule.id ? "Удаляем..." : "Удалить"}
+                                    </button>
+                                  </div>
+                                </article>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="flex h-full min-h-30 items-center justify-center rounded-2xl border border-dashed border-border/70 bg-background/35 px-3 text-center text-xs leading-5 text-muted-foreground">
+                              Смена не назначена
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   ))
                 ) : (
-                  <EmptyState
-                    icon={CalendarClock}
-                    compact
-                    title="График ещё не настроен"
-                    description="Добавьте повторяющиеся смены, чтобы CRM понимала, кто отвечает за новые заявки днём и ночью."
-                  />
+                  <div className="p-6">
+                    <EmptyState
+                      icon={CalendarClock}
+                      compact
+                      title="Сменный график ещё не настроен"
+                      description="Добавьте правила смен, чтобы CRM понимала, кто работает в каждый день недели и как обрабатывать ночные заявки."
+                    />
+                  </div>
                 )}
               </div>
-            </section>
-
-            <section className="glass-card p-6">
-              <div className="flex items-center gap-3">
-                <AlarmClockCheck className="h-5 w-5 text-[#E5D3B3]" />
-                <div>
-                  <h2 className="text-xl font-semibold tracking-[-0.03em] text-foreground">Ближайшие дежурства</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">Следующие окна, в которые CRM будет назначать ответственного по заявкам.</p>
-                </div>
-              </div>
-
-              <div className="mt-5 space-y-3">
-                {overview?.upcoming_windows?.length ? (
-                  overview.upcoming_windows.map((windowItem) => (
-                    <article key={`${windowItem.rule_id}-${windowItem.starts_at}`} className="rounded-3xl border border-border bg-background/65 p-4">
-                      <p className="text-sm font-semibold text-foreground">{windowItem.admin_name}</p>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {windowItem.weekday_label} · {windowItem.starts_time} → {windowItem.ends_time}
-                      </p>
-                      <p className="mt-2 text-sm text-foreground">{formatDateTime(windowItem.starts_at, timeZone)}</p>
-                      {windowItem.is_night_shift ? (
-                        <p className="mt-2 text-xs font-medium uppercase tracking-[0.18em] text-violet-300">Ночная смена</p>
-                      ) : null}
-                    </article>
-                  ))
-                ) : (
-                  <EmptyState
-                    icon={AlarmClockCheck}
-                    compact
-                    title="Нет ближайших окон"
-                    description="После настройки правил здесь появится ближайшая смена и последовательность дежурств."
-                  />
-                )}
-              </div>
-            </section>
-          </div>
+            </div>
+          </section>
         </>
       )}
+
+      <ModalShell
+        open={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+        title="Время реакции CRM"
+        description="Настройте SLA обработки заявок: сколько держать бронь, когда включать эскалацию и сколько повторов отправлять до уведомления управляющего."
+      >
+        <form
+          className="space-y-5"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!selectedCampId) {
+              setErrorMessage("Сначала выберите базу.");
+              return;
+            }
+            setPendingChange({
+              title: "Чувствительное изменение времени реакции",
+              description: "Изменение SLA влияет на заморозку заявок, ночную обработку и эскалации. Решите, отправлять ли его управляющему на подтверждение или применять сразу под свою ответственность.",
+              operation: "shift_settings_update",
+              payload: toSettingsPayload(settingsForm) as Record<string, unknown>,
+              successPending: "Параметры времени реакции отправлены на подтверждение.",
+              successApplied: "Параметры времени реакции применены под вашу ответственность.",
+            });
+            setIsSettingsModalOpen(false);
+          }}
+        >
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="space-y-2">
+              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Заморозка заявки, ч.</span>
+              <input type="number" min="1" className="soft-input" value={settingsForm.bookingHoldHours} onChange={(event) => setSettingsForm((current) => ({ ...current, bookingHoldHours: event.target.value }))} />
+            </label>
+            <label className="space-y-2">
+              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Ночной запас, мин.</span>
+              <input type="number" min="0" className="soft-input" value={settingsForm.nightReleaseAfterShiftMinutes} onChange={(event) => setSettingsForm((current) => ({ ...current, nightReleaseAfterShiftMinutes: event.target.value }))} />
+            </label>
+            <label className="space-y-2">
+              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Шаг эскалации, мин.</span>
+              <input type="number" min="1" className="soft-input" value={settingsForm.escalationStepMinutes} onChange={(event) => setSettingsForm((current) => ({ ...current, escalationStepMinutes: event.target.value }))} />
+            </label>
+            <label className="space-y-2">
+              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Повторы до управляющего</span>
+              <input type="number" min="1" className="soft-input" value={settingsForm.escalationRepeatsBeforeManager} onChange={(event) => setSettingsForm((current) => ({ ...current, escalationRepeatsBeforeManager: event.target.value }))} />
+            </label>
+          </div>
+
+          <div className="flex flex-col gap-3 border-t border-border pt-2 sm:flex-row sm:justify-end">
+            <button type="button" className="soft-button" onClick={() => setIsSettingsModalOpen(false)}>
+              Отмена
+            </button>
+            <button type="submit" className="brand-button gap-2 justify-center">
+              <Save className="h-4 w-4" />
+              Сохранить параметры
+            </button>
+          </div>
+        </form>
+      </ModalShell>
 
       <ModalShell
         open={isRuleModalOpen}
