@@ -7,8 +7,11 @@ import { SectionHeading } from "../components/SectionHeading";
 import { SensitiveChangeModal } from "../components/SensitiveChangeModal";
 import {
   createCrmChangeRequest,
+  createCrmShiftRule,
+  deleteCrmShiftRule,
   fetchCrmCamps,
   fetchCrmShifts,
+  updateCrmShiftRule,
   type CrmCamp,
   type CrmShiftRule,
   type CrmShiftRuleUpsertPayload,
@@ -25,6 +28,12 @@ type ShiftSettingsForm = {
 };
 
 type ShiftRuleForm = {
+  startsAt: string;
+  endsAt: string;
+  comment: string;
+};
+
+type ShiftPresetForm = {
   startsAt: string;
   endsAt: string;
 };
@@ -60,6 +69,12 @@ const emptySettingsForm: ShiftSettingsForm = {
 };
 
 const emptyRuleForm: ShiftRuleForm = {
+  startsAt: "09:00",
+  endsAt: "18:00",
+  comment: "",
+};
+
+const emptyPresetForm: ShiftPresetForm = {
   startsAt: "09:00",
   endsAt: "18:00",
 };
@@ -165,6 +180,7 @@ function mapRuleForm(rule: CrmShiftRule): ShiftRuleForm {
   return {
     startsAt: rule.starts_at?.slice(0, 5) || "09:00",
     endsAt: rule.ends_at?.slice(0, 5) || "18:00",
+    comment: rule.comment || "",
   };
 }
 
@@ -176,7 +192,7 @@ function toRulePayload(form: ShiftRuleForm, target: ShiftTarget): CrmShiftRuleUp
     ends_at: form.endsAt,
     is_night_shift: target.existingRule?.is_night_shift || false,
     is_active: target.existingRule?.is_active ?? true,
-    comment: target.existingRule?.comment || undefined,
+    comment: form.comment.trim() || undefined,
   };
 }
 
@@ -199,11 +215,14 @@ export default function ShiftsPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
   const [isRuleModalOpen, setIsRuleModalOpen] = useState(false);
+  const [isPresetModalOpen, setIsPresetModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<CrmShiftRule | null>(null);
   const [activeTarget, setActiveTarget] = useState<ShiftTarget | null>(null);
   const [ruleForm, setRuleForm] = useState<ShiftRuleForm>(emptyRuleForm);
+  const [presetForm, setPresetForm] = useState<ShiftPresetForm>(emptyPresetForm);
   const [ruleError, setRuleError] = useState("");
+  const [isSavingRule, setIsSavingRule] = useState(false);
   const [deletingRuleId, setDeletingRuleId] = useState<number | null>(null);
   const [pendingChange, setPendingChange] = useState<PendingSensitiveChange | null>(null);
   const [isSubmittingChange, setIsSubmittingChange] = useState(false);
@@ -336,18 +355,21 @@ export default function ShiftsPage() {
   function openTargetModal(target: ShiftTarget, rule?: CrmShiftRule | null) {
     setActiveTarget(target);
     setEditingRule(rule || null);
-    setRuleForm(rule ? mapRuleForm(rule) : emptyRuleForm);
+    setRuleForm(
+      rule
+        ? mapRuleForm(rule)
+        : {
+            startsAt: presetForm.startsAt,
+            endsAt: presetForm.endsAt,
+            comment: "",
+          },
+    );
     setRuleError("");
     setIsRuleModalOpen(true);
   }
 
   function openCreateRuleModal() {
-    if (!sortedStaff.length) {
-      return;
-    }
-    const todayKey = formatDateParam(new Date());
-    const initialDate = visibleDates.find((item) => formatDateParam(item) === todayKey) || visibleDates[0] || new Date();
-    openTargetModal(buildTarget(sortedStaff[0], initialDate));
+    setIsPresetModalOpen(true);
   }
 
   function openCellModal(member: CrmShiftStaffOption, date: Date, rule?: CrmShiftRule | null) {
@@ -360,36 +382,76 @@ export default function ShiftsPage() {
       setRuleError("Сначала выберите базу и ячейку графика.");
       return;
     }
-
-    setPendingChange({
-      title: editingRule ? "Согласование изменения смены" : "Согласование параметров смены",
-      description: "График смен влияет на ночной сценарий, эскалации и распределение заявок. Это изменение должно быть подтверждено или применено под ответственность инициатора.",
-      operation: editingRule ? "shift_rule_update" : "shift_rule_create",
-      payload: editingRule
-        ? ({ rule_id: editingRule.id, data: toRulePayload(ruleForm, activeTarget) } as Record<string, unknown>)
-        : (toRulePayload(ruleForm, activeTarget) as Record<string, unknown>),
-      successPending: editingRule ? "Параметры смены отправлены на подтверждение." : "Параметры смены отправлены на подтверждение.",
-      successApplied: editingRule ? "Параметры смены применены под вашу ответственность." : "Параметры смены применены под вашу ответственность.",
-    });
-    setIsRuleModalOpen(false);
-    setEditingRule(null);
-    setActiveTarget(null);
-    setRuleError("");
+    try {
+      setIsSavingRule(true);
+      setRuleError("");
+      setErrorMessage("");
+      if (editingRule) {
+        await updateCrmShiftRule(selectedCampId, editingRule.id, toRulePayload(ruleForm, activeTarget));
+        setSuccessMessage("Параметры смены сохранены.");
+      } else {
+        await createCrmShiftRule(selectedCampId, toRulePayload(ruleForm, activeTarget));
+        setSuccessMessage("Смена назначена.");
+      }
+      setPresetForm((current) => ({
+        ...current,
+        startsAt: ruleForm.startsAt,
+        endsAt: ruleForm.endsAt,
+      }));
+      setIsRuleModalOpen(false);
+      setEditingRule(null);
+      setActiveTarget(null);
+      setReloadKey((value) => value + 1);
+    } catch (error) {
+      setRuleError(error instanceof Error ? error.message : "Не удалось сохранить параметры смены");
+    } finally {
+      setIsSavingRule(false);
+    }
   }
 
   async function handleDeleteRule(rule: CrmShiftRule) {
-    setDeletingRuleId(rule.id);
-    setPendingChange({
-      title: "Согласование удаления смены",
-      description: "Удаление смены меняет логику назначения ответственного и ночную обработку заявок. Это действие нужно согласовать или применить под ответственность.",
-      operation: "shift_rule_delete",
-      payload: { rule_id: rule.id },
-      successPending: `Удаление смены отправлено на подтверждение: ${describeRule(rule)}`,
-      successApplied: `Удаление смены применено под вашу ответственность: ${describeRule(rule)}`,
-    });
-    setIsRuleModalOpen(false);
-    setEditingRule(null);
-    setActiveTarget(null);
+    if (!selectedCampId) {
+      return;
+    }
+    try {
+      setDeletingRuleId(rule.id);
+      setRuleError("");
+      setErrorMessage("");
+      await deleteCrmShiftRule(selectedCampId, rule.id);
+      setSuccessMessage(`Смена удалена: ${describeRule(rule)}`);
+      setIsRuleModalOpen(false);
+      setEditingRule(null);
+      setActiveTarget(null);
+      setReloadKey((value) => value + 1);
+    } catch (error) {
+      setRuleError(error instanceof Error ? error.message : "Не удалось удалить смену");
+    } finally {
+      setDeletingRuleId(null);
+    }
+  }
+
+  async function handleQuickAssign(member: CrmShiftStaffOption, date: Date) {
+    if (!selectedCampId) {
+      return;
+    }
+    try {
+      setErrorMessage("");
+      await createCrmShiftRule(
+        selectedCampId,
+        toRulePayload(
+          {
+            startsAt: presetForm.startsAt,
+            endsAt: presetForm.endsAt,
+            comment: "",
+          },
+          buildTarget(member, date),
+        ),
+      );
+      setSuccessMessage(`Смена назначена: ${member.display_name} · ${presetForm.startsAt} → ${presetForm.endsAt}`);
+      setReloadKey((value) => value + 1);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Не удалось назначить смену");
+    }
   }
 
   async function submitSensitiveChange(applyMode: "pending_review" | "apply_with_responsibility", comment: string) {
@@ -650,29 +712,50 @@ export default function ShiftsPage() {
                           <div key={`${member.id}-${dateKey}`} className="min-h-28 border-r border-border/80 p-2 last:border-r-0">
                             {cellRules.length ? (
                               <div className="space-y-2">
-                                {cellRules.map((rule) => (
-                                  <button
-                                    key={rule.id}
-                                    type="button"
-                                    className="flex w-full flex-col rounded-2xl border border-[#E5D3B3]/22 bg-[#E5D3B3]/10 px-2.5 py-2 text-left transition hover:bg-[#E5D3B3]/16"
-                                    onClick={() => openCellModal(member, date, rule)}
-                                  >
-                                    <span className="text-xs font-semibold text-foreground">
-                                      {rule.starts_at?.slice(0, 5)} → {rule.ends_at?.slice(0, 5)}
-                                    </span>
-                                    <span className="mt-1 text-[11px] text-muted-foreground">
-                                      {rule.is_night_shift ? "Ночная смена" : "Рабочее окно"}
-                                    </span>
-                                  </button>
-                                ))}
+                                {cellRules.map((rule) => {
+                                  const commentTooltip = rule.comment
+                                    ? `Комментарий: ${rule.comment}\nОставил: ${rule.comment_author_display || "Сотрудник"}`
+                                    : "";
+                                  return (
+                                    <button
+                                      key={rule.id}
+                                      type="button"
+                                      title={commentTooltip || undefined}
+                                      className="group relative flex w-full flex-col rounded-2xl border border-[#E5D3B3]/22 bg-[#E5D3B3]/10 px-2.5 py-2 text-left transition hover:bg-[#E5D3B3]/16"
+                                      onContextMenu={(event) => {
+                                        event.preventDefault();
+                                        openCellModal(member, date, rule);
+                                      }}
+                                    >
+                                      {rule.comment ? <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#E5D3B3]" /> : null}
+                                      <span className="pr-3 text-xs font-semibold leading-4 text-foreground">
+                                        {rule.starts_at?.slice(0, 5)} → {rule.ends_at?.slice(0, 5)}
+                                      </span>
+                                      <span className="mt-1 text-[11px] text-muted-foreground">
+                                        {rule.comment ? "Есть комментарий" : rule.is_night_shift ? "Ночная смена" : "Рабочее окно"}
+                                      </span>
+                                      {rule.comment ? (
+                                        <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden w-52 -translate-x-1/2 rounded-2xl border border-border bg-card/98 px-3 py-2 text-[11px] leading-4 text-foreground shadow-xl group-hover:block">
+                                          <span className="block font-medium">{rule.comment_author_display || "Сотрудник"}</span>
+                                          <span className="mt-1 block text-muted-foreground">{rule.comment}</span>
+                                        </span>
+                                      ) : null}
+                                    </button>
+                                  );
+                                })}
                               </div>
                             ) : (
                               <button
                                 type="button"
+                                title={`Левая кнопка: назначить ${presetForm.startsAt} → ${presetForm.endsAt}. Правая кнопка: открыть параметры.`}
                                 className="flex h-full min-h-24 w-full items-center justify-center rounded-2xl border border-dashed border-border/70 bg-background/35 px-3 text-center text-xs leading-5 text-muted-foreground transition hover:border-[#E5D3B3]/30 hover:text-foreground"
-                                onClick={() => openCellModal(member, date)}
+                                onClick={() => void handleQuickAssign(member, date)}
+                                onContextMenu={(event) => {
+                                  event.preventDefault();
+                                  openCellModal(member, date);
+                                }}
                               >
-                                Назначить смену
+                                <span className="text-lg leading-none text-[#E5D3B3]">+</span>
                               </button>
                             )}
                           </div>
@@ -695,6 +778,46 @@ export default function ShiftsPage() {
           </section>
         </>
       )}
+
+      <ModalShell
+        open={isPresetModalOpen}
+        onClose={() => setIsPresetModalOpen(false)}
+        title="Параметры смены"
+      >
+        <form
+          className="space-y-5"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setPresetForm({
+              startsAt: presetForm.startsAt,
+              endsAt: presetForm.endsAt,
+            });
+            setSuccessMessage(`Параметры смены сохранены: ${presetForm.startsAt} → ${presetForm.endsAt}`);
+            setIsPresetModalOpen(false);
+          }}
+        >
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="space-y-2">
+              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Начало смены</span>
+              <input type="time" className="soft-input" value={presetForm.startsAt} onChange={(event) => setPresetForm((current) => ({ ...current, startsAt: event.target.value }))} />
+            </label>
+            <label className="space-y-2">
+              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Конец смены</span>
+              <input type="time" className="soft-input" value={presetForm.endsAt} onChange={(event) => setPresetForm((current) => ({ ...current, endsAt: event.target.value }))} />
+            </label>
+          </div>
+
+          <div className="flex flex-col gap-3 border-t border-border pt-2 sm:flex-row sm:justify-end">
+            <button type="button" className="soft-button px-4 py-2.5 text-sm" onClick={() => setIsPresetModalOpen(false)}>
+              Отмена
+            </button>
+            <button type="submit" className="brand-button justify-center gap-2 px-5 py-2.5 text-sm">
+              <Save className="h-4 w-4" />
+              Сохранить параметры
+            </button>
+          </div>
+        </form>
+      </ModalShell>
 
       <ModalShell
         open={isSettingsModalOpen}
@@ -761,24 +884,10 @@ export default function ShiftsPage() {
           setRuleError("");
         }}
         title="Параметры смены"
-        description="Укажите только начало и конец смены для выбранной ячейки графика."
       >
         <form className="space-y-5" onSubmit={handleSaveRule}>
           {ruleError ? (
             <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{ruleError}</div>
-          ) : null}
-
-          {activeTarget ? (
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-2xl border border-border bg-background/60 px-4 py-3">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Сотрудник</p>
-                <p className="mt-1 text-sm font-medium text-foreground">{activeTarget.adminName}</p>
-              </div>
-              <div className="rounded-2xl border border-border bg-background/60 px-4 py-3">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">День</p>
-                <p className="mt-1 text-sm font-medium text-foreground">{activeTarget.dateLabel}</p>
-              </div>
-            </div>
           ) : null}
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -792,6 +901,16 @@ export default function ShiftsPage() {
             </label>
           </div>
 
+          <label className="space-y-2">
+            <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Комментарий</span>
+            <textarea
+              className="soft-input min-h-24 resize-y"
+              value={ruleForm.comment}
+              onChange={(event) => setRuleForm((current) => ({ ...current, comment: event.target.value }))}
+              placeholder="Комментарий к смене"
+            />
+          </label>
+
           <div className="flex flex-col gap-3 border-t border-border pt-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               {editingRule ? (
@@ -799,7 +918,7 @@ export default function ShiftsPage() {
                   type="button"
                   className="inline-flex items-center justify-center gap-2 rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-2.5 text-sm font-medium text-rose-300 transition hover:bg-rose-500/18 disabled:cursor-not-allowed disabled:opacity-60"
                   onClick={() => void handleDeleteRule(editingRule)}
-                  disabled={deletingRuleId === editingRule.id}
+                  disabled={deletingRuleId === editingRule.id || isSavingRule}
                 >
                   <Trash2 className="h-4 w-4" />
                   {deletingRuleId === editingRule.id ? "Удаляем..." : "Удалить"}
@@ -816,12 +935,13 @@ export default function ShiftsPage() {
                   setActiveTarget(null);
                   setRuleError("");
                 }}
+                disabled={isSavingRule}
               >
                 Отмена
               </button>
-              <button type="submit" className="brand-button justify-center gap-2 px-5 py-2.5 text-sm">
+              <button type="submit" className="brand-button justify-center gap-2 px-5 py-2.5 text-sm" disabled={isSavingRule}>
                 <Save className="h-4 w-4" />
-                Сохранить параметры
+                {isSavingRule ? "Сохраняем..." : "Сохранить параметры"}
               </button>
             </div>
           </div>

@@ -594,6 +594,8 @@ MIGRATIONS = (
         );
         CREATE INDEX IF NOT EXISTS idx_shift_schedule_rules_camp_weekday
         ON crm.shift_schedule_rules(camp_id, weekday, is_active);
+        ALTER TABLE crm.shift_schedule_rules
+        ADD COLUMN IF NOT EXISTS updated_by_admin_id INTEGER;
 
         CREATE TABLE IF NOT EXISTS crm.shift_assignments (
             id BIGSERIAL PRIMARY KEY,

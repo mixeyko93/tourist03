@@ -291,6 +291,8 @@ export type CrmShiftRule = {
   is_night_shift: boolean;
   is_active: boolean;
   comment: string | null;
+  comment_author_display: string | null;
+  comment_author_login: string | null;
   created_at: string;
   updated_at: string;
 };

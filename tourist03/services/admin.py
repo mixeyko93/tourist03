@@ -2114,7 +2114,7 @@ def api_admin_update_shift_rule(
         raise HTTPException(status_code=400, detail="Некорректный день недели")
     _parse_shift_time(payload.starts_at)
     _parse_shift_time(payload.ends_at)
-    changed = admin_repo.update_camp_shift_rule(camp_id, rule_id, payload.model_dump())
+    changed = admin_repo.update_camp_shift_rule(camp_id, rule_id, payload.model_dump(), int(admin["id"]))
     if not changed:
         raise HTTPException(status_code=404, detail="Правило смены не найдено")
     after = admin_repo.get_camp_shift_rule(camp_id, rule_id)
