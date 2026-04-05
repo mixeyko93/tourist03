@@ -15,11 +15,23 @@ router = APIRouter()
 router.add_api_route("/api/admin/login", admin_service.admin_login, methods=["POST"], responses=error_responses(400, 422, 500))
 router.add_api_route("/api/admin/logout", admin_service.admin_logout, methods=["POST"], responses=error_responses(500))
 router.add_api_route(
+    "/api/public/ui-overrides/{override_key}",
+    admin_service.api_public_ui_override,
+    methods=["GET"],
+    responses=error_responses(404, 500),
+)
+router.add_api_route(
     "/api/admin/me",
     admin_service.admin_me,
     methods=["GET"],
     response_model=AdminMeResponse,
     responses=error_responses(401, 500),
+)
+router.add_api_route(
+    "/api/admin/ui-overrides/{override_key}",
+    admin_service.api_admin_save_ui_override,
+    methods=["PUT"],
+    responses=error_responses(401, 404, 422, 500),
 )
 router.add_api_route(
     "/api/admin/my-camps",

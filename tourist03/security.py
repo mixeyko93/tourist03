@@ -612,6 +612,27 @@ def get_root_superadmin(request: Request):
     return principal
 
 
+def get_ui_override_editor(request: Request):
+    superadmin = get_superadmin_session_principal(request)
+    if superadmin:
+        return {
+            "actor_type": "superadmin",
+            "actor_id": superadmin.get("id"),
+            "actor_display": superadmin.get("display_name") or superadmin.get("login") or "Суперадмин",
+        }
+
+    try:
+        admin = get_current_admin(request)
+    except HTTPException as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Нет доступа для сохранения правок") from exc
+
+    return {
+        "actor_type": "camp_admin",
+        "actor_id": admin.get("id"),
+        "actor_display": admin.get("display_name") or admin.get("email") or "Сотрудник CRM",
+    }
+
+
 __all__ = [
     "_get_admin_camp_ids",
     "_get_user_by_phone",
@@ -620,6 +641,7 @@ __all__ = [
     "_user_public",
     "get_current_admin",
     "get_current_user",
+    "get_ui_override_editor",
     "get_superadmin",
     "get_root_superadmin",
     "get_superadmin_session_principal",

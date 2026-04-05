@@ -9,6 +9,10 @@ class AdminLoginRequest(BaseModel):
     password: str
 
 
+class UiOverrideSaveRequest(BaseModel):
+    payload: Dict[str, Any] = {}
+
+
 class SuperAdminLoginRequest(BaseModel):
     key: Optional[str] = None
     login: Optional[str] = None

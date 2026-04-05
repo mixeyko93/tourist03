@@ -13,6 +13,7 @@ from tourist03.domain import bookings as booking_domain
 from tourist03.domain import crm as crm_domain
 from tourist03.repositories import admin as admin_repo
 from tourist03.repositories import notifications as notification_repo
+from tourist03.repositories import ui_overrides as ui_override_repo
 from tourist03.storage import _normalize_move
 from tourist03.schemas import (
     AdminCampProfileUpdateRequest,
@@ -27,6 +28,7 @@ from tourist03.schemas import (
     AdminStaffUpsertRequest,
     AdminServiceUpsertRequest,
     BookingAdminUpdateRequest,
+    UiOverrideSaveRequest,
 )
 from tourist03.serializers import bookings as booking_serializers
 from tourist03.security import (
@@ -34,12 +36,16 @@ from tourist03.security import (
     _normalize_phone,
     create_notification_event,
     get_current_admin,
+    get_ui_override_editor,
     hash_password,
     issue_admin_telegram_link_code,
     log_crm_audit_event,
     log_user_event,
     verify_password,
 )
+
+
+ALLOWED_UI_OVERRIDE_KEYS = {"crm_login_page"}
 
 
 def _raise_booking_write_http_error(exc: Exception):
@@ -369,6 +375,54 @@ def admin_logout(request: Request):
 
 def admin_me(admin: dict = Depends(get_current_admin)):
     return admin
+
+
+def _validate_ui_override_key(override_key: str) -> str:
+    normalized = (override_key or "").strip().lower()
+    if normalized not in ALLOWED_UI_OVERRIDE_KEYS:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Шаблон интерфейса не найден")
+    return normalized
+
+
+def api_public_ui_override(override_key: str):
+    normalized = _validate_ui_override_key(override_key)
+    row = ui_override_repo.get_ui_override(normalized)
+    return {
+        "key": normalized,
+        "payload": (row or {}).get("payload") or {},
+        "updated_at": (row or {}).get("updated_at"),
+    }
+
+
+def api_admin_save_ui_override(
+    override_key: str,
+    payload: UiOverrideSaveRequest,
+    editor: dict = Depends(get_ui_override_editor),
+):
+    normalized = _validate_ui_override_key(override_key)
+    previous = ui_override_repo.get_ui_override(normalized)
+    saved = ui_override_repo.save_ui_override(
+        normalized,
+        payload.payload if isinstance(payload.payload, dict) else {},
+        actor_type=str(editor.get("actor_type") or "camp_admin"),
+        actor_id=editor.get("actor_id"),
+        actor_display=editor.get("actor_display"),
+    )
+    log_crm_audit_event(
+        actor_type=str(editor.get("actor_type") or "camp_admin"),
+        actor_id=editor.get("actor_id"),
+        actor_display=editor.get("actor_display"),
+        target_type="ui_override",
+        target_id=normalized,
+        action_type="ui_override_saved",
+        action_label="Сохранены правки интерфейса",
+        changed_field=normalized,
+        old_value=(previous or {}).get("payload") or {},
+        new_value=saved.get("payload") or {},
+        comment="Изменена конфигурация публичной страницы CRM",
+        metadata={"override_key": normalized},
+    )
+    return saved
 
 
 def _month_start(day: date) -> date:

@@ -847,6 +847,19 @@ MIGRATIONS = (
         ON catalog.room_media(moderation_status, created_at DESC);
         """,
     ),
+    MigrationStep(
+        version="0006_ui_overrides",
+        sql="""
+        CREATE TABLE IF NOT EXISTS crm.ui_overrides (
+            key TEXT PRIMARY KEY,
+            payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+            updated_by_actor_type TEXT,
+            updated_by_actor_id INTEGER,
+            updated_by_actor_display TEXT,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+        """,
+    ),
 )
 
 

@@ -13,6 +13,12 @@ export type CrmLoginPayload = {
   password: string;
 };
 
+export type CrmUiOverrideResponse = {
+  key: string;
+  payload: Record<string, unknown>;
+  updated_at?: string | null;
+};
+
 export type CrmCamp = {
   id: number;
   name: string;
@@ -544,6 +550,28 @@ export async function logoutCrmSession() {
     credentials: "same-origin",
   });
   await assertOk(response);
+}
+
+export async function fetchPublicUiOverride(key: string, signal?: AbortSignal): Promise<CrmUiOverrideResponse> {
+  const response = await fetch(`/api/public/ui-overrides/${encodeURIComponent(key)}`, {
+    credentials: "same-origin",
+    signal,
+  });
+  await assertOk(response);
+  return (await response.json()) as CrmUiOverrideResponse;
+}
+
+export async function saveCrmUiOverride(key: string, payload: Record<string, unknown>): Promise<CrmUiOverrideResponse> {
+  const response = await fetch(`/api/admin/ui-overrides/${encodeURIComponent(key)}`, {
+    method: "PUT",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ payload }),
+  });
+  await assertOk(response);
+  return (await response.json()) as CrmUiOverrideResponse;
 }
 
 export async function fetchCrmCamps(signal?: AbortSignal): Promise<CrmCamp[]> {
