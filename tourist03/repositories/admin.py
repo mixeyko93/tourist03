@@ -112,6 +112,7 @@ def list_camp_shift_rules(camp_id: int):
                 r.admin_id,
                 a.display_name AS admin_name,
                 a.email AS admin_email,
+                r.shift_date,
                 r.weekday,
                 r.starts_at,
                 r.ends_at,
@@ -127,7 +128,7 @@ def list_camp_shift_rules(camp_id: int):
             LEFT JOIN auth.camp_admin_accounts creator ON creator.id = r.created_by_admin_id
             LEFT JOIN auth.camp_admin_accounts updater ON updater.id = r.updated_by_admin_id
             WHERE r.camp_id = %s
-            ORDER BY r.weekday ASC, r.starts_at ASC, a.display_name ASC
+            ORDER BY r.shift_date ASC NULLS LAST, r.starts_at ASC, a.display_name ASC
             """,
             (camp_id,),
         )
@@ -145,6 +146,7 @@ def get_camp_shift_rule(camp_id: int, rule_id: int):
                 r.admin_id,
                 a.display_name AS admin_name,
                 a.email AS admin_email,
+                r.shift_date,
                 r.weekday,
                 r.starts_at,
                 r.ends_at,
@@ -177,6 +179,7 @@ def create_camp_shift_rule(camp_id: int, payload: dict, actor_admin_id: int) -> 
             INSERT INTO crm.shift_schedule_rules (
                 camp_id,
                 admin_id,
+                shift_date,
                 weekday,
                 starts_at,
                 ends_at,
@@ -192,6 +195,7 @@ def create_camp_shift_rule(camp_id: int, payload: dict, actor_admin_id: int) -> 
             (
                 camp_id,
                 int(payload.get("admin_id")),
+                payload.get("shift_date"),
                 int(payload.get("weekday")),
                 payload.get("starts_at"),
                 payload.get("ends_at"),
@@ -214,6 +218,7 @@ def update_camp_shift_rule(camp_id: int, rule_id: int, payload: dict, actor_admi
             """
             UPDATE crm.shift_schedule_rules
             SET admin_id = %s,
+                shift_date = %s,
                 weekday = %s,
                 starts_at = %s,
                 ends_at = %s,
@@ -227,6 +232,7 @@ def update_camp_shift_rule(camp_id: int, rule_id: int, payload: dict, actor_admi
             """,
             (
                 int(payload.get("admin_id")),
+                payload.get("shift_date"),
                 int(payload.get("weekday")),
                 payload.get("starts_at"),
                 payload.get("ends_at"),

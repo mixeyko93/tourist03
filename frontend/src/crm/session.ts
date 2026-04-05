@@ -285,6 +285,7 @@ export type CrmShiftRule = {
   admin_id: number;
   admin_name: string;
   admin_email: string;
+  shift_date: string | null;
   weekday: number;
   starts_at: string;
   ends_at: string;
@@ -462,7 +463,7 @@ export type CrmShiftSettingsUpdatePayload = {
 
 export type CrmShiftRuleUpsertPayload = {
   admin_id: number;
-  weekday: number;
+  shift_date: string;
   starts_at: string;
   ends_at: string;
   is_night_shift: boolean;

@@ -736,16 +736,18 @@ def _normalize_room_payload(raw_payload: dict) -> dict:
 
 
 def _normalize_shift_rule_payload(raw_payload: dict) -> dict:
-    weekday_value = int(raw_payload.get("weekday") or 0)
-    if weekday_value < 0 or weekday_value > 6:
-        raise HTTPException(status_code=400, detail="Некорректный день недели")
+    try:
+        shift_date_value = date.fromisoformat(str(raw_payload.get("shift_date") or "").strip())
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Некорректная дата смены") from exc
     starts_at = str(raw_payload.get("starts_at") or "").strip()
     ends_at = str(raw_payload.get("ends_at") or "").strip()
     _parse_shift_time(starts_at)
     _parse_shift_time(ends_at)
     return {
         "admin_id": int(raw_payload.get("admin_id") or 0),
-        "weekday": weekday_value,
+        "shift_date": shift_date_value,
+        "weekday": shift_date_value.weekday(),
         "starts_at": starts_at,
         "ends_at": ends_at,
         "is_night_shift": bool(raw_payload.get("is_night_shift")),
@@ -791,7 +793,7 @@ def _prepare_change_request_payload(camp_id: int, admin: dict, operation: str, r
             "change_kind": "shift_schedule",
             "target_type": "shift_rule",
             "target_id": None,
-            "summary": f"Добавление смены · {staff.get('display_name') or staff.get('email') or 'Сотрудник'} · {_weekday_label(after['weekday'])} · {after['starts_at']} → {after['ends_at']}",
+            "summary": f"Добавление смены · {staff.get('display_name') or staff.get('email') or 'Сотрудник'} · {_date_label(after['shift_date'])} · {after['starts_at']} → {after['ends_at']}",
             "payload": {"operation": normalized_operation, "after": after},
         }
 
@@ -809,7 +811,7 @@ def _prepare_change_request_payload(camp_id: int, admin: dict, operation: str, r
             "change_kind": "shift_schedule",
             "target_type": "shift_rule",
             "target_id": str(rule_id),
-            "summary": f"Изменение смены · {staff.get('display_name') or staff.get('email') or 'Сотрудник'} · {_weekday_label(after['weekday'])} · {after['starts_at']} → {after['ends_at']}",
+            "summary": f"Изменение смены · {staff.get('display_name') or staff.get('email') or 'Сотрудник'} · {_date_label(after['shift_date'])} · {after['starts_at']} → {after['ends_at']}",
             "payload": {"operation": normalized_operation, "rule_id": rule_id, "before": before, "after": after},
         }
 
@@ -823,7 +825,7 @@ def _prepare_change_request_payload(camp_id: int, admin: dict, operation: str, r
             "change_kind": "shift_schedule",
             "target_type": "shift_rule",
             "target_id": str(rule_id),
-            "summary": f"Удаление смены · {before.get('admin_name') or before.get('admin_email') or 'Сотрудник'} · {_weekday_label(int(before.get('weekday') or 0))} · {str(before.get('starts_at') or '')[:5]} → {str(before.get('ends_at') or '')[:5]}",
+            "summary": f"Удаление смены · {before.get('admin_name') or before.get('admin_email') or 'Сотрудник'} · {_date_label(before.get('shift_date')) if isinstance(before.get('shift_date'), date) else _weekday_label(int(before.get('weekday') or 0))} · {str(before.get('starts_at') or '')[:5]} → {str(before.get('ends_at') or '')[:5]}",
             "payload": {"operation": normalized_operation, "rule_id": rule_id, "before": before},
         }
 
@@ -1233,6 +1235,10 @@ def _weekday_label(weekday: int) -> str:
         return f"День {weekday}"
 
 
+def _date_label(value: date) -> str:
+    return value.strftime("%d.%m.%Y")
+
+
 def _resolve_shift_window(anchor_day: date, starts_at_value, ends_at_value) -> tuple[datetime, datetime]:
     start_time = starts_at_value if isinstance(starts_at_value, time) else _parse_shift_time(str(starts_at_value))
     end_time = ends_at_value if isinstance(ends_at_value, time) else _parse_shift_time(str(ends_at_value))
@@ -1244,10 +1250,12 @@ def _resolve_shift_window(anchor_day: date, starts_at_value, ends_at_value) -> t
 
 
 def _serialize_shift_occurrence(rule: dict, starts_at: datetime, ends_at: datetime, *, timezone_name: str) -> dict:
+    shift_date = rule.get("shift_date")
     return {
         "rule_id": rule.get("id"),
         "admin_id": rule.get("admin_id"),
         "admin_name": rule.get("admin_name") or rule.get("admin_email") or f"Сотрудник #{rule.get('admin_id')}",
+        "shift_date": shift_date.isoformat() if isinstance(shift_date, date) else shift_date,
         "weekday": rule.get("weekday"),
         "weekday_label": _weekday_label(int(rule.get("weekday") or 0)),
         "starts_at": starts_at.isoformat(),
@@ -1273,37 +1281,22 @@ def _build_shift_overview(timezone_name: str, rules: list[dict]) -> dict:
     next_occurrence: Optional[dict] = None
     upcoming_windows: list[dict] = []
 
-    for offset in range(0, 14):
-        anchor_day = (now + timedelta(days=offset)).date()
-        weekday_value = anchor_day.weekday()
-        for rule in rules:
-            if not rule.get("is_active"):
-                continue
-            if int(rule.get("weekday") or 0) != weekday_value:
-                continue
-            starts_at_naive, ends_at_naive = _resolve_shift_window(anchor_day, rule.get("starts_at"), rule.get("ends_at"))
-            starts_at = starts_at_naive.replace(tzinfo=zone)
-            ends_at = ends_at_naive.replace(tzinfo=zone)
-            occurrence = _serialize_shift_occurrence(rule, starts_at, ends_at, timezone_name=timezone_name)
-            if starts_at <= now < ends_at:
-                active_rules.append(occurrence)
-            if starts_at > now:
-                upcoming_windows.append(occurrence)
-                if next_occurrence is None or starts_at < datetime.fromisoformat(next_occurrence["starts_at"]):
-                    next_occurrence = occurrence
-
-    previous_day = (now - timedelta(days=1)).date()
-    previous_weekday = previous_day.weekday()
     for rule in rules:
         if not rule.get("is_active"):
             continue
-        if int(rule.get("weekday") or 0) != previous_weekday:
+        anchor_day = rule.get("shift_date")
+        if not isinstance(anchor_day, date):
             continue
-        starts_at_naive, ends_at_naive = _resolve_shift_window(previous_day, rule.get("starts_at"), rule.get("ends_at"))
+        starts_at_naive, ends_at_naive = _resolve_shift_window(anchor_day, rule.get("starts_at"), rule.get("ends_at"))
         starts_at = starts_at_naive.replace(tzinfo=zone)
         ends_at = ends_at_naive.replace(tzinfo=zone)
+        occurrence = _serialize_shift_occurrence(rule, starts_at, ends_at, timezone_name=timezone_name)
         if starts_at <= now < ends_at:
-            active_rules.append(_serialize_shift_occurrence(rule, starts_at, ends_at, timezone_name=timezone_name))
+            active_rules.append(occurrence)
+        if starts_at > now:
+            upcoming_windows.append(occurrence)
+            if next_occurrence is None or starts_at < datetime.fromisoformat(next_occurrence["starts_at"]):
+                next_occurrence = occurrence
 
     active_rules.sort(key=lambda item: (item["starts_at"], item["admin_name"]))
     upcoming_windows.sort(key=lambda item: (item["starts_at"], item["admin_name"]))
@@ -2065,11 +2058,11 @@ def api_admin_create_shift_rule(
     _ensure_admin_shift_access(admin, camp_id)
     if not admin_repo.get_admin_staff_member(camp_id, payload.admin_id):
         raise HTTPException(status_code=400, detail="Сотрудник не привязан к этой базе")
-    if payload.weekday < 0 or payload.weekday > 6:
-        raise HTTPException(status_code=400, detail="Некорректный день недели")
     _parse_shift_time(payload.starts_at)
     _parse_shift_time(payload.ends_at)
-    rule_id = admin_repo.create_camp_shift_rule(camp_id, payload.model_dump(), int(admin["id"]))
+    payload_data = payload.model_dump()
+    payload_data["weekday"] = payload.shift_date.weekday()
+    rule_id = admin_repo.create_camp_shift_rule(camp_id, payload_data, int(admin["id"]))
     rule = admin_repo.get_camp_shift_rule(camp_id, rule_id)
     log_crm_audit_event(
         actor_type="camp_admin",
@@ -2089,7 +2082,7 @@ def api_admin_create_shift_rule(
         admin=admin,
         event_type="shift_rule_created",
         title="Добавлено новое правило смены",
-        body=f"{rule.get('admin_name') or 'Сотрудник'} · {_weekday_label(payload.weekday)} · {payload.starts_at} → {payload.ends_at}.",
+        body=f"{rule.get('admin_name') or 'Сотрудник'} · {_date_label(payload.shift_date)} · {payload.starts_at} → {payload.ends_at}.",
         severity="warning",
         action_url="/shifts",
         action_payload={"camp_id": camp_id, "rule_id": rule_id},
@@ -2110,11 +2103,11 @@ def api_admin_update_shift_rule(
         raise HTTPException(status_code=404, detail="Правило смены не найдено")
     if not admin_repo.get_admin_staff_member(camp_id, payload.admin_id):
         raise HTTPException(status_code=400, detail="Сотрудник не привязан к этой базе")
-    if payload.weekday < 0 or payload.weekday > 6:
-        raise HTTPException(status_code=400, detail="Некорректный день недели")
     _parse_shift_time(payload.starts_at)
     _parse_shift_time(payload.ends_at)
-    changed = admin_repo.update_camp_shift_rule(camp_id, rule_id, payload.model_dump(), int(admin["id"]))
+    payload_data = payload.model_dump()
+    payload_data["weekday"] = payload.shift_date.weekday()
+    changed = admin_repo.update_camp_shift_rule(camp_id, rule_id, payload_data, int(admin["id"]))
     if not changed:
         raise HTTPException(status_code=404, detail="Правило смены не найдено")
     after = admin_repo.get_camp_shift_rule(camp_id, rule_id)
@@ -2137,7 +2130,7 @@ def api_admin_update_shift_rule(
         admin=admin,
         event_type="shift_rule_updated",
         title="Правило смены обновлено",
-        body=f"{after.get('admin_name') or 'Сотрудник'} · {_weekday_label(payload.weekday)} · {payload.starts_at} → {payload.ends_at}.",
+        body=f"{after.get('admin_name') or 'Сотрудник'} · {_date_label(payload.shift_date)} · {payload.starts_at} → {payload.ends_at}.",
         severity="warning",
         action_url="/shifts",
         action_payload={"camp_id": camp_id, "rule_id": rule_id},
@@ -2173,7 +2166,7 @@ def api_admin_delete_shift_rule(camp_id: int, rule_id: int, admin: dict = Depend
         title="Правило смены удалено",
         body=(
             f"{before.get('admin_name') or 'Сотрудник'} · "
-            f"{_weekday_label(before.get('weekday') or 0)} · "
+            f"{_date_label(before.get('shift_date')) if isinstance(before.get('shift_date'), date) else _weekday_label(before.get('weekday') or 0)} · "
             f"{str(before.get('starts_at') or '')[:5]} → {str(before.get('ends_at') or '')[:5]}."
         ),
         severity="warning",

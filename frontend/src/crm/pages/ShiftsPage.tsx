@@ -41,7 +41,7 @@ type ShiftPresetForm = {
 type ShiftTarget = {
   adminId: number;
   adminName: string;
-  weekday: number;
+  shiftDate: string;
   dateLabel: string;
   existingRule?: CrmShiftRule | null;
 };
@@ -187,7 +187,7 @@ function mapRuleForm(rule: CrmShiftRule): ShiftRuleForm {
 function toRulePayload(form: ShiftRuleForm, target: ShiftTarget): CrmShiftRuleUpsertPayload {
   return {
     admin_id: target.adminId,
-    weekday: target.weekday,
+    shift_date: target.shiftDate,
     starts_at: form.startsAt,
     ends_at: form.endsAt,
     is_night_shift: target.existingRule?.is_night_shift || false,
@@ -309,7 +309,10 @@ export default function ShiftsPage() {
   const rulesByCell = useMemo(() => {
     const map = new Map<string, CrmShiftRule[]>();
     rules.forEach((rule) => {
-      const key = `${rule.admin_id}:${rule.weekday}`;
+      if (!rule.shift_date) {
+        return;
+      }
+      const key = `${rule.admin_id}:${rule.shift_date}`;
       if (!map.has(key)) {
         map.set(key, []);
       }
@@ -322,6 +325,17 @@ export default function ShiftsPage() {
 
     return map;
   }, [rules]);
+
+  useEffect(() => {
+    if (!successMessage && !errorMessage) {
+      return;
+    }
+    const timeoutId = window.setTimeout(() => {
+      setSuccessMessage("");
+      setErrorMessage("");
+    }, 2600);
+    return () => window.clearTimeout(timeoutId);
+  }, [errorMessage, successMessage]);
 
   async function refreshShiftsSilently(campId: number) {
     try {
@@ -358,7 +372,7 @@ export default function ShiftsPage() {
     return {
       adminId: member.id,
       adminName: member.display_name,
-      weekday: getWeekdayIndex(date),
+      shiftDate: formatDateParam(date),
       dateLabel: formatTargetDate(date),
       existingRule,
     };
@@ -407,7 +421,8 @@ export default function ShiftsPage() {
                   ...item,
                   admin_id: activeTarget.adminId,
                   admin_name: activeTarget.adminName,
-                  weekday: activeTarget.weekday,
+                  shift_date: activeTarget.shiftDate,
+                  weekday: getWeekdayIndex(new Date(activeTarget.shiftDate)),
                   starts_at: ruleForm.startsAt,
                   ends_at: ruleForm.endsAt,
                   comment: ruleForm.comment.trim() || null,
@@ -429,7 +444,8 @@ export default function ShiftsPage() {
             admin_id: activeTarget.adminId,
             admin_name: activeTarget.adminName,
             admin_email: "",
-            weekday: activeTarget.weekday,
+            shift_date: activeTarget.shiftDate,
+            weekday: getWeekdayIndex(new Date(activeTarget.shiftDate)),
             starts_at: ruleForm.startsAt,
             ends_at: ruleForm.endsAt,
             is_night_shift: false,
@@ -506,6 +522,7 @@ export default function ShiftsPage() {
           admin_id: member.id,
           admin_name: member.display_name,
           admin_email: "",
+          shift_date: formatDateParam(date),
           weekday: getWeekdayIndex(date),
           starts_at: presetForm.startsAt,
           ends_at: presetForm.endsAt,
@@ -558,6 +575,20 @@ export default function ShiftsPage() {
 
   return (
     <PageMotion className="space-y-6">
+      {successMessage || errorMessage ? (
+        <div className="pointer-events-none fixed inset-x-0 top-4 z-40 flex justify-center px-4">
+          <div
+            className={`max-w-xl rounded-2xl border px-5 py-3 text-sm shadow-2xl backdrop-blur-xl transition ${
+              errorMessage
+                ? "border-rose-500/30 bg-rose-500/15 text-rose-100"
+                : "border-emerald-500/30 bg-emerald-500/15 text-emerald-100"
+            }`}
+          >
+            {errorMessage || successMessage}
+          </div>
+        </div>
+      ) : null}
+
       <SectionHeading
         title="График смен и дежурств"
         description="Рабочий экран базы: кто сейчас на смене, когда начинается следующая смена и как CRM должна обрабатывать ночные заявки."
@@ -583,18 +614,6 @@ export default function ShiftsPage() {
           </div>
         }
       />
-
-      {errorMessage ? (
-        <section className="rounded-3xl border border-rose-500/30 bg-rose-500/10 px-5 py-4 text-sm text-rose-200">
-          {errorMessage}
-        </section>
-      ) : null}
-
-      {successMessage ? (
-        <section className="rounded-3xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-4 text-sm text-emerald-200">
-          {successMessage}
-        </section>
-      ) : null}
 
       {isLoading ? (
         <section className="glass-card p-6">
@@ -776,23 +795,23 @@ export default function ShiftsPage() {
 
                       {visibleDates.map((date) => {
                         const dateKey = formatDateParam(date);
-                        const weekday = getWeekdayIndex(date);
-                        const cellRules = rulesByCell.get(`${member.id}:${weekday}`) || [];
+                        const cellRules = rulesByCell.get(`${member.id}:${dateKey}`) || [];
 
                         return (
                           <div key={`${member.id}-${dateKey}`} className="min-h-28 border-r border-border/80 p-2 last:border-r-0">
                             {cellRules.length ? (
                               <div className="space-y-2">
                                 {cellRules.map((rule) => {
-                                  const commentTooltip = rule.comment
-                                    ? `Комментарий: ${rule.comment}\nОставил: ${rule.comment_author_display || "Сотрудник"}`
-                                    : "";
                                   return (
                                     <button
                                       key={rule.id}
                                       type="button"
-                                      title={commentTooltip || undefined}
                                       className="group relative flex w-full flex-col rounded-2xl border border-[#E5D3B3]/22 bg-[#E5D3B3]/10 px-2.5 py-2 text-left transition hover:bg-[#E5D3B3]/16"
+                                      onMouseDown={(event) => {
+                                        if (event.button === 2) {
+                                          event.preventDefault();
+                                        }
+                                      }}
                                       onContextMenu={(event) => {
                                         event.preventDefault();
                                         openCellModal(member, date, rule);
@@ -801,9 +820,6 @@ export default function ShiftsPage() {
                                       {rule.comment ? <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#E5D3B3]" /> : null}
                                       <span className="pr-3 text-xs font-semibold leading-4 text-foreground">
                                         {rule.starts_at?.slice(0, 5)} → {rule.ends_at?.slice(0, 5)}
-                                      </span>
-                                      <span className="mt-1 text-[11px] text-muted-foreground">
-                                        {rule.comment ? "Есть комментарий" : rule.is_night_shift ? "Ночная смена" : "Рабочее окно"}
                                       </span>
                                       {rule.comment ? (
                                         <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden w-52 -translate-x-1/2 rounded-2xl border border-border bg-card/98 px-3 py-2 text-[11px] leading-4 text-foreground shadow-xl group-hover:block">
@@ -818,9 +834,13 @@ export default function ShiftsPage() {
                             ) : (
                               <button
                                 type="button"
-                                title={`Левая кнопка: назначить ${presetForm.startsAt} → ${presetForm.endsAt}. Правая кнопка: открыть параметры.`}
                                 className="flex h-full min-h-24 w-full items-center justify-center rounded-2xl border border-dashed border-border/70 bg-background/35 px-3 text-center text-xs leading-5 text-muted-foreground transition hover:border-[#E5D3B3]/30 hover:text-foreground"
                                 onClick={() => void handleQuickAssign(member, date)}
+                                onMouseDown={(event) => {
+                                  if (event.button === 2) {
+                                    event.preventDefault();
+                                  }
+                                }}
                                 onContextMenu={(event) => {
                                   event.preventDefault();
                                   openCellModal(member, date);

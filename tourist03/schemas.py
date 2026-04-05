@@ -253,7 +253,7 @@ class AdminShiftSettingsUpdateRequest(BaseModel):
 
 class AdminShiftRuleUpsertRequest(BaseModel):
     admin_id: int
-    weekday: int
+    shift_date: date
     starts_at: str
     ends_at: str
     is_night_shift: bool = False

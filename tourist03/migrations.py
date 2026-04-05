@@ -869,6 +869,13 @@ MIGRATIONS = (
         ADD COLUMN IF NOT EXISTS updated_by_admin_id INTEGER;
         """,
     ),
+    MigrationStep(
+        version="0008_shift_rule_dates",
+        sql="""
+        ALTER TABLE crm.shift_schedule_rules
+        ADD COLUMN IF NOT EXISTS shift_date DATE;
+        """,
+    ),
 )
 
 
