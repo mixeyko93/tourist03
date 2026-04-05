@@ -208,6 +208,15 @@
     scrollbar-color: color-mix(in oklab, var(--crm-gold) 58%, transparent) color-mix(in oklab, var(--background) 72%, transparent);
   }
 
+  .crm-calendar-grid-scroll {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .crm-calendar-grid-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
   .crm-calendar-scrollbar::-webkit-scrollbar {
     height: 12px;
   }

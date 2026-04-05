@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronsLeftRight } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "../components/EmptyState";
 import { PageMotion } from "../components/PageMotion";
@@ -89,9 +89,11 @@ export default function CalendarPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
   const [hasHorizontalOverflow, setHasHorizontalOverflow] = useState(false);
+  const [isScrollIndicatorActive, setIsScrollIndicatorActive] = useState(false);
   const gridScrollRef = useRef<HTMLDivElement | null>(null);
   const sliderScrollRef = useRef<HTMLDivElement | null>(null);
   const syncSourceRef = useRef<"grid" | "slider" | null>(null);
+  const scrollIndicatorTimeoutRef = useRef<number | null>(null);
 
   const periodStart = useMemo(() => {
     if (viewMode === "week") {
@@ -216,9 +218,31 @@ export default function CalendarPage() {
     };
   }, [calendarContentWidth, feed.rooms.length, selectedRoomId, viewMode]);
 
+  useEffect(() => {
+    return () => {
+      if (scrollIndicatorTimeoutRef.current !== null && typeof window !== "undefined") {
+        window.clearTimeout(scrollIndicatorTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const hasCampOptions = camps.length > 0;
   const hasRoomOptions = feed.rooms.length > 0;
   const visibleRooms = selectedRoomId ? feed.rooms.filter((room) => room.id === selectedRoomId) : feed.rooms;
+
+  const activateScrollIndicator = () => {
+    setIsScrollIndicatorActive(true);
+    if (typeof window === "undefined") {
+      return;
+    }
+    if (scrollIndicatorTimeoutRef.current !== null) {
+      window.clearTimeout(scrollIndicatorTimeoutRef.current);
+    }
+    scrollIndicatorTimeoutRef.current = window.setTimeout(() => {
+      setIsScrollIndicatorActive(false);
+      scrollIndicatorTimeoutRef.current = null;
+    }, 1200);
+  };
 
   const syncScroll = (source: "grid" | "slider") => {
     const fromNode = source === "grid" ? gridScrollRef.current : sliderScrollRef.current;
@@ -231,6 +255,7 @@ export default function CalendarPage() {
     }
     syncSourceRef.current = source;
     toNode.scrollLeft = fromNode.scrollLeft;
+    activateScrollIndicator();
     requestAnimationFrame(() => {
       syncSourceRef.current = null;
     });
@@ -390,7 +415,7 @@ export default function CalendarPage() {
             <div
               ref={gridScrollRef}
               onScroll={() => syncScroll("grid")}
-              className="mt-6 overflow-x-auto rounded-3xl border border-border bg-background/55"
+              className="crm-calendar-grid-scroll mt-6 overflow-x-auto rounded-3xl border border-border bg-background/55"
             >
               <div style={{ minWidth: calendarContentWidth }}>
                 <div className="flex border-b border-border bg-card/70">
@@ -443,15 +468,14 @@ export default function CalendarPage() {
             </div>
 
             {hasHorizontalOverflow ? (
-              <div className="mt-4 space-y-2">
-                <div className="flex items-center justify-between gap-3 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                  <span className="inline-flex items-center gap-2">
-                    <ChevronsLeftRight className="h-3.5 w-3.5" />
-                    Горизонтальная прокрутка
-                  </span>
-                  <span>Потяните бегунок для обзора календаря</span>
-                </div>
-                <div ref={sliderScrollRef} onScroll={() => syncScroll("slider")} className="crm-calendar-scrollbar overflow-x-auto rounded-full border border-border bg-card/70 p-1">
+              <div
+                className={`mt-4 transition-opacity duration-300 ${isScrollIndicatorActive ? "opacity-100" : "pointer-events-none opacity-0"}`}
+              >
+                <div
+                  ref={sliderScrollRef}
+                  onScroll={() => syncScroll("slider")}
+                  className="crm-calendar-scrollbar overflow-x-auto rounded-full border border-border bg-card/70 p-1"
+                >
                   <div className="h-2 rounded-full bg-gradient-to-r from-[#E5D3B3]/28 via-sky-500/15 to-[#E5D3B3]/28" style={{ width: calendarContentWidth }} />
                 </div>
               </div>
