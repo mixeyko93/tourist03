@@ -55,25 +55,25 @@ const loginPageDefaults: LoginPageConfig = {
   badgeText: "Premium Control Room",
   heroTitle: "Управляйте бронированиями, загрузкой и сервисом базы в одном интерфейсе.",
   heroText:
-    "Новый CRM-раздел для Tourist_03 объединяет календарь размещения, управление бронями, номерным фондом, услугами и клиентской базой в одном потоке работы.",
-  loginEyebrow: "Tourist_03 CRM",
+    "Новый CRM-раздел для Турист03 объединяет календарь размещения, управление бронями, номерным фондом, услугами и клиентской базой в одном потоке работы.",
+  loginEyebrow: "Tourist03 CRM",
   loginTitle: "Вход в систему",
-  loginText: "Войдите под своей учётной записью, чтобы открыть рабочее пространство CRM.",
+  loginText: "",
   submitText: "Войти в CRM",
-  shellMaxWidth: 1280,
-  shellMinHeight: 680,
-  shellRadius: 48,
+  shellMaxWidth: 1166,
+  shellMinHeight: 504,
+  shellRadius: 20,
   sectionPadding: 40,
-  leftColumnGap: 32,
-  heroFontSize: 86,
-  heroMaxWidth: 660,
-  bodyMaxWidth: 640,
-  featureCardPadding: 24,
-  featureCardRadius: 28,
-  loginCardWidth: 420,
-  loginCardPadding: 32,
-  loginCardRadius: 32,
-  loginCardGap: 18,
+  leftColumnGap: 40,
+  heroFontSize: 28,
+  heroMaxWidth: 840,
+  bodyMaxWidth: 864,
+  featureCardPadding: 18,
+  featureCardRadius: 20,
+  loginCardWidth: 450,
+  loginCardPadding: 37,
+  loginCardRadius: 20,
+  loginCardGap: 11,
   featureCards: [
     {
       title: "Живая загрузка",
@@ -649,13 +649,8 @@ export default function LoginPage() {
         </>
       ) : null}
 
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="glass-card relative w-full overflow-hidden"
-        style={{ maxWidth: pageConfig.shellMaxWidth, borderRadius: pageConfig.shellRadius }}
-      >
-        <div className="absolute right-4 top-4 z-20 sm:right-5 sm:top-5">
+      <div className="relative w-full" style={{ maxWidth: pageConfig.shellMaxWidth }}>
+        <div className="absolute right-4 top-4 z-30 sm:right-0 sm:top-0 sm:translate-x-[38%] sm:-translate-y-[38%]">
           {isThemeMounted ? (
             <button
               type="button"
@@ -667,114 +662,120 @@ export default function LoginPage() {
             </button>
           ) : null}
         </div>
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="glass-card relative w-full overflow-hidden"
+          style={{ borderRadius: pageConfig.shellRadius }}
+        >
+          <div className="grid lg:grid-cols-[1.08fr_0.92fr]" style={{ minHeight: pageConfig.shellMinHeight }}>
+            <section
+              className="order-2 crm-ambient flex flex-col border-t border-border lg:order-1 lg:border-r lg:border-t-0"
+              style={{ padding: pageConfig.sectionPadding, gap: pageConfig.leftColumnGap }}
+            >
+              <div className="flex flex-col" style={{ gap: Math.max(pageConfig.leftColumnGap - 4, 18) }}>
+                <span className="crm-gold-badge inline-flex self-start rounded-full border px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.26em] sm:text-xs">
+                  {pageConfig.badgeText}
+                </span>
 
-        <div className="grid lg:grid-cols-[1.08fr_0.92fr]" style={{ minHeight: pageConfig.shellMinHeight }}>
-          <section
-            className="order-2 crm-ambient flex flex-col border-t border-border lg:order-1 lg:border-r lg:border-t-0"
-            style={{ padding: pageConfig.sectionPadding, gap: pageConfig.leftColumnGap }}
-          >
-            <div className="flex flex-col" style={{ gap: Math.max(pageConfig.leftColumnGap - 4, 18) }}>
-              <span className="crm-gold-badge inline-flex rounded-full border px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.26em] sm:text-xs">
-                {pageConfig.badgeText}
-              </span>
-
-              <div className="space-y-5">
-                <h1
-                  className="font-semibold tracking-[-0.065em] text-foreground"
-                  style={{
-                    maxWidth: pageConfig.heroMaxWidth,
-                    fontSize: `clamp(${heroMinFontSize}px, ${heroFluidViewport}vw, ${pageConfig.heroFontSize}px)`,
-                    lineHeight: heroLineHeight,
-                  }}
-                >
-                  {pageConfig.heroTitle}
-                </h1>
-                <p className="text-base leading-7 text-muted-foreground" style={{ maxWidth: pageConfig.bodyMaxWidth }}>
-                  {pageConfig.heroText}
-                </p>
-              </div>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              {pageConfig.featureCards.map((item, index) => {
-                const Icon = featureIcons[index] ?? ShieldCheck;
-                return (
-                  <article
-                    key={`${item.title}-${index}`}
-                    className="flex h-full flex-col border border-border bg-card/55 backdrop-blur-lg"
-                    style={{ padding: pageConfig.featureCardPadding, borderRadius: pageConfig.featureCardRadius }}
+                <div className="space-y-5">
+                  <h1
+                    className="font-semibold tracking-[-0.065em] text-foreground"
+                    style={{
+                      maxWidth: pageConfig.heroMaxWidth,
+                      fontSize: `clamp(${heroMinFontSize}px, ${heroFluidViewport}vw, ${pageConfig.heroFontSize}px)`,
+                      lineHeight: heroLineHeight,
+                    }}
                   >
-                    <Icon className="crm-gold-tone h-5 w-5" />
-                    <h2 className="mt-6 text-sm font-semibold text-foreground">{item.title}</h2>
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.text}</p>
-                  </article>
-                );
-              })}
-            </div>
-          </section>
-
-          <section className="order-1 flex items-center px-4 py-5 sm:px-6 sm:py-7 lg:order-2 lg:px-8">
-            <div className="mx-auto w-full" style={{ maxWidth: pageConfig.loginCardWidth }}>
-              <div className="glass-card flex flex-col" style={{ borderRadius: pageConfig.loginCardRadius, padding: pageConfig.loginCardPadding }}>
-                <div className="space-y-2 text-center">
-                  <p className="crm-gold-tone text-xs font-semibold uppercase tracking-[0.28em]">{pageConfig.loginEyebrow}</p>
-                  <h2 className="text-2xl font-semibold tracking-[-0.05em] text-foreground sm:text-3xl">{pageConfig.loginTitle}</h2>
-                  <p className="text-sm leading-6 text-muted-foreground">{pageConfig.loginText}</p>
+                    {pageConfig.heroTitle}
+                  </h1>
+                  <p className="text-base leading-7 text-muted-foreground" style={{ maxWidth: pageConfig.bodyMaxWidth }}>
+                    {pageConfig.heroText}
+                  </p>
                 </div>
-
-                <form onSubmit={handleSubmit} className="space-y-4" style={{ marginTop: pageConfig.loginCardGap }}>
-                  {errorMessage ? (
-                    <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-                      {errorMessage}
-                    </div>
-                  ) : null}
-
-                  <label className="block space-y-2">
-                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Эл. почта</span>
-                    <div className="relative">
-                      <Mail className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-                      <input
-                        type="email"
-                        className="soft-input pl-12"
-                        placeholder="name@company.ru"
-                        value={email}
-                        onChange={(event) => setEmail(event.target.value)}
-                        disabled={isSubmitting || isCheckingSession}
-                        required
-                      />
-                    </div>
-                  </label>
-
-                  <label className="block space-y-2">
-                    <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Пароль</span>
-                    <div className="relative">
-                      <LockKeyhole className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-                      <input
-                        type="password"
-                        className="soft-input pl-12"
-                        placeholder="Введите пароль"
-                        value={password}
-                        onChange={(event) => setPassword(event.target.value)}
-                        disabled={isSubmitting || isCheckingSession}
-                        required
-                      />
-                    </div>
-                  </label>
-
-                  <button
-                    type="submit"
-                    disabled={isSubmitting || isCheckingSession}
-                    className="brand-button w-full gap-2 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {isCheckingSession ? "Проверяем доступ..." : isSubmitting ? "Открываем CRM..." : pageConfig.submitText}
-                    <ArrowRight className="h-4 w-4" />
-                  </button>
-                </form>
               </div>
-            </div>
-          </section>
-        </div>
-      </motion.div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                {pageConfig.featureCards.map((item, index) => {
+                  const Icon = featureIcons[index] ?? ShieldCheck;
+                  return (
+                    <article
+                      key={`${item.title}-${index}`}
+                      className="flex h-full flex-col border border-border bg-card/55 backdrop-blur-lg"
+                      style={{ padding: pageConfig.featureCardPadding, borderRadius: pageConfig.featureCardRadius }}
+                    >
+                      <Icon className="crm-gold-tone h-5 w-5" />
+                      <h2 className="mt-6 text-sm font-semibold text-foreground">{item.title}</h2>
+                      <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.text}</p>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section className="order-1 flex items-center px-4 py-5 sm:px-6 sm:py-7 lg:order-2 lg:px-8">
+              <div className="mx-auto w-full" style={{ maxWidth: pageConfig.loginCardWidth }}>
+                <div className="glass-card flex flex-col" style={{ borderRadius: pageConfig.loginCardRadius, padding: pageConfig.loginCardPadding }}>
+                  <div className="space-y-2 text-center">
+                    <p className="crm-gold-tone text-xs font-semibold uppercase tracking-[0.28em]">{pageConfig.loginEyebrow}</p>
+                    <h2 className="text-2xl font-semibold tracking-[-0.05em] text-foreground sm:text-3xl">{pageConfig.loginTitle}</h2>
+                    {pageConfig.loginText ? <p className="text-sm leading-6 text-muted-foreground">{pageConfig.loginText}</p> : null}
+                  </div>
+
+                  <form onSubmit={handleSubmit} className="space-y-4" style={{ marginTop: pageConfig.loginCardGap }}>
+                    {errorMessage ? (
+                      <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+                        {errorMessage}
+                      </div>
+                    ) : null}
+
+                    <label className="block space-y-2">
+                      <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Эл. почта</span>
+                      <div className="relative">
+                        <Mail className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                        <input
+                          type="email"
+                          className="soft-input pl-12"
+                          placeholder="name@company.ru"
+                          value={email}
+                          onChange={(event) => setEmail(event.target.value)}
+                          disabled={isSubmitting || isCheckingSession}
+                          required
+                        />
+                      </div>
+                    </label>
+
+                    <label className="block space-y-2">
+                      <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Пароль</span>
+                      <div className="relative">
+                        <LockKeyhole className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                        <input
+                          type="password"
+                          className="soft-input pl-12"
+                          placeholder="Введите пароль"
+                          value={password}
+                          onChange={(event) => setPassword(event.target.value)}
+                          disabled={isSubmitting || isCheckingSession}
+                          required
+                        />
+                      </div>
+                    </label>
+
+                    <button
+                      type="submit"
+                      disabled={isSubmitting || isCheckingSession}
+                      className="brand-button w-full gap-2 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isCheckingSession ? "Проверяем доступ..." : isSubmitting ? "Открываем CRM..." : pageConfig.submitText}
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </section>
+          </div>
+        </motion.div>
+      </div>
     </div>
   );
 }
