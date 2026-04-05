@@ -190,7 +190,7 @@ export default function LoginPage() {
   const [editorMessage, setEditorMessage] = useState("");
   const [editorError, setEditorError] = useState("");
   const [isEditorOpen, setIsEditorOpen] = useState(isEditMode);
-  const [hasEditorSession, setHasEditorSession] = useState(false);
+  const [editorSessionLabel, setEditorSessionLabel] = useState("");
   const { theme, setTheme } = useTheme();
   const homePath = crmPath("/calendar");
 
@@ -232,14 +232,13 @@ export default function LoginPage() {
     const controller = new AbortController();
     fetchCrmSession(controller.signal)
       .then((session) => {
-        const hasSession = Boolean(session);
-        setHasEditorSession(hasSession);
+        setEditorSessionLabel(session ? "CRM" : "");
         if (session && !isEditMode) {
           navigate(homePath, { replace: true });
         }
       })
       .catch(() => {
-        setHasEditorSession(false);
+        setEditorSessionLabel("");
       })
       .finally(() => {
         if (!controller.signal.aborted) {
@@ -268,17 +267,12 @@ export default function LoginPage() {
   }
 
   async function handleSaveOverrides() {
-    if (!hasEditorSession) {
-      setEditorError("Для сохранения откройте CRM под своей учётной записью в этом же браузере.");
-      setEditorMessage("");
-      return;
-    }
     try {
       setIsSavingOverrides(true);
       setEditorError("");
       setEditorMessage("");
       await saveCrmUiOverride("crm_login_page", serializeLoginPageConfig(pageConfig));
-      setEditorMessage("Правки страницы сохранены.");
+      setEditorMessage("Правки страницы сохранены на сервере.");
     } catch (error) {
       setEditorError(error instanceof Error ? error.message : "Не удалось сохранить правки");
     } finally {
@@ -300,9 +294,9 @@ export default function LoginPage() {
     }));
   }
 
-  const editorNotice = hasEditorSession
-    ? "Сохраняйте правки сразу на сервер. После этого я смогу закрепить их как финальные значения."
-    : "Редактирование доступно сразу, но для сохранения нужна открытая CRM-сессия в этом браузере.";
+  const editorNotice = editorSessionLabel
+    ? `Правки будут сохраняться по активной сессии: ${editorSessionLabel}.`
+    : "Правки отправляются сразу на сервер. Если сессия недействительна, страница покажет точную ошибку сохранения.";
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-4 py-4 sm:py-8 lg:py-10">
