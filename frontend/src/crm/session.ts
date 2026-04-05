@@ -286,6 +286,7 @@ export type CrmShiftRule = {
   admin_name: string;
   admin_email: string;
   shift_date: string | null;
+  ends_on_date: string | null;
   weekday: number;
   starts_at: string;
   ends_at: string;
@@ -304,6 +305,8 @@ export type CrmShiftOccurrence = {
   admin_name: string;
   weekday: number;
   weekday_label: string;
+  shift_date: string | null;
+  ends_on_date: string | null;
   starts_at: string;
   ends_at: string;
   starts_time: string;
@@ -464,6 +467,7 @@ export type CrmShiftSettingsUpdatePayload = {
 export type CrmShiftRuleUpsertPayload = {
   admin_id: number;
   shift_date: string;
+  ends_on_date?: string;
   starts_at: string;
   ends_at: string;
   is_night_shift: boolean;

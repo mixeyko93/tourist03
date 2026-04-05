@@ -29,6 +29,7 @@ type ShiftSettingsForm = {
 
 type ShiftRuleForm = {
   startsAt: string;
+  endsOnDate: string;
   endsAt: string;
   comment: string;
 };
@@ -70,6 +71,7 @@ const emptySettingsForm: ShiftSettingsForm = {
 
 const emptyRuleForm: ShiftRuleForm = {
   startsAt: "09:00",
+  endsOnDate: "",
   endsAt: "18:00",
   comment: "",
 };
@@ -103,6 +105,11 @@ function addDays(value: Date, amount: number) {
   const next = new Date(value);
   next.setDate(next.getDate() + amount);
   return next;
+}
+
+function parseDateParam(value: string) {
+  const [year, month, day] = value.split("-").map((item) => Number(item));
+  return new Date(year, (month || 1) - 1, day || 1);
 }
 
 function buildPeriodDates(start: Date, end: Date) {
@@ -179,6 +186,7 @@ function toSettingsPayload(form: ShiftSettingsForm) {
 function mapRuleForm(rule: CrmShiftRule): ShiftRuleForm {
   return {
     startsAt: rule.starts_at?.slice(0, 5) || "09:00",
+    endsOnDate: rule.ends_on_date || rule.shift_date || "",
     endsAt: rule.ends_at?.slice(0, 5) || "18:00",
     comment: rule.comment || "",
   };
@@ -188,6 +196,7 @@ function toRulePayload(form: ShiftRuleForm, target: ShiftTarget): CrmShiftRuleUp
   return {
     admin_id: target.adminId,
     shift_date: target.shiftDate,
+    ends_on_date: form.endsOnDate || target.shiftDate,
     starts_at: form.startsAt,
     ends_at: form.endsAt,
     is_night_shift: target.existingRule?.is_night_shift || false,
@@ -197,7 +206,17 @@ function toRulePayload(form: ShiftRuleForm, target: ShiftTarget): CrmShiftRuleUp
 }
 
 function describeRule(rule: CrmShiftRule) {
-  return `${weekdayLabels[rule.weekday] || "День"} · ${rule.starts_at?.slice(0, 5) || rule.starts_at} → ${rule.ends_at?.slice(0, 5) || rule.ends_at}`;
+  const startDate = rule.shift_date;
+  const endDate = rule.ends_on_date || rule.shift_date;
+  const startTime = rule.starts_at?.slice(0, 5) || rule.starts_at;
+  const endTime = rule.ends_at?.slice(0, 5) || rule.ends_at;
+  if (startDate && endDate && startDate !== endDate) {
+    return `${startDate} ${startTime} → ${endDate} ${endTime}`;
+  }
+  if (startDate) {
+    return `${startDate} · ${startTime} → ${endTime}`;
+  }
+  return `${weekdayLabels[rule.weekday] || "День"} · ${startTime} → ${endTime}`;
 }
 
 export default function ShiftsPage() {
@@ -312,11 +331,15 @@ export default function ShiftsPage() {
       if (!rule.shift_date) {
         return;
       }
-      const key = `${rule.admin_id}:${rule.shift_date}`;
-      if (!map.has(key)) {
-        map.set(key, []);
+      const startDate = parseDateParam(rule.shift_date);
+      const endDate = parseDateParam(rule.ends_on_date || rule.shift_date);
+      for (let cursor = new Date(startDate); cursor <= endDate; cursor = addDays(cursor, 1)) {
+        const key = `${rule.admin_id}:${formatDateParam(cursor)}`;
+        if (!map.has(key)) {
+          map.set(key, []);
+        }
+        map.get(key)?.push(rule);
       }
-      map.get(key)?.push(rule);
     });
 
     Array.from(map.values()).forEach((items) => {
@@ -369,11 +392,12 @@ export default function ShiftsPage() {
   const gridWidth = staffColumnWidth + visibleDates.length * dayColumnWidth;
 
   function buildTarget(member: CrmShiftStaffOption, date: Date, existingRule?: CrmShiftRule | null): ShiftTarget {
+    const shiftDate = existingRule?.shift_date || formatDateParam(date);
     return {
       adminId: member.id,
       adminName: member.display_name,
-      shiftDate: formatDateParam(date),
-      dateLabel: formatTargetDate(date),
+      shiftDate,
+      dateLabel: formatTargetDate(parseDateParam(shiftDate)),
       existingRule,
     };
   }
@@ -386,6 +410,7 @@ export default function ShiftsPage() {
         ? mapRuleForm(rule)
         : {
             startsAt: presetForm.startsAt,
+            endsOnDate: target.shiftDate,
             endsAt: presetForm.endsAt,
             comment: "",
           },
@@ -422,7 +447,8 @@ export default function ShiftsPage() {
                   admin_id: activeTarget.adminId,
                   admin_name: activeTarget.adminName,
                   shift_date: activeTarget.shiftDate,
-                  weekday: getWeekdayIndex(new Date(activeTarget.shiftDate)),
+                  ends_on_date: ruleForm.endsOnDate || activeTarget.shiftDate,
+                  weekday: getWeekdayIndex(parseDateParam(activeTarget.shiftDate)),
                   starts_at: ruleForm.startsAt,
                   ends_at: ruleForm.endsAt,
                   comment: ruleForm.comment.trim() || null,
@@ -445,7 +471,8 @@ export default function ShiftsPage() {
             admin_name: activeTarget.adminName,
             admin_email: "",
             shift_date: activeTarget.shiftDate,
-            weekday: getWeekdayIndex(new Date(activeTarget.shiftDate)),
+            ends_on_date: ruleForm.endsOnDate || activeTarget.shiftDate,
+            weekday: getWeekdayIndex(parseDateParam(activeTarget.shiftDate)),
             starts_at: ruleForm.startsAt,
             ends_at: ruleForm.endsAt,
             is_night_shift: false,
@@ -508,6 +535,7 @@ export default function ShiftsPage() {
         toRulePayload(
           {
             startsAt: presetForm.startsAt,
+            endsOnDate: formatDateParam(date),
             endsAt: presetForm.endsAt,
             comment: "",
           },
@@ -523,6 +551,7 @@ export default function ShiftsPage() {
           admin_name: member.display_name,
           admin_email: "",
           shift_date: formatDateParam(date),
+          ends_on_date: formatDateParam(date),
           weekday: getWeekdayIndex(date),
           starts_at: presetForm.startsAt,
           ends_at: presetForm.endsAt,
@@ -981,10 +1010,20 @@ export default function ShiftsPage() {
             <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{ruleError}</div>
           ) : null}
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-3">
             <label className="space-y-2">
               <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Начало смены</span>
               <input type="time" className="soft-input" value={ruleForm.startsAt} onChange={(event) => setRuleForm((current) => ({ ...current, startsAt: event.target.value }))} />
+            </label>
+            <label className="space-y-2">
+              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Дата окончания</span>
+              <input
+                type="date"
+                className="soft-input"
+                value={ruleForm.endsOnDate || activeTarget?.shiftDate || ""}
+                min={activeTarget?.shiftDate}
+                onChange={(event) => setRuleForm((current) => ({ ...current, endsOnDate: event.target.value }))}
+              />
             </label>
             <label className="space-y-2">
               <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Конец смены</span>

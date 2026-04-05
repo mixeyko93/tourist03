@@ -876,6 +876,20 @@ MIGRATIONS = (
         ADD COLUMN IF NOT EXISTS shift_date DATE;
         """,
     ),
+    MigrationStep(
+        version="0009_shift_rule_end_dates",
+        sql="""
+        ALTER TABLE crm.shift_schedule_rules
+        ADD COLUMN IF NOT EXISTS ends_on_date DATE;
+
+        UPDATE crm.shift_schedule_rules
+        SET ends_on_date = CASE
+            WHEN COALESCE(ends_on_date, shift_date) < shift_date THEN shift_date
+            WHEN COALESCE(ends_on_date, shift_date) = shift_date AND ends_at <= starts_at THEN shift_date + 1
+            ELSE COALESCE(ends_on_date, shift_date)
+        END;
+        """,
+    ),
 )
 
 
