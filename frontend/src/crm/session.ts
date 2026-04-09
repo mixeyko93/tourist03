@@ -264,6 +264,7 @@ export type CrmShiftSettings = {
   camp_id: number;
   time_zone: string;
   booking_hold_hours: number;
+  night_starts_at: string;
   night_release_after_shift_minutes: number;
   escalation_step_minutes: number;
   escalation_repeats_before_manager: number;
@@ -459,6 +460,7 @@ export type CrmStaffUpsertPayload = {
 export type CrmShiftSettingsUpdatePayload = {
   time_zone: string;
   booking_hold_hours: number;
+  night_starts_at: string;
   night_release_after_shift_minutes: number;
   escalation_step_minutes: number;
   escalation_repeats_before_manager: number;

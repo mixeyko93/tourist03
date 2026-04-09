@@ -246,6 +246,7 @@ class AdminStaffUpsertRequest(BaseModel):
 class AdminShiftSettingsUpdateRequest(BaseModel):
     time_zone: str
     booking_hold_hours: int = 4
+    night_starts_at: str = "22:00"
     night_release_after_shift_minutes: int = 60
     escalation_step_minutes: int = 15
     escalation_repeats_before_manager: int = 2

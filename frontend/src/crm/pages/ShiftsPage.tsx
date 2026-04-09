@@ -22,6 +22,7 @@ import {
 type ShiftSettingsForm = {
   timeZone: string;
   bookingHoldHours: string;
+  nightStartsAt: string;
   nightReleaseAfterShiftMinutes: string;
   escalationStepMinutes: string;
   escalationRepeatsBeforeManager: string;
@@ -64,6 +65,7 @@ const staffColumnWidth = 240;
 const emptySettingsForm: ShiftSettingsForm = {
   timeZone: "Asia/Irkutsk",
   bookingHoldHours: "4",
+  nightStartsAt: "22:00",
   nightReleaseAfterShiftMinutes: "60",
   escalationStepMinutes: "15",
   escalationRepeatsBeforeManager: "2",
@@ -384,6 +386,7 @@ function mapSettingsForm(settings: CrmShiftSettings): ShiftSettingsForm {
   return {
     timeZone: settings.time_zone || "Asia/Irkutsk",
     bookingHoldHours: String(settings.booking_hold_hours || 4),
+    nightStartsAt: settings.night_starts_at || "22:00",
     nightReleaseAfterShiftMinutes: String(settings.night_release_after_shift_minutes || 60),
     escalationStepMinutes: String(settings.escalation_step_minutes || 15),
     escalationRepeatsBeforeManager: String(settings.escalation_repeats_before_manager || 2),
@@ -394,6 +397,7 @@ function toSettingsPayload(form: ShiftSettingsForm) {
   return {
     time_zone: form.timeZone,
     booking_hold_hours: Number(form.bookingHoldHours || 4),
+    night_starts_at: form.nightStartsAt || "22:00",
     night_release_after_shift_minutes: Number(form.nightReleaseAfterShiftMinutes || 60),
     escalation_step_minutes: Number(form.escalationStepMinutes || 15),
     escalation_repeats_before_manager: Number(form.escalationRepeatsBeforeManager || 2),
@@ -464,6 +468,7 @@ export default function ShiftsPage() {
   const [isSubmittingChange, setIsSubmittingChange] = useState(false);
   const [activePresetTimeField, setActivePresetTimeField] = useState<"start" | "end" | null>(null);
   const [activeRulePicker, setActiveRulePicker] = useState<"start" | "date" | "end" | null>(null);
+  const [activeSettingsTimeField, setActiveSettingsTimeField] = useState<"night-start" | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -943,6 +948,9 @@ export default function ShiftsPage() {
                   Заморозка заявки: <span className="font-medium text-foreground">{settingsForm.bookingHoldHours} ч.</span>
                 </p>
                 <p>
+                  Ночь начинается: <span className="font-medium text-foreground">{settingsForm.nightStartsAt}</span>
+                </p>
+                <p>
                   Ночной запас после смены: <span className="font-medium text-foreground">{settingsForm.nightReleaseAfterShiftMinutes} мин.</span>
                 </p>
                 <p>
@@ -1177,7 +1185,10 @@ export default function ShiftsPage() {
 
       <ModalShell
         open={isSettingsModalOpen}
-        onClose={() => setIsSettingsModalOpen(false)}
+        onClose={() => {
+          setIsSettingsModalOpen(false);
+          setActiveSettingsTimeField(null);
+        }}
         title="Время реакции обработки брони"
         description="Настройте время реакции обработки заявок: сколько держать бронь, когда включать эскалацию и сколько повторов отправлять до уведомления управляющего."
       >
@@ -1197,6 +1208,7 @@ export default function ShiftsPage() {
               successPending: "Параметры времени реакции отправлены на подтверждение.",
               successApplied: "Параметры времени реакции применены под вашу ответственность.",
             });
+            setActiveSettingsTimeField(null);
             setIsSettingsModalOpen(false);
           }}
         >
@@ -1205,6 +1217,14 @@ export default function ShiftsPage() {
               <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Заморозка заявки, ч.</span>
               <input type="number" min="1" className="soft-input" value={settingsForm.bookingHoldHours} onChange={(event) => setSettingsForm((current) => ({ ...current, bookingHoldHours: event.target.value }))} />
             </label>
+            <ShiftTimeField
+              label="Начало ночи"
+              value={settingsForm.nightStartsAt}
+              open={activeSettingsTimeField === "night-start"}
+              onToggle={() => setActiveSettingsTimeField((current) => (current === "night-start" ? null : "night-start"))}
+              onClose={() => setActiveSettingsTimeField(null)}
+              onChange={(value) => setSettingsForm((current) => ({ ...current, nightStartsAt: value }))}
+            />
             <label className="space-y-2">
               <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Ночной запас, мин.</span>
               <input type="number" min="0" className="soft-input" value={settingsForm.nightReleaseAfterShiftMinutes} onChange={(event) => setSettingsForm((current) => ({ ...current, nightReleaseAfterShiftMinutes: event.target.value }))} />

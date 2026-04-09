@@ -463,6 +463,7 @@ MIGRATIONS = (
             camp_id INTEGER PRIMARY KEY,
             time_zone TEXT NOT NULL DEFAULT 'Asia/Irkutsk',
             booking_hold_hours INTEGER NOT NULL DEFAULT 4,
+            night_starts_at TEXT NOT NULL DEFAULT '22:00',
             night_release_after_shift_minutes INTEGER NOT NULL DEFAULT 60,
             escalation_step_minutes INTEGER NOT NULL DEFAULT 15,
             escalation_repeats_before_manager INTEGER NOT NULL DEFAULT 2,
@@ -888,6 +889,13 @@ MIGRATIONS = (
             WHEN COALESCE(ends_on_date, shift_date) = shift_date AND ends_at <= starts_at THEN shift_date + 1
             ELSE COALESCE(ends_on_date, shift_date)
         END;
+        """,
+    ),
+    MigrationStep(
+        version="0010_shift_night_start",
+        sql="""
+        ALTER TABLE crm.camp_settings
+        ADD COLUMN IF NOT EXISTS night_starts_at TEXT NOT NULL DEFAULT '22:00';
         """,
     ),
 )

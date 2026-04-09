@@ -55,6 +55,7 @@ def get_camp_shift_settings(camp_id: int):
                 camp_id,
                 time_zone,
                 booking_hold_hours,
+                night_starts_at,
                 night_release_after_shift_minutes,
                 escalation_step_minutes,
                 escalation_repeats_before_manager
@@ -76,14 +77,16 @@ def save_camp_shift_settings(camp_id: int, payload: dict):
                 camp_id,
                 time_zone,
                 booking_hold_hours,
+                night_starts_at,
                 night_release_after_shift_minutes,
                 escalation_step_minutes,
                 escalation_repeats_before_manager
             )
-            VALUES (%s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (camp_id) DO UPDATE SET
                 time_zone = EXCLUDED.time_zone,
                 booking_hold_hours = EXCLUDED.booking_hold_hours,
+                night_starts_at = EXCLUDED.night_starts_at,
                 night_release_after_shift_minutes = EXCLUDED.night_release_after_shift_minutes,
                 escalation_step_minutes = EXCLUDED.escalation_step_minutes,
                 escalation_repeats_before_manager = EXCLUDED.escalation_repeats_before_manager,
@@ -93,6 +96,7 @@ def save_camp_shift_settings(camp_id: int, payload: dict):
                 camp_id,
                 payload.get("time_zone") or "Asia/Irkutsk",
                 int(payload.get("booking_hold_hours") or 4),
+                payload.get("night_starts_at") or "22:00",
                 int(payload.get("night_release_after_shift_minutes") or 60),
                 int(payload.get("escalation_step_minutes") or 15),
                 int(payload.get("escalation_repeats_before_manager") or 2),
@@ -349,6 +353,7 @@ def get_admin_camp_profile(camp_id: int):
                 camp_id,
                 time_zone,
                 booking_hold_hours,
+                night_starts_at,
                 night_release_after_shift_minutes,
                 escalation_step_minutes,
                 escalation_repeats_before_manager,

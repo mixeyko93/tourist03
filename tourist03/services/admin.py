@@ -776,10 +776,13 @@ def _prepare_change_request_payload(camp_id: int, admin: dict, operation: str, r
     normalized_operation = (operation or "").strip()
     if normalized_operation == "shift_settings_update":
         _ensure_admin_shift_access(admin, camp_id)
+        night_starts_at = str(raw_payload.get("night_starts_at") or "22:00").strip()
+        _parse_shift_time(night_starts_at)
         before = admin_repo.get_camp_shift_settings(camp_id) or {
             "camp_id": camp_id,
             "time_zone": "Asia/Irkutsk",
             "booking_hold_hours": 4,
+            "night_starts_at": "22:00",
             "night_release_after_shift_minutes": 60,
             "escalation_step_minutes": 15,
             "escalation_repeats_before_manager": 2,
@@ -787,6 +790,7 @@ def _prepare_change_request_payload(camp_id: int, admin: dict, operation: str, r
         after = {
             "time_zone": str(raw_payload.get("time_zone") or "Asia/Irkutsk"),
             "booking_hold_hours": int(raw_payload.get("booking_hold_hours") or 4),
+            "night_starts_at": night_starts_at,
             "night_release_after_shift_minutes": int(raw_payload.get("night_release_after_shift_minutes") or 60),
             "escalation_step_minutes": int(raw_payload.get("escalation_step_minutes") or 15),
             "escalation_repeats_before_manager": int(raw_payload.get("escalation_repeats_before_manager") or 2),
@@ -2023,6 +2027,7 @@ def api_admin_camp_shifts(camp_id: int, admin: dict = Depends(get_current_admin)
         "camp_id": camp_id,
         "time_zone": "Asia/Irkutsk",
         "booking_hold_hours": 4,
+        "night_starts_at": "22:00",
         "night_release_after_shift_minutes": 60,
         "escalation_step_minutes": 15,
         "escalation_repeats_before_manager": 2,
@@ -2071,6 +2076,7 @@ def api_admin_update_shift_settings(
     admin: dict = Depends(get_current_admin),
 ):
     _ensure_admin_shift_access(admin, camp_id)
+    _parse_shift_time(payload.night_starts_at)
     before = admin_repo.get_camp_shift_settings(camp_id)
     admin_repo.save_camp_shift_settings(camp_id, payload.model_dump())
     after = admin_repo.get_camp_shift_settings(camp_id)
@@ -2095,7 +2101,7 @@ def api_admin_update_shift_settings(
         title="Параметры смен изменены",
         body=(
             f"{admin.get('display_name') or 'Сотрудник'} обновил SLA заявок, "
-            f"ночной резерв и интервалы эскалации."
+            f"время начала ночи, ночной резерв и интервалы эскалации."
         ),
         severity="warning",
         action_url="/shifts",
