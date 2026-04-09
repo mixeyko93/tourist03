@@ -156,6 +156,11 @@ export default function EventsPage() {
         note: "Ещё не разобраны сотрудниками",
         icon: BellRing,
         className: "border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-500/25 dark:bg-sky-500/10 dark:text-sky-300",
+        isActive: statusFilter === "new" && !severityFilter,
+        onClick: () => {
+          setStatusFilter("new");
+          setSeverityFilter("");
+        },
       },
       {
         label: "Событий в работе",
@@ -163,6 +168,11 @@ export default function EventsPage() {
         note: "Требуют реакции по бронированиям",
         icon: Workflow,
         className: "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-300",
+        isActive: statusFilter === "in_progress" && !severityFilter,
+        onClick: () => {
+          setStatusFilter("in_progress");
+          setSeverityFilter("");
+        },
       },
       {
         label: "Критичных сигналов",
@@ -170,6 +180,11 @@ export default function EventsPage() {
         note: "Срочные проблемы с заявками",
         icon: ShieldAlert,
         className: "border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-500/25 dark:bg-rose-500/10 dark:text-rose-300",
+        isActive: severityFilter === "critical" && !statusFilter,
+        onClick: () => {
+          setSeverityFilter("critical");
+          setStatusFilter("");
+        },
       },
       {
         label: "Всего в ленте",
@@ -177,9 +192,14 @@ export default function EventsPage() {
         note: "Только заявки и бронирования",
         icon: CircleDot,
         className: "border-[#D6BE8C] bg-[#FFF5DF] text-[#8E6E2C] dark:border-[#E5D3B3]/25 dark:bg-[#E5D3B3]/10 dark:text-[#E5D3B3]",
+        isActive: !statusFilter && !severityFilter,
+        onClick: () => {
+          setStatusFilter("");
+          setSeverityFilter("");
+        },
       },
     ],
-    [summary],
+    [severityFilter, statusFilter, summary],
   );
 
   async function handleStatusChange(item: CrmEventCenterItem, nextStatus: "new" | "viewed" | "in_progress" | "closed") {
@@ -293,7 +313,14 @@ export default function EventsPage() {
         {headlineStats.map((stat) => {
           const Icon = stat.icon;
           return (
-            <article key={stat.label} className="glass-card p-5">
+            <button
+              key={stat.label}
+              type="button"
+              onClick={stat.onClick}
+              className={`glass-card p-5 text-left transition hover:-translate-y-0.5 hover:border-[#E5D3B3]/50 hover:bg-accent/25 ${
+                stat.isActive ? "border-[#E5D3B3]/60 ring-1 ring-[#E5D3B3]/40" : ""
+              }`}
+            >
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">{stat.label}</p>
@@ -304,7 +331,7 @@ export default function EventsPage() {
                 </span>
               </div>
               <p className="mt-6 text-sm leading-6 text-muted-foreground">{stat.note}</p>
-            </article>
+            </button>
           );
         })}
       </section>

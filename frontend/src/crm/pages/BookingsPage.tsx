@@ -1,5 +1,6 @@
 import { CalendarRange, ChevronDown, Filter, Plus, Search } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
+import { useSearchParams } from "react-router";
 import { EmptyState } from "../components/EmptyState";
 import { PageMotion } from "../components/PageMotion";
 import { SectionHeading } from "../components/SectionHeading";
@@ -181,13 +182,14 @@ function getEditFormFromBooking(booking: CrmBooking): EditBookingForm {
 }
 
 export default function BookingsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [camps, setCamps] = useState<CrmCamp[]>([]);
   const [selectedCampId, setSelectedCampId] = useState<number | null>(null);
   const [bookings, setBookings] = useState<CrmBooking[]>([]);
   const [roomOptions, setRoomOptions] = useState<CrmRoomOption[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get("search") || "");
+  const [dateFrom, setDateFrom] = useState(() => searchParams.get("dateFrom") || "");
+  const [dateTo, setDateTo] = useState(() => searchParams.get("dateTo") || "");
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
@@ -199,6 +201,13 @@ export default function BookingsPage() {
   const [editForm, setEditForm] = useState<EditBookingForm | null>(null);
   const [editError, setEditError] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
+  const quickFilter = searchParams.get("quick") || "";
+
+  useEffect(() => {
+    setSearchQuery(searchParams.get("search") || "");
+    setDateFrom(searchParams.get("dateFrom") || "");
+    setDateTo(searchParams.get("dateTo") || "");
+  }, [searchParams]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -298,7 +307,14 @@ export default function BookingsPage() {
   }, [bookings, selectedBooking?.id]);
 
   const normalizedQuery = searchQuery.trim().toLowerCase();
+  const todayIso = new Date().toISOString().slice(0, 10);
   const filteredBookings = bookings.filter((booking) => {
+    if (quickFilter === "processing" && !["pending", "awaiting_confirmation", "awaiting_payment"].includes(booking.status)) {
+      return false;
+    }
+    if (quickFilter === "checkins_today" && booking.check_in !== todayIso) {
+      return false;
+    }
     if (!normalizedQuery) {
       return true;
     }
@@ -324,6 +340,8 @@ export default function BookingsPage() {
   const hasCampOptions = camps.length > 0;
   const hasRoomOptions = roomOptions.length > 0;
   const selectedCamp = camps.find((camp) => camp.id === selectedCampId) || null;
+  const quickFilterLabel =
+    quickFilter === "processing" ? "Показаны только заявки в работе" : quickFilter === "checkins_today" ? "Показаны только заезды на сегодня" : "";
 
   function openBookingEditor(booking: CrmBooking) {
     setSelectedBooking(booking);
@@ -474,6 +492,24 @@ export default function BookingsPage() {
             Обновить
           </button>
         </div>
+        {quickFilterLabel ? (
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <div className="rounded-full border border-[#E5D3B3]/35 bg-[#E5D3B3]/10 px-4 py-2 text-sm font-medium text-foreground">
+              {quickFilterLabel}
+            </div>
+            <button
+              type="button"
+              className="soft-button"
+              onClick={() => {
+                const next = new URLSearchParams(searchParams);
+                next.delete("quick");
+                setSearchParams(next);
+              }}
+            >
+              Сбросить быстрый фильтр
+            </button>
+          </div>
+        ) : null}
       </section>
 
       {errorMessage ? (

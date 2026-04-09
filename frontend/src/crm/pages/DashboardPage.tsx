@@ -1,8 +1,10 @@
 import { BarChart3, BedDouble, Building2, CalendarClock, CircleDollarSign, Sparkles, TrendingUp, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router";
 import { EmptyState } from "../components/EmptyState";
 import { PageMotion } from "../components/PageMotion";
 import { SectionHeading } from "../components/SectionHeading";
+import { crmPath } from "../paths";
 import { fetchCrmBookings, fetchCrmCampRooms, fetchCrmCamps, type CrmBooking, type CrmCamp, type CrmRoomOption } from "../session";
 
 const statusClasses = {
@@ -71,6 +73,7 @@ function nightsBetween(checkIn: string, checkOut: string) {
 }
 
 export default function DashboardPage() {
+  const navigate = useNavigate();
   const [camps, setCamps] = useState<CrmCamp[]>([]);
   const [selectedCampId, setSelectedCampId] = useState<number | null>(null);
   const [bookings, setBookings] = useState<CrmBooking[]>([]);
@@ -190,6 +193,7 @@ export default function DashboardPage() {
   const hasCampOptions = camps.length > 0;
   const hasRooms = rooms.length > 0;
   const hasRevenue = metrics.series.some((item) => item.revenue > 0 || item.bookingsCount > 0);
+  const todayIso = new Date().toISOString().slice(0, 10);
 
   return (
     <PageMotion className="space-y-6">
@@ -237,6 +241,7 @@ export default function DashboardPage() {
             note: "Требуют реакции менеджера или управляющего",
             delta: hasCampOptions ? "Живые данные" : "Нет базы",
             icon: CalendarClock,
+            onClick: () => navigate(crmPath("/bookings?quick=processing")),
           },
           {
             label: "Заездов сегодня",
@@ -244,6 +249,7 @@ export default function DashboardPage() {
             note: "Запланированные заселения на текущую дату",
             delta: hasCampOptions ? "По CRM" : "Нет базы",
             icon: Users,
+            onClick: () => navigate(crmPath(`/bookings?quick=checkins_today&dateFrom=${todayIso}&dateTo=${todayIso}`)),
           },
           {
             label: "Свободных апартаментов",
@@ -251,11 +257,17 @@ export default function DashboardPage() {
             note: hasRooms ? `Всего в фонде: ${rooms.length}` : "Номерной фонд ещё не заполнен",
             delta: hasCampOptions ? "На сегодня" : "Нет базы",
             icon: BedDouble,
+            onClick: () => navigate(crmPath("/calendar")),
           },
         ].map((stat) => {
           const Icon = stat.icon;
           return (
-            <article key={stat.label} className="glass-card p-5">
+            <button
+              key={stat.label}
+              type="button"
+              onClick={stat.onClick}
+              className="glass-card p-5 text-left transition hover:-translate-y-0.5 hover:border-[#E5D3B3]/50 hover:bg-accent/25"
+            >
               <div className="flex items-start justify-between gap-4">
                 <div className="space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">{stat.label}</p>
@@ -269,7 +281,7 @@ export default function DashboardPage() {
                 <span className="text-muted-foreground">{stat.note}</span>
                 <span className="shrink-0 font-semibold text-[#E5D3B3]">{stat.delta}</span>
               </div>
-            </article>
+            </button>
           );
         })}
       </section>

@@ -54,6 +54,7 @@ export default function AdminModerationPage() {
   const [items, setItems] = useState<SuperadminMediaQueueItem[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("pending");
+  const [mediaTypeFilter, setMediaTypeFilter] = useState<"" | "image" | "video">("");
   const [reloadKey, setReloadKey] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -100,6 +101,12 @@ export default function AdminModerationPage() {
       { pending: 0, approved: 0, rejected: 0, images: 0, videos: 0 },
     );
   }, [items]);
+  const visibleItems = useMemo(() => {
+    if (!mediaTypeFilter) {
+      return items;
+    }
+    return items.filter((item) => item.media_type === mediaTypeFilter);
+  }, [items, mediaTypeFilter]);
 
   function openDecision(item: SuperadminMediaQueueItem, status: "pending" | "approved" | "rejected") {
     setDecisionState({ item, status });
@@ -172,20 +179,44 @@ export default function AdminModerationPage() {
               <ShieldAlert className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             </div>
             {[
-              { label: "На модерации", value: summary.pending, icon: Clock3 },
-              { label: "Изображения", value: summary.images, icon: ImageIcon },
-              { label: "Видео", value: summary.videos, icon: Clapperboard },
-              { label: "Отклонено", value: summary.rejected, icon: X },
+              { label: "На модерации", value: summary.pending, icon: Clock3, key: "pending" as const },
+              { label: "Изображения", value: summary.images, icon: ImageIcon, key: "images" as const },
+              { label: "Видео", value: summary.videos, icon: Clapperboard, key: "videos" as const },
+              { label: "Отклонено", value: summary.rejected, icon: X, key: "rejected" as const },
             ].map((item) => {
               const Icon = item.icon;
               return (
-                <div key={item.label} className="rounded-2xl border border-border bg-background/70 px-4 py-3">
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => {
+                    if (item.key === "pending") {
+                      setStatusFilter("pending");
+                      setMediaTypeFilter("");
+                    } else if (item.key === "rejected") {
+                      setStatusFilter("rejected");
+                      setMediaTypeFilter("");
+                    } else if (item.key === "images") {
+                      setMediaTypeFilter("image");
+                    } else if (item.key === "videos") {
+                      setMediaTypeFilter("video");
+                    }
+                  }}
+                  className={`rounded-2xl border bg-background/70 px-4 py-3 text-left transition hover:-translate-y-0.5 hover:border-blue-500/40 hover:bg-accent ${
+                    (item.key === "pending" && statusFilter === "pending" && !mediaTypeFilter) ||
+                    (item.key === "rejected" && statusFilter === "rejected" && !mediaTypeFilter) ||
+                    (item.key === "images" && mediaTypeFilter === "image") ||
+                    (item.key === "videos" && mediaTypeFilter === "video")
+                      ? "border-blue-500/55 ring-1 ring-blue-500/30"
+                      : "border-border"
+                  }`}
+                >
                   <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                     <Icon className="h-4 w-4" />
                     {item.label}
                   </div>
                   <div className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-foreground">{item.value}</div>
-                </div>
+                </button>
               );
             })}
           </div>
@@ -214,8 +245,8 @@ export default function AdminModerationPage() {
                 <tr>
                   <td colSpan={7}>Загружаем очередь модерации…</td>
                 </tr>
-              ) : items.length ? (
-                items.map((item) => {
+              ) : visibleItems.length ? (
+                visibleItems.map((item) => {
                   const meta = statusMeta(item.moderation_status);
                   return (
                     <tr key={`${item.entity_type}-${item.media_id}`}>

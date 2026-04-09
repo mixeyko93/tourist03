@@ -48,6 +48,7 @@ export default function AdminBasesPage() {
   const [items, setItems] = useState<SuperadminBaseSummary[]>([]);
   const [events, setEvents] = useState<SuperadminSystemEvent[]>([]);
   const [search, setSearch] = useState("");
+  const [quickMode, setQuickMode] = useState<"all" | "active" | "rooms">("all");
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
@@ -95,6 +96,16 @@ export default function AdminBasesPage() {
       { total: 0, active: 0, disabled: 0, rooms: 0 },
     );
   }, [items]);
+  const visibleItems = useMemo(() => {
+    const next = [...items];
+    if (quickMode === "active") {
+      return next.filter((item) => (item.status || "").toLowerCase() === "active");
+    }
+    if (quickMode === "rooms") {
+      return next.sort((left, right) => Number(right.rooms_count || 0) - Number(left.rooms_count || 0));
+    }
+    return next;
+  }, [items, quickMode]);
 
   return (
     <PageMotion className="space-y-6">
@@ -133,14 +144,21 @@ export default function AdminBasesPage() {
             </label>
 
             {[
-              { label: "Всего баз", value: summary.total },
-              { label: "Активных", value: summary.active },
-              { label: "Апартаментов", value: summary.rooms },
+              { label: "Всего баз", value: summary.total, key: "all" as const },
+              { label: "Активных", value: summary.active, key: "active" as const },
+              { label: "Апартаментов", value: summary.rooms, key: "rooms" as const },
             ].map((item) => (
-              <div key={item.label} className="rounded-2xl border border-border bg-background/70 px-4 py-3">
+              <button
+                key={item.label}
+                type="button"
+                onClick={() => setQuickMode(item.key)}
+                className={`rounded-2xl border bg-background/70 px-4 py-3 text-left transition hover:-translate-y-0.5 hover:border-blue-500/40 hover:bg-accent ${
+                  quickMode === item.key ? "border-blue-500/55 ring-1 ring-blue-500/30" : "border-border"
+                }`}
+              >
                 <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">{item.label}</div>
                 <div className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-foreground">{item.value}</div>
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -170,8 +188,8 @@ export default function AdminBasesPage() {
                 <tr>
                   <td colSpan={10}>Загружаем базы отдыха…</td>
                 </tr>
-              ) : items.length ? (
-                items.map((base) => {
+              ) : visibleItems.length ? (
+                visibleItems.map((base) => {
                   const statusKey = (base.status || "").toLowerCase();
                   const linkedAdmins = base.linked_admins || [];
                   return (
