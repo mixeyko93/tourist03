@@ -898,6 +898,15 @@ MIGRATIONS = (
         ADD COLUMN IF NOT EXISTS night_starts_at TEXT NOT NULL DEFAULT '22:00';
         """,
     ),
+    MigrationStep(
+        version="0011_cleanup_crm_events",
+        sql="""
+        DELETE FROM crm.notification_events
+        WHERE recipient_scope = 'crm'
+          AND channel = 'in_app'
+          AND event_type NOT IN ('booking_created', 'booking_updated');
+        """,
+    ),
 )
 
 

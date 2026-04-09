@@ -7,6 +7,9 @@ from tourist03.booking_db_errors import translate_booking_integrity_error
 from tourist03.db import _db_conn
 
 
+CRM_BOOKING_EVENT_TYPES = ("booking_created", "booking_updated")
+
+
 def find_admin_account_by_login(login: str):
     with _db_conn("crm") as conn:
         cur = conn.cursor()
@@ -1644,6 +1647,7 @@ def list_admin_notification_events(
     conditions = [
         "e.recipient_scope = 'crm'",
         "e.channel = 'in_app'",
+        "e.event_type = ANY(%s)",
         """
         (
             e.recipient_admin_id = %s
@@ -1657,7 +1661,7 @@ def list_admin_notification_events(
         )
         """,
     ]
-    params: list = [admin_id, camp_ids]
+    params: list = [list(CRM_BOOKING_EVENT_TYPES), admin_id, camp_ids]
 
     if camp_id:
         conditions.append("e.camp_id = %s")
@@ -1731,6 +1735,7 @@ def get_admin_notification_summary(
     conditions = [
         "recipient_scope = 'crm'",
         "channel = 'in_app'",
+        "event_type = ANY(%s)",
         """
         (
             recipient_admin_id = %s
@@ -1744,7 +1749,7 @@ def get_admin_notification_summary(
         )
         """,
     ]
-    params: list = [admin_id, camp_ids]
+    params: list = [list(CRM_BOOKING_EVENT_TYPES), admin_id, camp_ids]
     if camp_id:
         conditions.append("camp_id = %s")
         params.append(camp_id)
@@ -1807,6 +1812,7 @@ def get_admin_notification_event(event_id: int, admin_id: int, camp_ids: list[in
             WHERE e.id = %s
               AND e.recipient_scope = 'crm'
               AND e.channel = 'in_app'
+              AND e.event_type = ANY(%s)
               AND (
                     e.recipient_admin_id = %s
                     OR (
@@ -1819,7 +1825,7 @@ def get_admin_notification_event(event_id: int, admin_id: int, camp_ids: list[in
               )
             LIMIT 1
             """,
-            (event_id, admin_id, camp_ids),
+            (event_id, list(CRM_BOOKING_EVENT_TYPES), admin_id, camp_ids),
         )
         row = cur.fetchone()
         return dict(row) if row else None

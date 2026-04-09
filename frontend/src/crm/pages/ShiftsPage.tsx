@@ -1,5 +1,5 @@
 import { AlarmClockCheck, CalendarClock, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Clock3, PencilLine, Save, Trash2, UserRoundCheck } from "lucide-react";
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { EmptyState } from "../components/EmptyState";
 import { ModalShell } from "../components/ModalShell";
 import { PageMotion } from "../components/PageMotion";
@@ -469,6 +469,20 @@ export default function ShiftsPage() {
   const [activePresetTimeField, setActivePresetTimeField] = useState<"start" | "end" | null>(null);
   const [activeRulePicker, setActiveRulePicker] = useState<"start" | "date" | "end" | null>(null);
   const [activeSettingsTimeField, setActiveSettingsTimeField] = useState<"night-start" | null>(null);
+  const [hasHorizontalOverflow, setHasHorizontalOverflow] = useState(false);
+  const [isScrollIndicatorActive, setIsScrollIndicatorActive] = useState(false);
+  const [isGridDragging, setIsGridDragging] = useState(false);
+  const [scrollThumbWidth, setScrollThumbWidth] = useState(0);
+  const [scrollThumbOffset, setScrollThumbOffset] = useState(0);
+  const gridScrollRef = useRef<HTMLDivElement | null>(null);
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  const scrollIndicatorTimeoutRef = useRef<number | null>(null);
+  const dragPointerIdRef = useRef<number | null>(null);
+  const dragStartXRef = useRef(0);
+  const dragStartScrollLeftRef = useRef(0);
+  const gridDragPointerIdRef = useRef<number | null>(null);
+  const gridDragStartXRef = useRef(0);
+  const gridDragStartScrollLeftRef = useRef(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -615,6 +629,103 @@ export default function ShiftsPage() {
   const dayColumnWidth = viewMode === "week" ? 140 : 92;
   const gridWidth = staffColumnWidth + visibleDates.length * dayColumnWidth;
 
+  const updateScrollMetrics = () => {
+    const gridNode = gridScrollRef.current;
+    if (!gridNode) {
+      setHasHorizontalOverflow(false);
+      setScrollThumbWidth(0);
+      setScrollThumbOffset(0);
+      return;
+    }
+
+    const hasOverflow = gridNode.scrollWidth - gridNode.clientWidth > 8;
+    setHasHorizontalOverflow(hasOverflow);
+    if (!hasOverflow) {
+      const trackWidth = trackRef.current?.clientWidth ?? 0;
+      setScrollThumbWidth(trackWidth);
+      setScrollThumbOffset(0);
+      return;
+    }
+
+    const trackNode = trackRef.current;
+    if (!trackNode || trackNode.clientWidth <= 0) {
+      return;
+    }
+
+    const visibleRatio = gridNode.clientWidth / gridNode.scrollWidth;
+    const nextThumbWidth = Math.max(44, Math.min(trackNode.clientWidth, trackNode.clientWidth * visibleRatio));
+    const maxGridScroll = Math.max(1, gridNode.scrollWidth - gridNode.clientWidth);
+    const maxThumbOffset = Math.max(0, trackNode.clientWidth - nextThumbWidth);
+
+    setScrollThumbWidth(nextThumbWidth);
+    setScrollThumbOffset(maxThumbOffset * (gridNode.scrollLeft / maxGridScroll));
+  };
+
+  const activateScrollIndicator = () => {
+    setIsScrollIndicatorActive(true);
+    if (typeof window === "undefined") {
+      return;
+    }
+    if (scrollIndicatorTimeoutRef.current !== null) {
+      window.clearTimeout(scrollIndicatorTimeoutRef.current);
+    }
+    scrollIndicatorTimeoutRef.current = window.setTimeout(() => {
+      setIsScrollIndicatorActive(false);
+      scrollIndicatorTimeoutRef.current = null;
+    }, 1200);
+  };
+
+  const syncScrollFromGrid = () => {
+    updateScrollMetrics();
+    activateScrollIndicator();
+  };
+
+  const updateGridScrollFromPointer = (clientX: number, alignToCenter = false) => {
+    const gridNode = gridScrollRef.current;
+    const trackNode = trackRef.current;
+    if (!gridNode || !trackNode || trackNode.clientWidth <= 0) {
+      return;
+    }
+
+    const trackRect = trackNode.getBoundingClientRect();
+    const trackWidth = trackRect.width;
+    const thumbWidth = Math.max(44, scrollThumbWidth || trackWidth);
+    const maxThumbOffset = Math.max(0, trackWidth - thumbWidth);
+    const maxGridScroll = Math.max(0, gridNode.scrollWidth - gridNode.clientWidth);
+    if (maxThumbOffset <= 0 || maxGridScroll <= 0) {
+      return;
+    }
+
+    const pointerOffset = clientX - trackRect.left - (alignToCenter ? thumbWidth / 2 : 0);
+    const boundedOffset = Math.max(0, Math.min(maxThumbOffset, pointerOffset));
+    gridNode.scrollLeft = (boundedOffset / maxThumbOffset) * maxGridScroll;
+    syncScrollFromGrid();
+  };
+
+  useEffect(() => {
+    updateScrollMetrics();
+    if (typeof window !== "undefined") {
+      window.addEventListener("resize", updateScrollMetrics);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("resize", updateScrollMetrics);
+      }
+    };
+  }, [gridWidth, sortedStaff.length, viewMode]);
+
+  useEffect(() => {
+    updateScrollMetrics();
+  }, [hasHorizontalOverflow]);
+
+  useEffect(() => {
+    return () => {
+      if (scrollIndicatorTimeoutRef.current !== null && typeof window !== "undefined") {
+        window.clearTimeout(scrollIndicatorTimeoutRef.current);
+      }
+    };
+  }, []);
+
   function buildTarget(member: CrmShiftStaffOption, date: Date, existingRule?: CrmShiftRule | null): ShiftTarget {
     const shiftDate = existingRule?.shift_date || formatDateParam(date);
     return {
@@ -652,6 +763,92 @@ export default function ShiftsPage() {
   function openCellModal(member: CrmShiftStaffOption, date: Date, rule?: CrmShiftRule | null) {
     openTargetModal(buildTarget(member, date, rule), rule);
   }
+
+  const handleTrackPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement;
+    if (target.dataset.thumb === "true") {
+      dragPointerIdRef.current = event.pointerId;
+      dragStartXRef.current = event.clientX;
+      dragStartScrollLeftRef.current = gridScrollRef.current?.scrollLeft ?? 0;
+      event.currentTarget.setPointerCapture(event.pointerId);
+      activateScrollIndicator();
+      return;
+    }
+
+    updateGridScrollFromPointer(event.clientX, true);
+    activateScrollIndicator();
+  };
+
+  const handleTrackPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (dragPointerIdRef.current !== event.pointerId) {
+      return;
+    }
+    const gridNode = gridScrollRef.current;
+    const trackNode = trackRef.current;
+    if (!gridNode || !trackNode) {
+      return;
+    }
+
+    const thumbWidth = Math.max(44, scrollThumbWidth || trackNode.clientWidth);
+    const maxThumbOffset = Math.max(1, trackNode.clientWidth - thumbWidth);
+    const maxGridScroll = Math.max(0, gridNode.scrollWidth - gridNode.clientWidth);
+    const deltaX = event.clientX - dragStartXRef.current;
+    const scrollDelta = (deltaX / maxThumbOffset) * maxGridScroll;
+    gridNode.scrollLeft = dragStartScrollLeftRef.current + scrollDelta;
+    syncScrollFromGrid();
+  };
+
+  const handleTrackPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (dragPointerIdRef.current !== event.pointerId) {
+      return;
+    }
+    dragPointerIdRef.current = null;
+    event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+
+  const handleGridPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== "mouse" || event.button !== 0) {
+      return;
+    }
+    const target = event.target as HTMLElement;
+    if (target.closest("[data-shift-cell='true']")) {
+      return;
+    }
+
+    const gridNode = gridScrollRef.current;
+    if (!gridNode || gridNode.scrollWidth <= gridNode.clientWidth) {
+      return;
+    }
+
+    gridDragPointerIdRef.current = event.pointerId;
+    gridDragStartXRef.current = event.clientX;
+    gridDragStartScrollLeftRef.current = gridNode.scrollLeft;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setIsGridDragging(true);
+    activateScrollIndicator();
+  };
+
+  const handleGridPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (gridDragPointerIdRef.current !== event.pointerId) {
+      return;
+    }
+    const gridNode = gridScrollRef.current;
+    if (!gridNode) {
+      return;
+    }
+    const deltaX = event.clientX - gridDragStartXRef.current;
+    gridNode.scrollLeft = gridDragStartScrollLeftRef.current - deltaX;
+    syncScrollFromGrid();
+  };
+
+  const stopGridDragging = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (gridDragPointerIdRef.current !== event.pointerId) {
+      return;
+    }
+    gridDragPointerIdRef.current = null;
+    setIsGridDragging(false);
+    event.currentTarget.releasePointerCapture(event.pointerId);
+  };
 
   async function handleSaveRule(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -835,8 +1032,8 @@ export default function ShiftsPage() {
           <div
             className={`max-w-xl rounded-2xl border px-5 py-3 text-sm shadow-2xl backdrop-blur-xl transition ${
               errorMessage
-                ? "border-rose-500/30 bg-rose-500/15 text-rose-100"
-                : "border-emerald-500/30 bg-emerald-500/15 text-emerald-100"
+                ? "border-rose-300 bg-rose-50/96 text-rose-900 dark:border-rose-500/30 dark:bg-rose-500/18 dark:text-rose-100"
+                : "border-emerald-300 bg-emerald-50/96 text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/18 dark:text-emerald-100"
             }`}
           >
             {errorMessage || successMessage}
@@ -897,7 +1094,7 @@ export default function ShiftsPage() {
               {activeRules.length ? (
                 <div className="mt-4 flex-1 space-y-3">
                   {activeRules.map((rule) => (
-                    <div key={`${rule.rule_id}-${rule.starts_at}`} className="rounded-3xl border border-border bg-background/65 p-4">
+                    <div key={`${rule.rule_id}-${rule.starts_at}`} className="rounded-3xl border border-border bg-white/92 p-4 dark:bg-background/65">
                       <p className="text-sm font-semibold text-foreground">{rule.admin_name}</p>
                       <p className="mt-1 text-sm text-muted-foreground">
                         {rule.starts_time} → {rule.ends_time}
@@ -919,7 +1116,7 @@ export default function ShiftsPage() {
                 Следующая смена
               </div>
               {nextRule ? (
-                <div className="mt-4 flex-1 rounded-3xl border border-border bg-background/65 p-4">
+                <div className="mt-4 flex-1 rounded-3xl border border-border bg-white/92 p-4 dark:bg-background/65">
                   <p className="text-sm font-semibold text-foreground">{nextRule.admin_name}</p>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {nextRule.weekday_label} · {nextRule.starts_time} → {nextRule.ends_time}
@@ -943,7 +1140,7 @@ export default function ShiftsPage() {
                   Изменить
                 </button>
               </div>
-              <div className="mt-4 flex-1 space-y-3 rounded-3xl border border-border bg-background/65 p-4 text-sm text-muted-foreground">
+              <div className="mt-4 flex-1 space-y-3 rounded-3xl border border-border bg-white/92 p-4 text-sm text-muted-foreground dark:bg-background/65">
                 <p>
                   Заморозка заявки: <span className="font-medium text-foreground">{settingsForm.bookingHoldHours} ч.</span>
                 </p>
@@ -997,7 +1194,9 @@ export default function ShiftsPage() {
                     type="button"
                     onClick={() => setViewMode("month")}
                     className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
-                      viewMode === "month" ? "border border-[#E5D3B3]/25 bg-[#E5D3B3]/10 text-foreground" : "text-muted-foreground hover:text-foreground"
+                      viewMode === "month"
+                        ? "border border-[#D6BE8C] bg-[#FFF5DF] text-[#8E6E2C] dark:border-[#E5D3B3]/25 dark:bg-[#E5D3B3]/10 dark:text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
                     Месяц
@@ -1006,7 +1205,9 @@ export default function ShiftsPage() {
                     type="button"
                     onClick={() => setViewMode("week")}
                     className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
-                      viewMode === "week" ? "border border-[#E5D3B3]/25 bg-[#E5D3B3]/10 text-foreground" : "text-muted-foreground hover:text-foreground"
+                      viewMode === "week"
+                        ? "border border-[#D6BE8C] bg-[#FFF5DF] text-[#8E6E2C] dark:border-[#E5D3B3]/25 dark:bg-[#E5D3B3]/10 dark:text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
                     Неделя
@@ -1022,13 +1223,21 @@ export default function ShiftsPage() {
               </button>
             </div>
 
-            <div className="mt-5 overflow-x-auto rounded-3xl border border-border bg-background/55">
+            <div
+              ref={gridScrollRef}
+              onScroll={syncScrollFromGrid}
+              onPointerDown={handleGridPointerDown}
+              onPointerMove={handleGridPointerMove}
+              onPointerUp={stopGridDragging}
+              onPointerCancel={stopGridDragging}
+              className={`crm-calendar-grid-scroll mt-5 overflow-x-auto rounded-3xl border border-border bg-white/90 dark:bg-background/55 ${isGridDragging ? "crm-calendar-grid-scroll--dragging" : ""}`}
+            >
               <div style={{ width: `${gridWidth}px`, minWidth: "100%" }}>
                 <div
-                  className="grid border-b border-border bg-card/70"
+                  className="grid border-b border-border bg-white/94 dark:bg-card/70"
                   style={{ gridTemplateColumns: `${staffColumnWidth}px repeat(${visibleDates.length}, minmax(${dayColumnWidth}px, 1fr))` }}
                 >
-                  <div className="sticky left-0 z-10 border-r border-border bg-card/90 px-5 py-4 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                  <div className="sticky left-0 z-10 border-r border-border bg-white/96 px-5 py-4 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground dark:bg-card/90">
                     Сотрудник
                   </div>
                   {visibleDates.map((date) => (
@@ -1046,7 +1255,7 @@ export default function ShiftsPage() {
                       className="grid border-b border-border last:border-b-0"
                       style={{ gridTemplateColumns: `${staffColumnWidth}px repeat(${visibleDates.length}, minmax(${dayColumnWidth}px, 1fr))` }}
                     >
-                      <div className="sticky left-0 z-10 border-r border-border bg-card/88 px-5 py-5">
+                      <div className="sticky left-0 z-10 border-r border-border bg-white/96 px-5 py-5 dark:bg-card/88">
                         <p className="text-sm font-semibold text-foreground">{member.display_name}</p>
                         <p className="mt-1 text-xs uppercase tracking-[0.18em] text-muted-foreground">{member.role_label}</p>
                       </div>
@@ -1064,7 +1273,8 @@ export default function ShiftsPage() {
                                     <button
                                       key={rule.id}
                                       type="button"
-                                      className="group relative flex min-h-24 w-full flex-1 flex-col justify-center rounded-[1.9rem] border border-[#E5D3B3]/22 bg-[#E5D3B3]/10 px-3 py-3 text-left transition hover:bg-[#E5D3B3]/16"
+                                      data-shift-cell="true"
+                                      className="group relative flex min-h-24 w-full flex-1 flex-col justify-center rounded-[1.9rem] border border-[#D6BE8C]/55 bg-[#FBF3E4] px-3 py-3 text-left shadow-sm transition hover:bg-[#F6ECD8] dark:border-[#E5D3B3]/22 dark:bg-[#E5D3B3]/10 dark:hover:bg-[#E5D3B3]/16"
                                       onMouseDown={(event) => {
                                         if (event.button === 2) {
                                           event.preventDefault();
@@ -1096,7 +1306,8 @@ export default function ShiftsPage() {
                             ) : (
                               <button
                                 type="button"
-                                className="flex h-full min-h-24 w-full items-center justify-center rounded-2xl border border-dashed border-border/70 bg-background/35 px-3 text-center text-xs leading-5 text-muted-foreground transition hover:border-[#E5D3B3]/30 hover:text-foreground"
+                                data-shift-cell="true"
+                                className="flex h-full min-h-24 w-full items-center justify-center rounded-2xl border border-dashed border-[#D6BE8C]/75 bg-white/82 px-3 text-center text-xs leading-5 text-[#C6A163] shadow-sm transition hover:border-[#C7A25A]/80 hover:bg-[#FFF5E5] hover:text-[#8E6E2C] dark:border-border/70 dark:bg-background/35 dark:text-muted-foreground dark:hover:border-[#E5D3B3]/30 dark:hover:bg-background/55 dark:hover:text-foreground"
                                 onClick={() => void handleQuickAssign(member, date)}
                                 onMouseDown={(event) => {
                                   if (event.button === 2) {
@@ -1108,7 +1319,7 @@ export default function ShiftsPage() {
                                   openCellModal(member, date);
                                 }}
                               >
-                                <span className="text-lg leading-none text-[#E5D3B3]">+</span>
+                                <span className="text-lg leading-none text-[#C6A163] dark:text-[#E5D3B3]">+</span>
                               </button>
                             )}
                           </div>
@@ -1128,6 +1339,25 @@ export default function ShiftsPage() {
                 )}
               </div>
             </div>
+
+            {hasHorizontalOverflow ? (
+              <div className={`mt-4 transition-opacity duration-300 ${isScrollIndicatorActive ? "opacity-100" : "pointer-events-none opacity-0"}`}>
+                <div
+                  ref={trackRef}
+                  onPointerDown={handleTrackPointerDown}
+                  onPointerMove={handleTrackPointerMove}
+                  onPointerUp={handleTrackPointerUp}
+                  onPointerCancel={handleTrackPointerUp}
+                  className="crm-calendar-scrollbar relative h-3 rounded-full border border-border bg-card/70"
+                >
+                  <div
+                    data-thumb="true"
+                    className="absolute top-1/2 h-2 -translate-y-1/2 rounded-full bg-gradient-to-r from-[#C6A163]/70 via-sky-400/40 to-[#C6A163]/70 shadow-sm dark:from-[#E5D3B3]/55 dark:via-sky-400/35 dark:to-[#E5D3B3]/55"
+                    style={{ width: `${scrollThumbWidth}px`, transform: `translate(${scrollThumbOffset}px, -50%)` }}
+                  />
+                </div>
+              </div>
+            ) : null}
           </section>
         </>
       )}

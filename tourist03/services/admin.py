@@ -623,23 +623,24 @@ def _publish_crm_event(
 ) -> None:
     actor_id = int(admin["id"]) if admin and admin.get("id") is not None else None
     actor_name = (admin or {}).get("display_name") if admin else None
-    create_notification_event(
-        event_type=event_type,
-        title=title,
-        body=body,
-        channel="in_app",
-        recipient_scope="crm",
-        recipient_admin_id=recipient_admin_id,
-        camp_id=camp_id,
-        action_url=action_url,
-        action_payload=action_payload,
-        severity=severity,
-        metadata={
-            "actor_id": actor_id,
-            "actor_display": actor_name,
-            **(metadata or {}),
-        },
-    )
+    if event_type in admin_repo.CRM_BOOKING_EVENT_TYPES:
+        create_notification_event(
+            event_type=event_type,
+            title=title,
+            body=body,
+            channel="in_app",
+            recipient_scope="crm",
+            recipient_admin_id=recipient_admin_id,
+            camp_id=camp_id,
+            action_url=action_url,
+            action_payload=action_payload,
+            severity=severity,
+            metadata={
+                "actor_id": actor_id,
+                "actor_display": actor_name,
+                **(metadata or {}),
+            },
+        )
     if camp_id and severity in {"warning", "critical"}:
         recipients = notification_repo.list_active_staff_telegram_recipients(
             int(camp_id),

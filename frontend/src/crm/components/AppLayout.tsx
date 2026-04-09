@@ -234,8 +234,8 @@ export default function AppLayout() {
   );
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <header className="relative z-20 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-border bg-card/85 px-4 backdrop-blur-xl md:px-6">
+    <div className="flex h-screen min-h-screen flex-col overflow-hidden bg-background text-foreground">
+      <header className="fixed inset-x-0 top-0 z-30 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-border bg-card/92 px-4 backdrop-blur-xl md:px-6">
         <div className="flex min-w-0 items-center gap-3">
           <button
             type="button"
@@ -286,7 +286,7 @@ export default function AppLayout() {
         </div>
       </header>
 
-      <div className="relative flex min-w-0 flex-1 overflow-hidden">
+      <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden pt-16">
         <div className={`relative hidden shrink-0 transition-[width] duration-300 lg:block ${sidebarOpen ? "w-56" : "w-0"}`}>
           <aside
             className={`absolute inset-y-0 left-0 h-full w-56 overflow-hidden border-r border-border bg-card/80 px-3 py-4 backdrop-blur-xl transition-transform duration-300 lg:fixed lg:bottom-0 lg:left-0 lg:top-16 lg:z-10 lg:h-[calc(100dvh-4rem)] ${

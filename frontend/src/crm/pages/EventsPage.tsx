@@ -37,10 +37,10 @@ const statusLabels: Record<string, string> = {
 };
 
 const statusClasses: Record<string, string> = {
-  new: "border-sky-500/25 bg-sky-500/10 text-sky-300",
-  viewed: "border-slate-500/25 bg-slate-500/10 text-slate-300",
-  in_progress: "border-amber-500/25 bg-amber-500/10 text-amber-300",
-  closed: "border-emerald-500/25 bg-emerald-500/10 text-emerald-300",
+  new: "border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-500/25 dark:bg-sky-500/10 dark:text-sky-300",
+  viewed: "border-slate-300 bg-slate-100 text-slate-700 dark:border-slate-500/25 dark:bg-slate-500/10 dark:text-slate-300",
+  in_progress: "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-300",
+  closed: "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-300",
 };
 
 const severityLabels: Record<string, string> = {
@@ -50,9 +50,9 @@ const severityLabels: Record<string, string> = {
 };
 
 const severityClasses: Record<string, string> = {
-  info: "border-[#E5D3B3]/25 bg-[#E5D3B3]/10 text-[#E5D3B3]",
-  warning: "border-amber-500/25 bg-amber-500/10 text-amber-300",
-  critical: "border-rose-500/25 bg-rose-500/10 text-rose-300",
+  info: "border-[#D6BE8C] bg-[#FFF5DF] text-[#8E6E2C] dark:border-[#E5D3B3]/25 dark:bg-[#E5D3B3]/10 dark:text-[#E5D3B3]",
+  warning: "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-300",
+  critical: "border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-500/25 dark:bg-rose-500/10 dark:text-rose-300",
 };
 
 function formatDateTime(value: string | null | undefined) {
@@ -155,28 +155,28 @@ export default function EventsPage() {
         value: summary.new_count,
         note: "Ещё не разобраны сотрудниками",
         icon: BellRing,
-        className: "border-sky-500/25 bg-sky-500/10 text-sky-300",
+        className: "border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-500/25 dark:bg-sky-500/10 dark:text-sky-300",
       },
       {
         label: "Событий в работе",
         value: summary.in_progress_count,
-        note: "Требуют реакции по базе",
+        note: "Требуют реакции по бронированиям",
         icon: Workflow,
-        className: "border-amber-500/25 bg-amber-500/10 text-amber-300",
+        className: "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-300",
       },
       {
         label: "Критичных сигналов",
         value: summary.critical_count,
-        note: "Максимальный приоритет",
+        note: "Срочные проблемы с заявками",
         icon: ShieldAlert,
-        className: "border-rose-500/25 bg-rose-500/10 text-rose-300",
+        className: "border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-500/25 dark:bg-rose-500/10 dark:text-rose-300",
       },
       {
         label: "Всего в ленте",
         value: summary.total_count,
-        note: "Все события по доступным базам",
+        note: "Только заявки и бронирования",
         icon: CircleDot,
-        className: "border-[#E5D3B3]/25 bg-[#E5D3B3]/10 text-[#E5D3B3]",
+        className: "border-[#D6BE8C] bg-[#FFF5DF] text-[#8E6E2C] dark:border-[#E5D3B3]/25 dark:bg-[#E5D3B3]/10 dark:text-[#E5D3B3]",
       },
     ],
     [summary],
@@ -219,8 +219,8 @@ export default function EventsPage() {
   return (
     <PageMotion className="space-y-6">
       <SectionHeading
-        title="Центр событий CRM"
-        description="Живая операционная лента: новые заявки, изменения по базе, действия сотрудников и всё, что требует внимания в течение смены."
+        title="События по броням"
+        description="Живая лента заявок и бронирований: новые обращения, изменения статусов и всё, что требует внимания по размещению."
         actions={
           <button type="button" className="brand-outline w-full sm:w-auto" onClick={() => setReloadKey((value) => value + 1)}>
             Обновить ленту
