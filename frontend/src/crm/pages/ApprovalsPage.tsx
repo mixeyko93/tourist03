@@ -186,7 +186,7 @@ export default function ApprovalsPage() {
     <PageMotion className="space-y-6">
       <SectionHeading
         title="Подтверждения и откаты"
-        description="Живой контур чувствительных изменений: что отправили на подтверждение, что применили под ответственность и что при необходимости можно откатить."
+        description="Живой контур изменений: что отправили на подтверждение, что применили под ответственность и что при необходимости можно откатить."
         actions={
           <button type="button" className="brand-outline w-full sm:w-auto" onClick={() => setReloadKey((value) => value + 1)}>
             Обновить список
