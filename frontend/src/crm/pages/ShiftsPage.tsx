@@ -1274,7 +1274,7 @@ export default function ShiftsPage() {
                                       key={rule.id}
                                       type="button"
                                       data-shift-cell="true"
-                                      className="group relative flex min-h-24 w-full flex-1 flex-col justify-center rounded-[1.9rem] border border-[#D6BE8C]/55 bg-[#FBF3E4] px-3 py-3 text-left shadow-sm transition hover:bg-[#F6ECD8] dark:border-[#E5D3B3]/22 dark:bg-[#E5D3B3]/10 dark:hover:bg-[#E5D3B3]/16"
+                                      className="group relative flex min-h-24 w-full flex-1 flex-col items-center justify-center rounded-[1.9rem] border border-[#D6BE8C]/55 bg-[#FBF3E4] px-3 py-3 text-center shadow-sm transition hover:bg-[#F6ECD8] dark:border-[#E5D3B3]/22 dark:bg-[#E5D3B3]/10 dark:hover:bg-[#E5D3B3]/16"
                                       onMouseDown={(event) => {
                                         if (event.button === 2) {
                                           event.preventDefault();
@@ -1286,7 +1286,7 @@ export default function ShiftsPage() {
                                       }}
                                     >
                                       {rule.comment ? <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#E5D3B3]" /> : null}
-                                      <span className="pr-3 text-[0.95rem] font-semibold leading-6 tracking-[-0.03em] text-foreground">
+                                      <span className="flex flex-col items-center justify-center text-[0.95rem] font-semibold leading-6 tracking-[-0.03em] text-foreground">
                                         {rule.starts_at?.slice(0, 5)}
                                         <br />
                                         <span aria-hidden="true">→</span>
