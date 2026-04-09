@@ -1352,8 +1352,8 @@ export default function ShiftsPage() {
                 >
                   <div
                     data-thumb="true"
-                    className="absolute top-1/2 h-2 -translate-y-1/2 rounded-full bg-gradient-to-r from-[#C6A163]/70 via-sky-400/40 to-[#C6A163]/70 shadow-sm dark:from-[#E5D3B3]/55 dark:via-sky-400/35 dark:to-[#E5D3B3]/55"
-                    style={{ width: `${scrollThumbWidth}px`, transform: `translate(${scrollThumbOffset}px, -50%)` }}
+                    className="absolute top-1/2 h-2 -translate-y-1/2 rounded-full bg-gradient-to-r from-[#C6A163]/70 via-sky-400/40 to-[#C6A163]/70 shadow-[0_0_0_1px_rgba(17,24,39,0.16)] transition-[opacity,box-shadow] duration-200 hover:shadow-[0_0_0_1px_rgba(17,24,39,0.28)] dark:from-[#E5D3B3]/55 dark:via-sky-400/35 dark:to-[#E5D3B3]/55"
+                    style={{ width: scrollThumbWidth, left: scrollThumbOffset }}
                   />
                 </div>
               </div>
