@@ -12,7 +12,7 @@ build_server() {
     return
   fi
 
-  printf '%s' "root@45.153.71.21"
+  printf '%s' "root@150.241.74.215"
 }
 
 run_remote() {

@@ -3,7 +3,7 @@
   # email you@example.com
 }
 
-http://45.153.71.21 {
+http://150.241.74.215 {
   reverse_proxy 127.0.0.1:8000
 }
 
