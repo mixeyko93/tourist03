@@ -63,26 +63,11 @@ resolve_deploy_password() {
 
 SERVER="$(build_server)"
 PROJECT_PATH="${DEPLOY_PATH:-/opt/tourist03}"
-RSYNC_RSH="${RSYNC_RSH:-ssh -o StrictHostKeyChecking=accept-new}"
-DEPLOY_CMD="${DEPLOY_CMD:-./.venv/bin/pip install -r requirements.txt && ./.venv/bin/python -c 'from tourist03.migrations import run_migrations; run_migrations()' && systemctl restart tourist03-app tourist03-bot caddy}"
+DEPLOY_REMOTE="${DEPLOY_REMOTE:-origin}"
+DEPLOY_BRANCH="${DEPLOY_BRANCH:-$(git branch --show-current)}"
+DEPLOY_REVISION="${DEPLOY_REVISION:-$(git rev-parse HEAD)}"
+DEPLOY_CMD="${DEPLOY_CMD:-sudo -u tourist03 git -C \"$PROJECT_PATH\" fetch \"$DEPLOY_REMOTE\" \"$DEPLOY_BRANCH\" && sudo -u tourist03 git -C \"$PROJECT_PATH\" reset --hard \"$DEPLOY_REVISION\" && sudo -u tourist03 git -C \"$PROJECT_PATH\" clean -fd -e archive/ -e static/uploads/ -e .env && chown -R tourist03:tourist03 \"$PROJECT_PATH\" && cd \"$PROJECT_PATH\" && ./.venv/bin/pip install -r requirements.txt && ./.venv/bin/python -c 'from tourist03.migrations import run_migrations; run_migrations()' && systemctl restart tourist03-app tourist03-bot caddy}"
 
 resolve_deploy_password
 
-run_remote rsync -az --delete \
-  --exclude='.git' \
-  --exclude='.deploy.local' \
-  --exclude='.env' \
-  --exclude='.venv' \
-  --exclude='DerivedData' \
-  --exclude='__pycache__' \
-  --exclude='.DS_Store' \
-  --exclude='._*' \
-  --exclude='node_modules' \
-  --exclude='frontend/node_modules' \
-  --exclude='uploads' \
-  --exclude='cache' \
-  --exclude='__cache__' \
-  -e "$RSYNC_RSH" \
-  ./ "$SERVER:$PROJECT_PATH/"
-
-run_remote ssh -o StrictHostKeyChecking=accept-new "$SERVER" "chown -R tourist03:tourist03 \"$PROJECT_PATH\" && cd \"$PROJECT_PATH\" && $DEPLOY_CMD"
+run_remote ssh -o StrictHostKeyChecking=accept-new "$SERVER" "$DEPLOY_CMD"
