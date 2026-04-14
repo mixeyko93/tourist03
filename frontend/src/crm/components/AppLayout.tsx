@@ -4,6 +4,7 @@ import { NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-route
 import { useTheme } from "next-themes";
 import { fetchCrmEventCenterSummary, fetchCrmSession, logoutCrmSession, type CrmSession } from "../session";
 import { crmPath } from "../paths";
+import { PageLoadingState } from "./PageLoadingState";
 import { useDocumentTitle } from "./useDocumentTitle";
 
 const navItems = [
@@ -154,10 +155,8 @@ export default function AppLayout() {
   if (isAuthLoading) {
     return (
       <div className="crm-ambient flex min-h-screen items-center justify-center bg-background px-4 text-foreground">
-        <div className="glass-card w-full max-w-md rounded-3xl p-8 text-center">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#E5D3B3]">Tourist_03 CRM</p>
-          <h1 className="mt-3 text-2xl font-semibold tracking-[-0.05em] text-foreground">Загружаем рабочее пространство</h1>
-          <p className="mt-3 text-sm leading-6 text-muted-foreground">Проверяем сессию и права доступа к вашим базам.</p>
+        <div className="glass-card w-full max-w-2xl rounded-3xl p-8">
+          <PageLoadingState blocks={2} columnsClassName="md:grid-cols-2" blockHeightClassName="h-40" />
         </div>
       </div>
     );

@@ -2,6 +2,7 @@ import { Filter, Mail, Phone, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { EmptyState } from "../components/EmptyState";
 import { ModalShell } from "../components/ModalShell";
+import { PageLoadingState } from "../components/PageLoadingState";
 import { PageMotion } from "../components/PageMotion";
 import { SectionHeading } from "../components/SectionHeading";
 import { fetchCrmCamps, fetchCrmGuests, type CrmCamp, type CrmGuest } from "../session";
@@ -181,12 +182,7 @@ export default function GuestsPage() {
       <section className="glass-card overflow-hidden md:hidden">
         {isLoading ? (
           <div className="p-4">
-            <EmptyState
-              icon={Search}
-              compact
-              title="Загружаем гостевую базу"
-              description="Собираем гостей по реальным бронированиям CRM и приложения."
-            />
+            <PageLoadingState blocks={2} columnsClassName="grid-cols-1" blockHeightClassName="h-44" />
           </div>
         ) : hasGuests ? (
           <div className="space-y-3 p-4">
@@ -242,11 +238,7 @@ export default function GuestsPage() {
       <section className="glass-card hidden overflow-hidden md:block">
         {isLoading ? (
           <div className="p-6">
-            <EmptyState
-              icon={Search}
-              title="Загружаем карточки гостей"
-              description="Подтягиваем контакты, историю визитов и оборот по реальным бронированиям."
-            />
+            <PageLoadingState blocks={1} columnsClassName="grid-cols-1" blockHeightClassName="h-[22rem]" />
           </div>
         ) : hasGuests ? (
           <div className="overflow-x-auto">

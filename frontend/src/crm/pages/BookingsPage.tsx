@@ -2,6 +2,7 @@ import { CalendarRange, ChevronDown, Filter, Plus, Search } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router";
 import { EmptyState } from "../components/EmptyState";
+import { PageLoadingState } from "../components/PageLoadingState";
 import { PageMotion } from "../components/PageMotion";
 import { SectionHeading } from "../components/SectionHeading";
 import { ModalShell } from "../components/ModalShell";
@@ -526,12 +527,7 @@ export default function BookingsPage() {
       <section className="glass-card overflow-hidden md:hidden">
         {isLoading ? (
           <div className="p-4">
-            <EmptyState
-              icon={CalendarRange}
-              compact
-              title="Загружаем брони"
-              description="Подтягиваем реальные заявки и ручные брони по выбранной базе."
-            />
+            <PageLoadingState blocks={2} columnsClassName="grid-cols-1" blockHeightClassName="h-44" />
           </div>
         ) : hasBookings ? (
           <div className="space-y-3 p-4">
@@ -613,11 +609,7 @@ export default function BookingsPage() {
       <section className="glass-card hidden overflow-hidden md:block">
         {isLoading ? (
           <div className="p-6">
-            <EmptyState
-              icon={CalendarRange}
-              title="Загружаем список броней"
-              description="Подтягиваем реальные заезды, статусы и оплаты по выбранной базе."
-            />
+            <PageLoadingState blocks={1} columnsClassName="grid-cols-1" blockHeightClassName="h-[24rem]" />
           </div>
         ) : hasBookings ? (
           <div className="overflow-x-auto">

@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "../components/EmptyState";
+import { PageLoadingState } from "../components/PageLoadingState";
 import { PageMotion } from "../components/PageMotion";
 import { SectionHeading } from "../components/SectionHeading";
 import { fetchCrmCalendarFeed, fetchCrmCamps, type CrmCalendarFeed, type CrmCamp } from "../session";
@@ -528,7 +529,9 @@ export default function CalendarPage() {
 
         {isMetaLoading || isFeedLoading ? (
           <div className="mt-6">
-            <EmptyState icon={ChevronRight} title="Загружаем календарь" description="Подтягиваем базы, апартаменты и бронирования из CRM." />
+            <section className="glass-card p-6">
+              <PageLoadingState blocks={1} columnsClassName="grid-cols-1" blockHeightClassName="h-[28rem]" />
+            </section>
           </div>
         ) : !hasCampOptions ? (
           <div className="mt-6">

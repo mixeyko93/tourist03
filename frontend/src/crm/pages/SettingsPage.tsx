@@ -15,6 +15,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { MediaEditorSection } from "../components/MediaEditorSection";
 import { EmptyState } from "../components/EmptyState";
 import { ModalShell } from "../components/ModalShell";
+import { PageLoadingState } from "../components/PageLoadingState";
 import { PageMotion } from "../components/PageMotion";
 import { SectionHeading } from "../components/SectionHeading";
 import { SensitiveChangeModal } from "../components/SensitiveChangeModal";
@@ -741,11 +742,7 @@ export default function SettingsPage() {
         <>
           {isProfileLoading ? (
             <section className="glass-card p-6">
-              <EmptyState
-                icon={Building2}
-                title="Загружаем профиль базы"
-                description="Подтягиваем рабочие параметры, правила проживания и контакты поддержки."
-              />
+              <PageLoadingState blocks={3} columnsClassName="grid-cols-1" blockHeightClassName="h-56" />
             </section>
           ) : (
             <form onSubmit={handleProfileSubmit} className="space-y-6">
@@ -964,7 +961,7 @@ export default function SettingsPage() {
 
           {isTeamLoading ? (
             <section className="glass-card p-6">
-              <EmptyState icon={Users2} title="Загружаем команду базы" description="Подтягиваем сотрудников, роли, доступы и Telegram-статусы." />
+              <PageLoadingState blocks={2} columnsClassName="xl:grid-cols-2" blockHeightClassName="h-56" />
             </section>
           ) : filteredTeamItems.length ? (
             <div className="grid gap-4 xl:grid-cols-2">
@@ -1124,7 +1121,7 @@ export default function SettingsPage() {
 
           {isAuditLoading ? (
             <section className="glass-card p-6">
-              <EmptyState icon={ShieldCheck} title="Загружаем журнал действий" description="Подтягиваем сохранения, изменения и служебные операции по выбранной базе." />
+              <PageLoadingState blocks={1} columnsClassName="grid-cols-1" blockHeightClassName="h-[22rem]" />
             </section>
           ) : auditItems.length ? (
             <div className="space-y-3">

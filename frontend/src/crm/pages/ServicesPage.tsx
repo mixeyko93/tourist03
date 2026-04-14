@@ -2,6 +2,7 @@ import { Car, Coffee, MapPin, Plus, Search, Shield, Trash2, Wifi } from "lucide-
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { EmptyState } from "../components/EmptyState";
 import { ModalShell } from "../components/ModalShell";
+import { PageLoadingState } from "../components/PageLoadingState";
 import { PageMotion } from "../components/PageMotion";
 import { SectionHeading } from "../components/SectionHeading";
 import {
@@ -370,11 +371,7 @@ export default function ServicesPage() {
 
       {isLoading ? (
         <section className="glass-card p-6">
-          <EmptyState
-            icon={Coffee}
-            title="Загружаем услуги базы"
-            description="Подтягиваем активные предложения, поставщиков и параметры продаж по реальным данным CRM."
-          />
+          <PageLoadingState blocks={3} columnsClassName="md:grid-cols-2 xl:grid-cols-3" blockHeightClassName="h-60" />
         </section>
       ) : !hasCampOptions ? (
         <section className="glass-card p-6">

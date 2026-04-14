@@ -2,6 +2,7 @@ import { CheckCheck, MessageSquareWarning, RotateCcw, Search, ShieldAlert, XCirc
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 import { EmptyState } from "../components/EmptyState";
+import { PageLoadingState } from "../components/PageLoadingState";
 import { ModalShell } from "../components/ModalShell";
 import { PageMotion } from "../components/PageMotion";
 import { SectionHeading } from "../components/SectionHeading";
@@ -265,7 +266,7 @@ export default function ApprovalsPage() {
       <section className="grid gap-6 xl:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
         <div className="glass-card p-5">
           {isLoading ? (
-            <EmptyState icon={ShieldAlert} title="Загружаем согласования" description="Подтягиваем запросы на подтверждение, откаты и комментарии управляющих." />
+            <PageLoadingState blocks={3} columnsClassName="grid-cols-1" blockHeightClassName="h-36" />
           ) : items.length ? (
             <div className="space-y-3">
               {items.map((item) => (

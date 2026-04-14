@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { MediaEditorSection } from "../components/MediaEditorSection";
 import { EmptyState } from "../components/EmptyState";
 import { ModalShell } from "../components/ModalShell";
+import { PageLoadingState } from "../components/PageLoadingState";
 import { PageMotion } from "../components/PageMotion";
 import { SectionHeading } from "../components/SectionHeading";
 import { SensitiveChangeModal } from "../components/SensitiveChangeModal";
@@ -461,11 +462,7 @@ export default function RoomsPage() {
 
       {isLoading ? (
         <section className="glass-card p-6">
-          <EmptyState
-            icon={ImageIcon}
-            title="Загружаем номерной фонд"
-            description="Подтягиваем реальные апартаменты и тарифы по выбранной базе."
-          />
+          <PageLoadingState blocks={2} columnsClassName="xl:grid-cols-2" blockHeightClassName="h-[23rem]" />
         </section>
       ) : hasRooms ? (
         <div className="grid gap-6 xl:grid-cols-2">

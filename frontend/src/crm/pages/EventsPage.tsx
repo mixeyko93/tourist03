@@ -2,6 +2,7 @@ import { BellRing, CheckCheck, CircleAlert, CircleDot, ExternalLink, Search, Shi
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { EmptyState } from "../components/EmptyState";
+import { PageLoadingState } from "../components/PageLoadingState";
 import { PageMotion } from "../components/PageMotion";
 import { SectionHeading } from "../components/SectionHeading";
 import { crmPath } from "../paths";
@@ -338,11 +339,7 @@ export default function EventsPage() {
 
       <section className="glass-card p-6">
         {isLoading ? (
-          <EmptyState
-            icon={BellRing}
-            title="Загружаем события"
-            description="Подтягиваем уведомления по базам, статусы обработки и текущие приоритеты."
-          />
+          <PageLoadingState blocks={3} columnsClassName="grid-cols-1" blockHeightClassName="h-40" />
         ) : items.length ? (
           <div className="space-y-4">
             {items.map((item) => {
