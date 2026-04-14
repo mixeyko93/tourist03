@@ -2,6 +2,7 @@ import { AlarmClockCheck, CalendarClock, CalendarDays, ChevronDown, ChevronLeft,
 import { type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { EmptyState } from "../components/EmptyState";
 import { ModalShell } from "../components/ModalShell";
+import { PageLoadingState } from "../components/PageLoadingState";
 import { PageMotion } from "../components/PageMotion";
 import { SectionHeading } from "../components/SectionHeading";
 import { SensitiveChangeModal } from "../components/SensitiveChangeModal";
@@ -55,6 +56,13 @@ type PendingSensitiveChange = {
   payload: Record<string, unknown>;
   successPending: string;
   successApplied: string;
+};
+
+type ShiftCommentTooltip = {
+  author: string;
+  comment: string;
+  x: number;
+  y: number;
 };
 
 type ViewMode = "month" | "week";
@@ -474,6 +482,7 @@ export default function ShiftsPage() {
   const [isGridDragging, setIsGridDragging] = useState(false);
   const [scrollThumbWidth, setScrollThumbWidth] = useState(0);
   const [scrollThumbOffset, setScrollThumbOffset] = useState(0);
+  const [tooltipFlip, setTooltipFlip] = useState<Map<number, boolean>>(new Map());
   const gridScrollRef = useRef<HTMLDivElement | null>(null);
   const trackRef = useRef<HTMLDivElement | null>(null);
   const scrollIndicatorTimeoutRef = useRef<number | null>(null);
@@ -1069,11 +1078,7 @@ export default function ShiftsPage() {
 
       {isLoading ? (
         <section className="glass-card p-6">
-          <EmptyState
-            icon={CalendarClock}
-            title="Загружаем график смен"
-            description="Подтягиваем текущее дежурство, расписание базы и параметры ночной обработки заявок."
-          />
+          <PageLoadingState blocks={2} columnsClassName="xl:grid-cols-2" blockHeightClassName="h-[20rem]" />
         </section>
       ) : !hasCampOptions ? (
         <section className="glass-card p-6">
@@ -1274,7 +1279,19 @@ export default function ShiftsPage() {
                                       key={rule.id}
                                       type="button"
                                       data-shift-cell="true"
+                                      title={rule.comment ? `${rule.comment_author_display || "Сотрудник"}: ${rule.comment}` : undefined}
                                       className="group relative flex min-h-24 w-full flex-1 flex-col items-center justify-center rounded-[1.9rem] border border-[#D6BE8C]/55 bg-[#FBF3E4] px-3 py-3 text-center shadow-sm transition hover:bg-[#F6ECD8] dark:border-[#E5D3B3]/22 dark:bg-[#E5D3B3]/10 dark:hover:bg-[#E5D3B3]/16"
+                                      onMouseEnter={(event) => {
+                                        if (rule.comment) {
+                                          const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
+                                          const nearBottom = rect.bottom > window.innerHeight * 0.6;
+                                          setTooltipFlip((prev) => {
+                                            const next = new Map(prev);
+                                            next.set(rule.id, nearBottom);
+                                            return next;
+                                          });
+                                        }
+                                      }}
                                       onMouseDown={(event) => {
                                         if (event.button === 2) {
                                           event.preventDefault();
@@ -1294,7 +1311,7 @@ export default function ShiftsPage() {
                                         {rule.ends_at?.slice(0, 5)}
                                       </span>
                                       {rule.comment ? (
-                                        <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden w-52 -translate-x-1/2 rounded-2xl border border-border bg-card/98 px-3 py-2 text-[11px] leading-4 text-foreground shadow-xl group-hover:block">
+                                        <span className={`pointer-events-none absolute left-1/2 z-20 hidden w-52 -translate-x-1/2 rounded-2xl border border-border bg-card px-3 py-2 text-[11px] leading-4 text-foreground shadow-xl group-hover:block group-focus-visible:block ${tooltipFlip.get(rule.id) ? "bottom-full mb-2" : "top-full mt-2"}`}>
                                           <span className="block font-medium">{rule.comment_author_display || "Сотрудник"}</span>
                                           <span className="mt-1 block text-muted-foreground">{rule.comment}</span>
                                         </span>
