@@ -5,6 +5,7 @@ import { EmptyState } from "../components/EmptyState";
 import { ModalShell } from "../components/ModalShell";
 import { PageMotion } from "../components/PageMotion";
 import { PageRefreshOverlay } from "../components/PageRefreshOverlay";
+import { SectionHeading } from "../components/SectionHeading";
 import { usePageLoadState } from "../components/usePageLoadState";
 import {
   createCrmBooking,
@@ -771,8 +772,9 @@ export default function CalendarPage() {
         </div>
       ) : null}
 
-      <div className="relative">
-        {showRefreshOverlay ? <PageRefreshOverlay /> : null}
+      <SectionHeading title="Календарь размещения" description="Живой календарь показывает реальные бронирования по выбранной базе, чтобы быстро видеть загрузку и конфликты." />
+
+      {showRefreshOverlay ? <PageRefreshOverlay /> : null}
         <section className="glass-card p-5 md:p-6">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-wrap items-center gap-3">
@@ -1028,7 +1030,6 @@ export default function CalendarPage() {
           </>
         )}
         </section>
-      </div>
 
       <ModalShell
         open={roomModalOpen}

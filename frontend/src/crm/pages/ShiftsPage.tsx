@@ -1074,8 +1074,7 @@ export default function ShiftsPage() {
         }
       />
 
-      <div className="relative">
-        {showRefreshOverlay ? <PageRefreshOverlay /> : null}
+      {showRefreshOverlay ? <PageRefreshOverlay /> : null}
 
       {!hasCampOptions ? (
         <section className="glass-card p-6">
@@ -1374,7 +1373,6 @@ export default function ShiftsPage() {
           </section>
         </>
       )}
-      </div>
 
       <ModalShell
         open={isPresetModalOpen}
