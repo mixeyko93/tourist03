@@ -1287,15 +1287,7 @@ export default function ShiftsPage() {
                                           });
                                         }
                                       }}
-                                      onMouseDown={(event) => {
-                                        if (event.button === 2) {
-                                          event.preventDefault();
-                                        }
-                                      }}
-                                      onContextMenu={(event) => {
-                                        event.preventDefault();
-                                        openCellModal(member, date, rule);
-                                      }}
+                                      onDoubleClick={() => openCellModal(member, date, rule)}
                                     >
                                       {rule.comment ? <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#E5D3B3]" /> : null}
                                       <span className="flex flex-col items-center justify-center text-[0.95rem] font-semibold leading-6 tracking-[-0.03em] text-foreground">
@@ -1321,15 +1313,6 @@ export default function ShiftsPage() {
                                 data-shift-cell="true"
                                 className="flex h-full min-h-24 w-full items-center justify-center rounded-2xl border border-dashed border-[#D6BE8C]/75 bg-white/82 px-3 text-center text-xs leading-5 text-[#C6A163] shadow-sm transition hover:border-[#C7A25A]/80 hover:bg-[#FFF5E5] hover:text-[#8E6E2C] dark:border-border/70 dark:bg-background/35 dark:text-muted-foreground dark:hover:border-[#E5D3B3]/30 dark:hover:bg-background/55 dark:hover:text-foreground"
                                 onClick={() => void handleQuickAssign(member, date)}
-                                onMouseDown={(event) => {
-                                  if (event.button === 2) {
-                                    event.preventDefault();
-                                  }
-                                }}
-                                onContextMenu={(event) => {
-                                  event.preventDefault();
-                                  openCellModal(member, date);
-                                }}
                               >
                                 <span className="text-lg leading-none text-[#C6A163] dark:text-[#E5D3B3]">+</span>
                               </button>
