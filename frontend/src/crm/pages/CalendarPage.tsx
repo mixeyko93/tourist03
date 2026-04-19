@@ -240,6 +240,7 @@ export default function CalendarPage() {
   const gridDragPointerIdRef = useRef<number | null>(null);
   const gridDragStartXRef = useRef(0);
   const gridDragStartScrollLeftRef = useRef(0);
+  const gridDragActiveRef = useRef(false);
   const [bookingModalOpen, setBookingModalOpen] = useState(false);
   const [bookingForm, setBookingForm] = useState<BookingCreateForm>(emptyBookingForm);
   const [bookingRoomId, setBookingRoomId] = useState<number | null>(null);
@@ -434,6 +435,7 @@ export default function CalendarPage() {
       if (scrollIndicatorTimeoutRef.current !== null && typeof window !== "undefined") {
         window.clearTimeout(scrollIndicatorTimeoutRef.current);
       }
+      gridDragActiveRef.current = false;
       setIsGridDragging(false);
     };
   }, []);
@@ -544,9 +546,9 @@ export default function CalendarPage() {
     gridDragPointerIdRef.current = event.pointerId;
     gridDragStartXRef.current = event.clientX;
     gridDragStartScrollLeftRef.current = gridNode.scrollLeft;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    setIsGridDragging(true);
-    activateScrollIndicator();
+    gridDragActiveRef.current = false;
+    // Defer setPointerCapture until movement threshold is exceeded,
+    // so double-click on empty cells still fires normally.
   };
 
   const handleGridPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -558,6 +560,15 @@ export default function CalendarPage() {
       return;
     }
     const deltaX = event.clientX - gridDragStartXRef.current;
+    if (!gridDragActiveRef.current) {
+      if (Math.abs(deltaX) < 5) {
+        return;
+      }
+      gridDragActiveRef.current = true;
+      event.currentTarget.setPointerCapture(event.pointerId);
+      setIsGridDragging(true);
+      activateScrollIndicator();
+    }
     gridNode.scrollLeft = gridDragStartScrollLeftRef.current - deltaX;
     syncScrollFromGrid();
   };
@@ -567,8 +578,11 @@ export default function CalendarPage() {
       return;
     }
     gridDragPointerIdRef.current = null;
+    gridDragActiveRef.current = false;
     setIsGridDragging(false);
-    event.currentTarget.releasePointerCapture(event.pointerId);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
   };
 
   const openRoomDetails = (roomId: number | null) => {
