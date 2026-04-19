@@ -5,7 +5,9 @@ import { EmptyState } from "../components/EmptyState";
 import { ModalShell } from "../components/ModalShell";
 import { PageLoadingState } from "../components/PageLoadingState";
 import { PageMotion } from "../components/PageMotion";
+import { PageRefreshOverlay } from "../components/PageRefreshOverlay";
 import { SectionHeading } from "../components/SectionHeading";
+import { usePageLoadState } from "../components/usePageLoadState";
 import {
   createCrmBooking,
   fetchCrmCalendarFeed,
@@ -445,6 +447,8 @@ export default function CalendarPage() {
   const visibleRooms = selectedRoomId ? feed.rooms.filter((room) => room.id === selectedRoomId) : feed.rooms;
   const roomOptionsById = useMemo(() => new Map(roomOptions.map((room) => [room.id, room])), [roomOptions]);
   const activeRoom = activeRoomDetailsId ? roomOptionsById.get(activeRoomDetailsId) || null : null;
+  const pageIsLoading = isMetaLoading || isFeedLoading;
+  const { showInitialSkeleton, showRefreshOverlay } = usePageLoadState(pageIsLoading);
 
   const activateScrollIndicator = () => {
     setIsScrollIndicatorActive(true);
@@ -762,6 +766,13 @@ export default function CalendarPage() {
     <PageMotion className="space-y-6">
       <SectionHeading title="Календарь размещения" description="Живой календарь показывает реальные бронирования по выбранной базе, чтобы быстро видеть загрузку и конфликты." />
 
+      {showInitialSkeleton ? (
+        <section className="glass-card p-6">
+          <PageLoadingState blocks={1} columnsClassName="grid-cols-1" blockHeightClassName="h-[28rem]" />
+        </section>
+      ) : null}
+
+      {!showInitialSkeleton ? <>
       {successMessage ? (
         <div className="fixed inset-x-0 top-20 z-40 flex justify-center px-4">
           <div className="rounded-2xl border border-emerald-500/35 bg-emerald-500/14 px-5 py-3 text-sm font-medium text-emerald-200 shadow-lg shadow-black/10 backdrop-blur-xl dark:text-emerald-100">
@@ -770,7 +781,9 @@ export default function CalendarPage() {
         </div>
       ) : null}
 
-      <section className="glass-card p-5 md:p-6">
+      <div className="relative">
+        {showRefreshOverlay ? <PageRefreshOverlay /> : null}
+        <section className="glass-card p-5 md:p-6">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex flex-wrap items-center gap-3">
             <button
@@ -899,13 +912,7 @@ export default function CalendarPage() {
           </div>
         ) : null}
 
-        {isMetaLoading || isFeedLoading ? (
-          <div className="mt-6">
-            <section className="glass-card p-6">
-              <PageLoadingState blocks={1} columnsClassName="grid-cols-1" blockHeightClassName="h-[28rem]" />
-            </section>
-          </div>
-        ) : !hasCampOptions ? (
+        {!hasCampOptions ? (
           <div className="mt-6">
             <EmptyState icon={ChevronRight} title="У вас пока нет подключённых баз" description="После выдачи доступа к базе здесь появятся её апартаменты и бронирования." />
           </div>
@@ -1030,7 +1037,8 @@ export default function CalendarPage() {
             ) : null}
           </>
         )}
-      </section>
+        </section>
+      </div>
 
       <ModalShell
         open={roomModalOpen}
@@ -1293,6 +1301,7 @@ export default function CalendarPage() {
           </div>
         ) : null}
       </ModalShell>
+      </> : null}
     </PageMotion>
   );
 }

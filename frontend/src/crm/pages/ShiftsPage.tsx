@@ -4,8 +4,10 @@ import { EmptyState } from "../components/EmptyState";
 import { ModalShell } from "../components/ModalShell";
 import { PageLoadingState } from "../components/PageLoadingState";
 import { PageMotion } from "../components/PageMotion";
+import { PageRefreshOverlay } from "../components/PageRefreshOverlay";
 import { SectionHeading } from "../components/SectionHeading";
 import { SensitiveChangeModal } from "../components/SensitiveChangeModal";
+import { usePageLoadState } from "../components/usePageLoadState";
 import {
   createCrmChangeRequest,
   createCrmShiftRule,
@@ -1027,9 +1029,22 @@ export default function ShiftsPage() {
   const activeRules = overview?.active_rules || [];
   const nextRule = overview?.next_rule || null;
   const hasCampOptions = camps.length > 0;
+  const pageIsLoading = isBootLoading || isLoading;
+  const { showInitialSkeleton, showRefreshOverlay } = usePageLoadState(pageIsLoading);
 
   return (
     <PageMotion className="space-y-6">
+      {showInitialSkeleton ? (
+        <SectionHeading title="График смен и дежурств" description="Рабочий экран базы: кто сейчас на смене, когда начинается следующая смена и как CRM должна обрабатывать ночные заявки." />
+      ) : null}
+
+      {showInitialSkeleton ? (
+        <section className="glass-card p-6">
+          <PageLoadingState blocks={2} columnsClassName="xl:grid-cols-2" blockHeightClassName="h-[20rem]" />
+        </section>
+      ) : null}
+
+      {!showInitialSkeleton ? <>
       {successMessage || errorMessage ? (
         <div className="pointer-events-none fixed inset-x-0 top-4 z-40 flex justify-center px-4">
           <div
@@ -1070,11 +1085,10 @@ export default function ShiftsPage() {
         }
       />
 
-      {isLoading ? (
-        <section className="glass-card p-6">
-          <PageLoadingState blocks={2} columnsClassName="xl:grid-cols-2" blockHeightClassName="h-[20rem]" />
-        </section>
-      ) : !hasCampOptions ? (
+      <div className="relative">
+        {showRefreshOverlay ? <PageRefreshOverlay /> : null}
+
+      {!hasCampOptions ? (
         <section className="glass-card p-6">
           <EmptyState
             icon={CalendarClock}
@@ -1371,6 +1385,7 @@ export default function ShiftsPage() {
           </section>
         </>
       )}
+      </div>
 
       <ModalShell
         open={isPresetModalOpen}
@@ -1596,6 +1611,7 @@ export default function ShiftsPage() {
         onConfirm={(comment) => submitSensitiveChange("pending_review", comment)}
         onApply={(comment) => submitSensitiveChange("apply_with_responsibility", comment)}
       />
+      </> : null}
     </PageMotion>
   );
 }
