@@ -532,7 +532,7 @@ export default function CalendarPage() {
       return;
     }
     const target = event.target as HTMLElement;
-    if (target.closest("[data-booking-block='true']") || target.closest("[data-calendar-action='true']")) {
+    if (target.closest("[data-booking-block='true']") || target.closest("[data-calendar-no-drag='true']")) {
       return;
     }
 
@@ -933,18 +933,16 @@ export default function CalendarPage() {
                   {visibleRooms.map((room) => (
                     <div
                       key={room.id}
-                      className={`flex border-b last:border-b-0 transition-colors ${
-                        highlightedRoomId === room.id ? "border-[#E5D3B3]/35 dark:border-[#E5D3B3]/22" : "border-border"
-                      }`}
+                      className="flex border-b border-border last:border-b-0 transition-colors"
                     >
                       <button
                         type="button"
-                        data-calendar-action="true"
+                        data-calendar-no-drag="true"
                         onClick={() => setHighlightedRoomId(room.id)}
                         onDoubleClick={() => openRoomDetails(room.room_id)}
                         className={`sticky left-0 z-10 flex shrink-0 cursor-pointer flex-col justify-center border-r border-border px-5 py-5 text-left transition ${
                           highlightedRoomId === room.id
-                            ? "bg-[#E5D3B3]/14 dark:bg-card/95"
+                            ? "bg-[#E5D3B3]/14 shadow-[inset_0_0_0_1px_rgba(229,211,179,0.22)] dark:bg-card/95 dark:shadow-[inset_0_0_0_1px_rgba(229,211,179,0.16)]"
                             : "bg-card/85 hover:bg-accent/55"
                         }`}
                         style={{ width: roomColumnWidth }}
@@ -955,7 +953,7 @@ export default function CalendarPage() {
 
                       <div
                         className={`relative grid flex-1 transition-colors ${
-                          highlightedRoomId === room.id ? "bg-[#E5D3B3]/8 dark:bg-[#E5D3B3]/4" : ""
+                          highlightedRoomId === room.id ? "shadow-[inset_0_0_0_1px_rgba(229,211,179,0.16)] dark:shadow-[inset_0_0_0_1px_rgba(229,211,179,0.1)]" : ""
                         }`}
                         style={{ gridTemplateColumns: `repeat(${visibleDates.length}, minmax(${dayColumnWidth}px, 1fr))` }}
                       >
@@ -963,10 +961,9 @@ export default function CalendarPage() {
                           <button
                             key={`${room.id}-${formatDateParam(value)}`}
                             type="button"
-                            data-calendar-action="true"
                             onDoubleClick={() => openCreateBooking(room, value)}
                             className={`h-18 border-r border-border/80 text-transparent transition last:border-r-0 ${
-                              highlightedRoomId === room.id ? "bg-[#E5D3B3]/6 dark:bg-[#E5D3B3]/3" : "bg-transparent"
+                              highlightedRoomId === room.id ? "bg-[#E5D3B3]/5 dark:bg-[#E5D3B3]/3" : "bg-transparent"
                             }`}
                             aria-label={`Создать бронь для ${room.title} на ${formatDateLabel(formatDateParam(value))}`}
                           >
