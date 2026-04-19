@@ -1,5 +1,6 @@
 import { AlarmClockCheck, CalendarClock, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Clock3, PencilLine, Save, Trash2, UserRoundCheck } from "lucide-react";
 import { type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { EmptyState } from "../components/EmptyState";
 import { ModalShell } from "../components/ModalShell";
 import { PageMotion } from "../components/PageMotion";
@@ -204,17 +205,31 @@ type PopoverFieldShellProps = {
 };
 
 function PopoverFieldShell({ label, open, onToggle, value, icon, children }: PopoverFieldShellProps) {
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [popoverStyle, setPopoverStyle] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  useEffect(() => {
+    if (open && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setPopoverStyle({ top: rect.bottom + 10, left: rect.left, width: Math.max(rect.width, 288) });
+    }
+  }, [open]);
+
   return (
-    <div className="relative space-y-2">
+    <div className="space-y-2">
       <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">{label}</span>
-      <button type="button" className="soft-input flex items-center justify-between gap-3 py-3.5 text-left" onClick={onToggle}>
+      <button ref={triggerRef} type="button" className="soft-input flex items-center justify-between gap-3 py-3.5 text-left" onClick={onToggle}>
         <span className="text-base font-semibold text-foreground">{value}</span>
         <span className="shrink-0 text-foreground">{icon}</span>
       </button>
-      {open ? (
-        <div className="absolute left-0 top-[calc(100%+0.65rem)] z-30 w-full min-w-[18rem] rounded-3xl border border-border bg-card/98 p-4 shadow-2xl backdrop-blur-xl">
+      {open && popoverStyle ? createPortal(
+        <div
+          style={{ position: "fixed", top: popoverStyle.top, left: popoverStyle.left, width: popoverStyle.width, zIndex: 9999 }}
+          className="rounded-3xl border border-border bg-card/98 p-4 shadow-2xl backdrop-blur-xl"
+        >
           {children}
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </div>
   );
