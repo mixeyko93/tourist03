@@ -1,5 +1,5 @@
 import { AlarmClockCheck, CalendarClock, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Clock3, PencilLine, Save, Trash2, UserRoundCheck } from "lucide-react";
-import { type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { EmptyState } from "../components/EmptyState";
 import { ModalShell } from "../components/ModalShell";
@@ -89,7 +89,6 @@ const emptyPresetForm: ShiftPresetForm = {
 
 const monthLabels = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
 const weekdayShortLabels = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
-const timeMinuteOptions = ["00", "15", "30", "45"];
 
 function formatDateParam(value: Date) {
   const year = value.getFullYear();
@@ -195,45 +194,6 @@ function splitTimeParts(value: string) {
   return { hours, minutes };
 }
 
-type PopoverFieldShellProps = {
-  label: string;
-  open: boolean;
-  onToggle: () => void;
-  value: string;
-  icon: ReactNode;
-  children: ReactNode;
-};
-
-function PopoverFieldShell({ label, open, onToggle, value, icon, children }: PopoverFieldShellProps) {
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const [popoverStyle, setPopoverStyle] = useState<{ top: number; left: number; width: number } | null>(null);
-
-  useEffect(() => {
-    if (open && triggerRef.current) {
-      const rect = triggerRef.current.getBoundingClientRect();
-      setPopoverStyle({ top: rect.bottom + 10, left: rect.left, width: Math.max(rect.width, 288) });
-    }
-  }, [open]);
-
-  return (
-    <div className="space-y-2">
-      <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">{label}</span>
-      <button ref={triggerRef} type="button" className="soft-input flex items-center justify-between gap-3 py-3.5 text-left" onClick={onToggle}>
-        <span className="text-base font-semibold text-foreground">{value}</span>
-        <span className="shrink-0 text-foreground">{icon}</span>
-      </button>
-      {open && popoverStyle ? createPortal(
-        <div
-          style={{ position: "fixed", top: popoverStyle.top, left: popoverStyle.left, width: popoverStyle.width, zIndex: 9999 }}
-          className="rounded-3xl border border-border bg-card/98 p-4 shadow-2xl backdrop-blur-xl"
-        >
-          {children}
-        </div>,
-        document.body,
-      ) : null}
-    </div>
-  );
-}
 
 type ShiftDateFieldProps = {
   label: string;
@@ -246,80 +206,84 @@ type ShiftDateFieldProps = {
 };
 
 function ShiftDateField({ label, value, min, open, onToggle, onClose, onChange }: ShiftDateFieldProps) {
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const [viewDate, setViewDate] = useState(() => (value ? parseDateParam(value) : new Date()));
+  const [popoverStyle, setPopoverStyle] = useState<{ top: number; left: number } | null>(null);
 
   useEffect(() => {
     if (open) {
       setViewDate(value ? parseDateParam(value) : min ? parseDateParam(min) : new Date());
+      if (triggerRef.current) {
+        const rect = triggerRef.current.getBoundingClientRect();
+        const popW = 320;
+        let left = rect.left + rect.width / 2 - popW / 2;
+        left = Math.max(8, Math.min(left, window.innerWidth - popW - 8));
+        setPopoverStyle({ top: rect.bottom + 10, left });
+      }
     }
-  }, [min, open, value]);
+  }, [open, min, value]);
 
   const minDate = min ? parseDateParam(min) : null;
   const calendarDays = buildCalendarMatrix(viewDate);
 
   return (
-    <PopoverFieldShell
-      label={label}
-      open={open}
-      onToggle={onToggle}
-      value={formatDateButtonLabel(value)}
-      icon={<CalendarDays className="h-5 w-5" />}
-    >
-      <div className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <button type="button" className="soft-button h-11 w-11 rounded-2xl px-0" onClick={() => setViewDate((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))}>
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <div className="rounded-2xl border border-border bg-background/65 px-4 py-2 text-center">
-            <div className="text-lg font-semibold text-foreground">{monthLabels[viewDate.getMonth()]}</div>
-            <div className="text-sm text-muted-foreground">{viewDate.getFullYear()}</div>
-          </div>
-          <button type="button" className="soft-button h-11 w-11 rounded-2xl px-0" onClick={() => setViewDate((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))}>
-            <ChevronRight className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="grid grid-cols-7 gap-2 text-center text-sm font-medium text-muted-foreground">
-          {weekdayShortLabels.map((day) => (
-            <div key={day} className="py-2">
-              {day}
+    <div className="space-y-2">
+      <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">{label}</span>
+      <button ref={triggerRef} type="button" className="soft-input flex items-center justify-between gap-3 py-3.5 text-left" onClick={onToggle}>
+        <span className="text-base font-semibold text-foreground">{formatDateButtonLabel(value)}</span>
+        <span className="shrink-0 text-foreground"><CalendarDays className="h-5 w-5" /></span>
+      </button>
+      {open && popoverStyle ? createPortal(
+        <div
+          style={{ position: "fixed", top: popoverStyle.top, left: popoverStyle.left, width: 320, zIndex: 9999 }}
+          className="rounded-3xl border border-white/10 bg-[#18181b]/96 p-5 shadow-2xl backdrop-blur-xl"
+        >
+          <div className="mb-4 flex items-center justify-between gap-2">
+            <button type="button" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20" onClick={() => setViewDate((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))}>
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <div className="text-center">
+              <div className="text-base font-bold text-white">{monthLabels[viewDate.getMonth()]}</div>
+              <div className="text-xs text-white/50">{viewDate.getFullYear()}</div>
             </div>
-          ))}
-        </div>
+            <button type="button" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20" onClick={() => setViewDate((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))}>
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
 
-        <div className="grid grid-cols-7 gap-2">
-          {calendarDays.map((day) => {
-            const iso = formatDateParam(day);
-            const isCurrentMonth = day.getMonth() === viewDate.getMonth();
-            const isSelected = value === iso;
-            const isDisabled = Boolean(minDate && day < minDate);
-            return (
-              <button
-                key={iso}
-                type="button"
-                disabled={isDisabled}
-                className={`flex h-11 items-center justify-center rounded-2xl border text-sm font-semibold transition ${
-                  isSelected
-                    ? "border-[#E5D3B3]/45 bg-[#E5D3B3] text-slate-900"
-                    : isCurrentMonth
-                      ? "border-border bg-background/65 text-foreground hover:border-[#E5D3B3]/35 hover:bg-[#E5D3B3]/10"
-                      : "border-transparent bg-transparent text-muted-foreground/60 hover:border-border hover:bg-background/45"
-                } ${isDisabled ? "cursor-not-allowed opacity-40" : ""}`}
-                onClick={() => {
-                  if (isDisabled) {
-                    return;
-                  }
-                  onChange(iso);
-                  onClose();
-                }}
-              >
-                {day.getDate()}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    </PopoverFieldShell>
+          <div className="mb-1 grid grid-cols-7 text-center text-[11px] font-medium text-white/40">
+            {weekdayShortLabels.map((day) => <div key={day} className="py-1">{day}</div>)}
+          </div>
+
+          <div className="grid grid-cols-7 gap-1">
+            {calendarDays.map((day) => {
+              const iso = formatDateParam(day);
+              const isCurrentMonth = day.getMonth() === viewDate.getMonth();
+              const isSelected = value === iso;
+              const isDisabled = Boolean(minDate && day < minDate);
+              return (
+                <button
+                  key={iso}
+                  type="button"
+                  disabled={isDisabled}
+                  className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold transition mx-auto ${
+                    isSelected
+                      ? "bg-[#E5D3B3] text-slate-900"
+                      : isCurrentMonth
+                        ? "text-white hover:bg-white/15"
+                        : "text-white/25 hover:bg-white/8"
+                  } ${isDisabled ? "cursor-not-allowed opacity-30" : ""}`}
+                  onClick={() => { if (!isDisabled) { onChange(iso); onClose(); } }}
+                >
+                  {day.getDate()}
+                </button>
+              );
+            })}
+          </div>
+        </div>,
+        document.body,
+      ) : null}
+    </div>
   );
 }
 
@@ -332,71 +296,114 @@ type ShiftTimeFieldProps = {
   onChange: (value: string) => void;
 };
 
-function ShiftTimeField({ label, value, open, onToggle, onClose, onChange }: ShiftTimeFieldProps) {
-  const parts = splitTimeParts(value);
+function DrumColumn({ items, selected, onSelect }: { items: string[]; selected: string; onSelect: (v: string) => void }) {
+  const ITEM_H = 44;
+  const VISIBLE = 5;
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isScrollingByCode = useRef(false);
+
+  const selectedIndex = items.indexOf(selected);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    isScrollingByCode.current = true;
+    el.scrollTo({ top: selectedIndex * ITEM_H, behavior: "smooth" });
+    const t = setTimeout(() => { isScrollingByCode.current = false; }, 400);
+    return () => clearTimeout(t);
+  }, [selectedIndex]);
+
+  const handleScroll = () => {
+    if (isScrollingByCode.current) return;
+    const el = containerRef.current;
+    if (!el) return;
+    const idx = Math.round(el.scrollTop / ITEM_H);
+    const clamped = Math.max(0, Math.min(idx, items.length - 1));
+    if (items[clamped] !== selected) onSelect(items[clamped]);
+  };
 
   return (
-    <PopoverFieldShell
-      label={label}
-      open={open}
-      onToggle={onToggle}
-      value={value}
-      icon={<Clock3 className="h-5 w-5" />}
-    >
-      <div className="space-y-4">
-        <div className="rounded-2xl border border-border bg-background/65 px-4 py-3 text-center">
-          <div className="text-2xl font-semibold tracking-[-0.04em] text-foreground">{value}</div>
-          <div className="mt-1 text-sm text-muted-foreground">Выберите часы и минуты</div>
-        </div>
-
-        <div className="space-y-2">
-          <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Часы</p>
-          <div className="grid grid-cols-4 gap-2">
-            {Array.from({ length: 24 }, (_, index) => `${index}`.padStart(2, "0")).map((hours) => {
-              const next = `${hours}:${parts.minutes}`;
-              const active = parts.hours === hours;
-              return (
-                <button
-                  key={hours}
-                  type="button"
-                  className={`rounded-2xl border px-3 py-2 text-sm font-semibold transition ${
-                    active ? "border-[#E5D3B3]/45 bg-[#E5D3B3] text-slate-900" : "border-border bg-background/65 text-foreground hover:border-[#E5D3B3]/35 hover:bg-[#E5D3B3]/10"
-                  }`}
-                  onClick={() => onChange(next)}
-                >
-                  {hours}
-                </button>
-              );
-            })}
+    <div className="relative flex-1">
+      <div
+        ref={containerRef}
+        onScroll={handleScroll}
+        style={{ height: ITEM_H * VISIBLE, scrollSnapType: "y mandatory", overflowY: "scroll", scrollbarWidth: "none" } as React.CSSProperties}
+        className="[-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+      >
+        {Array.from({ length: Math.floor(VISIBLE / 2) }).map((_, i) => (
+          <div key={`pad-top-${i}`} style={{ height: ITEM_H }} />
+        ))}
+        {items.map((item) => (
+          <div
+            key={item}
+            style={{ height: ITEM_H, scrollSnapAlign: "center" } as React.CSSProperties}
+            className={`flex cursor-pointer items-center justify-center text-xl font-semibold transition-all ${item === selected ? "scale-110 text-white" : "scale-90 text-white/30"}`}
+            onClick={() => onSelect(item)}
+          >
+            {item}
           </div>
-        </div>
-
-        <div className="space-y-2">
-          <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Минуты</p>
-          <div className="grid grid-cols-4 gap-2">
-            {timeMinuteOptions.map((minutes) => {
-              const next = `${parts.hours}:${minutes}`;
-              const active = parts.minutes === minutes;
-              return (
-                <button
-                  key={minutes}
-                  type="button"
-                  className={`rounded-2xl border px-3 py-2 text-sm font-semibold transition ${
-                    active ? "border-[#E5D3B3]/45 bg-[#E5D3B3] text-slate-900" : "border-border bg-background/65 text-foreground hover:border-[#E5D3B3]/35 hover:bg-[#E5D3B3]/10"
-                  }`}
-                  onClick={() => {
-                    onChange(next);
-                    onClose();
-                  }}
-                >
-                  {minutes}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        ))}
+        {Array.from({ length: Math.floor(VISIBLE / 2) }).map((_, i) => (
+          <div key={`pad-bot-${i}`} style={{ height: ITEM_H }} />
+        ))}
       </div>
-    </PopoverFieldShell>
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[88px] bg-gradient-to-b from-[#18181b]/95 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[88px] bg-gradient-to-t from-[#18181b]/95 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-2 top-1/2 h-11 -translate-y-1/2 rounded-xl border border-white/10 bg-white/8" />
+    </div>
+  );
+}
+
+const hourItems = Array.from({ length: 24 }, (_, i) => `${i}`.padStart(2, "0"));
+const minuteItems = Array.from({ length: 60 }, (_, i) => `${i}`.padStart(2, "0"));
+
+function ShiftTimeField({ label, value, open, onToggle, onChange }: ShiftTimeFieldProps) {
+  const parts = splitTimeParts(value);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [popoverStyle, setPopoverStyle] = useState<{ top: number; left: number } | null>(null);
+
+  useEffect(() => {
+    if (open && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      const popW = 220;
+      let left = rect.left + rect.width / 2 - popW / 2;
+      left = Math.max(8, Math.min(left, window.innerWidth - popW - 8));
+      setPopoverStyle({ top: rect.bottom + 10, left });
+    }
+  }, [open]);
+
+  return (
+    <div className="space-y-2">
+      <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">{label}</span>
+      <button ref={triggerRef} type="button" className="soft-input flex items-center justify-between gap-3 py-3.5 text-left" onClick={onToggle}>
+        <span className="text-base font-semibold text-foreground">{value}</span>
+        <span className="shrink-0 text-foreground"><Clock3 className="h-5 w-5" /></span>
+      </button>
+      {open && popoverStyle ? createPortal(
+        <div
+          style={{ position: "fixed", top: popoverStyle.top, left: popoverStyle.left, width: 220, zIndex: 9999 }}
+          className="overflow-hidden rounded-3xl border border-white/10 bg-[#18181b]/96 shadow-2xl backdrop-blur-xl"
+        >
+          <div className="px-4 pt-4 pb-2 text-center text-2xl font-bold tracking-[-0.04em] text-white">
+            {parts.hours}:{parts.minutes}
+          </div>
+          <div className="flex gap-0 px-2 pb-3">
+            <DrumColumn
+              items={hourItems}
+              selected={parts.hours}
+              onSelect={(h) => onChange(`${h}:${parts.minutes}`)}
+            />
+            <div className="flex items-center justify-center text-xl font-bold text-white/40 px-1">:</div>
+            <DrumColumn
+              items={minuteItems}
+              selected={parts.minutes}
+              onSelect={(m) => onChange(`${parts.hours}:${m}`)}
+            />
+          </div>
+        </div>,
+        document.body,
+      ) : null}
+    </div>
   );
 }
 
