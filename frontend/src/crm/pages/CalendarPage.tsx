@@ -1,10 +1,22 @@
-import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
-import { type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState } from "react";
+import { BedDouble, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, PencilLine, Users } from "lucide-react";
+import { type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { EmptyState } from "../components/EmptyState";
+import { ModalShell } from "../components/ModalShell";
 import { PageLoadingState } from "../components/PageLoadingState";
 import { PageMotion } from "../components/PageMotion";
 import { SectionHeading } from "../components/SectionHeading";
-import { fetchCrmCalendarFeed, fetchCrmCamps, type CrmCalendarFeed, type CrmCamp } from "../session";
+import {
+  createCrmBooking,
+  fetchCrmCalendarFeed,
+  fetchCrmCampRooms,
+  fetchCrmCamps,
+  updateCrmRoom,
+  type CrmCalendarFeed,
+  type CrmCamp,
+  type CrmCreateBookingPayload,
+  type CrmRoomOption,
+  type CrmRoomUpsertPayload,
+} from "../session";
 
 const statusClasses = {
   processing: "border-amber-500/30 bg-amber-500/20 text-amber-200",
@@ -29,6 +41,54 @@ const emptyFeed: CrmCalendarFeed = {
 const roomColumnWidth = 308;
 
 type ViewMode = "month" | "week";
+
+type BookingCreateForm = {
+  guestName: string;
+  guestPhone: string;
+  guestEmail: string;
+  guestsCount: string;
+  checkIn: string;
+  checkOut: string;
+  status: string;
+  paymentStatus: string;
+  paymentRequired: boolean;
+  comment: string;
+};
+
+type RoomEditForm = {
+  name: string;
+  roomType: string;
+  price: string;
+  priceAdult: string;
+  priceChild: string;
+  singleBeds: string;
+  doubleBeds: string;
+  description: string;
+};
+
+const emptyBookingForm: BookingCreateForm = {
+  guestName: "",
+  guestPhone: "",
+  guestEmail: "",
+  guestsCount: "1",
+  checkIn: "",
+  checkOut: "",
+  status: "confirmed",
+  paymentStatus: "unpaid",
+  paymentRequired: false,
+  comment: "",
+};
+
+const emptyRoomForm: RoomEditForm = {
+  name: "",
+  roomType: "",
+  price: "0",
+  priceAdult: "0",
+  priceChild: "0",
+  singleBeds: "0",
+  doubleBeds: "0",
+  description: "",
+};
 
 function formatDateParam(value: Date) {
   const year = value.getFullYear();
@@ -78,16 +138,91 @@ function getWeekdayLabel(value: Date) {
   return new Intl.DateTimeFormat("ru-RU", { weekday: "short" }).format(value).replace(".", "");
 }
 
+function formatDateLabel(value: string) {
+  if (!value) {
+    return "Не указано";
+  }
+  const [year, month, day] = value.split("-");
+  if (!year || !month || !day) {
+    return value;
+  }
+  return `${day}.${month}.${year}`;
+}
+
+function formatCurrency(value: number | null | undefined) {
+  return new Intl.NumberFormat("ru-RU").format(Number(value || 0)) + " ₽";
+}
+
+function mapBookingStatusToCalendarStatus(status: string): "processing" | "confirmed" | "cancelled" | "completed" {
+  if (["confirmed", "checked_in"].includes(status)) {
+    return "confirmed";
+  }
+  if (status === "completed") {
+    return "completed";
+  }
+  if (["cancelled", "cancelled_by_user", "cancelled_by_base", "rejected", "expired_pending", "no_show"].includes(status)) {
+    return "cancelled";
+  }
+  return "processing";
+}
+
+function isPaymentRequiredAvailable(paymentStatus: string) {
+  return ["unpaid", "awaiting_prepayment", "partially_paid", "failed"].includes(paymentStatus);
+}
+
+function buildRoomPayload(room: CrmRoomOption, form: RoomEditForm): CrmRoomUpsertPayload {
+  return {
+    name: form.name,
+    room_type: form.roomType || room.room_type || "Апартамент",
+    floors: Number(room.floors ?? 1),
+    floor: Number(room.floor ?? 1),
+    beds_single: Number(form.singleBeds || 0),
+    beds_double: Number(form.doubleBeds || 0),
+    bath_type: room.bath_type || "Нет",
+    wc_type: room.wc_type || "Нет",
+    bbq_type: room.bbq_type || "Нет",
+    kitchen_type: room.kitchen_type || "Нет",
+    gazebo_type: room.gazebo_type || "Нет",
+    terrace_type: room.terrace_type || "Нет",
+    pool_type: room.pool_type || "Нет",
+    balcony_type: room.balcony_type || "Нет",
+    has_ac: Boolean(room.has_ac),
+    price_adult: Number(form.priceAdult || 0),
+    price_child: Number(form.priceChild || 0),
+    price: Number(form.price || 0),
+    discount_pct: Number(room.discount_pct ?? 0),
+    discount_from_nights: Number(room.discount_from_nights ?? 0),
+    description: form.description,
+    media: room.media,
+  };
+}
+
+function buildRoomForm(room: CrmRoomOption): RoomEditForm {
+  return {
+    name: room.name || "",
+    roomType: room.room_type || "Апартамент",
+    price: String(room.price ?? 0),
+    priceAdult: String(room.price_adult ?? 0),
+    priceChild: String(room.price_child ?? 0),
+    singleBeds: String(room.beds_single ?? 0),
+    doubleBeds: String(room.beds_double ?? 0),
+    description: room.description || "",
+  };
+}
+
 export default function CalendarPage() {
   const [viewMode, setViewMode] = useState<ViewMode>("month");
   const [focusDate, setFocusDate] = useState(() => new Date());
   const [camps, setCamps] = useState<CrmCamp[]>([]);
   const [selectedCampId, setSelectedCampId] = useState<number | null>(null);
   const [selectedRoomId, setSelectedRoomId] = useState("");
+  const [highlightedRoomId, setHighlightedRoomId] = useState("");
   const [feed, setFeed] = useState<CrmCalendarFeed>(emptyFeed);
+  const [roomOptions, setRoomOptions] = useState<CrmRoomOption[]>([]);
   const [isMetaLoading, setIsMetaLoading] = useState(true);
   const [isFeedLoading, setIsFeedLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
   const [hasHorizontalOverflow, setHasHorizontalOverflow] = useState(false);
   const [isScrollIndicatorActive, setIsScrollIndicatorActive] = useState(false);
@@ -103,6 +238,18 @@ export default function CalendarPage() {
   const gridDragPointerIdRef = useRef<number | null>(null);
   const gridDragStartXRef = useRef(0);
   const gridDragStartScrollLeftRef = useRef(0);
+  const [bookingModalOpen, setBookingModalOpen] = useState(false);
+  const [bookingForm, setBookingForm] = useState<BookingCreateForm>(emptyBookingForm);
+  const [bookingRoomId, setBookingRoomId] = useState<number | null>(null);
+  const [bookingRoomLabel, setBookingRoomLabel] = useState("");
+  const [bookingError, setBookingError] = useState("");
+  const [isBookingSaving, setIsBookingSaving] = useState(false);
+  const [roomModalOpen, setRoomModalOpen] = useState(false);
+  const [isRoomEditing, setIsRoomEditing] = useState(false);
+  const [roomModalError, setRoomModalError] = useState("");
+  const [isRoomSaving, setIsRoomSaving] = useState(false);
+  const [activeRoomDetailsId, setActiveRoomDetailsId] = useState<number | null>(null);
+  const [roomEditForm, setRoomEditForm] = useState<RoomEditForm>(emptyRoomForm);
 
   const periodStart = useMemo(() => {
     if (viewMode === "week") {
@@ -195,6 +342,7 @@ export default function CalendarPage() {
   useEffect(() => {
     if (!selectedCampId) {
       setFeed(emptyFeed);
+      setRoomOptions([]);
       return;
     }
 
@@ -202,16 +350,20 @@ export default function CalendarPage() {
     setIsFeedLoading(true);
     setErrorMessage("");
 
-    fetchCrmCalendarFeed(
-      {
-        campId: selectedCampId,
-        dateFrom,
-        dateTo,
-      },
-      controller.signal,
-    )
-      .then((payload) => {
+    Promise.all([
+      fetchCrmCalendarFeed(
+        {
+          campId: selectedCampId,
+          dateFrom,
+          dateTo,
+        },
+        controller.signal,
+      ),
+      fetchCrmCampRooms(selectedCampId, controller.signal),
+    ])
+      .then(([payload, roomItems]) => {
         setFeed(payload);
+        setRoomOptions(roomItems);
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) {
@@ -219,6 +371,7 @@ export default function CalendarPage() {
         }
         setErrorMessage(error instanceof Error ? error.message : "Не удалось загрузить календарь");
         setFeed(emptyFeed);
+        setRoomOptions([]);
       })
       .finally(() => {
         if (!controller.signal.aborted) {
@@ -237,6 +390,23 @@ export default function CalendarPage() {
       setSelectedRoomId("");
     }
   }, [feed.rooms, selectedRoomId]);
+
+  useEffect(() => {
+    if (!highlightedRoomId) {
+      return;
+    }
+    if (!feed.rooms.some((room) => room.id === highlightedRoomId)) {
+      setHighlightedRoomId("");
+    }
+  }, [feed.rooms, highlightedRoomId]);
+
+  useEffect(() => {
+    if (!successMessage || typeof window === "undefined") {
+      return;
+    }
+    const timeoutId = window.setTimeout(() => setSuccessMessage(""), 2200);
+    return () => window.clearTimeout(timeoutId);
+  }, [successMessage]);
 
   useEffect(() => {
     updateScrollMetrics();
@@ -266,6 +436,8 @@ export default function CalendarPage() {
   const hasCampOptions = camps.length > 0;
   const hasRoomOptions = feed.rooms.length > 0;
   const visibleRooms = selectedRoomId ? feed.rooms.filter((room) => room.id === selectedRoomId) : feed.rooms;
+  const roomOptionsById = useMemo(() => new Map(roomOptions.map((room) => [room.id, room])), [roomOptions]);
+  const activeRoom = activeRoomDetailsId ? roomOptionsById.get(activeRoomDetailsId) || null : null;
 
   const activateScrollIndicator = () => {
     setIsScrollIndicatorActive(true);
@@ -394,9 +566,179 @@ export default function CalendarPage() {
     event.currentTarget.releasePointerCapture(event.pointerId);
   };
 
+  const openRoomDetails = (roomId: number | null) => {
+    if (!roomId) {
+      return;
+    }
+    const room = roomOptionsById.get(roomId);
+    if (!room) {
+      return;
+    }
+    setActiveRoomDetailsId(roomId);
+    setRoomEditForm(buildRoomForm(room));
+    setRoomModalError("");
+    setIsRoomEditing(false);
+    setRoomModalOpen(true);
+  };
+
+  const closeRoomDetails = () => {
+    if (isRoomSaving) {
+      return;
+    }
+    setRoomModalOpen(false);
+    setIsRoomEditing(false);
+    setRoomModalError("");
+    setActiveRoomDetailsId(null);
+    setRoomEditForm(emptyRoomForm);
+  };
+
+  const openCreateBooking = (room: CrmCalendarFeed["rooms"][number], date: Date) => {
+    const nextDay = addDays(date, 1);
+    setHighlightedRoomId(room.id);
+    setBookingRoomId(room.room_id);
+    setBookingRoomLabel(room.title);
+    setBookingForm({
+      ...emptyBookingForm,
+      checkIn: formatDateParam(date),
+      checkOut: formatDateParam(nextDay),
+    });
+    setBookingError("");
+    setBookingModalOpen(true);
+  };
+
+  const closeCreateBooking = () => {
+    if (isBookingSaving) {
+      return;
+    }
+    setBookingModalOpen(false);
+    setBookingError("");
+    setBookingForm(emptyBookingForm);
+    setBookingRoomId(null);
+    setBookingRoomLabel("");
+  };
+
+  const handleCreateBookingSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedCampId || !bookingRoomId) {
+      setBookingError("Сначала выберите базу и апартамент.");
+      return;
+    }
+    if (!bookingForm.guestName.trim()) {
+      setBookingError("Укажите имя гостя.");
+      return;
+    }
+    if (!bookingForm.guestPhone.trim()) {
+      setBookingError("Укажите телефон гостя.");
+      return;
+    }
+
+    const payload: CrmCreateBookingPayload = {
+      camp_id: selectedCampId,
+      room_id: bookingRoomId,
+      check_in: bookingForm.checkIn,
+      check_out: bookingForm.checkOut,
+      guests_count: Number(bookingForm.guestsCount || 1),
+      status: bookingForm.status,
+      payment_status: bookingForm.paymentStatus,
+      payment_required: isPaymentRequiredAvailable(bookingForm.paymentStatus) ? bookingForm.paymentRequired : false,
+      guest_name: bookingForm.guestName.trim(),
+      guest_phone: bookingForm.guestPhone.trim(),
+      guest_email: bookingForm.guestEmail.trim() || undefined,
+      comment: bookingForm.comment.trim() || undefined,
+    };
+
+    try {
+      setIsBookingSaving(true);
+      setBookingError("");
+      const response = await createCrmBooking(payload);
+      setFeed((current) => ({
+        ...current,
+        rooms: current.rooms.map((room) =>
+          room.room_id === bookingRoomId
+            ? {
+                ...room,
+                bookings: [
+                  ...room.bookings,
+                  {
+                    id: response.id,
+                    label: payload.guest_name || "Новая бронь",
+                    status: mapBookingStatusToCalendarStatus(payload.status),
+                    start_day: Math.max(1, visibleDates.findIndex((item) => formatDateParam(item) === payload.check_in) + 1),
+                    span_days: Math.max(1, Math.round((new Date(payload.check_out).getTime() - new Date(payload.check_in).getTime()) / 86400000)),
+                    check_in: payload.check_in,
+                    check_out: payload.check_out,
+                    source: "crm",
+                  },
+                ],
+              }
+            : room,
+        ),
+      }));
+      closeCreateBooking();
+      setSuccessMessage("Бронь добавлена в календарь.");
+    } catch (error) {
+      setBookingError(error instanceof Error ? error.message : "Не удалось создать бронь");
+    } finally {
+      setIsBookingSaving(false);
+    }
+  };
+
+  const handleRoomSave = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!selectedCampId || !activeRoomDetailsId || !activeRoom) {
+      setRoomModalError("Не удалось определить апартамент.");
+      return;
+    }
+
+    try {
+      setIsRoomSaving(true);
+      setRoomModalError("");
+      const payload = buildRoomPayload(activeRoom, roomEditForm);
+      await updateCrmRoom(selectedCampId, activeRoomDetailsId, payload);
+      const updatedRoom: CrmRoomOption = {
+        ...activeRoom,
+        name: payload.name,
+        room_type: payload.room_type || activeRoom.room_type,
+        beds_single: payload.beds_single,
+        beds_double: payload.beds_double,
+        price: payload.price,
+        price_adult: payload.price_adult,
+        price_child: payload.price_child,
+        description: payload.description || "",
+      };
+      setRoomOptions((current) => current.map((room) => (room.id === activeRoomDetailsId ? updatedRoom : room)));
+      setFeed((current) => ({
+        ...current,
+        rooms: current.rooms.map((room) =>
+          room.room_id === activeRoomDetailsId
+            ? {
+                ...room,
+                title: payload.name,
+                category: payload.room_type || room.category,
+              }
+            : room,
+        ),
+      }));
+      setIsRoomEditing(false);
+      setSuccessMessage("Карточка апартамента обновлена.");
+    } catch (error) {
+      setRoomModalError(error instanceof Error ? error.message : "Не удалось обновить апартамент");
+    } finally {
+      setIsRoomSaving(false);
+    }
+  };
+
   return (
     <PageMotion className="space-y-6">
       <SectionHeading title="Календарь размещения" description="Живой календарь показывает реальные бронирования по выбранной базе, чтобы быстро видеть загрузку и конфликты." />
+
+      {successMessage ? (
+        <div className="fixed inset-x-0 top-20 z-40 flex justify-center px-4">
+          <div className="rounded-2xl border border-emerald-500/35 bg-emerald-500/14 px-5 py-3 text-sm font-medium text-emerald-200 shadow-lg shadow-black/10 backdrop-blur-xl dark:text-emerald-100">
+            {successMessage}
+          </div>
+        </div>
+      ) : null}
 
       <section className="glass-card p-5 md:p-6">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
@@ -573,15 +915,45 @@ export default function CalendarPage() {
 
                 <div>
                   {visibleRooms.map((room) => (
-                    <div key={room.id} className="flex border-b border-border last:border-b-0">
-                      <div className="sticky left-0 z-10 flex shrink-0 flex-col justify-center border-r border-border bg-card/85 px-5 py-5" style={{ width: roomColumnWidth }}>
+                    <div
+                      key={room.id}
+                      className={`flex border-b border-border last:border-b-0 transition-colors ${
+                        highlightedRoomId === room.id ? "bg-[#E5D3B3]/10 dark:bg-[#E5D3B3]/6" : ""
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setHighlightedRoomId(room.id)}
+                        onDoubleClick={() => openRoomDetails(room.room_id)}
+                        className={`sticky left-0 z-10 flex shrink-0 cursor-pointer flex-col justify-center border-r border-border px-5 py-5 text-left transition ${
+                          highlightedRoomId === room.id
+                            ? "bg-[#E5D3B3]/14 dark:bg-card/95"
+                            : "bg-card/85 hover:bg-accent/55"
+                        }`}
+                        style={{ width: roomColumnWidth }}
+                      >
                         <span className="text-sm font-semibold text-foreground">{room.title}</span>
                         <span className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{room.category}</span>
-                      </div>
+                      </button>
 
-                      <div className="relative grid flex-1" style={{ gridTemplateColumns: `repeat(${visibleDates.length}, minmax(${dayColumnWidth}px, 1fr))` }}>
+                      <div
+                        className={`relative grid flex-1 transition-colors ${
+                          highlightedRoomId === room.id ? "bg-[#E5D3B3]/8 dark:bg-[#E5D3B3]/4" : ""
+                        }`}
+                        style={{ gridTemplateColumns: `repeat(${visibleDates.length}, minmax(${dayColumnWidth}px, 1fr))` }}
+                      >
                         {visibleDates.map((value) => (
-                          <div key={`${room.id}-${formatDateParam(value)}`} className="h-18 border-r border-border/80 last:border-r-0" />
+                          <button
+                            key={`${room.id}-${formatDateParam(value)}`}
+                            type="button"
+                            onDoubleClick={() => openCreateBooking(room, value)}
+                            className={`h-18 border-r border-border/80 text-transparent transition last:border-r-0 ${
+                              highlightedRoomId === room.id ? "bg-[#E5D3B3]/6 dark:bg-[#E5D3B3]/3" : "bg-transparent"
+                            }`}
+                            aria-label={`Создать бронь для ${room.title} на ${formatDateLabel(formatDateParam(value))}`}
+                          >
+                            ·
+                          </button>
                         ))}
 
                         <div className="absolute inset-0 px-1 py-2">
@@ -630,6 +1002,215 @@ export default function CalendarPage() {
           </>
         )}
       </section>
+
+      <ModalShell
+        open={roomModalOpen}
+        onClose={closeRoomDetails}
+        title={activeRoom ? activeRoom.name || "Карточка апартамента" : "Карточка апартамента"}
+        description={activeRoom ? `${activeRoom.room_type || "Апартамент"} · ${formatCurrency(activeRoom.price)}` : "Подробная информация по апартаменту."}
+      >
+        {activeRoom ? (
+          isRoomEditing ? (
+            <form onSubmit={handleRoomSave} className="space-y-4">
+              {roomModalError ? (
+                <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{roomModalError}</div>
+              ) : null}
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="space-y-2 md:col-span-2">
+                  <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Название</span>
+                  <input className="soft-input" value={roomEditForm.name} onChange={(event) => setRoomEditForm((current) => ({ ...current, name: event.target.value }))} required />
+                </label>
+
+                <label className="space-y-2">
+                  <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Тип</span>
+                  <input className="soft-input" value={roomEditForm.roomType} onChange={(event) => setRoomEditForm((current) => ({ ...current, roomType: event.target.value }))} />
+                </label>
+
+                <label className="space-y-2">
+                  <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Цена за апартамент</span>
+                  <input type="number" min="0" className="soft-input" value={roomEditForm.price} onChange={(event) => setRoomEditForm((current) => ({ ...current, price: event.target.value }))} />
+                </label>
+
+                <label className="space-y-2">
+                  <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Цена взрослого</span>
+                  <input type="number" min="0" className="soft-input" value={roomEditForm.priceAdult} onChange={(event) => setRoomEditForm((current) => ({ ...current, priceAdult: event.target.value }))} />
+                </label>
+
+                <label className="space-y-2">
+                  <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Цена ребёнка</span>
+                  <input type="number" min="0" className="soft-input" value={roomEditForm.priceChild} onChange={(event) => setRoomEditForm((current) => ({ ...current, priceChild: event.target.value }))} />
+                </label>
+
+                <label className="space-y-2">
+                  <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Односпальные кровати</span>
+                  <input type="number" min="0" className="soft-input" value={roomEditForm.singleBeds} onChange={(event) => setRoomEditForm((current) => ({ ...current, singleBeds: event.target.value }))} />
+                </label>
+
+                <label className="space-y-2">
+                  <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Двуспальные кровати</span>
+                  <input type="number" min="0" className="soft-input" value={roomEditForm.doubleBeds} onChange={(event) => setRoomEditForm((current) => ({ ...current, doubleBeds: event.target.value }))} />
+                </label>
+
+                <label className="space-y-2 md:col-span-2">
+                  <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Описание</span>
+                  <textarea className="soft-input min-h-28 resize-none" value={roomEditForm.description} onChange={(event) => setRoomEditForm((current) => ({ ...current, description: event.target.value }))} />
+                </label>
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                <button type="button" className="soft-button" onClick={() => setIsRoomEditing(false)} disabled={isRoomSaving}>
+                  Отмена
+                </button>
+                <button type="submit" className="brand-button disabled:cursor-not-allowed disabled:opacity-60" disabled={isRoomSaving}>
+                  {isRoomSaving ? "Сохраняем..." : "Сохранить изменения"}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="space-y-5">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-2xl border border-border bg-background/65 p-4">
+                  <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                    <BedDouble className="h-4 w-4 text-[#E5D3B3]" />
+                    Формат
+                  </div>
+                  <p className="mt-2 text-lg font-semibold text-foreground">{activeRoom.room_type || "Апартамент"}</p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {Number(activeRoom.beds_single ?? 0)} односпальных · {Number(activeRoom.beds_double ?? 0)} двуспальных
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-border bg-background/65 p-4">
+                  <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                    <Users className="h-4 w-4 text-[#E5D3B3]" />
+                    Вместимость и цены
+                  </div>
+                  <p className="mt-2 text-lg font-semibold text-foreground">{activeRoom.capacity ?? "—"} гостей</p>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Апартамент: {formatCurrency(activeRoom.price)} · Взрослый: {formatCurrency(activeRoom.price_adult)} · Ребёнок: {formatCurrency(activeRoom.price_child)}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-border bg-background/65 p-4 md:col-span-2">
+                  <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                    <CalendarDays className="h-4 w-4 text-[#E5D3B3]" />
+                    Описание и размещение
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-foreground">{activeRoom.description || "Описание ещё не заполнено."}</p>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+                <button type="button" className="soft-button" onClick={closeRoomDetails}>
+                  Закрыть
+                </button>
+                <button type="button" className="brand-button gap-2" onClick={() => setIsRoomEditing(true)}>
+                  <PencilLine className="h-4 w-4" />
+                  Редактировать
+                </button>
+              </div>
+            </div>
+          )
+        ) : null}
+      </ModalShell>
+
+      <ModalShell
+        open={bookingModalOpen}
+        onClose={closeCreateBooking}
+        title="Новая бронь"
+        description={bookingRoomLabel ? `Быстрое создание брони для апартамента «${bookingRoomLabel}».` : "Быстрое создание брони из календаря."}
+      >
+        <form onSubmit={handleCreateBookingSubmit} className="space-y-4">
+          {bookingError ? <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{bookingError}</div> : null}
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="space-y-2">
+              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Гость</span>
+              <input className="soft-input" value={bookingForm.guestName} onChange={(event) => setBookingForm((current) => ({ ...current, guestName: event.target.value }))} placeholder="Имя гостя" required />
+            </label>
+
+            <label className="space-y-2">
+              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Телефон</span>
+              <input className="soft-input" value={bookingForm.guestPhone} onChange={(event) => setBookingForm((current) => ({ ...current, guestPhone: event.target.value }))} placeholder="+7 (999) 000-00-00" required />
+            </label>
+
+            <label className="space-y-2">
+              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Эл. почта</span>
+              <input type="email" className="soft-input" value={bookingForm.guestEmail} onChange={(event) => setBookingForm((current) => ({ ...current, guestEmail: event.target.value }))} placeholder="guest@example.ru" />
+            </label>
+
+            <label className="space-y-2">
+              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Гостей</span>
+              <input type="number" min="1" className="soft-input" value={bookingForm.guestsCount} onChange={(event) => setBookingForm((current) => ({ ...current, guestsCount: event.target.value }))} />
+            </label>
+
+            <label className="space-y-2">
+              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Заезд</span>
+              <input type="date" className="soft-input" value={bookingForm.checkIn} onChange={(event) => setBookingForm((current) => ({ ...current, checkIn: event.target.value }))} required />
+            </label>
+
+            <label className="space-y-2">
+              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Выезд</span>
+              <input type="date" className="soft-input" value={bookingForm.checkOut} onChange={(event) => setBookingForm((current) => ({ ...current, checkOut: event.target.value }))} required />
+            </label>
+
+            <label className="space-y-2">
+              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Статус брони</span>
+              <select className="soft-input appearance-none" value={bookingForm.status} onChange={(event) => setBookingForm((current) => ({ ...current, status: event.target.value }))}>
+                <option value="confirmed">Подтверждена</option>
+                <option value="awaiting_payment">Ожидает оплаты</option>
+                <option value="awaiting_confirmation">Ожидает подтверждения</option>
+                <option value="pending">Новая заявка</option>
+              </select>
+            </label>
+
+            <label className="space-y-2">
+              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Статус оплаты</span>
+              <select
+                className="soft-input appearance-none"
+                value={bookingForm.paymentStatus}
+                onChange={(event) =>
+                  setBookingForm((current) => ({
+                    ...current,
+                    paymentStatus: event.target.value,
+                    paymentRequired: isPaymentRequiredAvailable(event.target.value) ? current.paymentRequired : false,
+                  }))
+                }
+              >
+                <option value="unpaid">Не оплачено</option>
+                <option value="awaiting_prepayment">Требуется предоплата</option>
+                <option value="partially_paid">Частично оплачено</option>
+                <option value="paid">Оплачено полностью</option>
+                <option value="cash">Оплата на месте</option>
+              </select>
+            </label>
+
+            <label className="flex items-center gap-3 rounded-2xl border border-border bg-background/60 px-4 py-3 md:col-span-2">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-border bg-background"
+                checked={bookingForm.paymentRequired}
+                onChange={(event) => setBookingForm((current) => ({ ...current, paymentRequired: event.target.checked }))}
+                disabled={!isPaymentRequiredAvailable(bookingForm.paymentStatus)}
+              />
+              <span className="text-sm text-foreground">Нужна предоплата</span>
+            </label>
+
+            <label className="space-y-2 md:col-span-2">
+              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Комментарий</span>
+              <textarea className="soft-input min-h-28 resize-none" value={bookingForm.comment} onChange={(event) => setBookingForm((current) => ({ ...current, comment: event.target.value }))} placeholder="Особые пожелания, нюансы по оплате или заселению" />
+            </label>
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+            <button type="button" className="soft-button" onClick={closeCreateBooking} disabled={isBookingSaving}>
+              Отмена
+            </button>
+            <button type="submit" className="brand-button disabled:cursor-not-allowed disabled:opacity-60" disabled={isBookingSaving}>
+              {isBookingSaving ? "Сохраняем бронь..." : "Создать бронь"}
+            </button>
+          </div>
+        </form>
+      </ModalShell>
     </PageMotion>
   );
 }
