@@ -1,5 +1,6 @@
 import { BedDouble, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, PencilLine, Users } from "lucide-react";
 import { type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useNavigate } from "react-router";
 import { EmptyState } from "../components/EmptyState";
 import { ModalShell } from "../components/ModalShell";
 import { PageLoadingState } from "../components/PageLoadingState";
@@ -211,6 +212,7 @@ function buildRoomForm(room: CrmRoomOption): RoomEditForm {
 }
 
 export default function CalendarPage() {
+  const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<ViewMode>("month");
   const [focusDate, setFocusDate] = useState(() => new Date());
   const [camps, setCamps] = useState<CrmCamp[]>([]);
@@ -250,6 +252,9 @@ export default function CalendarPage() {
   const [isRoomSaving, setIsRoomSaving] = useState(false);
   const [activeRoomDetailsId, setActiveRoomDetailsId] = useState<number | null>(null);
   const [roomEditForm, setRoomEditForm] = useState<RoomEditForm>(emptyRoomForm);
+  const [bookingDetailsOpen, setBookingDetailsOpen] = useState(false);
+  const [activeBooking, setActiveBooking] = useState<CrmCalendarFeed["rooms"][number]["bookings"][number] | null>(null);
+  const [activeBookingRoomTitle, setActiveBookingRoomTitle] = useState("");
 
   const periodStart = useMemo(() => {
     if (viewMode === "week") {
@@ -527,7 +532,7 @@ export default function CalendarPage() {
       return;
     }
     const target = event.target as HTMLElement;
-    if (target.closest("[data-booking-block='true']")) {
+    if (target.closest("[data-booking-block='true']") || target.closest("[data-calendar-action='true']")) {
       return;
     }
 
@@ -593,6 +598,10 @@ export default function CalendarPage() {
   };
 
   const openCreateBooking = (room: CrmCalendarFeed["rooms"][number], date: Date) => {
+    if (!room.room_id) {
+      setErrorMessage("Для этого апартамента пока нельзя создать бронь: не найден ID номера.");
+      return;
+    }
     const nextDay = addDays(date, 1);
     setHighlightedRoomId(room.id);
     setBookingRoomId(room.room_id);
@@ -604,6 +613,13 @@ export default function CalendarPage() {
     });
     setBookingError("");
     setBookingModalOpen(true);
+  };
+
+  const openBookingDetails = (room: CrmCalendarFeed["rooms"][number], booking: CrmCalendarFeed["rooms"][number]["bookings"][number]) => {
+    setHighlightedRoomId(room.id);
+    setActiveBooking(booking);
+    setActiveBookingRoomTitle(room.title);
+    setBookingDetailsOpen(true);
   };
 
   const closeCreateBooking = () => {
@@ -917,12 +933,13 @@ export default function CalendarPage() {
                   {visibleRooms.map((room) => (
                     <div
                       key={room.id}
-                      className={`flex border-b border-border last:border-b-0 transition-colors ${
-                        highlightedRoomId === room.id ? "bg-[#E5D3B3]/10 dark:bg-[#E5D3B3]/6" : ""
+                      className={`flex border-b last:border-b-0 transition-colors ${
+                        highlightedRoomId === room.id ? "border-[#E5D3B3]/35 dark:border-[#E5D3B3]/22" : "border-border"
                       }`}
                     >
                       <button
                         type="button"
+                        data-calendar-action="true"
                         onClick={() => setHighlightedRoomId(room.id)}
                         onDoubleClick={() => openRoomDetails(room.room_id)}
                         className={`sticky left-0 z-10 flex shrink-0 cursor-pointer flex-col justify-center border-r border-border px-5 py-5 text-left transition ${
@@ -946,6 +963,7 @@ export default function CalendarPage() {
                           <button
                             key={`${room.id}-${formatDateParam(value)}`}
                             type="button"
+                            data-calendar-action="true"
                             onDoubleClick={() => openCreateBooking(room, value)}
                             className={`h-18 border-r border-border/80 text-transparent transition last:border-r-0 ${
                               highlightedRoomId === room.id ? "bg-[#E5D3B3]/6 dark:bg-[#E5D3B3]/3" : "bg-transparent"
@@ -956,12 +974,14 @@ export default function CalendarPage() {
                           </button>
                         ))}
 
-                        <div className="absolute inset-0 px-1 py-2">
+                        <div className="pointer-events-none absolute inset-0 px-1 py-2">
                           {room.bookings.map((booking) => (
-                            <div
+                            <button
                               key={`${room.id}-${booking.id}`}
+                              type="button"
                               data-booking-block="true"
-                              className={`pointer-events-auto absolute top-2 flex h-[calc(100%-1rem)] items-center rounded-2xl border px-3 text-xs font-medium shadow-lg shadow-black/10 ${statusClasses[booking.status]}`}
+                              onClick={() => openBookingDetails(room, booking)}
+                              className={`pointer-events-auto absolute top-2 flex h-[calc(100%-1rem)] items-center rounded-2xl border px-3 text-left text-xs font-medium shadow-lg shadow-black/10 transition hover:brightness-105 ${statusClasses[booking.status]}`}
                               style={{
                                 left: `calc((100% / ${visibleDates.length}) * ${booking.start_day - 1} + 4px)`,
                                 width: `calc((100% / ${visibleDates.length}) * ${booking.span_days} - 8px)`,
@@ -969,7 +989,7 @@ export default function CalendarPage() {
                               title={`${booking.label}: ${booking.check_in} → ${booking.check_out}`}
                             >
                               <span className="truncate">{booking.label}</span>
-                            </div>
+                            </button>
                           ))}
                         </div>
                       </div>
@@ -1069,6 +1089,16 @@ export default function CalendarPage() {
             </form>
           ) : (
             <div className="space-y-5">
+              {activeRoom.photos?.length || activeRoom.photo_main ? (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {(activeRoom.photos?.length ? activeRoom.photos.map((item) => item.url) : activeRoom.photo_main ? [activeRoom.photo_main] : []).slice(0, 6).map((url, index) => (
+                    <div key={`${url}-${index}`} className="overflow-hidden rounded-2xl border border-border bg-background/65">
+                      <img src={url} alt={`${activeRoom.name || "Апартамент"} ${index + 1}`} className="h-40 w-full object-cover" />
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="rounded-2xl border border-border bg-background/65 p-4">
                   <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
@@ -1210,6 +1240,49 @@ export default function CalendarPage() {
             </button>
           </div>
         </form>
+      </ModalShell>
+
+      <ModalShell
+        open={bookingDetailsOpen}
+        onClose={() => {
+          setBookingDetailsOpen(false);
+          setActiveBooking(null);
+          setActiveBookingRoomTitle("");
+        }}
+        title={activeBooking ? activeBooking.label : "Карточка брони"}
+        description={activeBooking ? `${activeBookingRoomTitle} · ${formatDateLabel(activeBooking.check_in)} → ${formatDateLabel(activeBooking.check_out)}` : "Подробности бронирования."}
+      >
+        {activeBooking ? (
+          <div className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-2xl border border-border bg-background/65 p-4">
+                <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Статус</p>
+                <p className="mt-2 text-lg font-semibold text-foreground">{activeBooking.label}</p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {activeBooking.check_in} → {activeBooking.check_out}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-border bg-background/65 p-4">
+                <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Источник</p>
+                <p className="mt-2 text-lg font-semibold text-foreground">{activeBooking.source || "CRM"}</p>
+                <p className="mt-2 text-sm text-muted-foreground">Апартамент: {activeBookingRoomTitle}</p>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                className="soft-button"
+                onClick={() => {
+                  setBookingDetailsOpen(false);
+                  navigate(`/bookings?search=${encodeURIComponent(String(activeBooking.id))}`);
+                }}
+              >
+                Перейти в брони
+              </button>
+            </div>
+          </div>
+        ) : null}
       </ModalShell>
     </PageMotion>
   );
