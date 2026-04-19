@@ -947,7 +947,7 @@ export default function CalendarPage() {
                   {visibleRooms.map((room) => (
                     <div
                       key={room.id}
-                      className="flex border-b border-border last:border-b-0 transition-colors"
+                      className="flex border-b border-border last:border-b-0"
                     >
                       <button
                         type="button"
@@ -966,9 +966,7 @@ export default function CalendarPage() {
                       </button>
 
                       <div
-                        className={`relative grid flex-1 transition-colors ${
-                          highlightedRoomId === room.id ? "shadow-[inset_0_0_0_1px_rgba(229,211,179,0.16)] dark:shadow-[inset_0_0_0_1px_rgba(229,211,179,0.1)]" : ""
-                        }`}
+                        className="relative grid flex-1"
                         style={{ gridTemplateColumns: `repeat(${visibleDates.length}, minmax(${dayColumnWidth}px, 1fr))` }}
                       >
                         {visibleDates.map((value) => (
@@ -976,7 +974,7 @@ export default function CalendarPage() {
                             key={`${room.id}-${formatDateParam(value)}`}
                             type="button"
                             onDoubleClick={() => openCreateBooking(room, value)}
-                            className={`h-18 border-r border-border/80 text-transparent transition last:border-r-0 ${
+                            className={`h-18 border-r border-border/80 text-transparent last:border-r-0 ${
                               highlightedRoomId === room.id ? "bg-[#E5D3B3]/5 dark:bg-[#E5D3B3]/3" : "bg-transparent"
                             }`}
                             aria-label={`Создать бронь для ${room.title} на ${formatDateLabel(formatDateParam(value))}`}
