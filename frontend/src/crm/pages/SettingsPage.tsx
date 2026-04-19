@@ -677,10 +677,10 @@ export default function SettingsPage() {
   }
 
   const hasCampOptions = camps.length > 0;
-  const { showInitialSkeleton } = usePageLoadState(isBootLoading);
+  const { isPageVisible } = usePageLoadState(isBootLoading);
 
   return (
-    <PageMotion className="space-y-6" isReady={!showInitialSkeleton}>
+    <PageMotion className="space-y-6" isReady={isPageVisible}>
       <SectionHeading
         title="Профиль, команда и контроль"
         description="Живой центр управления базой: данные объекта, команда сотрудников, роли, Telegram-привязки и журнал действий."

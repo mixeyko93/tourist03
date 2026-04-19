@@ -446,7 +446,7 @@ export default function CalendarPage() {
   const roomOptionsById = useMemo(() => new Map(roomOptions.map((room) => [room.id, room])), [roomOptions]);
   const activeRoom = activeRoomDetailsId ? roomOptionsById.get(activeRoomDetailsId) || null : null;
   const pageIsLoading = isMetaLoading || isFeedLoading;
-  const { showInitialSkeleton, showRefreshOverlay } = usePageLoadState(pageIsLoading);
+  const { showInitialSkeleton, showRefreshOverlay, isPageVisible } = usePageLoadState(pageIsLoading);
 
   const activateScrollIndicator = () => {
     setIsScrollIndicatorActive(true);
@@ -761,7 +761,7 @@ export default function CalendarPage() {
   };
 
   return (
-    <PageMotion className="space-y-6" isReady={!showInitialSkeleton}>
+    <PageMotion className="space-y-6" isReady={isPageVisible}>
       {!showInitialSkeleton ? <>
       {successMessage ? (
         <div className="fixed inset-x-0 top-20 z-40 flex justify-center px-4">

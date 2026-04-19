@@ -965,10 +965,10 @@ export default function AdminBaseEditPage() {
     }
   }
 
-  const { showInitialSkeleton } = usePageLoadState(isLoading);
+  const { isPageVisible } = usePageLoadState(isLoading);
 
   return (
-    <PageMotion className="space-y-6" isReady={!showInitialSkeleton}>
+    <PageMotion className="space-y-6" isReady={isPageVisible}>
       <AdminCard className="p-5 sm:p-6 lg:p-8">
         <input
           ref={galleryInputRef}

@@ -306,10 +306,10 @@ export default function ServicesPage() {
     }
   }
 
-  const { showInitialSkeleton } = usePageLoadState(isLoading);
+  const { isPageVisible } = usePageLoadState(isLoading);
 
   return (
-    <PageMotion className="space-y-6" isReady={!showInitialSkeleton}>
+    <PageMotion className="space-y-6" isReady={isPageVisible}>
       <SectionHeading
         title="Каталог услуг базы"
         description="Реальные услуги, которые менеджеры могут продвигать вместе с проживанием или продавать отдельно по поставщикам."

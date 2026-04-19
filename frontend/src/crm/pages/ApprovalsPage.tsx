@@ -184,10 +184,10 @@ export default function ApprovalsPage() {
     }
   }
 
-  const { showInitialSkeleton } = usePageLoadState(isBootLoading);
+  const { isPageVisible } = usePageLoadState(isBootLoading);
 
   return (
-    <PageMotion className="space-y-6" isReady={!showInitialSkeleton}>
+    <PageMotion className="space-y-6" isReady={isPageVisible}>
       <SectionHeading
         title="Подтверждения и откаты"
         description="Живой контур изменений: что отправили на подтверждение, что применили под ответственность и что при необходимости можно откатить."

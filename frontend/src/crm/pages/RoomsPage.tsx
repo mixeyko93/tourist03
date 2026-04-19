@@ -398,10 +398,10 @@ export default function RoomsPage() {
 
   const hasCampOptions = camps.length > 0;
   const hasRooms = rooms.length > 0;
-  const { showInitialSkeleton } = usePageLoadState(isLoading);
+  const { isPageVisible } = usePageLoadState(isLoading);
 
   return (
-    <PageMotion className="space-y-6" isReady={!showInitialSkeleton}>
+    <PageMotion className="space-y-6" isReady={isPageVisible}>
       <SectionHeading
         title="Апартаменты и тарифы"
         description="Рабочий список реальных апартаментов по выбранной базе с редактированием тарифов, вместимости и удобств."

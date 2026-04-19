@@ -195,10 +195,10 @@ export default function DashboardPage() {
   const hasRooms = rooms.length > 0;
   const hasRevenue = metrics.series.some((item) => item.revenue > 0 || item.bookingsCount > 0);
   const todayIso = new Date().toISOString().slice(0, 10);
-  const { showInitialSkeleton } = usePageLoadState(isLoading);
+  const { isPageVisible } = usePageLoadState(isLoading);
 
   return (
-    <PageMotion className="space-y-6" isReady={!showInitialSkeleton}>
+    <PageMotion className="space-y-6" isReady={isPageVisible}>
       <SectionHeading
         title="Сводка по базе"
         description="Живой обзор загрузки, ближайших заездов, выручки по базовым тарифам и потока реальных заявок."

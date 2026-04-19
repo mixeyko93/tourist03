@@ -243,6 +243,21 @@
     background: color-mix(in oklab, var(--crm-gold) 76%, transparent);
   }
 
+  .crm-page-refresh-bar {
+    background: linear-gradient(90deg, transparent 0%, color-mix(in oklab, var(--crm-gold) 72%, transparent) 22%, color-mix(in oklab, #7dd3fc 70%, transparent) 52%, color-mix(in oklab, var(--crm-gold) 72%, transparent) 82%, transparent 100%);
+    animation: crm-page-refresh-slide 1.15s ease-in-out infinite;
+    box-shadow: 0 0 18px color-mix(in oklab, #7dd3fc 26%, transparent);
+  }
+
+  @keyframes crm-page-refresh-slide {
+    0% {
+      transform: translateX(-130%);
+    }
+    100% {
+      transform: translateX(420%);
+    }
+  }
+
   .admin-table {
     @apply w-full border-collapse text-left;
   }

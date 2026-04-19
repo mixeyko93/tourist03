@@ -122,10 +122,10 @@ export default function GuestsPage() {
   }, [guests, searchQuery, statusFilter]);
 
   const hasGuests = filteredGuests.length > 0;
-  const { showInitialSkeleton } = usePageLoadState(isLoading);
+  const { isPageVisible } = usePageLoadState(isLoading);
 
   return (
-    <PageMotion className="space-y-6" isReady={!showInitialSkeleton}>
+    <PageMotion className="space-y-6" isReady={isPageVisible}>
       <SectionHeading
         title="База гостей"
         description="Живой список гостей по реальным бронированиям с контактами, историей визитов и оценкой клиентской ценности."

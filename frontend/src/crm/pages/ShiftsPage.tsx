@@ -1029,10 +1029,10 @@ export default function ShiftsPage() {
   const nextRule = overview?.next_rule || null;
   const hasCampOptions = camps.length > 0;
   const pageIsLoading = isBootLoading || isLoading;
-  const { showInitialSkeleton, showRefreshOverlay } = usePageLoadState(pageIsLoading);
+  const { showInitialSkeleton, showRefreshOverlay, isPageVisible } = usePageLoadState(pageIsLoading);
 
   return (
-    <PageMotion className="space-y-6" isReady={!showInitialSkeleton}>
+    <PageMotion className="space-y-6" isReady={isPageVisible}>
       {!showInitialSkeleton ? <>
       {successMessage || errorMessage ? (
         <div className="pointer-events-none fixed inset-x-0 top-4 z-40 flex justify-center px-4">

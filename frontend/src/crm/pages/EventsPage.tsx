@@ -238,10 +238,10 @@ export default function EventsPage() {
     }
   }
 
-  const { showInitialSkeleton } = usePageLoadState(isBootLoading);
+  const { isPageVisible } = usePageLoadState(isBootLoading);
 
   return (
-    <PageMotion className="space-y-6" isReady={!showInitialSkeleton}>
+    <PageMotion className="space-y-6" isReady={isPageVisible}>
       <SectionHeading
         title="События по броням"
         description="Живая лента заявок и бронирований: новые обращения, изменения статусов и всё, что требует внимания по размещению."
