@@ -3,14 +3,15 @@ import { motion } from "motion/react";
 
 type PageMotionProps = PropsWithChildren<{
   className?: string;
+  isReady?: boolean;
 }>;
 
-export function PageMotion({ children, className = "" }: PageMotionProps) {
+export function PageMotion({ children, className = "", isReady = true }: PageMotionProps) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+      initial={{ opacity: 0, y: 16 }}
+      animate={isReady ? { opacity: 1, y: 0 } : { opacity: 0, y: 16 }}
+      transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
       className={className}
     >
       {children}

@@ -3,10 +3,8 @@ import { type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, use
 import { useNavigate } from "react-router";
 import { EmptyState } from "../components/EmptyState";
 import { ModalShell } from "../components/ModalShell";
-import { PageLoadingState } from "../components/PageLoadingState";
 import { PageMotion } from "../components/PageMotion";
 import { PageRefreshOverlay } from "../components/PageRefreshOverlay";
-import { SectionHeading } from "../components/SectionHeading";
 import { usePageLoadState } from "../components/usePageLoadState";
 import {
   createCrmBooking,
@@ -763,15 +761,7 @@ export default function CalendarPage() {
   };
 
   return (
-    <PageMotion className="space-y-6">
-      <SectionHeading title="Календарь размещения" description="Живой календарь показывает реальные бронирования по выбранной базе, чтобы быстро видеть загрузку и конфликты." />
-
-      {showInitialSkeleton ? (
-        <section className="glass-card p-6">
-          <PageLoadingState blocks={1} columnsClassName="grid-cols-1" blockHeightClassName="h-[28rem]" />
-        </section>
-      ) : null}
-
+    <PageMotion className="space-y-6" isReady={!showInitialSkeleton}>
       {!showInitialSkeleton ? <>
       {successMessage ? (
         <div className="fixed inset-x-0 top-20 z-40 flex justify-center px-4">

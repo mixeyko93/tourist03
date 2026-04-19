@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { EmptyState } from "../components/EmptyState";
 import { PageMotion } from "../components/PageMotion";
+import { usePageLoadState } from "../components/usePageLoadState";
 import { SectionHeading } from "../components/SectionHeading";
 import { crmPath } from "../paths";
 import { fetchCrmBookings, fetchCrmCampRooms, fetchCrmCamps, type CrmBooking, type CrmCamp, type CrmRoomOption } from "../session";
@@ -194,9 +195,10 @@ export default function DashboardPage() {
   const hasRooms = rooms.length > 0;
   const hasRevenue = metrics.series.some((item) => item.revenue > 0 || item.bookingsCount > 0);
   const todayIso = new Date().toISOString().slice(0, 10);
+  const { showInitialSkeleton } = usePageLoadState(isLoading);
 
   return (
-    <PageMotion className="space-y-6">
+    <PageMotion className="space-y-6" isReady={!showInitialSkeleton}>
       <SectionHeading
         title="Сводка по базе"
         description="Живой обзор загрузки, ближайших заездов, выручки по базовым тарифам и потока реальных заявок."

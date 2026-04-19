@@ -4,6 +4,7 @@ import { EmptyState } from "../components/EmptyState";
 import { ModalShell } from "../components/ModalShell";
 import { PageLoadingState } from "../components/PageLoadingState";
 import { PageMotion } from "../components/PageMotion";
+import { usePageLoadState } from "../components/usePageLoadState";
 import { SectionHeading } from "../components/SectionHeading";
 import {
   createCrmService,
@@ -305,8 +306,10 @@ export default function ServicesPage() {
     }
   }
 
+  const { showInitialSkeleton } = usePageLoadState(isLoading);
+
   return (
-    <PageMotion className="space-y-6">
+    <PageMotion className="space-y-6" isReady={!showInitialSkeleton}>
       <SectionHeading
         title="Каталог услуг базы"
         description="Реальные услуги, которые менеджеры могут продвигать вместе с проживанием или продавать отдельно по поставщикам."

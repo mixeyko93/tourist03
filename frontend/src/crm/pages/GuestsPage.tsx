@@ -4,6 +4,7 @@ import { EmptyState } from "../components/EmptyState";
 import { ModalShell } from "../components/ModalShell";
 import { PageLoadingState } from "../components/PageLoadingState";
 import { PageMotion } from "../components/PageMotion";
+import { usePageLoadState } from "../components/usePageLoadState";
 import { SectionHeading } from "../components/SectionHeading";
 import { fetchCrmCamps, fetchCrmGuests, type CrmCamp, type CrmGuest } from "../session";
 
@@ -121,9 +122,10 @@ export default function GuestsPage() {
   }, [guests, searchQuery, statusFilter]);
 
   const hasGuests = filteredGuests.length > 0;
+  const { showInitialSkeleton } = usePageLoadState(isLoading);
 
   return (
-    <PageMotion className="space-y-6">
+    <PageMotion className="space-y-6" isReady={!showInitialSkeleton}>
       <SectionHeading
         title="База гостей"
         description="Живой список гостей по реальным бронированиям с контактами, историей визитов и оценкой клиентской ценности."

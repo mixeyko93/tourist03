@@ -2,7 +2,6 @@ import { AlarmClockCheck, CalendarClock, CalendarDays, ChevronDown, ChevronLeft,
 import { type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { EmptyState } from "../components/EmptyState";
 import { ModalShell } from "../components/ModalShell";
-import { PageLoadingState } from "../components/PageLoadingState";
 import { PageMotion } from "../components/PageMotion";
 import { PageRefreshOverlay } from "../components/PageRefreshOverlay";
 import { SectionHeading } from "../components/SectionHeading";
@@ -1033,17 +1032,7 @@ export default function ShiftsPage() {
   const { showInitialSkeleton, showRefreshOverlay } = usePageLoadState(pageIsLoading);
 
   return (
-    <PageMotion className="space-y-6">
-      {showInitialSkeleton ? (
-        <SectionHeading title="График смен и дежурств" description="Рабочий экран базы: кто сейчас на смене, когда начинается следующая смена и как CRM должна обрабатывать ночные заявки." />
-      ) : null}
-
-      {showInitialSkeleton ? (
-        <section className="glass-card p-6">
-          <PageLoadingState blocks={2} columnsClassName="xl:grid-cols-2" blockHeightClassName="h-[20rem]" />
-        </section>
-      ) : null}
-
+    <PageMotion className="space-y-6" isReady={!showInitialSkeleton}>
       {!showInitialSkeleton ? <>
       {successMessage || errorMessage ? (
         <div className="pointer-events-none fixed inset-x-0 top-4 z-40 flex justify-center px-4">
