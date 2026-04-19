@@ -2,6 +2,7 @@ import { Compass, PencilLine, Plus, RefreshCcw, Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { PageMotion } from "../../components/PageMotion";
+import { usePageLoadState } from "../../components/usePageLoadState";
 import { crmPath } from "../../paths";
 import { AdminCard } from "../components/AdminCard";
 import { AdminStatusBadge } from "../components/AdminStatusBadge";
@@ -107,8 +108,10 @@ export default function AdminBasesPage() {
     return next;
   }, [items, quickMode]);
 
+  const { showInitialSkeleton } = usePageLoadState(isLoading);
+
   return (
-    <PageMotion className="space-y-6">
+    <PageMotion className="space-y-6" isReady={!showInitialSkeleton}>
       <AdminCard className="overflow-hidden">
         <div className="flex flex-col gap-4 border-b border-border px-5 py-5 sm:px-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">

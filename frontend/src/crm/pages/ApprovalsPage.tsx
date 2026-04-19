@@ -5,6 +5,7 @@ import { EmptyState } from "../components/EmptyState";
 import { PageLoadingState } from "../components/PageLoadingState";
 import { ModalShell } from "../components/ModalShell";
 import { PageMotion } from "../components/PageMotion";
+import { usePageLoadState } from "../components/usePageLoadState";
 import { SectionHeading } from "../components/SectionHeading";
 import { fetchCrmCamps, fetchCrmChangeRequests, updateCrmChangeRequest, type CrmCamp, type CrmChangeRequest, type CrmChangeRequestDecisionPayload } from "../session";
 
@@ -183,8 +184,10 @@ export default function ApprovalsPage() {
     }
   }
 
+  const { showInitialSkeleton } = usePageLoadState(isBootLoading);
+
   return (
-    <PageMotion className="space-y-6">
+    <PageMotion className="space-y-6" isReady={!showInitialSkeleton}>
       <SectionHeading
         title="Подтверждения и откаты"
         description="Живой контур изменений: что отправили на подтверждение, что применили под ответственность и что при необходимости можно откатить."

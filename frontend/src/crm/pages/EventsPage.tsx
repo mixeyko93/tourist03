@@ -4,6 +4,7 @@ import { useNavigate } from "react-router";
 import { EmptyState } from "../components/EmptyState";
 import { PageLoadingState } from "../components/PageLoadingState";
 import { PageMotion } from "../components/PageMotion";
+import { usePageLoadState } from "../components/usePageLoadState";
 import { SectionHeading } from "../components/SectionHeading";
 import { crmPath } from "../paths";
 import {
@@ -237,8 +238,10 @@ export default function EventsPage() {
     }
   }
 
+  const { showInitialSkeleton } = usePageLoadState(isBootLoading);
+
   return (
-    <PageMotion className="space-y-6">
+    <PageMotion className="space-y-6" isReady={!showInitialSkeleton}>
       <SectionHeading
         title="События по броням"
         description="Живая лента заявок и бронирований: новые обращения, изменения статусов и всё, что требует внимания по размещению."

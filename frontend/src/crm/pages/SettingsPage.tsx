@@ -17,6 +17,7 @@ import { EmptyState } from "../components/EmptyState";
 import { ModalShell } from "../components/ModalShell";
 import { PageLoadingState } from "../components/PageLoadingState";
 import { PageMotion } from "../components/PageMotion";
+import { usePageLoadState } from "../components/usePageLoadState";
 import { SectionHeading } from "../components/SectionHeading";
 import { SensitiveChangeModal } from "../components/SensitiveChangeModal";
 import { buildMediaItems, captureVideoPosterFile, splitMediaItems } from "../mediaTools";
@@ -676,9 +677,10 @@ export default function SettingsPage() {
   }
 
   const hasCampOptions = camps.length > 0;
+  const { showInitialSkeleton } = usePageLoadState(isBootLoading);
 
   return (
-    <PageMotion className="space-y-6">
+    <PageMotion className="space-y-6" isReady={!showInitialSkeleton}>
       <SectionHeading
         title="Профиль, команда и контроль"
         description="Живой центр управления базой: данные объекта, команда сотрудников, роли, Telegram-привязки и журнал действий."

@@ -20,6 +20,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { PageMotion } from "../../components/PageMotion";
+import { usePageLoadState } from "../../components/usePageLoadState";
 import { crmPath } from "../../paths";
 import { AdminCard } from "../components/AdminCard";
 import { AdminField } from "../components/AdminField";
@@ -964,8 +965,10 @@ export default function AdminBaseEditPage() {
     }
   }
 
+  const { showInitialSkeleton } = usePageLoadState(isLoading);
+
   return (
-    <PageMotion className="space-y-6">
+    <PageMotion className="space-y-6" isReady={!showInitialSkeleton}>
       <AdminCard className="p-5 sm:p-6 lg:p-8">
         <input
           ref={galleryInputRef}

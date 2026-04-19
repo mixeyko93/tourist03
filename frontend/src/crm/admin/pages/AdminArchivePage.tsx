@@ -1,6 +1,7 @@
 import { RefreshCcw, RotateCcw, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { PageMotion } from "../../components/PageMotion";
+import { usePageLoadState } from "../../components/usePageLoadState";
 import { AdminCard } from "../components/AdminCard";
 import { AdminStatusBadge } from "../components/AdminStatusBadge";
 import {
@@ -136,8 +137,10 @@ export default function AdminArchivePage() {
     }
   }
 
+  const { showInitialSkeleton } = usePageLoadState(isLoading);
+
   return (
-    <PageMotion className="space-y-6">
+    <PageMotion className="space-y-6" isReady={!showInitialSkeleton}>
       <AdminCard className="overflow-hidden">
         <div className="border-b border-border px-5 py-5 sm:px-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">

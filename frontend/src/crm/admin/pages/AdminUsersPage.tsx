@@ -1,6 +1,7 @@
 import { ChevronDown, Clock3, Phone, RefreshCcw, Search, ShieldCheck, UserRound } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { PageMotion } from "../../components/PageMotion";
+import { usePageLoadState } from "../../components/usePageLoadState";
 import { AdminCard } from "../components/AdminCard";
 import { AdminModal } from "../components/AdminModal";
 import { AdminStatusBadge } from "../components/AdminStatusBadge";
@@ -97,8 +98,10 @@ export default function AdminUsersPage() {
 
   const selectedUser = useMemo(() => users.find((user) => user.id === selectedUserId) ?? null, [selectedUserId, users]);
 
+  const { showInitialSkeleton } = usePageLoadState(isLoading);
+
   return (
-    <PageMotion className="space-y-6">
+    <PageMotion className="space-y-6" isReady={!showInitialSkeleton}>
       <AdminCard className="overflow-hidden">
         <div className="border-b border-border px-5 py-5 sm:px-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
