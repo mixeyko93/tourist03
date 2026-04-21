@@ -294,6 +294,7 @@ export type CrmShiftRule = {
   is_night_shift: boolean;
   is_active: boolean;
   comment: string | null;
+  comment_date: string | null;
   comment_author_display: string | null;
   comment_author_login: string | null;
   created_at: string;
@@ -475,6 +476,7 @@ export type CrmShiftRuleUpsertPayload = {
   is_night_shift: boolean;
   is_active: boolean;
   comment?: string;
+  comment_date?: string;
 };
 
 export type CrmChangeRequestCreatePayload = {
