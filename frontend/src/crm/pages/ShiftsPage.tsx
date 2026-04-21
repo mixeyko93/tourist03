@@ -147,7 +147,15 @@ function getWeekdayIndex(value: Date) {
   return (value.getDay() + 6) % 7;
 }
 
-function formatDateTime(value: string | null | undefined, timeZone?: string) {
+function formatTargetDate(value: Date) {
+  return new Intl.DateTimeFormat("ru-RU", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(value);
+}
+
+function formatShortDateWithWeekday(value: string | null | undefined, timeZone?: string) {
   if (!value) {
     return "Не указано";
   }
@@ -155,21 +163,26 @@ function formatDateTime(value: string | null | undefined, timeZone?: string) {
   if (Number.isNaN(date.getTime())) {
     return value;
   }
-  return new Intl.DateTimeFormat("ru-RU", {
-    timeZone,
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
+  const day = new Intl.DateTimeFormat("ru-RU", { timeZone, day: "2-digit", month: "2-digit" }).format(date);
+  const weekdayRaw = new Intl.DateTimeFormat("ru-RU", { timeZone, weekday: "long" }).format(date);
+  const weekday = weekdayRaw ? `${weekdayRaw.charAt(0).toUpperCase()}${weekdayRaw.slice(1)}` : "";
+  return `${day} (${weekday})`;
 }
 
-function formatTargetDate(value: Date) {
-  return new Intl.DateTimeFormat("ru-RU", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  }).format(value);
+function toDateOnlyKey(value: string | null | undefined, timeZone?: string) {
+  if (!value) {
+    return "";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
 }
 
 function formatDateButtonLabel(value: string) {
@@ -677,6 +690,56 @@ export default function ShiftsPage() {
     return map;
   }, [rules]);
 
+  const currentShiftDateKey = useMemo(
+    () => toDateOnlyKey(overview?.now, overview?.timezone || settingsForm.timeZone),
+    [overview?.now, overview?.timezone, settingsForm.timeZone],
+  );
+
+  const todayScheduledRules = useMemo(() => {
+    if (!currentShiftDateKey) {
+      return [];
+    }
+    return rules
+      .filter((rule) => {
+        if (!rule.is_active || !rule.shift_date) {
+          return false;
+        }
+        const startDateKey = rule.shift_date;
+        const endDateKey = rule.ends_on_date || rule.shift_date;
+        return startDateKey <= currentShiftDateKey && currentShiftDateKey <= endDateKey;
+      })
+      .sort((left, right) => `${left.starts_at}-${left.ends_at}`.localeCompare(`${right.starts_at}-${right.ends_at}`))
+      .map((rule) => ({
+        rule_id: rule.id,
+        admin_id: rule.admin_id,
+        admin_name: rule.admin_name,
+        weekday: getWeekdayIndex(parseDateParam(currentShiftDateKey)),
+        weekday_label: weekdayLabels[getWeekdayIndex(parseDateParam(currentShiftDateKey))] || "Сегодня",
+        shift_date: rule.shift_date,
+        ends_on_date: rule.ends_on_date || rule.shift_date,
+        starts_at: rule.shift_date ? `${rule.shift_date}T${rule.starts_at}` : rule.starts_at,
+        ends_at: (rule.ends_on_date || rule.shift_date) ? `${rule.ends_on_date || rule.shift_date}T${rule.ends_at}` : rule.ends_at,
+        starts_time: rule.starts_at?.slice(0, 5) || rule.starts_at,
+        ends_time: rule.ends_at?.slice(0, 5) || rule.ends_at,
+        is_night_shift: rule.is_night_shift,
+        is_active: rule.is_active,
+        comment: rule.comment || "",
+        timezone: overview?.timezone || settingsForm.timeZone,
+      }));
+  }, [currentShiftDateKey, overview?.timezone, rules, settingsForm.timeZone]);
+
+  const todayUpcomingRules = useMemo(
+    () => (overview?.upcoming_windows || []).filter((rule) => rule.shift_date === currentShiftDateKey),
+    [currentShiftDateKey, overview?.upcoming_windows],
+  );
+
+  const activeRules = overview?.active_rules || [];
+  const nextRule = overview?.next_rule || null;
+  const visibleActiveRules = activeRules.length ? activeRules : (todayUpcomingRules.length ? todayUpcomingRules : todayScheduledRules);
+  const nextRuleSummaryLine = nextRule
+    ? `${formatShortDateWithWeekday(nextRule.starts_at, overview?.timezone || settingsForm.timeZone)} · с ${nextRule.starts_time} до ${nextRule.ends_time}`
+    : "";
+
   useEffect(() => {
     if (!successMessage && !errorMessage) {
       return;
@@ -1117,8 +1180,6 @@ export default function ShiftsPage() {
     }
   }
 
-  const activeRules = overview?.active_rules || [];
-  const nextRule = overview?.next_rule || null;
   const hasCampOptions = camps.length > 0;
   const pageIsLoading = isBootLoading || isLoading;
   const { showInitialSkeleton, showRefreshOverlay, isPageVisible } = usePageLoadState(pageIsLoading);
@@ -1178,15 +1239,15 @@ export default function ShiftsPage() {
         </section>
       ) : (
         <>
-          <div className="grid gap-4 xl:grid-cols-3 xl:items-start">
-            <section className="glass-card p-4">
+          <div className="grid gap-4 xl:grid-cols-3 xl:items-stretch">
+            <section className="glass-card flex min-h-[172px] flex-col p-4">
               <div className="flex items-start gap-2 text-sm font-medium text-foreground">
                 <UserRoundCheck className="h-4 w-4 text-[#E5D3B3]" />
                 Кто сейчас на смене
               </div>
-              {activeRules.length ? (
+              {visibleActiveRules.length ? (
                 <div className="mt-3 space-y-2">
-                  {activeRules.map((rule) => (
+                  {visibleActiveRules.slice(0, 2).map((rule) => (
                     <div key={`${rule.rule_id}-${rule.starts_at}`} className="rounded-3xl border border-border bg-white/92 p-3 dark:bg-background/65">
                       <p className="text-sm font-semibold text-foreground">{rule.admin_name}</p>
                       <p className="mt-1 text-sm text-muted-foreground">
@@ -1203,7 +1264,7 @@ export default function ShiftsPage() {
               )}
             </section>
 
-            <section className="glass-card p-4">
+            <section className="glass-card flex min-h-[172px] flex-col p-4">
               <div className="flex items-start gap-2 text-sm font-medium text-foreground">
                 <AlarmClockCheck className="h-4 w-4 text-[#E5D3B3]" />
                 Следующая смена
@@ -1211,10 +1272,7 @@ export default function ShiftsPage() {
               {nextRule ? (
                 <div className="mt-3 rounded-3xl border border-border bg-white/92 p-3 dark:bg-background/65">
                   <p className="text-sm font-semibold text-foreground">{nextRule.admin_name}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {nextRule.weekday_label} · {nextRule.starts_time} → {nextRule.ends_time}
-                  </p>
-                  <p className="mt-3 text-sm text-foreground">Старт: {formatDateTime(nextRule.starts_at, overview?.timezone || settingsForm.timeZone)}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{nextRuleSummaryLine}</p>
                 </div>
               ) : (
                 <p className="mt-3 text-sm leading-6 text-muted-foreground">
@@ -1223,7 +1281,7 @@ export default function ShiftsPage() {
               )}
             </section>
 
-            <section className="glass-card p-4">
+            <section className="glass-card flex min-h-[172px] flex-col p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-2 text-sm font-medium text-foreground">
                   <Clock3 className="h-4 w-4 text-[#E5D3B3]" />
@@ -1253,7 +1311,7 @@ export default function ShiftsPage() {
             </section>
           </div>
 
-          <section className="glass-card p-6">
+          <section className="glass-card p-5">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div className="flex flex-wrap items-center gap-3">
                 <button
@@ -1323,7 +1381,7 @@ export default function ShiftsPage() {
               onPointerMove={handleGridPointerMove}
               onPointerUp={stopGridDragging}
               onPointerCancel={stopGridDragging}
-              className={`crm-calendar-grid-scroll mt-5 overflow-x-auto rounded-3xl border border-border bg-white/90 dark:bg-background/55 ${isGridDragging ? "crm-calendar-grid-scroll--dragging" : ""}`}
+              className={`crm-calendar-grid-scroll mt-4 overflow-x-auto rounded-3xl border border-border bg-white/90 dark:bg-background/55 ${isGridDragging ? "crm-calendar-grid-scroll--dragging" : ""}`}
             >
               <div style={{ width: `${gridWidth}px`, minWidth: "100%" }}>
                 <div
@@ -1348,7 +1406,7 @@ export default function ShiftsPage() {
                       className="grid border-b border-border last:border-b-0"
                       style={{ gridTemplateColumns: `${staffColumnWidth}px repeat(${visibleDates.length}, minmax(${dayColumnWidth}px, 1fr))` }}
                     >
-                      <div className="sticky left-0 z-10 border-r border-border bg-white/96 px-5 py-5 dark:bg-card/88">
+                      <div className="sticky left-0 z-10 border-r border-border bg-white/96 px-5 py-3.5 dark:bg-card/88">
                         <p className="text-sm font-semibold text-foreground">{member.display_name}</p>
                         <p className="mt-1 text-xs uppercase tracking-[0.18em] text-muted-foreground">{member.role_label}</p>
                       </div>
@@ -1358,7 +1416,7 @@ export default function ShiftsPage() {
                         const cellRules = rulesByCell.get(`${member.id}:${dateKey}`) || [];
 
                         return (
-                          <div key={`${member.id}-${dateKey}`} className="min-h-28 border-r border-border/80 p-2 last:border-r-0">
+                          <div key={`${member.id}-${dateKey}`} className="min-h-[88px] border-r border-border/80 p-1.5 last:border-r-0">
                             {cellRules.length ? (
                               <div className="flex h-full flex-col gap-2">
                                 {cellRules.map((rule) => {
@@ -1367,7 +1425,7 @@ export default function ShiftsPage() {
                                       key={rule.id}
                                       type="button"
                                       data-shift-cell="true"
-                                      className="group relative flex min-h-24 w-full flex-1 flex-col items-center justify-center rounded-[1.9rem] border border-[#D6BE8C]/55 bg-[#FBF3E4] px-3 py-3 text-center shadow-sm transition hover:bg-[#F6ECD8] dark:border-[#E5D3B3]/22 dark:bg-[#E5D3B3]/10 dark:hover:bg-[#E5D3B3]/16"
+                                      className="group relative flex min-h-[78px] w-full flex-1 flex-col items-center justify-center rounded-[1.75rem] border border-[#D6BE8C]/55 bg-[#FBF3E4] px-3 py-2 text-center shadow-sm transition hover:bg-[#F6ECD8] dark:border-[#E5D3B3]/22 dark:bg-[#E5D3B3]/10 dark:hover:bg-[#E5D3B3]/16"
                                       onMouseEnter={(event) => {
                                         if (rule.comment) {
                                           const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
@@ -1382,7 +1440,7 @@ export default function ShiftsPage() {
                                       onDoubleClick={() => openCellModal(member, date, rule)}
                                     >
                                       {rule.comment && rule.comment_date === dateKey ? <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#E5D3B3]" /> : null}
-                                      <span className="flex h-full min-h-24 flex-col items-center justify-between py-1 text-[0.95rem] font-semibold tracking-[-0.03em] text-foreground">
+                                      <span className="flex h-full min-h-[74px] flex-col items-center justify-between py-1 text-[0.95rem] font-semibold tracking-[-0.03em] text-foreground">
                                         <span>{rule.starts_at?.slice(0, 5)}</span>
                                         <span className="flex flex-1 items-center justify-center leading-none" aria-hidden="true">→</span>
                                         <span>{rule.ends_at?.slice(0, 5)}</span>
@@ -1401,7 +1459,7 @@ export default function ShiftsPage() {
                               <button
                                 type="button"
                                 data-shift-cell="true"
-                                className="flex h-full min-h-24 w-full items-center justify-center rounded-2xl border border-dashed border-[#D6BE8C]/75 bg-white/82 px-3 text-center text-xs leading-5 text-[#C6A163] shadow-sm transition hover:border-[#C7A25A]/80 hover:bg-[#FFF5E5] hover:text-[#8E6E2C] dark:border-border/70 dark:bg-background/35 dark:text-muted-foreground dark:hover:border-[#E5D3B3]/30 dark:hover:bg-background/55 dark:hover:text-foreground"
+                                className="flex h-full min-h-[78px] w-full items-center justify-center rounded-2xl border border-dashed border-[#D6BE8C]/75 bg-white/82 px-3 text-center text-xs leading-5 text-[#C6A163] shadow-sm transition hover:border-[#C7A25A]/80 hover:bg-[#FFF5E5] hover:text-[#8E6E2C] dark:border-border/70 dark:bg-background/35 dark:text-muted-foreground dark:hover:border-[#E5D3B3]/30 dark:hover:bg-background/55 dark:hover:text-foreground"
                                 onClick={() => void handleQuickAssign(member, date)}
                               >
                                 <span className="text-lg leading-none text-[#C6A163] dark:text-[#E5D3B3]">+</span>
