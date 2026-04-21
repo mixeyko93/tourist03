@@ -743,6 +743,9 @@ def _normalize_shift_rule_payload(raw_payload: dict) -> dict:
         raise HTTPException(status_code=400, detail="Некорректная дата смены") from exc
     ends_on_date_raw = str(raw_payload.get("ends_on_date") or "").strip()
     ends_on_date_value: date | None = None
+    comment = (raw_payload.get("comment") or "").strip() or None
+    comment_date_raw = str(raw_payload.get("comment_date") or "").strip()
+    comment_date_value: date | None = None
     if ends_on_date_raw:
         try:
             ends_on_date_value = date.fromisoformat(ends_on_date_raw)
@@ -750,6 +753,16 @@ def _normalize_shift_rule_payload(raw_payload: dict) -> dict:
             raise HTTPException(status_code=400, detail="Некорректная дата окончания смены") from exc
         if ends_on_date_value < shift_date_value:
             raise HTTPException(status_code=400, detail="Дата окончания смены не может быть раньше даты начала")
+    if comment:
+        if comment_date_raw:
+            try:
+                comment_date_value = date.fromisoformat(comment_date_raw)
+            except Exception as exc:
+                raise HTTPException(status_code=400, detail="Некорректная дата комментария") from exc
+        else:
+            comment_date_value = shift_date_value
+        if comment_date_value < shift_date_value:
+            raise HTTPException(status_code=400, detail="Дата комментария не может быть раньше даты начала смены")
     starts_at = str(raw_payload.get("starts_at") or "").strip()
     ends_at = str(raw_payload.get("ends_at") or "").strip()
     _parse_shift_time(starts_at)
@@ -769,7 +782,8 @@ def _normalize_shift_rule_payload(raw_payload: dict) -> dict:
         "ends_at": normalized_end_at.strftime("%H:%M"),
         "is_night_shift": bool(raw_payload.get("is_night_shift")),
         "is_active": bool(raw_payload.get("is_active", True)),
-        "comment": (raw_payload.get("comment") or "").strip() or None,
+        "comment": comment,
+        "comment_date": comment_date_value,
     }
 
 

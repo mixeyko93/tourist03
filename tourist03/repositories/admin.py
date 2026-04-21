@@ -127,6 +127,7 @@ def list_camp_shift_rules(camp_id: int):
                 r.is_night_shift,
                 r.is_active,
                 r.comment,
+                r.comment_date,
                 COALESCE(updater.display_name, creator.display_name) AS comment_author_display,
                 COALESCE(updater.email, creator.email) AS comment_author_login,
                 r.created_at,
@@ -162,6 +163,7 @@ def get_camp_shift_rule(camp_id: int, rule_id: int):
                 r.is_night_shift,
                 r.is_active,
                 r.comment,
+                r.comment_date,
                 COALESCE(updater.display_name, creator.display_name) AS comment_author_display,
                 COALESCE(updater.email, creator.email) AS comment_author_login,
                 r.created_at,
@@ -197,9 +199,10 @@ def create_camp_shift_rule(camp_id: int, payload: dict, actor_admin_id: int) -> 
                 is_active,
                 created_by_admin_id,
                 updated_by_admin_id,
-                comment
+                comment,
+                comment_date
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
             (
@@ -215,6 +218,7 @@ def create_camp_shift_rule(camp_id: int, payload: dict, actor_admin_id: int) -> 
                 actor_admin_id,
                 actor_admin_id,
                 payload.get("comment"),
+                payload.get("comment_date"),
             ),
         )
         rule_id = cur.fetchone()["id"]
@@ -237,6 +241,7 @@ def update_camp_shift_rule(camp_id: int, rule_id: int, payload: dict, actor_admi
                 is_night_shift = %s,
                 is_active = %s,
                 comment = %s,
+                comment_date = %s,
                 updated_by_admin_id = %s,
                 updated_at = NOW()
             WHERE camp_id = %s
@@ -252,6 +257,7 @@ def update_camp_shift_rule(camp_id: int, rule_id: int, payload: dict, actor_admi
                 bool(payload.get("is_night_shift")),
                 bool(payload.get("is_active", True)),
                 payload.get("comment"),
+                payload.get("comment_date"),
                 actor_admin_id,
                 camp_id,
                 rule_id,

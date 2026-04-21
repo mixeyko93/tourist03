@@ -907,6 +907,18 @@ MIGRATIONS = (
           AND event_type NOT IN ('booking_created', 'booking_updated');
         """,
     ),
+    MigrationStep(
+        version="0012_shift_comment_date",
+        sql="""
+        ALTER TABLE crm.shift_schedule_rules
+        ADD COLUMN IF NOT EXISTS comment_date DATE;
+
+        UPDATE crm.shift_schedule_rules
+        SET comment_date = shift_date
+        WHERE comment IS NOT NULL
+          AND comment_date IS NULL;
+        """,
+    ),
 )
 
 

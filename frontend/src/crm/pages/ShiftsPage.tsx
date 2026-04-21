@@ -207,6 +207,7 @@ type ShiftDateFieldProps = {
 
 function ShiftDateField({ label, value, min, open, onToggle, onClose, onChange }: ShiftDateFieldProps) {
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
   const [viewDate, setViewDate] = useState(() => (value ? parseDateParam(value) : new Date()));
   const [popoverStyle, setPopoverStyle] = useState<{ top: number; left: number } | null>(null);
 
@@ -223,6 +224,33 @@ function ShiftDateField({ label, value, min, open, onToggle, onClose, onChange }
     }
   }, [open, min, value]);
 
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (!target) {
+        return;
+      }
+      if (triggerRef.current?.contains(target) || popoverRef.current?.contains(target)) {
+        return;
+      }
+      onClose();
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+      document.removeEventListener("keydown", handleKeyDown, true);
+    };
+  }, [onClose, open]);
+
   const minDate = min ? parseDateParam(min) : null;
   const calendarDays = buildCalendarMatrix(viewDate);
 
@@ -235,6 +263,7 @@ function ShiftDateField({ label, value, min, open, onToggle, onClose, onChange }
       </button>
       {open && popoverStyle ? createPortal(
         <div
+          ref={popoverRef}
           style={{ position: "fixed", top: popoverStyle.top, left: popoverStyle.left, width: 320, zIndex: 9999 }}
           className="rounded-3xl border border-white/10 bg-[#18181b]/96 p-5 shadow-2xl backdrop-blur-xl"
         >
@@ -357,9 +386,10 @@ function DrumColumn({ items, selected, onSelect }: { items: string[]; selected: 
 const hourItems = Array.from({ length: 24 }, (_, i) => `${i}`.padStart(2, "0"));
 const minuteItems = Array.from({ length: 60 }, (_, i) => `${i}`.padStart(2, "0"));
 
-function ShiftTimeField({ label, value, open, onToggle, onChange }: ShiftTimeFieldProps) {
+function ShiftTimeField({ label, value, open, onToggle, onClose, onChange }: ShiftTimeFieldProps) {
   const parts = splitTimeParts(value);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
   const [popoverStyle, setPopoverStyle] = useState<{ top: number; left: number } | null>(null);
 
   useEffect(() => {
@@ -372,6 +402,33 @@ function ShiftTimeField({ label, value, open, onToggle, onChange }: ShiftTimeFie
     }
   }, [open]);
 
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (!target) {
+        return;
+      }
+      if (triggerRef.current?.contains(target) || popoverRef.current?.contains(target)) {
+        return;
+      }
+      onClose();
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+      document.removeEventListener("keydown", handleKeyDown, true);
+    };
+  }, [onClose, open]);
+
   return (
     <div className="space-y-2">
       <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">{label}</span>
@@ -381,6 +438,7 @@ function ShiftTimeField({ label, value, open, onToggle, onChange }: ShiftTimeFie
       </button>
       {open && popoverStyle ? createPortal(
         <div
+          ref={popoverRef}
           style={{ position: "fixed", top: popoverStyle.top, left: popoverStyle.left, width: 220, zIndex: 9999 }}
           className="overflow-hidden rounded-3xl border border-white/10 bg-[#18181b]/96 shadow-2xl backdrop-blur-xl"
         >
@@ -439,6 +497,7 @@ function mapRuleForm(rule: CrmShiftRule): ShiftRuleForm {
 }
 
 function toRulePayload(form: ShiftRuleForm, target: ShiftTarget): CrmShiftRuleUpsertPayload {
+  const nextComment = form.comment.trim();
   return {
     admin_id: target.adminId,
     shift_date: target.shiftDate,
@@ -447,7 +506,8 @@ function toRulePayload(form: ShiftRuleForm, target: ShiftTarget): CrmShiftRuleUp
     ends_at: form.endsAt,
     is_night_shift: target.existingRule?.is_night_shift || false,
     is_active: target.existingRule?.is_active ?? true,
-    comment: form.comment.trim() || undefined,
+    comment: nextComment || undefined,
+    comment_date: nextComment ? target.shiftDate : undefined,
   };
 }
 
@@ -463,6 +523,10 @@ function describeRule(rule: CrmShiftRule) {
     return `${startDate} · ${startTime} → ${endTime}`;
   }
   return `${weekdayLabels[rule.weekday] || "День"} · ${startTime} → ${endTime}`;
+}
+
+function shiftCellTooltipKey(ruleId: number, dateKey: string) {
+  return `${ruleId}:${dateKey}`;
 }
 
 export default function ShiftsPage() {
@@ -499,7 +563,7 @@ export default function ShiftsPage() {
   const [isGridDragging, setIsGridDragging] = useState(false);
   const [scrollThumbWidth, setScrollThumbWidth] = useState(0);
   const [scrollThumbOffset, setScrollThumbOffset] = useState(0);
-  const [tooltipFlip, setTooltipFlip] = useState<Map<number, boolean>>(new Map());
+  const [tooltipFlip, setTooltipFlip] = useState<Map<string, boolean>>(new Map());
   const gridScrollRef = useRef<HTMLDivElement | null>(null);
   const trackRef = useRef<HTMLDivElement | null>(null);
   const scrollIndicatorTimeoutRef = useRef<number | null>(null);
@@ -768,7 +832,10 @@ export default function ShiftsPage() {
     setEditingRule(rule || null);
     setRuleForm(
       rule
-        ? mapRuleForm(rule)
+        ? {
+            ...mapRuleForm(rule),
+            comment: rule.comment_date === target.shiftDate ? rule.comment || "" : "",
+          }
         : {
             startsAt: presetForm.startsAt,
             endsOnDate: target.shiftDate,
@@ -901,6 +968,7 @@ export default function ShiftsPage() {
                   starts_at: ruleForm.startsAt,
                   ends_at: ruleForm.endsAt,
                   comment: ruleForm.comment.trim() || null,
+                  comment_date: ruleForm.comment.trim() ? activeTarget.shiftDate : null,
                   comment_author_display: ruleForm.comment.trim() ? "Вы" : null,
                   comment_author_login: ruleForm.comment.trim() ? "you" : null,
                   updated_at: new Date().toISOString(),
@@ -927,6 +995,7 @@ export default function ShiftsPage() {
             is_night_shift: false,
             is_active: true,
             comment: ruleForm.comment.trim() || null,
+            comment_date: ruleForm.comment.trim() ? activeTarget.shiftDate : null,
             comment_author_display: ruleForm.comment.trim() ? "Вы" : null,
             comment_author_login: ruleForm.comment.trim() ? "you" : null,
             created_at: new Date().toISOString(),
@@ -1007,6 +1076,7 @@ export default function ShiftsPage() {
           is_night_shift: false,
           is_active: true,
           comment: null,
+          comment_date: null,
           comment_author_display: null,
           comment_author_login: null,
           created_at: new Date().toISOString(),
@@ -1108,16 +1178,16 @@ export default function ShiftsPage() {
         </section>
       ) : (
         <>
-          <div className="grid gap-4 xl:grid-cols-3">
-            <section className="glass-card flex h-full flex-col p-5">
-              <div className="flex min-h-11 items-start gap-2 text-sm font-medium text-foreground">
+          <div className="grid gap-4 xl:grid-cols-3 xl:items-start">
+            <section className="glass-card p-4">
+              <div className="flex items-start gap-2 text-sm font-medium text-foreground">
                 <UserRoundCheck className="h-4 w-4 text-[#E5D3B3]" />
                 Кто сейчас на смене
               </div>
               {activeRules.length ? (
-                <div className="mt-4 flex-1 space-y-3">
+                <div className="mt-3 space-y-2">
                   {activeRules.map((rule) => (
-                    <div key={`${rule.rule_id}-${rule.starts_at}`} className="rounded-3xl border border-border bg-white/92 p-4 dark:bg-background/65">
+                    <div key={`${rule.rule_id}-${rule.starts_at}`} className="rounded-3xl border border-border bg-white/92 p-3 dark:bg-background/65">
                       <p className="text-sm font-semibold text-foreground">{rule.admin_name}</p>
                       <p className="mt-1 text-sm text-muted-foreground">
                         {rule.starts_time} → {rule.ends_time}
@@ -1127,19 +1197,19 @@ export default function ShiftsPage() {
                   ))}
                 </div>
               ) : (
-                <p className="mt-4 flex-1 text-sm leading-6 text-muted-foreground">
+                <p className="mt-3 text-sm leading-6 text-muted-foreground">
                   Сейчас никто не назначен на смену. Ночная логика будет держать заявку до начала следующей смены плюс ещё {settingsForm.nightReleaseAfterShiftMinutes} минут.
                 </p>
               )}
             </section>
 
-            <section className="glass-card flex h-full flex-col p-5">
-              <div className="flex min-h-11 items-start gap-2 text-sm font-medium text-foreground">
+            <section className="glass-card p-4">
+              <div className="flex items-start gap-2 text-sm font-medium text-foreground">
                 <AlarmClockCheck className="h-4 w-4 text-[#E5D3B3]" />
                 Следующая смена
               </div>
               {nextRule ? (
-                <div className="mt-4 flex-1 rounded-3xl border border-border bg-white/92 p-4 dark:bg-background/65">
+                <div className="mt-3 rounded-3xl border border-border bg-white/92 p-3 dark:bg-background/65">
                   <p className="text-sm font-semibold text-foreground">{nextRule.admin_name}</p>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {nextRule.weekday_label} · {nextRule.starts_time} → {nextRule.ends_time}
@@ -1147,14 +1217,14 @@ export default function ShiftsPage() {
                   <p className="mt-3 text-sm text-foreground">Старт: {formatDateTime(nextRule.starts_at, overview?.timezone || settingsForm.timeZone)}</p>
                 </div>
               ) : (
-                <p className="mt-4 flex-1 text-sm leading-6 text-muted-foreground">
+                <p className="mt-3 text-sm leading-6 text-muted-foreground">
                   Следующее правило смены пока не задано. Добавьте график, чтобы CRM понимала, кто обрабатывает новые заявки.
                 </p>
               )}
             </section>
 
-            <section className="glass-card flex h-full flex-col p-5">
-              <div className="flex min-h-11 items-start justify-between gap-3">
+            <section className="glass-card p-4">
+              <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-2 text-sm font-medium text-foreground">
                   <Clock3 className="h-4 w-4 text-[#E5D3B3]" />
                   <span className="whitespace-nowrap">Время реакции обработки брони</span>
@@ -1163,7 +1233,7 @@ export default function ShiftsPage() {
                   Изменить
                 </button>
               </div>
-              <div className="mt-4 flex-1 space-y-3 rounded-3xl border border-border bg-white/92 p-4 text-sm text-muted-foreground dark:bg-background/65">
+              <div className="mt-3 grid gap-3 rounded-3xl border border-border bg-white/92 p-3 text-sm text-muted-foreground dark:bg-background/65 sm:grid-cols-2">
                 <p>
                   Заморозка заявки: <span className="font-medium text-foreground">{settingsForm.bookingHoldHours} ч.</span>
                 </p>
@@ -1171,12 +1241,12 @@ export default function ShiftsPage() {
                   Ночь начинается: <span className="font-medium text-foreground">{settingsForm.nightStartsAt}</span>
                 </p>
                 <p>
-                  Ночной запас после смены: <span className="font-medium text-foreground">{settingsForm.nightReleaseAfterShiftMinutes} мин.</span>
+                  Ночной запас: <span className="font-medium text-foreground">{settingsForm.nightReleaseAfterShiftMinutes} мин.</span>
                 </p>
                 <p>
                   Шаг эскалации: <span className="font-medium text-foreground">{settingsForm.escalationStepMinutes} мин.</span>
                 </p>
-                <p>
+                <p className="sm:col-span-2">
                   Повторов до управляющего: <span className="font-medium text-foreground">{settingsForm.escalationRepeatsBeforeManager}</span>
                 </p>
               </div>
@@ -1304,23 +1374,21 @@ export default function ShiftsPage() {
                                           const nearBottom = rect.bottom > window.innerHeight * 0.6;
                                           setTooltipFlip((prev) => {
                                             const next = new Map(prev);
-                                            next.set(rule.id, nearBottom);
+                                            next.set(shiftCellTooltipKey(rule.id, dateKey), nearBottom);
                                             return next;
                                           });
                                         }
                                       }}
                                       onDoubleClick={() => openCellModal(member, date, rule)}
                                     >
-                                      {rule.comment ? <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#E5D3B3]" /> : null}
-                                      <span className="flex flex-col items-center justify-center text-[0.95rem] font-semibold leading-6 tracking-[-0.03em] text-foreground">
-                                        {rule.starts_at?.slice(0, 5)}
-                                        <br />
-                                        <span aria-hidden="true">→</span>
-                                        <br />
-                                        {rule.ends_at?.slice(0, 5)}
+                                      {rule.comment && rule.comment_date === dateKey ? <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#E5D3B3]" /> : null}
+                                      <span className="flex h-full min-h-24 flex-col items-center justify-between py-1 text-[0.95rem] font-semibold tracking-[-0.03em] text-foreground">
+                                        <span>{rule.starts_at?.slice(0, 5)}</span>
+                                        <span className="flex flex-1 items-center justify-center leading-none" aria-hidden="true">→</span>
+                                        <span>{rule.ends_at?.slice(0, 5)}</span>
                                       </span>
-                                      {rule.comment ? (
-                                        <span className={`pointer-events-none absolute left-1/2 z-20 hidden w-52 -translate-x-1/2 rounded-2xl border border-border bg-white px-3 py-2 text-[11px] leading-4 text-foreground shadow-xl dark:bg-slate-950 group-hover:block group-focus-visible:block ${tooltipFlip.get(rule.id) ? "bottom-full mb-2" : "top-full mt-2"}`}>
+                                      {rule.comment && rule.comment_date === dateKey ? (
+                                        <span className={`pointer-events-none absolute left-1/2 z-20 hidden w-52 -translate-x-1/2 rounded-2xl border border-border bg-white px-3 py-2 text-[11px] leading-4 text-foreground shadow-xl dark:bg-slate-950 group-hover:block group-focus-visible:block ${tooltipFlip.get(shiftCellTooltipKey(rule.id, dateKey)) ? "bottom-full mb-2" : "top-full mt-2"}`}>
                                           <span className="block font-medium">{rule.comment_author_display || "Сотрудник"}</span>
                                           <span className="mt-1 block text-muted-foreground">{rule.comment}</span>
                                         </span>
