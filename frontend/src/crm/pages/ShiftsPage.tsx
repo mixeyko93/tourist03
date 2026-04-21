@@ -1282,13 +1282,18 @@ export default function ShiftsPage() {
             </section>
 
             <section className="glass-card flex min-h-[172px] flex-col p-4">
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center justify-between gap-3">
                 <div className="flex items-start gap-2 text-sm font-medium text-foreground">
                   <Clock3 className="h-4 w-4 text-[#E5D3B3]" />
                   <span className="whitespace-nowrap">Время реакции обработки брони</span>
                 </div>
-                <button type="button" className="soft-button shrink-0 px-3.5 py-2 text-sm" onClick={() => setIsSettingsModalOpen(true)}>
-                  Изменить
+                <button
+                  type="button"
+                  aria-label="Изменить параметры реакции"
+                  className="soft-button flex h-10 w-10 shrink-0 items-center justify-center rounded-full px-0 py-0"
+                  onClick={() => setIsSettingsModalOpen(true)}
+                >
+                  <PencilLine className="h-4 w-4" />
                 </button>
               </div>
               <div className="mt-3 grid gap-3 rounded-3xl border border-border bg-white/92 p-3 text-sm text-muted-foreground dark:bg-background/65 sm:grid-cols-2">
