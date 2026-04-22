@@ -1285,7 +1285,7 @@ export default function ShiftsPage() {
               <button
                 type="button"
                 aria-label="Изменить параметры реакции"
-                className="soft-button absolute right-5 top-4 flex h-8 w-8 items-center justify-center rounded-full px-0 py-0"
+                className="soft-button absolute right-6 top-3.5 flex h-8 w-8 items-center justify-center rounded-full px-0 py-0"
                 onClick={() => setIsSettingsModalOpen(true)}
               >
                 <PencilLine className="h-3.5 w-3.5" />
