@@ -736,6 +736,13 @@ export default function ShiftsPage() {
   const activeRules = overview?.active_rules || [];
   const nextRule = overview?.next_rule || null;
   const visibleActiveRules = activeRules.length ? activeRules : (todayUpcomingRules.length ? todayUpcomingRules : todayScheduledRules);
+  const nextRuleGroup = useMemo(() => {
+    if (!nextRule) {
+      return [];
+    }
+    const upcoming = overview?.upcoming_windows || [];
+    return upcoming.filter((rule) => rule.starts_at === nextRule.starts_at && rule.ends_at === nextRule.ends_at);
+  }, [nextRule, overview?.upcoming_windows]);
   const nextRuleSummaryLine = nextRule
     ? `${formatShortDateWithWeekday(nextRule.starts_at, overview?.timezone || settingsForm.timeZone)} · с ${nextRule.starts_time} до ${nextRule.ends_time}`
     : "";
@@ -1271,8 +1278,14 @@ export default function ShiftsPage() {
               </div>
               {nextRule ? (
                 <div className="mt-3 rounded-3xl border border-border bg-white/92 p-3 dark:bg-background/65">
-                  <p className="text-sm font-semibold text-foreground">{nextRule.admin_name}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">{nextRuleSummaryLine}</p>
+                  <div className="space-y-2">
+                    {(nextRuleGroup.length ? nextRuleGroup : [nextRule]).map((rule) => (
+                      <div key={`${rule.rule_id}-${rule.admin_id}-${rule.starts_at}`}>
+                        <p className="text-sm font-semibold text-foreground">{rule.admin_name}</p>
+                        <p className="mt-1 text-sm text-muted-foreground">{nextRuleSummaryLine}</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ) : (
                 <p className="mt-3 text-sm leading-6 text-muted-foreground">
