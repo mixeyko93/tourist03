@@ -565,7 +565,7 @@ export default function ShiftsPage() {
   const [presetForm, setPresetForm] = useState<ShiftPresetForm>(emptyPresetForm);
   const [ruleError, setRuleError] = useState("");
   const [isSavingRule, setIsSavingRule] = useState(false);
-  const [deletingRuleId, setDeletingRuleId] = useState<number | null>(null);
+  const [, setDeletingRuleId] = useState<number | null>(null);
   const [pendingChange, setPendingChange] = useState<PendingSensitiveChange | null>(null);
   const [isSubmittingChange, setIsSubmittingChange] = useState(false);
   const [activePresetTimeField, setActivePresetTimeField] = useState<"start" | "end" | null>(null);
@@ -1423,9 +1423,9 @@ export default function ShiftsPage() {
                       className="grid border-b border-border last:border-b-0"
                       style={{ gridTemplateColumns: `${staffColumnWidth}px repeat(${visibleDates.length}, minmax(${dayColumnWidth}px, 1fr))` }}
                     >
-                      <div className="sticky left-0 z-10 border-r border-border bg-white/96 px-5 py-3.5 dark:bg-card/88">
+                      <div className="sticky left-0 z-10 flex flex-col justify-center border-r border-border bg-white/96 px-5 py-2 dark:bg-card/88">
                         <p className="text-sm font-semibold text-foreground">{member.display_name}</p>
-                        <p className="mt-1 text-xs uppercase tracking-[0.18em] text-muted-foreground">{member.role_label}</p>
+                        <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">{member.role_label}</p>
                       </div>
 
                       {visibleDates.map((date) => {
@@ -1433,42 +1433,53 @@ export default function ShiftsPage() {
                         const cellRules = rulesByCell.get(`${member.id}:${dateKey}`) || [];
 
                         return (
-                          <div key={`${member.id}-${dateKey}`} className="min-h-[88px] border-r border-border/80 p-1.5 last:border-r-0">
+                          <div key={`${member.id}-${dateKey}`} className="min-h-[48px] border-r border-border/80 p-1 last:border-r-0">
                             {cellRules.length ? (
-                              <div className="flex h-full flex-col gap-2">
+                              <div className="flex h-full flex-col gap-1">
                                 {cellRules.map((rule) => {
                                   return (
-                                    <button
-                                      key={rule.id}
-                                      type="button"
-                                      data-shift-cell="true"
-                                      className="group relative flex min-h-[78px] w-full flex-1 flex-col items-center justify-center rounded-[1.75rem] border border-[#D6BE8C]/55 bg-[#FBF3E4] px-3 py-2 text-center shadow-sm transition hover:bg-[#F6ECD8] dark:border-[#E5D3B3]/22 dark:bg-[#E5D3B3]/10 dark:hover:bg-[#E5D3B3]/16"
-                                      onMouseEnter={(event) => {
-                                        if (rule.comment) {
-                                          const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
-                                          const nearBottom = rect.bottom > window.innerHeight * 0.6;
-                                          setTooltipFlip((prev) => {
-                                            const next = new Map(prev);
-                                            next.set(shiftCellTooltipKey(rule.id, dateKey), nearBottom);
-                                            return next;
-                                          });
-                                        }
-                                      }}
-                                      onDoubleClick={() => openCellModal(member, date, rule)}
-                                    >
-                                      {rule.comment && rule.comment_date === dateKey ? <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#E5D3B3]" /> : null}
-                                      <span className="flex h-full min-h-[74px] flex-col items-center justify-between py-1 text-[0.95rem] font-semibold tracking-[-0.03em] text-foreground">
-                                        <span>{rule.starts_at?.slice(0, 5)}</span>
-                                        <span className="flex flex-1 items-center justify-center leading-none" aria-hidden="true">→</span>
-                                        <span>{rule.ends_at?.slice(0, 5)}</span>
-                                      </span>
-                                      {rule.comment && rule.comment_date === dateKey ? (
-                                        <span className={`pointer-events-none absolute left-1/2 z-20 hidden w-52 -translate-x-1/2 rounded-2xl border border-border bg-white px-3 py-2 text-[11px] leading-4 text-foreground shadow-xl dark:bg-slate-950 group-hover:block group-focus-visible:block ${tooltipFlip.get(shiftCellTooltipKey(rule.id, dateKey)) ? "bottom-full mb-2" : "top-full mt-2"}`}>
-                                          <span className="block font-medium">{rule.comment_author_display || "Сотрудник"}</span>
-                                          <span className="mt-1 block text-muted-foreground">{rule.comment}</span>
+                                    <div key={rule.id} className="group relative flex-1">
+                                      <button
+                                        type="button"
+                                        data-shift-cell="true"
+                                        className="relative flex h-full min-h-[40px] w-full flex-col items-center justify-center rounded-2xl border border-[#D6BE8C]/55 bg-[#FBF3E4] px-2 py-1 text-center shadow-sm transition hover:bg-[#F6ECD8] dark:border-[#E5D3B3]/22 dark:bg-[#E5D3B3]/10 dark:hover:bg-[#E5D3B3]/16"
+                                        onMouseEnter={(event) => {
+                                          if (rule.comment) {
+                                            const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
+                                            const nearBottom = rect.bottom > window.innerHeight * 0.6;
+                                            setTooltipFlip((prev) => {
+                                              const next = new Map(prev);
+                                              next.set(shiftCellTooltipKey(rule.id, dateKey), nearBottom);
+                                              return next;
+                                            });
+                                          }
+                                        }}
+                                        onDoubleClick={() => openCellModal(member, date, rule)}
+                                      >
+                                        {rule.comment && rule.comment_date === dateKey ? <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[#E5D3B3]" /> : null}
+                                        <span className="flex items-center gap-1 text-[0.8rem] font-semibold tracking-[-0.02em] text-foreground">
+                                          <span>{rule.starts_at?.slice(0, 5)}</span>
+                                          <span className="text-muted-foreground" aria-hidden="true">→</span>
+                                          <span>{rule.ends_at?.slice(0, 5)}</span>
                                         </span>
-                                      ) : null}
-                                    </button>
+                                        {rule.comment && rule.comment_date === dateKey ? (
+                                          <span className={`pointer-events-none absolute left-1/2 z-20 hidden w-52 -translate-x-1/2 rounded-2xl border border-border bg-white px-3 py-2 text-[11px] leading-4 text-foreground shadow-xl dark:bg-slate-950 group-hover:block group-focus-visible:block ${tooltipFlip.get(shiftCellTooltipKey(rule.id, dateKey)) ? "bottom-full mb-2" : "top-full mt-2"}`}>
+                                            <span className="block font-medium">{rule.comment_author_display || "Сотрудник"}</span>
+                                            <span className="mt-1 block text-muted-foreground">{rule.comment}</span>
+                                          </span>
+                                        ) : null}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        aria-label="Удалить смену"
+                                        className="absolute right-1 top-1 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500/80 text-white opacity-0 shadow transition hover:bg-rose-600 group-hover:opacity-100"
+                                        onClick={(event) => { event.stopPropagation(); void handleDeleteRule(rule); }}
+                                      >
+                                        <svg viewBox="0 0 10 10" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                                          <line x1="2" y1="2" x2="8" y2="8" /><line x1="8" y1="2" x2="2" y2="8" />
+                                        </svg>
+                                      </button>
+                                    </div>
                                   );
                                 })}
                               </div>
@@ -1476,10 +1487,10 @@ export default function ShiftsPage() {
                               <button
                                 type="button"
                                 data-shift-cell="true"
-                                className="flex h-full min-h-[78px] w-full items-center justify-center rounded-2xl border border-dashed border-[#D6BE8C]/75 bg-white/82 px-3 text-center text-xs leading-5 text-[#C6A163] shadow-sm transition hover:border-[#C7A25A]/80 hover:bg-[#FFF5E5] hover:text-[#8E6E2C] dark:border-border/70 dark:bg-background/35 dark:text-muted-foreground dark:hover:border-[#E5D3B3]/30 dark:hover:bg-background/55 dark:hover:text-foreground"
+                                className="flex h-full min-h-[40px] w-full items-center justify-center rounded-xl border border-dashed border-[#D6BE8C]/75 bg-white/82 px-2 text-center text-xs leading-5 text-[#C6A163] shadow-sm transition hover:border-[#C7A25A]/80 hover:bg-[#FFF5E5] hover:text-[#8E6E2C] dark:border-border/70 dark:bg-background/35 dark:text-muted-foreground dark:hover:border-[#E5D3B3]/30 dark:hover:bg-background/55 dark:hover:text-foreground"
                                 onClick={() => void handleQuickAssign(member, date)}
                               >
-                                <span className="text-lg leading-none text-[#C6A163] dark:text-[#E5D3B3]">+</span>
+                                <span className="text-base leading-none text-[#C6A163] dark:text-[#E5D3B3]">+</span>
                               </button>
                             )}
                           </div>
@@ -1697,15 +1708,15 @@ export default function ShiftsPage() {
 
           <div className="flex flex-col gap-3 border-t border-border pt-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              {editingRule ? (
+              {editingRule && ruleForm.comment.trim() ? (
                 <button
                   type="button"
                   className="inline-flex items-center justify-center gap-2 rounded-2xl border border-rose-500/20 bg-rose-500/10 px-4 py-2.5 text-sm font-medium text-rose-300 transition hover:bg-rose-500/18 disabled:cursor-not-allowed disabled:opacity-60"
-                  onClick={() => void handleDeleteRule(editingRule)}
-                  disabled={deletingRuleId === editingRule.id || isSavingRule}
+                  onClick={() => setRuleForm((current) => ({ ...current, comment: "" }))}
+                  disabled={isSavingRule}
                 >
                   <Trash2 className="h-4 w-4" />
-                  {deletingRuleId === editingRule.id ? "Удаляем..." : "Удалить"}
+                  Удалить комментарий
                 </button>
               ) : null}
             </div>
