@@ -1433,7 +1433,7 @@ export default function ShiftsPage() {
                         const cellRules = rulesByCell.get(`${member.id}:${dateKey}`) || [];
 
                         return (
-                          <div key={`${member.id}-${dateKey}`} className="min-h-[48px] border-r border-border/80 p-1 last:border-r-0">
+                          <div key={`${member.id}-${dateKey}`} className="min-h-[48px] border-r border-border/80 px-1.5 py-1.5 last:border-r-0">
                             {cellRules.length ? (
                               <div className="flex h-full flex-col gap-1">
                                 {cellRules.map((rule) => {
@@ -1442,7 +1442,7 @@ export default function ShiftsPage() {
                                       <button
                                         type="button"
                                         data-shift-cell="true"
-                                        className="relative flex h-full min-h-[40px] w-full flex-col items-center justify-center rounded-2xl border border-[#D6BE8C]/55 bg-[#FBF3E4] px-2 py-1 text-center shadow-sm transition hover:bg-[#F6ECD8] dark:border-[#E5D3B3]/22 dark:bg-[#E5D3B3]/10 dark:hover:bg-[#E5D3B3]/16"
+                                        className="relative flex h-full min-h-[40px] w-full items-center justify-center rounded-2xl border border-[#D6BE8C]/55 bg-[#FBF3E4] px-3 py-1 text-center shadow-sm transition hover:bg-[#F6ECD8] dark:border-[#E5D3B3]/22 dark:bg-[#E5D3B3]/10 dark:hover:bg-[#E5D3B3]/16"
                                         onMouseEnter={(event) => {
                                           if (rule.comment) {
                                             const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
@@ -1456,7 +1456,7 @@ export default function ShiftsPage() {
                                         }}
                                         onDoubleClick={() => openCellModal(member, date, rule)}
                                       >
-                                        {rule.comment && rule.comment_date === dateKey ? <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-[#E5D3B3]" /> : null}
+                                        {rule.comment && rule.comment_date === dateKey ? <span className="absolute left-2 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-[#E5D3B3]" /> : null}
                                         <span className="flex items-center gap-1 text-[0.8rem] font-semibold tracking-[-0.02em] text-foreground">
                                           <span>{rule.starts_at?.slice(0, 5)}</span>
                                           <span className="text-muted-foreground" aria-hidden="true">→</span>
@@ -1472,11 +1472,11 @@ export default function ShiftsPage() {
                                       <button
                                         type="button"
                                         aria-label="Удалить смену"
-                                        className="absolute right-1 top-1 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500/80 text-white opacity-0 shadow transition hover:bg-rose-600 group-hover:opacity-100"
+                                        className="absolute -right-2 -top-2 z-20 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-white opacity-0 shadow-md transition hover:bg-rose-600 group-hover:opacity-100"
                                         onClick={(event) => { event.stopPropagation(); void handleDeleteRule(rule); }}
                                       >
-                                        <svg viewBox="0 0 10 10" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                                          <line x1="2" y1="2" x2="8" y2="8" /><line x1="8" y1="2" x2="2" y2="8" />
+                                        <svg viewBox="0 0 10 10" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                                          <line x1="2.5" y1="2.5" x2="7.5" y2="7.5" /><line x1="7.5" y1="2.5" x2="2.5" y2="7.5" />
                                         </svg>
                                       </button>
                                     </div>
