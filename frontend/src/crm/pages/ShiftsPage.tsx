@@ -1253,16 +1253,17 @@ export default function ShiftsPage() {
                 Кто сейчас на смене
               </div>
               {visibleActiveRules.length ? (
-                <div className="mt-3 space-y-2">
-                  {visibleActiveRules.slice(0, 2).map((rule) => (
-                    <div key={`${rule.rule_id}-${rule.starts_at}`} className="rounded-3xl border border-border bg-white/92 p-3 dark:bg-background/65">
-                      <p className="text-sm font-semibold text-foreground">{rule.admin_name}</p>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {rule.starts_time} → {rule.ends_time}
-                        {rule.is_night_shift ? " · Ночная смена" : ""}
-                      </p>
-                    </div>
-                  ))}
+                <div className="mt-3 rounded-3xl border border-border bg-white/92 p-3 dark:bg-background/65">
+                  <div className="space-y-2">
+                    {visibleActiveRules.slice(0, 2).map((rule) => (
+                      <div key={`${rule.rule_id}-${rule.starts_at}`}>
+                        <p className="text-sm font-semibold text-foreground">{rule.admin_name}</p>
+                        <p className="mt-0.5 text-sm text-muted-foreground">
+                          {formatShortDateWithWeekday(rule.starts_at, overview?.timezone || settingsForm.timeZone)} · с {rule.starts_time} до {rule.ends_time}{rule.is_night_shift ? " · Ночная" : ""}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ) : (
                 <p className="mt-3 text-sm leading-6 text-muted-foreground">
