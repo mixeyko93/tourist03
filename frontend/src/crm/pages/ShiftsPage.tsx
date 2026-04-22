@@ -1442,7 +1442,7 @@ export default function ShiftsPage() {
                                       <button
                                         type="button"
                                         data-shift-cell="true"
-                                        className="relative flex h-full min-h-[40px] w-full items-center justify-center overflow-hidden rounded-2xl border border-[#D6BE8C]/55 bg-[#FBF3E4] px-3 py-1 text-center shadow-sm transition hover:bg-[#F6ECD8] dark:border-[#E5D3B3]/22 dark:bg-[#E5D3B3]/10 dark:hover:bg-[#E5D3B3]/16"
+                                        className="relative flex h-full min-h-[40px] w-full items-center justify-center rounded-2xl border border-[#D6BE8C]/55 bg-[#FBF3E4] px-2 py-1 text-center shadow-sm transition hover:bg-[#F6ECD8] dark:border-[#E5D3B3]/22 dark:bg-[#E5D3B3]/10 dark:hover:bg-[#E5D3B3]/16"
                                         onMouseEnter={(event) => {
                                           if (rule.comment) {
                                             const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
@@ -1456,11 +1456,11 @@ export default function ShiftsPage() {
                                         }}
                                         onDoubleClick={() => openCellModal(member, date, rule)}
                                       >
-                                        {rule.comment && rule.comment_date === dateKey ? <span className="absolute left-2 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-[#E5D3B3]" /> : null}
-                                        <span className="flex min-w-0 items-center gap-0.5 text-[0.75rem] font-semibold tracking-[-0.02em] text-foreground">
-                                          <span className="shrink-0">{rule.starts_at?.slice(0, 5)}</span>
+                                        {rule.comment && rule.comment_date === dateKey ? <span className="absolute left-1.5 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-[#E5D3B3]" /> : null}
+                                        <span className="flex min-w-0 items-center gap-0.5 overflow-hidden text-[0.75rem] font-semibold tracking-[-0.02em] text-foreground">
+                                          <span className="shrink-0">{rule.starts_at?.slice(0, 5).replace(/^0/, "")}</span>
                                           <span className="shrink-0 text-muted-foreground" aria-hidden="true">→</span>
-                                          <span className="shrink-0">{rule.ends_at?.slice(0, 5)}</span>
+                                          <span className="shrink-0">{rule.ends_at?.slice(0, 5).replace(/^0/, "")}</span>
                                         </span>
                                         {rule.comment && rule.comment_date === dateKey ? (
                                           <span className={`pointer-events-none absolute left-1/2 z-20 hidden w-52 -translate-x-1/2 rounded-2xl border border-border bg-white px-3 py-2 text-[11px] leading-4 text-foreground shadow-xl dark:bg-slate-950 group-hover:block group-focus-visible:block ${tooltipFlip.get(shiftCellTooltipKey(rule.id, dateKey)) ? "bottom-full mb-2" : "top-full mt-2"}`}>
