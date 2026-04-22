@@ -249,12 +249,27 @@
     box-shadow: 0 0 18px color-mix(in oklab, #7dd3fc 26%, transparent);
   }
 
+  .crm-route-loader {
+    background: linear-gradient(90deg, transparent 0%, color-mix(in oklab, var(--crm-gold) 70%, transparent) 24%, color-mix(in oklab, #7dd3fc 75%, transparent) 52%, color-mix(in oklab, var(--crm-gold) 70%, transparent) 80%, transparent 100%);
+    animation: crm-route-loader-slide 0.9s ease-in-out infinite;
+    box-shadow: 0 0 14px color-mix(in oklab, #7dd3fc 22%, transparent);
+  }
+
   @keyframes crm-page-refresh-slide {
     0% {
       transform: translateX(-130%);
     }
     100% {
       transform: translateX(420%);
+    }
+  }
+
+  @keyframes crm-route-loader-slide {
+    0% {
+      transform: translateX(-160%);
+    }
+    100% {
+      transform: translateX(560%);
     }
   }
 

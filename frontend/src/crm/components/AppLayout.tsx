@@ -32,6 +32,7 @@ export default function AppLayout() {
   const [authError, setAuthError] = useState("");
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [eventNewCount, setEventNewCount] = useState(0);
+  const [isRouteTransitioning, setIsRouteTransitioning] = useState(false);
   const calendarPath = crmPath("/calendar");
   const activeNavItem = navItems.find((item) => location.pathname === crmPath(item.path));
 
@@ -68,6 +69,17 @@ export default function AppLayout() {
       setSidebarOpen(false);
     }
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    setIsRouteTransitioning(true);
+    const timeoutId = window.setTimeout(() => {
+      setIsRouteTransitioning(false);
+    }, 700);
+    return () => window.clearTimeout(timeoutId);
+  }, [location.pathname, location.search]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -283,6 +295,11 @@ export default function AppLayout() {
           </NavLink>
 
         </div>
+        {isRouteTransitioning ? (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px overflow-hidden">
+            <div className="crm-route-loader h-full w-48 rounded-full" />
+          </div>
+        ) : null}
       </header>
 
       <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden pt-16">

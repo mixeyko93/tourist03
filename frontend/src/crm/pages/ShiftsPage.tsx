@@ -1,13 +1,15 @@
 import { AlarmClockCheck, CalendarClock, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Clock3, Expand, Minus, PencilLine, Plus, Save, Trash2, UserRoundCheck } from "lucide-react";
-import { type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { type PointerEvent as ReactPointerEvent, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { EmptyState } from "../components/EmptyState";
 import { ModalShell } from "../components/ModalShell";
 import { PageMotion } from "../components/PageMotion";
+import { PageLoadingState } from "../components/PageLoadingState";
 import { PageRefreshOverlay } from "../components/PageRefreshOverlay";
 import { SectionHeading } from "../components/SectionHeading";
 import { SensitiveChangeModal } from "../components/SensitiveChangeModal";
 import { usePageLoadState } from "../components/usePageLoadState";
+import { getProductionDayTone } from "../productionCalendar";
 import {
   createCrmChangeRequest,
   createCrmShiftRule,
@@ -574,12 +576,17 @@ function StepperField({ label, value, min, max, step = 1, suffix, onChange }: St
         </button>
         <div className="min-w-0 flex-1">
           <input
-            type="number"
-            min={min}
-            max={max}
-            step={step}
+            type="text"
+            inputMode="numeric"
             value={safeValue}
-            onChange={(event) => commit(Number(event.target.value || min))}
+            onChange={(event) => {
+              const nextValue = event.target.value.replace(/[^\d-]/g, "");
+              if (!nextValue) {
+                commit(min);
+                return;
+              }
+              commit(Number(nextValue));
+            }}
             className="w-full bg-transparent text-center text-base font-semibold text-foreground outline-none"
           />
           {suffix ? <div className="-mt-0.5 text-center text-xs text-muted-foreground">{suffix}</div> : null}
@@ -701,12 +708,6 @@ export default function ShiftsPage() {
   const [activeTooltip, setActiveTooltip] = useState<ActiveTooltip | null>(null);
   const [pendingDeletion, setPendingDeletion] = useState<PendingRuleDeletion | null>(null);
   const [pendingDeletionSeconds, setPendingDeletionSeconds] = useState(5);
-  const [isFullscreenUltraCompact, setIsFullscreenUltraCompact] = useState(() => {
-    if (typeof window === "undefined") {
-      return false;
-    }
-    return window.innerWidth < 1500;
-  });
   const gridScrollRef = useRef<HTMLDivElement | null>(null);
   const trackRef = useRef<HTMLDivElement | null>(null);
   const scrollIndicatorTimeoutRef = useRef<number | null>(null);
@@ -1059,10 +1060,10 @@ export default function ShiftsPage() {
   const staffColumnWidth = showShiftTimes ? 300 : 260;
   const dayColumnWidth = showShiftTimes
     ? (viewMode === "week" ? 140 : 92)
-    : (viewMode === "week" ? 40 : 26);
+    : (viewMode === "week" ? 40 : 24);
   const gridWidth = staffColumnWidth + visibleDates.length * dayColumnWidth;
-  const fullscreenStaffColumnWidth = isFullscreenUltraCompact ? 154 : 220;
-  const fullscreenDayColumnWidth = isFullscreenUltraCompact ? 28 : 44;
+  const fullscreenStaffColumnWidth = 154;
+  const fullscreenDayColumnWidth = 28;
 
   const fullscreenMonthStart = useMemo(() => new Date(focusDate.getFullYear(), focusDate.getMonth(), 1), [focusDate]);
   const fullscreenMonthEnd = useMemo(() => new Date(fullscreenMonthStart.getFullYear(), fullscreenMonthStart.getMonth() + 1, 0), [fullscreenMonthStart]);
@@ -1158,7 +1159,7 @@ export default function ShiftsPage() {
     updateScrollMetrics();
   }, [hasHorizontalOverflow]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const gridNode = gridScrollRef.current;
     if (!gridNode) {
       return;
@@ -1172,16 +1173,10 @@ export default function ShiftsPage() {
 
     const today = new Date();
     if (today.getFullYear() === focusDate.getFullYear() && today.getMonth() === focusDate.getMonth()) {
-      const timeoutId = window.setTimeout(() => {
-        if (!gridScrollRef.current) {
-          return;
-        }
-        const targetCell = gridScrollRef.current.querySelector<HTMLElement>(`[data-grid-date='${formatDateParam(today)}']`);
-        const targetScroll = targetCell ? Math.max(0, targetCell.offsetLeft - staffColumnWidth) : 0;
-        gridScrollRef.current.scrollLeft = targetScroll;
-        syncScrollFromGrid();
-      }, 320);
-      return () => window.clearTimeout(timeoutId);
+      const targetCell = gridNode.querySelector<HTMLElement>(`[data-grid-date='${formatDateParam(today)}']`);
+      const targetScroll = targetCell ? Math.max(0, targetCell.offsetLeft - staffColumnWidth - 12) : 0;
+      gridNode.scrollLeft = targetScroll;
+      syncScrollFromGrid();
     } else {
       gridNode.scrollLeft = 0;
       syncScrollFromGrid();
@@ -1516,11 +1511,21 @@ export default function ShiftsPage() {
 
   return (
     <PageMotion className="space-y-6" isReady={isPageVisible}>
-      {!showInitialSkeleton ? <>
+      {showInitialSkeleton ? (
+        <>
+          <SectionHeading title="График смен и дежурств" description="Рабочий экран базы: кто сейчас на смене, когда начинается следующая смена и как CRM должна обрабатывать ночные заявки." />
+          <div className="grid gap-4 xl:grid-cols-3">
+            <PageLoadingState blocks={3} columnsClassName="xl:grid-cols-3" blockHeightClassName="h-40" />
+          </div>
+          <section className="glass-card p-5 md:p-6">
+            <PageLoadingState blocks={1} columnsClassName="grid-cols-1" blockHeightClassName="h-[24rem]" />
+          </section>
+        </>
+      ) : <>
       {pendingDeletion || successMessage || errorMessage ? (
-        <div className="pointer-events-none fixed inset-x-0 top-4 z-40 flex justify-center px-4">
+        <div className="pointer-events-none fixed inset-x-0 top-4 z-[10001] flex justify-center px-4">
           <div
-            className={`pointer-events-auto flex max-w-xl items-center gap-3 rounded-2xl border px-5 py-3 text-sm shadow-2xl backdrop-blur-xl transition ${
+            className={`pointer-events-auto relative flex max-w-xl items-center gap-3 overflow-hidden rounded-2xl border px-5 py-3 text-sm shadow-2xl backdrop-blur-xl transition ${
               errorMessage
                 ? "border-rose-300 bg-rose-50/96 text-rose-900 dark:border-rose-500/30 dark:bg-rose-500/18 dark:text-rose-100"
                 : pendingDeletion
@@ -1794,18 +1799,28 @@ export default function ShiftsPage() {
               onPointerCancel={stopGridDragging}
               className={`crm-calendar-grid-scroll mt-4 overflow-x-auto overflow-y-hidden rounded-3xl border border-border bg-white dark:bg-background/55 ${isGridDragging ? "crm-calendar-grid-scroll--dragging" : ""}`}
             >
-              <div style={{ width: `${gridWidth}px`, minWidth: "100%", transition: "width 280ms ease" }}>
+              <div style={{ width: `${gridWidth}px`, minWidth: "100%" }}>
                 <div
-                  className="grid border-b border-border bg-white dark:bg-card transition-[grid-template-columns] duration-300 ease-out"
+                  className="grid border-b border-border bg-white dark:bg-card"
                   style={{ gridTemplateColumns: `${staffColumnWidth}px repeat(${visibleDates.length}, minmax(${dayColumnWidth}px, 1fr))` }}
                 >
                   <div className="sticky left-0 z-40 flex min-h-[72px] items-center border-r border-border bg-white px-5 py-4 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground dark:bg-[#171b24]">
                     Сотрудник
                   </div>
                   {visibleDates.map((date) => (
-                    <div key={formatDateParam(date)} data-grid-date={formatDateParam(date)} className="border-r border-border px-2 py-3 text-center transition-[width,padding] duration-300 ease-out last:border-r-0">
+                    <div
+                      key={formatDateParam(date)}
+                      data-grid-date={formatDateParam(date)}
+                      className={`border-r border-border px-2 py-3 text-center last:border-r-0 ${
+                        getProductionDayTone(date) === "holiday"
+                          ? "bg-rose-50/85 dark:bg-rose-500/10"
+                          : getProductionDayTone(date) === "weekend"
+                            ? "bg-[#FFF8EE]/85 dark:bg-[#E5D3B3]/6"
+                            : ""
+                      }`}
+                    >
                       <div className="text-base font-semibold text-foreground">{getDayNumberLabel(date)}</div>
-                      <div className="mt-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{getWeekdayShortLabel(date)}</div>
+                      <div className={`mt-1 text-[11px] uppercase tracking-[0.18em] ${getProductionDayTone(date) === "holiday" ? "text-rose-500 dark:text-rose-300" : "text-muted-foreground"}`}>{getWeekdayShortLabel(date)}</div>
                     </div>
                   ))}
                 </div>
@@ -1814,7 +1829,7 @@ export default function ShiftsPage() {
                   sortedStaff.map((member) => (
                     <div
                       key={member.id}
-                      className="grid border-b border-border transition-[grid-template-columns] duration-300 ease-out last:border-b-0"
+                      className="grid border-b border-border last:border-b-0"
                       style={{ gridTemplateColumns: `${staffColumnWidth}px repeat(${visibleDates.length}, minmax(${dayColumnWidth}px, 1fr))` }}
                     >
                       <div className="sticky left-0 z-40 flex flex-col justify-center border-r border-border bg-white px-5 py-1 dark:bg-[#171b24]">
@@ -1827,7 +1842,16 @@ export default function ShiftsPage() {
                         const cellRules = rulesByCell.get(`${member.id}:${dateKey}`) || [];
 
                         return (
-                          <div key={`${member.id}-${dateKey}`} className="min-h-[34px] border-r border-border/80 px-1 py-1 last:border-r-0">
+                          <div
+                            key={`${member.id}-${dateKey}`}
+                            className={`min-h-[34px] border-r border-border/80 px-1 py-1 last:border-r-0 ${
+                              getProductionDayTone(date) === "holiday"
+                                ? "bg-rose-50/65 dark:bg-rose-500/6"
+                                : getProductionDayTone(date) === "weekend"
+                                  ? "bg-[#FFF8EE]/65 dark:bg-[#E5D3B3]/4"
+                                  : ""
+                            }`}
+                          >
                             {cellRules.length ? (
                               <div className="flex h-full flex-col gap-1">
                                 {cellRules.map((rule) => {
@@ -1837,7 +1861,7 @@ export default function ShiftsPage() {
                                         type="button"
                                         data-shift-cell="true"
                                         data-shift-interactive="true"
-                                        className={`relative flex h-full w-full items-center justify-center overflow-visible border border-[#D6BE8C]/55 bg-[#FBF3E4] text-center shadow-sm transition-[background-color,border-color,width,min-height,padding,opacity,transform,border-radius] duration-300 ease-out hover:bg-[#F6ECD8] dark:border-[#E5D3B3]/22 dark:bg-[#E5D3B3]/10 dark:hover:bg-[#E5D3B3]/16 ${showShiftTimes ? "min-h-[36px] rounded-2xl px-2 py-1" : "min-h-[24px] rounded-xl px-1 py-0.5"}`}
+                                        className={`relative flex h-full w-full items-center justify-center overflow-visible border border-[#D6BE8C]/55 bg-[#FBF3E4] text-center shadow-sm transition-[background-color,border-color,min-height,padding,opacity,transform,border-radius] duration-300 ease-out hover:bg-[#F6ECD8] dark:border-[#E5D3B3]/22 dark:bg-[#E5D3B3]/10 dark:hover:bg-[#E5D3B3]/16 ${showShiftTimes ? "min-h-[36px] rounded-2xl px-2 py-1" : "min-h-[24px] rounded-xl px-1 py-0.5"}`}
                                         onMouseEnter={(event) => {
                                           if (rule.comment) {
                                             const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
@@ -1846,7 +1870,7 @@ export default function ShiftsPage() {
                                             const shiftRight = rect.left < staffColumnWidth + 120;
                                             const left = shiftRight
                                               ? Math.min(window.innerWidth - tooltipWidth - 8, rect.right + 8)
-                                              : Math.max(8, Math.min(window.innerWidth - tooltipWidth - 8, rect.left + rect.width / 2 - tooltipWidth / 2));
+                                              : Math.max(staffColumnWidth + 12, Math.min(window.innerWidth - tooltipWidth - 8, rect.left + rect.width / 2 - tooltipWidth / 2));
                                             setActiveTooltip({
                                               key: shiftCellTooltipKey(rule.id, dateKey),
                                               top: flip ? rect.top - 8 : rect.bottom + 8,
@@ -1870,7 +1894,7 @@ export default function ShiftsPage() {
                                           openCellModal(member, date, rule);
                                         }}
                                       >
-                                        {rule.comment && rule.comment_date === dateKey ? <span className="absolute -left-0.5 -top-0.5 z-10 h-2.5 w-2.5 rounded-full bg-[#E5D3B3] shadow-[0_0_0_2px_rgba(15,23,42,0.7)]" /> : null}
+                                        {rule.comment && rule.comment_date === dateKey ? <span className="absolute -left-1 -top-1 z-10 h-2 w-2 rounded-full bg-[#E5D3B3] shadow-[0_0_0_2px_rgba(15,23,42,0.7)]" /> : null}
                                         {showShiftTimes ? (
                                           <span className="flex min-w-0 items-center gap-0.5 overflow-hidden text-[0.75rem] font-semibold tracking-[-0.02em] text-foreground transition-opacity duration-200">
                                             <span className="shrink-0">{formatShiftTime(rule.starts_at)}</span>
@@ -1885,7 +1909,7 @@ export default function ShiftsPage() {
                                         type="button"
                                         aria-label="Удалить смену"
                                         data-shift-no-drag="true"
-                                        className="absolute right-1 top-1 z-20 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-white opacity-70 shadow-md transition hover:bg-rose-600 hover:opacity-100"
+                                        className="pointer-events-none absolute right-1 top-1 z-20 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-white opacity-0 shadow-md transition group-hover:pointer-events-auto group-hover:opacity-70 hover:bg-rose-600 hover:opacity-100"
                                         onPointerDown={(event) => {
                                           event.stopPropagation();
                                         }}
@@ -1907,7 +1931,7 @@ export default function ShiftsPage() {
                                 type="button"
                                 data-shift-cell="true"
                                 data-shift-interactive="true"
-                                className={`flex h-full w-full items-center justify-center border border-dashed border-[#D6BE8C]/75 bg-white/82 text-center text-xs leading-5 text-[#C6A163] shadow-sm transition-[background-color,border-color,width,min-height,padding,opacity,transform,border-radius] duration-300 ease-out hover:border-[#C7A25A]/80 hover:bg-[#FFF5E5] hover:text-[#8E6E2C] dark:border-border/70 dark:bg-background/35 dark:text-muted-foreground dark:hover:border-[#E5D3B3]/30 dark:hover:bg-background/55 dark:hover:text-foreground ${showShiftTimes ? "min-h-[36px] rounded-xl px-2" : "min-h-[24px] rounded-lg px-1"}`}
+                                className={`flex h-full w-full items-center justify-center border border-dashed border-[#D6BE8C]/75 bg-white/82 text-center text-xs leading-5 text-[#C6A163] shadow-sm transition-[background-color,border-color,min-height,padding,opacity,transform,border-radius] duration-300 ease-out hover:border-[#C7A25A]/80 hover:bg-[#FFF5E5] hover:text-[#8E6E2C] dark:border-border/70 dark:bg-background/35 dark:text-muted-foreground dark:hover:border-[#E5D3B3]/30 dark:hover:bg-background/55 dark:hover:text-foreground ${showShiftTimes ? "min-h-[36px] rounded-xl px-2" : "min-h-[24px] rounded-lg px-1"}`}
                                 onClick={() => {
                                   if (Date.now() < suppressGridClickUntilRef.current) {
                                     return;
@@ -1965,29 +1989,6 @@ export default function ShiftsPage() {
         panelClassName="max-w-[min(1860px,calc(100vw-2rem))]"
         bodyClassName="overflow-hidden"
       >
-        <div className="mb-4 flex justify-end">
-          <button
-            type="button"
-            onClick={() => setIsFullscreenUltraCompact((current) => !current)}
-            className="soft-button gap-3 px-3 py-2.5 text-sm"
-            aria-pressed={isFullscreenUltraCompact}
-          >
-            <span className="text-muted-foreground">{isFullscreenUltraCompact ? "Ultra-compact" : "Обычный вид"}</span>
-            <span
-              className={`relative h-6 w-11 rounded-full border transition-colors duration-300 ${
-                isFullscreenUltraCompact
-                  ? "border-[#D6BE8C] bg-[#FFF5DF] dark:border-[#E5D3B3]/30 dark:bg-[#E5D3B3]/10"
-                  : "border-border bg-background/70"
-              }`}
-            >
-              <span
-                className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-foreground transition-all duration-300 ${
-                  isFullscreenUltraCompact ? "left-[22px]" : "left-[4px]"
-                }`}
-              />
-            </span>
-          </button>
-        </div>
         <div className="overflow-hidden rounded-3xl border border-border bg-white dark:bg-[#171b24]">
           <div
             className="grid border-b border-border bg-white dark:bg-[#171b24]"
@@ -1997,9 +1998,18 @@ export default function ShiftsPage() {
               Сотрудник
             </div>
             {fullscreenVisibleDates.map((date) => (
-              <div key={`fullscreen-${formatDateParam(date)}`} className="border-r border-border px-1 py-3 text-center last:border-r-0">
+              <div
+                key={`fullscreen-${formatDateParam(date)}`}
+                className={`border-r border-border px-1 py-3 text-center last:border-r-0 ${
+                  getProductionDayTone(date) === "holiday"
+                    ? "bg-rose-50/85 dark:bg-rose-500/10"
+                    : getProductionDayTone(date) === "weekend"
+                      ? "bg-[#FFF8EE]/85 dark:bg-[#E5D3B3]/6"
+                      : ""
+                }`}
+              >
                 <div className="text-sm font-semibold text-foreground">{getDayNumberLabel(date)}</div>
-                <div className="mt-1 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{getWeekdayShortLabel(date)}</div>
+                <div className={`mt-1 text-[10px] uppercase tracking-[0.18em] ${getProductionDayTone(date) === "holiday" ? "text-rose-500 dark:text-rose-300" : "text-muted-foreground"}`}>{getWeekdayShortLabel(date)}</div>
               </div>
             ))}
           </div>
@@ -2018,7 +2028,16 @@ export default function ShiftsPage() {
                 const dateKey = formatDateParam(date);
                 const cellRules = rulesByCell.get(`${member.id}:${dateKey}`) || [];
                 return (
-                  <div key={`fullscreen-${member.id}-${dateKey}`} className="min-h-[48px] overflow-visible border-r border-border/80 px-0.5 py-0.5 last:border-r-0">
+                  <div
+                    key={`fullscreen-${member.id}-${dateKey}`}
+                    className={`min-h-[48px] overflow-visible border-r border-border/80 px-0.5 py-0.5 last:border-r-0 ${
+                      getProductionDayTone(date) === "holiday"
+                        ? "bg-rose-50/65 dark:bg-rose-500/6"
+                        : getProductionDayTone(date) === "weekend"
+                          ? "bg-[#FFF8EE]/65 dark:bg-[#E5D3B3]/4"
+                          : ""
+                    }`}
+                  >
                     {cellRules.length ? (
                       <div className="flex h-full flex-col gap-1">
                         {cellRules.map((rule) => (
@@ -2026,7 +2045,7 @@ export default function ShiftsPage() {
                             <button
                               type="button"
                               data-shift-cell="true"
-                              className={`relative flex h-full w-full items-center justify-center overflow-visible rounded-xl border border-[#D6BE8C]/55 bg-[#FBF3E4] px-1 py-1 text-center shadow-sm transition hover:bg-[#F6ECD8] dark:border-[#E5D3B3]/22 dark:bg-[#E5D3B3]/10 dark:hover:bg-[#E5D3B3]/16 ${isFullscreenUltraCompact ? "min-h-[40px]" : "min-h-[48px]"}`}
+                              className="relative flex h-full w-full items-center justify-center overflow-visible rounded-xl border border-[#D6BE8C]/55 bg-[#FBF3E4] px-1 py-1 text-center shadow-sm transition hover:bg-[#F6ECD8] dark:border-[#E5D3B3]/22 dark:bg-[#E5D3B3]/10 dark:hover:bg-[#E5D3B3]/16 min-h-[40px]"
                               onClick={() => {
                                 if (Date.now() < suppressGridClickUntilRef.current) {
                                   return;
@@ -2034,18 +2053,18 @@ export default function ShiftsPage() {
                                 openCellModal(member, date, rule);
                               }}
                             >
-                              {rule.comment && rule.comment_date === dateKey ? <span className="absolute -left-0.5 -top-0.5 z-10 h-2.5 w-2.5 rounded-full bg-[#E5D3B3] shadow-[0_0_0_2px_rgba(15,23,42,0.7)]" /> : null}
-                              <span className={`font-semibold leading-3 text-foreground ${isFullscreenUltraCompact ? "text-[8px]" : "text-[10px]"}`}>
-                                {formatShiftTime(rule.starts_at)}
+                              {rule.comment && rule.comment_date === dateKey ? <span className="absolute -left-1 -top-1 z-10 h-2 w-2 rounded-full bg-[#E5D3B3] shadow-[0_0_0_2px_rgba(15,23,42,0.7)]" /> : null}
+                              <span className="font-semibold leading-3 text-foreground text-[8px]">
+                                {formatShiftTime(rule.starts_at).replace(":", "")}
                                 <br />
-                                {formatShiftTime(rule.ends_at)}
+                                {formatShiftTime(rule.ends_at).replace(":", "")}
                               </span>
                             </button>
                             <button
                               type="button"
                               aria-label="Удалить смену"
                               data-shift-no-drag="true"
-                              className="absolute right-0.5 top-0.5 z-20 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-white opacity-70 shadow-md transition hover:bg-rose-600 hover:opacity-100"
+                              className="pointer-events-none absolute right-0.5 top-0.5 z-20 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-white opacity-0 shadow-md transition group-hover:pointer-events-auto group-hover:opacity-70 hover:bg-rose-600 hover:opacity-100"
                               onPointerDown={(event) => {
                                 event.stopPropagation();
                               }}
@@ -2100,7 +2119,7 @@ export default function ShiftsPage() {
           setActivePresetTimeField(null);
         }}
         title="Параметры смены"
-        panelClassName="max-w-xl"
+        panelClassName="max-w-lg"
       >
         <form
           className="space-y-5"
@@ -2114,7 +2133,7 @@ export default function ShiftsPage() {
             setIsPresetModalOpen(false);
           }}
         >
-          <div className="grid gap-4 md:grid-cols-[minmax(0,160px)_minmax(0,160px)] md:justify-between">
+          <div className="grid gap-4 md:grid-cols-[minmax(0,140px)_minmax(0,140px)] md:justify-between">
             <ShiftTimeField
               label="Начало смены"
               value={presetForm.startsAt}
@@ -2122,7 +2141,7 @@ export default function ShiftsPage() {
               onToggle={() => setActivePresetTimeField((current) => (current === "start" ? null : "start"))}
               onClose={() => setActivePresetTimeField(null)}
               onChange={(value) => setPresetForm((current) => ({ ...current, startsAt: value }))}
-              fieldClassName="md:max-w-[160px]"
+              fieldClassName="md:max-w-[140px]"
             />
             <ShiftTimeField
               label="Конец смены"
@@ -2131,7 +2150,7 @@ export default function ShiftsPage() {
               onToggle={() => setActivePresetTimeField((current) => (current === "end" ? null : "end"))}
               onClose={() => setActivePresetTimeField(null)}
               onChange={(value) => setPresetForm((current) => ({ ...current, endsAt: value }))}
-              fieldClassName="md:max-w-[160px]"
+              fieldClassName="md:max-w-[140px]"
             />
           </div>
 
@@ -2155,7 +2174,7 @@ export default function ShiftsPage() {
         }}
         title="Время реакции обработки брони"
         description="Настройте время реакции обработки заявок: сколько держать бронь, когда включать эскалацию и сколько повторов отправлять до уведомления управляющего."
-        panelClassName="max-w-4xl"
+        panelClassName="max-w-3xl"
       >
         <form
           className="space-y-5"
@@ -2237,14 +2256,14 @@ export default function ShiftsPage() {
           setActiveRulePicker(null);
         }}
         title="Параметры смены"
-        panelClassName="max-w-4xl"
+        panelClassName="max-w-3xl"
       >
         <form className="space-y-5" onSubmit={handleSaveRule}>
           {ruleError ? (
             <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{ruleError}</div>
           ) : null}
 
-          <div className="grid gap-4 md:grid-cols-[minmax(0,170px)_minmax(0,170px)_minmax(0,170px)] md:justify-between">
+          <div className="grid gap-4 md:grid-cols-[minmax(0,150px)_minmax(0,150px)_minmax(0,150px)] md:justify-between">
             <ShiftTimeField
               label="Начало смены"
               value={ruleForm.startsAt}
@@ -2252,7 +2271,7 @@ export default function ShiftsPage() {
               onToggle={() => setActiveRulePicker((current) => (current === "start" ? null : "start"))}
               onClose={() => setActiveRulePicker(null)}
               onChange={(value) => setRuleForm((current) => ({ ...current, startsAt: value }))}
-              fieldClassName="md:max-w-[170px]"
+              fieldClassName="md:max-w-[150px]"
             />
             <ShiftDateField
               label="Дата окончания"
@@ -2262,7 +2281,7 @@ export default function ShiftsPage() {
               onToggle={() => setActiveRulePicker((current) => (current === "date" ? null : "date"))}
               onClose={() => setActiveRulePicker(null)}
               onChange={(value) => setRuleForm((current) => ({ ...current, endsOnDate: value }))}
-              fieldClassName="md:max-w-[170px]"
+              fieldClassName="md:max-w-[150px]"
             />
             <ShiftTimeField
               label="Конец смены"
@@ -2271,7 +2290,7 @@ export default function ShiftsPage() {
               onToggle={() => setActiveRulePicker((current) => (current === "end" ? null : "end"))}
               onClose={() => setActiveRulePicker(null)}
               onChange={(value) => setRuleForm((current) => ({ ...current, endsAt: value }))}
-              fieldClassName="md:max-w-[170px]"
+              fieldClassName="md:max-w-[150px]"
             />
           </div>
 
@@ -2336,7 +2355,7 @@ export default function ShiftsPage() {
         onConfirm={(comment) => submitSensitiveChange("pending_review", comment)}
         onApply={(comment) => submitSensitiveChange("apply_with_responsibility", comment)}
       />
-      </> : null}
+      </>}
     </PageMotion>
   );
 }

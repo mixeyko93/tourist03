@@ -4,9 +4,11 @@ import { useNavigate } from "react-router";
 import { EmptyState } from "../components/EmptyState";
 import { ModalShell } from "../components/ModalShell";
 import { PageMotion } from "../components/PageMotion";
+import { PageLoadingState } from "../components/PageLoadingState";
 import { PageRefreshOverlay } from "../components/PageRefreshOverlay";
 import { SectionHeading } from "../components/SectionHeading";
 import { usePageLoadState } from "../components/usePageLoadState";
+import { getProductionDayTone } from "../productionCalendar";
 import {
   createCrmBooking,
   fetchCrmCalendarFeed,
@@ -763,7 +765,17 @@ export default function CalendarPage() {
 
   return (
     <PageMotion className="space-y-6" isReady={isPageVisible}>
-      {!showInitialSkeleton ? <>
+      {showInitialSkeleton ? (
+        <>
+          <SectionHeading title="Календарь размещения" description="Живой календарь показывает реальные бронирования по выбранной базе, чтобы быстро видеть загрузку и конфликты." />
+          <section className="glass-card p-5 md:p-6">
+            <PageLoadingState blocks={2} columnsClassName="grid-cols-1" blockHeightClassName="h-44" />
+            <div className="mt-5">
+              <PageLoadingState blocks={1} columnsClassName="grid-cols-1" blockHeightClassName="h-[26rem]" />
+            </div>
+          </section>
+        </>
+      ) : <>
       {successMessage ? (
         <div className="fixed inset-x-0 top-20 z-40 flex justify-center px-4">
           <div className="rounded-2xl border border-emerald-500/35 bg-emerald-500/14 px-5 py-3 text-sm font-medium text-emerald-200 shadow-lg shadow-black/10 backdrop-blur-xl dark:text-emerald-100">
@@ -934,9 +946,18 @@ export default function CalendarPage() {
                   </div>
                   <div className="grid flex-1" style={{ gridTemplateColumns: `repeat(${visibleDates.length}, minmax(${dayColumnWidth}px, 1fr))` }}>
                     {visibleDates.map((value) => (
-                      <div key={formatDateParam(value)} className="border-r border-border px-2 py-3 text-center last:border-r-0">
+                      <div
+                        key={formatDateParam(value)}
+                        className={`border-r border-border px-2 py-3 text-center last:border-r-0 ${
+                          getProductionDayTone(value) === "holiday"
+                            ? "bg-rose-50/85 dark:bg-rose-500/10"
+                            : getProductionDayTone(value) === "weekend"
+                              ? "bg-[#FFF8EE]/85 dark:bg-[#E5D3B3]/6"
+                              : ""
+                        }`}
+                      >
                         <div className="text-sm font-semibold text-foreground">{getDayNumberLabel(value)}</div>
-                        <div className="mt-1 text-[10px] uppercase tracking-[0.18em] text-muted-foreground">{getWeekdayLabel(value)}</div>
+                        <div className={`mt-1 text-[10px] uppercase tracking-[0.18em] ${getProductionDayTone(value) === "holiday" ? "text-rose-500 dark:text-rose-300" : "text-muted-foreground"}`}>{getWeekdayLabel(value)}</div>
                       </div>
                     ))}
                   </div>
@@ -974,7 +995,13 @@ export default function CalendarPage() {
                             type="button"
                             onDoubleClick={() => openCreateBooking(room, value)}
                             className={`h-18 border-r border-border/80 text-transparent last:border-r-0 ${
-                              highlightedRoomId === room.id ? "bg-[#E5D3B3]/5 dark:bg-[#E5D3B3]/3" : "bg-transparent"
+                              getProductionDayTone(value) === "holiday"
+                                ? "bg-rose-50/70 dark:bg-rose-500/6"
+                                : getProductionDayTone(value) === "weekend"
+                                  ? "bg-[#FFF8EE]/70 dark:bg-[#E5D3B3]/4"
+                                  : highlightedRoomId === room.id
+                                    ? "bg-[#E5D3B3]/5 dark:bg-[#E5D3B3]/3"
+                                    : "bg-transparent"
                             }`}
                             aria-label={`Создать бронь для ${room.title} на ${formatDateLabel(formatDateParam(value))}`}
                           >
@@ -1292,7 +1319,7 @@ export default function CalendarPage() {
           </div>
         ) : null}
       </ModalShell>
-      </> : null}
+      </>}
     </PageMotion>
   );
 }
