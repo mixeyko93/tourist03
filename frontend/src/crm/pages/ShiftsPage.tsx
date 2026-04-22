@@ -75,6 +75,11 @@ type DerivedShiftWindow = {
   is_night_shift: boolean;
 };
 
+type PendingRuleDeletion = {
+  rule: CrmShiftRule;
+  campId: number;
+  expiresAt: number;
+};
 
 type ViewMode = "month" | "week";
 
@@ -602,6 +607,8 @@ export default function ShiftsPage() {
   const [scrollThumbWidth, setScrollThumbWidth] = useState(0);
   const [scrollThumbOffset, setScrollThumbOffset] = useState(0);
   const [tooltipFlip, setTooltipFlip] = useState<Map<string, boolean>>(new Map());
+  const [pendingDeletion, setPendingDeletion] = useState<PendingRuleDeletion | null>(null);
+  const [pendingDeletionSeconds, setPendingDeletionSeconds] = useState(5);
   const gridScrollRef = useRef<HTMLDivElement | null>(null);
   const trackRef = useRef<HTMLDivElement | null>(null);
   const scrollIndicatorTimeoutRef = useRef<number | null>(null);
@@ -611,6 +618,9 @@ export default function ShiftsPage() {
   const gridDragPointerIdRef = useRef<number | null>(null);
   const gridDragStartXRef = useRef(0);
   const gridDragStartScrollLeftRef = useRef(0);
+  const gridDragActiveRef = useRef(false);
+  const pendingDeletionTimeoutRef = useRef<number | null>(null);
+  const pendingDeletionIntervalRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -618,6 +628,65 @@ export default function ShiftsPage() {
     }
     window.localStorage.setItem("tourist03.crm.shifts.show-times", showShiftTimes ? "1" : "0");
   }, [showShiftTimes]);
+
+  function clearPendingDeletionTimers() {
+    if (pendingDeletionTimeoutRef.current !== null) {
+      window.clearTimeout(pendingDeletionTimeoutRef.current);
+      pendingDeletionTimeoutRef.current = null;
+    }
+    if (pendingDeletionIntervalRef.current !== null) {
+      window.clearInterval(pendingDeletionIntervalRef.current);
+      pendingDeletionIntervalRef.current = null;
+    }
+  }
+
+  async function commitPendingDeletion(deletion: PendingRuleDeletion, mode: "timeout" | "replace" = "timeout") {
+    try {
+      clearPendingDeletionTimers();
+      setDeletingRuleId(deletion.rule.id);
+      await deleteCrmShiftRule(deletion.campId, deletion.rule.id);
+      setRules((current) => current.filter((item) => item.id !== deletion.rule.id));
+      setPendingDeletion((current) => (current?.rule.id === deletion.rule.id ? null : current));
+      setPendingDeletionSeconds(5);
+      if (mode === "timeout") {
+        setSuccessMessage(`Смена удалена: ${describeRule(deletion.rule)}`);
+      }
+      void refreshShiftsSilently(deletion.campId);
+    } catch (error) {
+      setPendingDeletion((current) => (current?.rule.id === deletion.rule.id ? null : current));
+      setPendingDeletionSeconds(5);
+      setErrorMessage(error instanceof Error ? error.message : "Не удалось удалить смену");
+    } finally {
+      setDeletingRuleId(null);
+    }
+  }
+
+  function handleUndoPendingDeletion() {
+    clearPendingDeletionTimers();
+    setPendingDeletion(null);
+    setPendingDeletionSeconds(5);
+    setSuccessMessage("Удаление смены отменено.");
+  }
+
+  useEffect(() => {
+    if (!pendingDeletion) {
+      clearPendingDeletionTimers();
+      return;
+    }
+
+    const tick = () => {
+      setPendingDeletionSeconds(Math.max(0, Math.ceil((pendingDeletion.expiresAt - Date.now()) / 1000)));
+    };
+    tick();
+    pendingDeletionIntervalRef.current = window.setInterval(tick, 250);
+    pendingDeletionTimeoutRef.current = window.setTimeout(() => {
+      void commitPendingDeletion(pendingDeletion, "timeout");
+    }, Math.max(0, pendingDeletion.expiresAt - Date.now()));
+
+    return () => clearPendingDeletionTimers();
+  }, [pendingDeletion]);
+
+  useEffect(() => () => clearPendingDeletionTimers(), []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -698,9 +767,17 @@ export default function ShiftsPage() {
     [staff],
   );
 
+  const visibleRules = useMemo(
+    () =>
+      pendingDeletion && pendingDeletion.campId === selectedCampId
+        ? rules.filter((rule) => rule.id !== pendingDeletion.rule.id)
+        : rules,
+    [pendingDeletion, rules, selectedCampId],
+  );
+
   const rulesByCell = useMemo(() => {
     const map = new Map<string, CrmShiftRule[]>();
-    rules.forEach((rule) => {
+    visibleRules.forEach((rule) => {
       if (!rule.shift_date) {
         return;
       }
@@ -720,7 +797,7 @@ export default function ShiftsPage() {
     });
 
     return map;
-  }, [rules]);
+  }, [visibleRules]);
 
   const currentTimestamp = useMemo(() => {
     const parsedNow = overview?.now ? new Date(overview.now) : new Date();
@@ -736,7 +813,7 @@ export default function ShiftsPage() {
   const referenceDateKey = currentShiftDateKey || fallbackTodayDateKey;
 
   const derivedRuleWindows = useMemo<DerivedShiftWindow[]>(() => {
-    return rules
+    return visibleRules
       .filter((rule) => rule.is_active && rule.shift_date)
       .map((rule) => {
         const shiftDate = rule.shift_date!;
@@ -768,7 +845,7 @@ export default function ShiftsPage() {
         }
         return left.admin_name.localeCompare(right.admin_name, "ru");
       });
-  }, [rules]);
+  }, [visibleRules]);
 
   const todayScheduledRules = useMemo(() => {
     if (!referenceDateKey) {
@@ -839,6 +916,9 @@ export default function ShiftsPage() {
     : "";
 
   useEffect(() => {
+    if (pendingDeletion) {
+      return;
+    }
     if (!successMessage && !errorMessage) {
       return;
     }
@@ -847,7 +927,7 @@ export default function ShiftsPage() {
       setErrorMessage("");
     }, 2600);
     return () => window.clearTimeout(timeoutId);
-  }, [errorMessage, successMessage]);
+  }, [errorMessage, pendingDeletion, successMessage]);
 
   async function refreshShiftsSilently(campId: number) {
     try {
@@ -1068,7 +1148,7 @@ export default function ShiftsPage() {
       return;
     }
     const target = event.target as HTMLElement;
-    if (target.closest("[data-shift-cell='true']")) {
+    if (target.closest("[data-shift-no-drag='true']")) {
       return;
     }
 
@@ -1080,9 +1160,7 @@ export default function ShiftsPage() {
     gridDragPointerIdRef.current = event.pointerId;
     gridDragStartXRef.current = event.clientX;
     gridDragStartScrollLeftRef.current = gridNode.scrollLeft;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    setIsGridDragging(true);
-    activateScrollIndicator();
+    gridDragActiveRef.current = false;
   };
 
   const handleGridPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -1094,6 +1172,15 @@ export default function ShiftsPage() {
       return;
     }
     const deltaX = event.clientX - gridDragStartXRef.current;
+    if (!gridDragActiveRef.current) {
+      if (Math.abs(deltaX) < 5) {
+        return;
+      }
+      gridDragActiveRef.current = true;
+      event.currentTarget.setPointerCapture(event.pointerId);
+      setIsGridDragging(true);
+      activateScrollIndicator();
+    }
     gridNode.scrollLeft = gridDragStartScrollLeftRef.current - deltaX;
     syncScrollFromGrid();
   };
@@ -1103,8 +1190,11 @@ export default function ShiftsPage() {
       return;
     }
     gridDragPointerIdRef.current = null;
+    gridDragActiveRef.current = false;
     setIsGridDragging(false);
-    event.currentTarget.releasePointerCapture(event.pointerId);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
   };
 
   async function handleSaveRule(event: FormEvent<HTMLFormElement>) {
@@ -1189,20 +1279,22 @@ export default function ShiftsPage() {
       return;
     }
     try {
-      setDeletingRuleId(rule.id);
       setRuleError("");
       setErrorMessage("");
-      await deleteCrmShiftRule(selectedCampId, rule.id);
-      setRules((current) => current.filter((item) => item.id !== rule.id));
-      setSuccessMessage(`Смена удалена: ${describeRule(rule)}`);
+      setSuccessMessage("");
+      if (pendingDeletion) {
+        await commitPendingDeletion(pendingDeletion, "replace");
+      }
+      setPendingDeletion({
+        rule,
+        campId: selectedCampId,
+        expiresAt: Date.now() + 5000,
+      });
       setIsRuleModalOpen(false);
       setEditingRule(null);
       setActiveTarget(null);
-      void refreshShiftsSilently(selectedCampId);
     } catch (error) {
       setRuleError(error instanceof Error ? error.message : "Не удалось удалить смену");
-    } finally {
-      setDeletingRuleId(null);
     }
   }
 
@@ -1288,16 +1380,31 @@ export default function ShiftsPage() {
   return (
     <PageMotion className="space-y-6" isReady={isPageVisible}>
       {!showInitialSkeleton ? <>
-      {successMessage || errorMessage ? (
+      {pendingDeletion || successMessage || errorMessage ? (
         <div className="pointer-events-none fixed inset-x-0 top-4 z-40 flex justify-center px-4">
           <div
-            className={`max-w-xl rounded-2xl border px-5 py-3 text-sm shadow-2xl backdrop-blur-xl transition ${
+            className={`pointer-events-auto flex max-w-xl items-center gap-3 rounded-2xl border px-5 py-3 text-sm shadow-2xl backdrop-blur-xl transition ${
               errorMessage
                 ? "border-rose-300 bg-rose-50/96 text-rose-900 dark:border-rose-500/30 dark:bg-rose-500/18 dark:text-rose-100"
+                : pendingDeletion
+                  ? "border-amber-300 bg-amber-50/96 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/18 dark:text-amber-100"
                 : "border-emerald-300 bg-emerald-50/96 text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/18 dark:text-emerald-100"
             }`}
           >
-            {errorMessage || successMessage}
+            <span className="min-w-0 flex-1">
+              {pendingDeletion
+                ? `Смена будет удалена через ${pendingDeletionSeconds} сек.`
+                : errorMessage || successMessage}
+            </span>
+            {pendingDeletion ? (
+              <button
+                type="button"
+                className="soft-button px-3 py-1.5 text-xs"
+                onClick={handleUndoPendingDeletion}
+              >
+                Отменить
+              </button>
+            ) : null}
           </div>
         </div>
       ) : null}
@@ -1574,7 +1681,7 @@ export default function ShiftsPage() {
                                         }}
                                         onDoubleClick={() => openCellModal(member, date, rule)}
                                       >
-                                        {rule.comment && rule.comment_date === dateKey ? <span className="absolute left-2 top-2 h-2.5 w-2.5 rounded-full bg-[#E5D3B3]" /> : null}
+                                        {rule.comment && rule.comment_date === dateKey ? <span className="absolute left-1.5 top-1.5 h-3.5 w-3.5 rounded-full bg-[#E5D3B3] shadow-[0_0_0_2px_rgba(15,23,42,0.55)]" /> : null}
                                         {showShiftTimes ? (
                                           <span className="flex min-w-0 items-center gap-0.5 overflow-hidden text-[0.75rem] font-semibold tracking-[-0.02em] text-foreground transition-opacity duration-200">
                                             <span className="shrink-0">{rule.starts_at?.slice(0, 5).replace(/^0/, "").replace(/:00$/, "")}</span>
@@ -1594,8 +1701,15 @@ export default function ShiftsPage() {
                                       <button
                                         type="button"
                                         aria-label="Удалить смену"
+                                        data-shift-no-drag="true"
                                         className="absolute -right-2 -top-2 z-20 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-white opacity-0 shadow-md transition hover:bg-rose-600 group-hover:opacity-100"
-                                        onClick={(event) => { event.stopPropagation(); void handleDeleteRule(rule); }}
+                                        onPointerDown={(event) => {
+                                          event.stopPropagation();
+                                        }}
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          void handleDeleteRule(rule);
+                                        }}
                                       >
                                         <svg viewBox="0 0 10 10" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                                           <line x1="2.5" y1="2.5" x2="7.5" y2="7.5" /><line x1="7.5" y1="2.5" x2="2.5" y2="7.5" />
