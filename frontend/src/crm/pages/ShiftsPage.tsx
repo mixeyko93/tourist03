@@ -60,6 +60,21 @@ type PendingSensitiveChange = {
   successApplied: string;
 };
 
+type DerivedShiftWindow = {
+  rule_id: number;
+  admin_id: number;
+  admin_name: string;
+  shift_date: string;
+  ends_on_date: string;
+  starts_at: string;
+  ends_at: string;
+  starts_time: string;
+  ends_time: string;
+  starts_at_ms: number;
+  ends_at_ms: number;
+  is_night_shift: boolean;
+};
+
 
 type ViewMode = "month" | "week";
 
@@ -205,6 +220,10 @@ function buildCalendarMatrix(viewDate: Date) {
 function splitTimeParts(value: string) {
   const [hours = "09", minutes = "00"] = value.split(":");
   return { hours, minutes };
+}
+
+function buildRuleDateTime(value: string, time: string) {
+  return new Date(`${value}T${time}`);
 }
 
 
@@ -690,59 +709,118 @@ export default function ShiftsPage() {
     return map;
   }, [rules]);
 
+  const currentTimestamp = useMemo(() => {
+    const parsedNow = overview?.now ? new Date(overview.now) : new Date();
+    return Number.isNaN(parsedNow.getTime()) ? Date.now() : parsedNow.getTime();
+  }, [overview?.now]);
+
   const currentShiftDateKey = useMemo(
     () => toDateOnlyKey(overview?.now, overview?.timezone || settingsForm.timeZone),
     [overview?.now, overview?.timezone, settingsForm.timeZone],
   );
 
+  const fallbackTodayDateKey = useMemo(() => formatDateParam(new Date()), []);
+  const referenceDateKey = currentShiftDateKey || fallbackTodayDateKey;
+
+  const derivedRuleWindows = useMemo<DerivedShiftWindow[]>(() => {
+    return rules
+      .filter((rule) => rule.is_active && rule.shift_date)
+      .map((rule) => {
+        const shiftDate = rule.shift_date!;
+        const endsOnDate = rule.ends_on_date || shiftDate;
+        const startsAt = buildRuleDateTime(shiftDate, rule.starts_at);
+        const endsAt = buildRuleDateTime(endsOnDate, rule.ends_at);
+        return {
+          rule_id: rule.id,
+          admin_id: rule.admin_id,
+          admin_name: rule.admin_name,
+          shift_date: shiftDate,
+          ends_on_date: endsOnDate,
+          starts_at: `${shiftDate}T${rule.starts_at}`,
+          ends_at: `${endsOnDate}T${rule.ends_at}`,
+          starts_time: rule.starts_at.slice(0, 5) || rule.starts_at,
+          ends_time: rule.ends_at.slice(0, 5) || rule.ends_at,
+          starts_at_ms: startsAt.getTime(),
+          ends_at_ms: endsAt.getTime(),
+          is_night_shift: rule.is_night_shift,
+        };
+      })
+      .filter((rule) => !Number.isNaN(rule.starts_at_ms) && !Number.isNaN(rule.ends_at_ms))
+      .sort((left, right) => {
+        if (left.starts_at_ms !== right.starts_at_ms) {
+          return left.starts_at_ms - right.starts_at_ms;
+        }
+        if (left.ends_at_ms !== right.ends_at_ms) {
+          return left.ends_at_ms - right.ends_at_ms;
+        }
+        return left.admin_name.localeCompare(right.admin_name, "ru");
+      });
+  }, [rules]);
+
   const todayScheduledRules = useMemo(() => {
-    if (!currentShiftDateKey) {
+    if (!referenceDateKey) {
       return [];
     }
-    return rules
-      .filter((rule) => {
-        if (!rule.is_active || !rule.shift_date) {
-          return false;
-        }
-        const startDateKey = rule.shift_date;
-        const endDateKey = rule.ends_on_date || rule.shift_date;
-        return startDateKey <= currentShiftDateKey && currentShiftDateKey <= endDateKey;
-      })
-      .sort((left, right) => `${left.starts_at}-${left.ends_at}`.localeCompare(`${right.starts_at}-${right.ends_at}`))
+    return derivedRuleWindows
+      .filter((rule) => rule.shift_date <= referenceDateKey && referenceDateKey <= rule.ends_on_date)
       .map((rule) => ({
-        rule_id: rule.id,
+        rule_id: rule.rule_id,
         admin_id: rule.admin_id,
         admin_name: rule.admin_name,
-        weekday: getWeekdayIndex(parseDateParam(currentShiftDateKey)),
-        weekday_label: weekdayLabels[getWeekdayIndex(parseDateParam(currentShiftDateKey))] || "Сегодня",
+        weekday: getWeekdayIndex(parseDateParam(referenceDateKey)),
+        weekday_label: weekdayLabels[getWeekdayIndex(parseDateParam(referenceDateKey))] || "Сегодня",
         shift_date: rule.shift_date,
-        ends_on_date: rule.ends_on_date || rule.shift_date,
-        starts_at: rule.shift_date ? `${rule.shift_date}T${rule.starts_at}` : rule.starts_at,
-        ends_at: (rule.ends_on_date || rule.shift_date) ? `${rule.ends_on_date || rule.shift_date}T${rule.ends_at}` : rule.ends_at,
-        starts_time: rule.starts_at?.slice(0, 5) || rule.starts_at,
-        ends_time: rule.ends_at?.slice(0, 5) || rule.ends_at,
+        ends_on_date: rule.ends_on_date,
+        starts_at: rule.starts_at,
+        ends_at: rule.ends_at,
+        starts_time: rule.starts_time,
+        ends_time: rule.ends_time,
         is_night_shift: rule.is_night_shift,
-        is_active: rule.is_active,
-        comment: rule.comment || "",
+        is_active: true,
+        comment: "",
         timezone: overview?.timezone || settingsForm.timeZone,
       }));
-  }, [currentShiftDateKey, overview?.timezone, rules, settingsForm.timeZone]);
+  }, [derivedRuleWindows, overview?.timezone, referenceDateKey, settingsForm.timeZone]);
 
   const todayUpcomingRules = useMemo(
-    () => (overview?.upcoming_windows || []).filter((rule) => rule.shift_date === currentShiftDateKey),
-    [currentShiftDateKey, overview?.upcoming_windows],
+    () => (overview?.upcoming_windows || []).filter((rule) => rule.shift_date === referenceDateKey),
+    [overview?.upcoming_windows, referenceDateKey],
   );
 
-  const activeRules = overview?.active_rules || [];
-  const nextRule = overview?.next_rule || null;
-  const visibleActiveRules = activeRules.length ? activeRules : (todayUpcomingRules.length ? todayUpcomingRules : todayScheduledRules);
+  const activeRules = useMemo(
+    () =>
+      derivedRuleWindows
+        .filter((rule) => rule.starts_at_ms <= currentTimestamp && currentTimestamp < rule.ends_at_ms)
+        .map((rule) => ({
+          rule_id: rule.rule_id,
+          admin_id: rule.admin_id,
+          admin_name: rule.admin_name,
+          weekday: getWeekdayIndex(parseDateParam(rule.shift_date)),
+          weekday_label: weekdayLabels[getWeekdayIndex(parseDateParam(rule.shift_date))] || "Сегодня",
+          shift_date: rule.shift_date,
+          ends_on_date: rule.ends_on_date,
+          starts_at: rule.starts_at,
+          ends_at: rule.ends_at,
+          starts_time: rule.starts_time,
+          ends_time: rule.ends_time,
+          is_night_shift: rule.is_night_shift,
+          is_active: true,
+          comment: "",
+          timezone: overview?.timezone || settingsForm.timeZone,
+        })),
+    [currentTimestamp, derivedRuleWindows, overview?.timezone, settingsForm.timeZone],
+  );
+
   const nextRuleGroup = useMemo(() => {
+    const nextRule = derivedRuleWindows.find((rule) => rule.starts_at_ms > currentTimestamp);
     if (!nextRule) {
       return [];
     }
-    const upcoming = overview?.upcoming_windows || [];
-    return upcoming.filter((rule) => rule.starts_at === nextRule.starts_at && rule.ends_at === nextRule.ends_at);
-  }, [nextRule, overview?.upcoming_windows]);
+    return derivedRuleWindows.filter((rule) => rule.starts_at_ms === nextRule.starts_at_ms && rule.ends_at_ms === nextRule.ends_at_ms);
+  }, [currentTimestamp, derivedRuleWindows]);
+
+  const nextRule = nextRuleGroup[0] || null;
+  const visibleActiveRules = activeRules.length ? activeRules : (todayUpcomingRules.length ? todayUpcomingRules : todayScheduledRules);
   const nextRuleSummaryLine = nextRule
     ? `${formatShortDateWithWeekday(nextRule.starts_at, overview?.timezone || settingsForm.timeZone)} · с ${nextRule.starts_time} до ${nextRule.ends_time}`
     : "";
