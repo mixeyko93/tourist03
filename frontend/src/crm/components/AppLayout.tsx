@@ -317,7 +317,7 @@ export default function AppLayout() {
         </aside>
 
         <main className="crm-ambient relative min-w-0 flex-1 overflow-y-auto px-4 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] md:px-6 md:py-6 lg:px-8">
-          <div className="mx-auto flex min-h-full min-w-0 w-full max-w-[1600px] flex-col gap-6">
+          <div className="mx-auto flex min-h-full min-w-0 w-full max-w-[2100px] flex-col gap-6">
             <Outlet />
           </div>
         </main>

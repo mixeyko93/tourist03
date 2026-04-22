@@ -101,7 +101,7 @@ export default function AdminLayout() {
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <header className="sticky top-0 z-20 border-b border-border bg-card/88 backdrop-blur-xl">
-        <div className="mx-auto flex min-w-0 max-w-[1600px] flex-col gap-4 px-4 py-4 md:px-6 lg:px-8">
+        <div className="mx-auto flex min-w-0 max-w-[2100px] flex-col gap-4 px-4 py-4 md:px-6 lg:px-8">
           <div className="flex min-w-0 flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div className="min-w-0 space-y-1">
               <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">Tourist_03 Superadmin</p>
@@ -170,7 +170,7 @@ export default function AdminLayout() {
       </header>
 
       <main className="crm-ambient min-w-0 flex-1 px-4 py-5 md:px-6 md:py-6 lg:px-8">
-        <div className="mx-auto flex min-w-0 w-full max-w-[1600px] flex-col gap-6">
+        <div className="mx-auto flex min-w-0 w-full max-w-[2100px] flex-col gap-6">
           <Outlet />
         </div>
       </main>
