@@ -234,6 +234,22 @@ function formatShiftTime(value: string) {
   return value.slice(0, 5).replace(/^0/, "").replace(/:00$/, "");
 }
 
+function formatShiftSummary(
+  rule: {
+    starts_at: string;
+    starts_time: string;
+    ends_time: string;
+    ends_on_date?: string | null;
+  },
+  timeZone?: string,
+) {
+  const startLabel = formatShortDateWithWeekday(rule.starts_at, timeZone);
+  const startDateKey = toDateOnlyKey(rule.starts_at, timeZone);
+  const endDateLabel =
+    rule.ends_on_date && rule.ends_on_date !== startDateKey ? ` ${formatDateButtonLabel(rule.ends_on_date).slice(0, 5)}` : "";
+  return `${startLabel} · с ${formatDisplayTime(rule.starts_time)} до ${formatDisplayTime(rule.ends_time)}${endDateLabel}`;
+}
+
 function getMonthGridStart(value: Date) {
   return startOfWeek(new Date(value.getFullYear(), value.getMonth(), 1));
 }
@@ -1011,9 +1027,7 @@ export default function ShiftsPage() {
 
   const nextRule = nextRuleGroup[0] || null;
   const visibleActiveRules = activeRules.length ? activeRules : (todayUpcomingRules.length ? todayUpcomingRules : todayScheduledRules);
-  const nextRuleSummaryLine = nextRule
-    ? `${formatShortDateWithWeekday(nextRule.starts_at, overview?.timezone || settingsForm.timeZone)} · с ${formatDisplayTime(nextRule.starts_time)} до ${formatDisplayTime(nextRule.ends_time)}`
-    : "";
+  const nextRuleSummaryLine = nextRule ? formatShiftSummary(nextRule, overview?.timezone || settingsForm.timeZone) : "";
 
   useEffect(() => {
     if (pendingDeletion) {
@@ -1629,7 +1643,8 @@ export default function ShiftsPage() {
                       <div key={`${rule.rule_id}-${rule.starts_at}`}>
                         <p className="text-sm font-semibold text-foreground">{rule.admin_name}</p>
                         <p className="mt-0.5 text-sm text-muted-foreground">
-                          {formatShortDateWithWeekday(rule.starts_at, overview?.timezone || settingsForm.timeZone)} · с {formatDisplayTime(rule.starts_time)} до {formatDisplayTime(rule.ends_time)}{rule.is_night_shift ? " · Ночная" : ""}
+                          {formatShiftSummary(rule, overview?.timezone || settingsForm.timeZone)}
+                          {rule.is_night_shift ? " · Ночная" : ""}
                         </p>
                       </div>
                     ))}
@@ -1669,10 +1684,10 @@ export default function ShiftsPage() {
               <button
                 type="button"
                 aria-label="Изменить параметры реакции"
-                className="soft-button absolute right-6 top-3.5 flex h-8 w-8 items-center justify-center rounded-full px-0 py-0"
+                className="soft-button absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full px-0 py-0"
                 onClick={() => setIsSettingsModalOpen(true)}
               >
-                <PencilLine className="h-3.5 w-3.5" />
+                <PencilLine className="h-3 w-3" />
               </button>
               <div className="flex items-start gap-2 pr-14 text-sm font-medium text-foreground">
                   <Clock3 className="h-4 w-4 text-[#E5D3B3]" />
@@ -1804,7 +1819,7 @@ export default function ShiftsPage() {
                   className="grid border-b border-border bg-white dark:bg-card"
                   style={{ gridTemplateColumns: `${staffColumnWidth}px repeat(${visibleDates.length}, minmax(${dayColumnWidth}px, 1fr))` }}
                 >
-                  <div className="sticky left-0 z-40 flex min-h-[72px] items-center border-r border-border bg-white px-5 py-4 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground dark:bg-[#171b24]">
+                  <div className="sticky left-0 z-50 flex min-h-[78px] items-center border-r border-border bg-white px-5 py-4 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground dark:bg-[#171b24]">
                     Сотрудник
                   </div>
                   {visibleDates.map((date) => (
@@ -1832,9 +1847,9 @@ export default function ShiftsPage() {
                       className="grid border-b border-border last:border-b-0"
                       style={{ gridTemplateColumns: `${staffColumnWidth}px repeat(${visibleDates.length}, minmax(${dayColumnWidth}px, 1fr))` }}
                     >
-                      <div className="sticky left-0 z-40 flex flex-col justify-center border-r border-border bg-white px-5 py-1 dark:bg-[#171b24]">
-                        <p className="text-[1.05rem] font-semibold leading-tight text-foreground">{member.display_name}</p>
-                        <p className="mt-0.5 text-[9px] uppercase tracking-[0.14em] text-muted-foreground">{member.role_label}</p>
+                      <div className="sticky left-0 z-50 flex min-h-[64px] flex-col justify-center border-r border-border bg-white px-5 py-3 dark:bg-[#171b24]">
+                        <p className="text-[1.18rem] font-semibold leading-tight text-foreground">{member.display_name}</p>
+                        <p className="mt-1 text-[8px] uppercase tracking-[0.16em] text-muted-foreground">{member.role_label}</p>
                       </div>
 
                       {visibleDates.map((date) => {
@@ -1909,7 +1924,7 @@ export default function ShiftsPage() {
                                         type="button"
                                         aria-label="Удалить смену"
                                         data-shift-no-drag="true"
-                                        className="pointer-events-none absolute right-1 top-1 z-20 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-white opacity-0 shadow-md transition group-hover:pointer-events-auto group-hover:opacity-70 hover:bg-rose-600 hover:opacity-100"
+                                        className={`pointer-events-none absolute z-20 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-white opacity-0 shadow-md transition group-hover:pointer-events-auto group-hover:opacity-80 hover:bg-rose-600 hover:opacity-100 ${showShiftTimes ? "right-1 top-1" : "-right-1.5 -top-1.5"}`}
                                         onPointerDown={(event) => {
                                           event.stopPropagation();
                                         }}
@@ -1994,7 +2009,7 @@ export default function ShiftsPage() {
             className="grid border-b border-border bg-white dark:bg-[#171b24]"
             style={{ gridTemplateColumns: `${fullscreenStaffColumnWidth}px repeat(${fullscreenVisibleDates.length}, minmax(${fullscreenDayColumnWidth}px, 1fr))` }}
           >
-            <div className="sticky left-0 z-40 flex min-h-[64px] items-center border-r border-border bg-white px-5 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground dark:bg-[#171b24]">
+            <div className="sticky left-0 z-50 flex min-h-[72px] items-center border-r border-border bg-white px-5 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground dark:bg-[#171b24]">
               Сотрудник
             </div>
             {fullscreenVisibleDates.map((date) => (
@@ -2020,9 +2035,9 @@ export default function ShiftsPage() {
               className="grid border-b border-border last:border-b-0"
               style={{ gridTemplateColumns: `${fullscreenStaffColumnWidth}px repeat(${fullscreenVisibleDates.length}, minmax(${fullscreenDayColumnWidth}px, 1fr))` }}
             >
-              <div className="sticky left-0 z-40 flex flex-col justify-center border-r border-border bg-white px-5 py-2 dark:bg-[#171b24]">
-                <p className="text-sm font-semibold leading-tight text-foreground">{member.display_name}</p>
-                <p className="mt-0.5 text-[10px] uppercase tracking-[0.16em] text-muted-foreground">{member.role_label}</p>
+              <div className="sticky left-0 z-50 flex min-h-[72px] flex-col justify-center border-r border-border bg-white px-5 py-3 dark:bg-[#171b24]">
+                <p className="text-base font-semibold leading-tight text-foreground">{member.display_name}</p>
+                <p className="mt-1 text-[9px] uppercase tracking-[0.16em] text-muted-foreground">{member.role_label}</p>
               </div>
               {fullscreenVisibleDates.map((date) => {
                 const dateKey = formatDateParam(date);
@@ -2054,7 +2069,7 @@ export default function ShiftsPage() {
                               }}
                             >
                               {rule.comment && rule.comment_date === dateKey ? <span className="absolute -left-1 -top-1 z-10 h-2 w-2 rounded-full bg-[#E5D3B3] shadow-[0_0_0_2px_rgba(15,23,42,0.7)]" /> : null}
-                              <span className="font-semibold leading-3 text-foreground text-[8px]">
+                              <span className="text-[10px] font-semibold leading-[0.95rem] text-foreground">
                                 {formatShiftTime(rule.starts_at).replace(":", "")}
                                 <br />
                                 {formatShiftTime(rule.ends_at).replace(":", "")}
@@ -2064,7 +2079,7 @@ export default function ShiftsPage() {
                               type="button"
                               aria-label="Удалить смену"
                               data-shift-no-drag="true"
-                              className="pointer-events-none absolute right-0.5 top-0.5 z-20 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-white opacity-0 shadow-md transition group-hover:pointer-events-auto group-hover:opacity-70 hover:bg-rose-600 hover:opacity-100"
+                              className="pointer-events-none absolute right-1 top-1 z-20 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-white opacity-0 shadow-md transition group-hover:pointer-events-auto group-hover:opacity-80 hover:bg-rose-600 hover:opacity-100"
                               onPointerDown={(event) => {
                                 event.stopPropagation();
                               }}
@@ -2256,14 +2271,14 @@ export default function ShiftsPage() {
           setActiveRulePicker(null);
         }}
         title="Параметры смены"
-        panelClassName="max-w-3xl"
+        panelClassName="max-w-2xl"
       >
-        <form className="space-y-5" onSubmit={handleSaveRule}>
+        <form className="space-y-4" onSubmit={handleSaveRule}>
           {ruleError ? (
             <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{ruleError}</div>
           ) : null}
 
-          <div className="grid gap-4 md:grid-cols-[minmax(0,150px)_minmax(0,150px)_minmax(0,150px)] md:justify-between">
+          <div className="grid gap-4 md:grid-cols-[minmax(0,220px)_minmax(0,220px)] md:justify-between">
             <ShiftTimeField
               label="Начало смены"
               value={ruleForm.startsAt}
@@ -2271,17 +2286,7 @@ export default function ShiftsPage() {
               onToggle={() => setActiveRulePicker((current) => (current === "start" ? null : "start"))}
               onClose={() => setActiveRulePicker(null)}
               onChange={(value) => setRuleForm((current) => ({ ...current, startsAt: value }))}
-              fieldClassName="md:max-w-[150px]"
-            />
-            <ShiftDateField
-              label="Дата окончания"
-              value={ruleForm.endsOnDate || activeTarget?.shiftDate || ""}
-              min={activeTarget?.shiftDate}
-              open={activeRulePicker === "date"}
-              onToggle={() => setActiveRulePicker((current) => (current === "date" ? null : "date"))}
-              onClose={() => setActiveRulePicker(null)}
-              onChange={(value) => setRuleForm((current) => ({ ...current, endsOnDate: value }))}
-              fieldClassName="md:max-w-[150px]"
+              fieldClassName="md:max-w-[220px]"
             />
             <ShiftTimeField
               label="Конец смены"
@@ -2290,9 +2295,20 @@ export default function ShiftsPage() {
               onToggle={() => setActiveRulePicker((current) => (current === "end" ? null : "end"))}
               onClose={() => setActiveRulePicker(null)}
               onChange={(value) => setRuleForm((current) => ({ ...current, endsAt: value }))}
-              fieldClassName="md:max-w-[150px]"
+              fieldClassName="md:max-w-[220px]"
             />
           </div>
+
+          <ShiftDateField
+            label="Дата окончания"
+            value={ruleForm.endsOnDate || activeTarget?.shiftDate || ""}
+            min={activeTarget?.shiftDate}
+            open={activeRulePicker === "date"}
+            onToggle={() => setActiveRulePicker((current) => (current === "date" ? null : "date"))}
+            onClose={() => setActiveRulePicker(null)}
+            onChange={(value) => setRuleForm((current) => ({ ...current, endsOnDate: value }))}
+            fieldClassName="max-w-[220px]"
+          />
 
           <label className="space-y-2">
             <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Комментарий</span>
@@ -2304,7 +2320,7 @@ export default function ShiftsPage() {
             />
           </label>
 
-          <div className="flex flex-col gap-3 border-t border-border pt-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 border-t border-border pt-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               {editingRule && ruleForm.comment.trim() ? (
                 <button

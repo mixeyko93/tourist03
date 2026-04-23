@@ -941,7 +941,7 @@ export default function CalendarPage() {
             >
               <div style={{ minWidth: calendarContentWidth }}>
                 <div className="flex border-b border-border bg-card/70">
-                  <div className="sticky left-0 z-10 shrink-0 border-r border-border bg-card/90 px-5 py-4 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground" style={{ width: roomColumnWidth }}>
+                  <div className="sticky left-0 z-30 shrink-0 border-r border-border bg-white px-5 py-4 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground dark:bg-[#171b24]" style={{ width: roomColumnWidth }}>
                     Апартамент
                   </div>
                   <div className="grid flex-1" style={{ gridTemplateColumns: `repeat(${visibleDates.length}, minmax(${dayColumnWidth}px, 1fr))` }}>
@@ -974,10 +974,10 @@ export default function CalendarPage() {
                         data-calendar-no-drag="true"
                         onClick={() => setHighlightedRoomId(room.id)}
                         onDoubleClick={() => openRoomDetails(room.room_id)}
-                        className={`sticky left-0 z-10 flex shrink-0 cursor-pointer flex-col justify-center border-r border-border px-5 py-5 text-left transition ${
+                        className={`sticky left-0 z-30 flex shrink-0 cursor-pointer flex-col justify-center border-r border-border px-5 py-5 text-left transition ${
                           highlightedRoomId === room.id
-                            ? "bg-[#E5D3B3]/14 shadow-[inset_0_0_0_1px_rgba(229,211,179,0.22)] dark:bg-card/95 dark:shadow-[inset_0_0_0_1px_rgba(229,211,179,0.16)]"
-                            : "bg-card/85 hover:bg-accent/55"
+                            ? "bg-[#F8F0E2] shadow-[inset_0_0_0_1px_rgba(229,211,179,0.26)] dark:bg-[#1b202b] dark:shadow-[inset_0_0_0_1px_rgba(229,211,179,0.16)]"
+                            : "bg-white hover:bg-accent/55 dark:bg-[#171b24]"
                         }`}
                         style={{ width: roomColumnWidth }}
                       >
