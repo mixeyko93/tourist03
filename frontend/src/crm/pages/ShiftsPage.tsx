@@ -1310,10 +1310,9 @@ export default function ShiftsPage() {
 
   const visibleDates = useMemo(() => buildPeriodDates(periodStart, periodEnd), [periodEnd, periodStart]);
   const periodLabel = viewMode === "week" ? getWeekLabel(periodStart, periodEnd) : getMonthLabel(periodStart);
-  const staffColumnWidth = showShiftTimes ? 316 : 272;
-  const dayColumnWidth = showShiftTimes
-    ? (viewMode === "week" ? 140 : 92)
-    : (viewMode === "week" ? 40 : 24);
+  const shouldShowShiftTimes = viewMode === "week" || showShiftTimes;
+  const staffColumnWidth = shouldShowShiftTimes ? 316 : 272;
+  const dayColumnWidth = viewMode === "week" ? 140 : shouldShowShiftTimes ? 92 : 24;
   const gridWidth = staffColumnWidth + visibleDates.length * dayColumnWidth;
   const fullscreenStaffColumnWidth = 186;
   const fullscreenDayColumnWidth = 28;
@@ -2260,7 +2259,7 @@ export default function ShiftsPage() {
                                         type="button"
                                         data-shift-cell="true"
                                         data-shift-interactive="true"
-                                        className={`relative flex h-full w-full items-center justify-center overflow-visible border border-[#D6BE8C]/55 bg-[#FBF3E4] text-center shadow-sm transition-[background-color,border-color,min-height,padding,opacity,transform,border-radius] duration-300 ease-out hover:bg-[#F6ECD8] dark:border-[#E5D3B3]/22 dark:bg-[#E5D3B3]/10 dark:hover:bg-[#E5D3B3]/16 ${showShiftTimes ? "min-h-[24px] rounded-xl px-2 py-0.5" : "min-h-[16px] rounded-lg px-1 py-0"}`}
+                                        className={`relative flex h-full w-full items-center justify-center overflow-visible border border-[#D6BE8C]/55 bg-[#FBF3E4] text-center shadow-sm transition-[background-color,border-color,min-height,padding,opacity,transform,border-radius] duration-300 ease-out hover:bg-[#F6ECD8] dark:border-[#E5D3B3]/22 dark:bg-[#E5D3B3]/10 dark:hover:bg-[#E5D3B3]/16 ${shouldShowShiftTimes ? "min-h-[24px] rounded-xl px-2 py-0.5" : "min-h-[16px] rounded-lg px-1 py-0"}`}
                                         onMouseEnter={(event) => {
                                           if (rule.comment) {
                                             const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
@@ -2294,7 +2293,7 @@ export default function ShiftsPage() {
                                         }}
                                       >
                                         {rule.comment && rule.comment_date === dateKey ? <span className="absolute -left-1 -top-1 z-10 h-3 w-3 rounded-full bg-[#E5D3B3] shadow-[0_0_0_2px_rgba(15,23,42,0.7)]" /> : null}
-                                        {showShiftTimes ? (
+                                        {shouldShowShiftTimes ? (
                                           <span className="flex min-w-0 items-center gap-0.5 overflow-hidden text-[0.75rem] font-semibold tracking-[-0.02em] text-foreground transition-opacity duration-200">
                                             <span className="truncate">{getShiftCellLabel(rule, dateKey)}</span>
                                           </span>
@@ -2345,7 +2344,7 @@ export default function ShiftsPage() {
                                 type="button"
                                 data-shift-cell="true"
                                 data-shift-interactive="true"
-                                className={`flex h-full w-full items-center justify-center border border-dashed border-[#D6BE8C]/75 bg-white/82 text-center text-xs leading-5 text-[#C6A163] shadow-sm transition-[background-color,border-color,min-height,padding,opacity,transform,border-radius] duration-300 ease-out hover:border-[#C7A25A]/80 hover:bg-[#FFF5E5] hover:text-[#8E6E2C] dark:border-border/70 dark:bg-background/35 dark:text-muted-foreground dark:hover:border-[#E5D3B3]/30 dark:hover:bg-background/55 dark:hover:text-foreground ${showShiftTimes ? "min-h-[24px] rounded-lg px-2" : "min-h-[16px] rounded-md px-1"}`}
+                                className={`flex h-full w-full items-center justify-center border border-dashed border-[#D6BE8C]/75 bg-white/82 text-center text-xs leading-5 text-[#C6A163] shadow-sm transition-[background-color,border-color,min-height,padding,opacity,transform,border-radius] duration-300 ease-out hover:border-[#C7A25A]/80 hover:bg-[#FFF5E5] hover:text-[#8E6E2C] dark:border-border/70 dark:bg-background/35 dark:text-muted-foreground dark:hover:border-[#E5D3B3]/30 dark:hover:bg-background/55 dark:hover:text-foreground ${shouldShowShiftTimes ? "min-h-[24px] rounded-lg px-2" : "min-h-[16px] rounded-md px-1"}`}
                                 onClick={() => {
                                   if (Date.now() < suppressGridClickUntilRef.current) {
                                     return;
