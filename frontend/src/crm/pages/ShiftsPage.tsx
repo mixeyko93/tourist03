@@ -2277,7 +2277,7 @@ export default function ShiftsPage() {
         onClose={closeSettingsModal}
         title="Время реакции обработки брони"
         description="Настройте время реакции обработки заявок: сколько держать бронь, когда включать эскалацию и сколько повторов отправлять до уведомления управляющего."
-        panelClassName="!w-[min(520px,calc(100vw-1rem))] !max-w-none [&>div:first-child]:px-5 [&>div:first-child]:py-4"
+        panelClassName="!w-[min(440px,calc(100vw-1rem))] !max-w-none [&>div:first-child]:px-5 [&>div:first-child]:py-4"
         bodyClassName="px-5 py-4 sm:px-5 sm:py-4"
       >
         <form
@@ -2354,8 +2354,8 @@ export default function ShiftsPage() {
             />
           </div>
 
-          <div className="mx-auto flex max-w-[400px] flex-col gap-2.5 border-t border-border pt-3 sm:flex-row sm:justify-end">
-            <button type="button" className="soft-button px-4 py-2.5 text-sm" onClick={closeSettingsModal}>
+          <div className="mx-auto grid max-w-[400px] grid-cols-[minmax(0,1fr)_auto] gap-2.5 border-t border-border pt-3">
+            <button type="button" className="soft-button w-full justify-center px-4 py-2.5 text-sm" onClick={closeSettingsModal}>
               Отмена
             </button>
             <button type="submit" className="brand-button justify-center gap-2 px-4 py-2.5 text-sm">
