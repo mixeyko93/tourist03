@@ -525,7 +525,7 @@ function ShiftTimeField({ label, value, open, onToggle, onClose, onChange, field
   return (
     <div className={`space-y-2 ${fieldClassName}`}>
       <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">{label}</span>
-      <button ref={triggerRef} type="button" className="soft-input flex items-center justify-between gap-3 py-3 text-left" onClick={onToggle}>
+      <button ref={triggerRef} type="button" className="soft-input flex h-14 items-center justify-between gap-3 rounded-[1.35rem] px-4 py-1 text-left" onClick={onToggle}>
         <input
           type="text"
           inputMode="numeric"
@@ -585,9 +585,10 @@ type StepperFieldProps = {
   step?: number;
   suffix?: string;
   onChange: (value: string) => void;
+  className?: string;
 };
 
-function StepperField({ label, value, min, max, step = 1, suffix, onChange }: StepperFieldProps) {
+function StepperField({ label, value, min, max, step = 1, suffix, onChange, className = "" }: StepperFieldProps) {
   const numericValue = Number(value || min);
   const safeValue = Number.isFinite(numericValue) ? numericValue : min;
   const commit = (next: number) => {
@@ -596,13 +597,13 @@ function StepperField({ label, value, min, max, step = 1, suffix, onChange }: St
   };
 
   return (
-    <div className="space-y-2">
-      <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">{label}</span>
-      <div className="soft-input flex items-center gap-2 py-2 pr-2">
-        <button type="button" className="soft-button h-9 w-9 shrink-0 px-0 py-0" onClick={() => commit(safeValue - step)}>
+    <div className={`space-y-2 ${className}`.trim()}>
+      <span className="block text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">{label}</span>
+      <div className="soft-input flex h-14 items-center gap-2 rounded-[1.35rem] px-2 py-1">
+        <button type="button" className="soft-button h-9 w-9 shrink-0 px-0 py-0" onClick={() => commit(safeValue - step)} aria-label={`Уменьшить: ${label}`}>
           <Minus className="h-4 w-4" />
         </button>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 text-center">
           <input
             type="text"
             inputMode="numeric"
@@ -615,11 +616,11 @@ function StepperField({ label, value, min, max, step = 1, suffix, onChange }: St
               }
               commit(Number(nextValue));
             }}
-            className="w-full appearance-none bg-transparent text-center text-base font-semibold text-foreground outline-none"
+            className="w-16 appearance-none bg-transparent text-center text-lg font-semibold text-foreground outline-none"
           />
-          {suffix ? <div className="-mt-0.5 text-center text-xs text-muted-foreground">{suffix}</div> : null}
+          {suffix ? <div className="-mt-1 text-center text-xs font-medium text-muted-foreground">{suffix}</div> : null}
         </div>
-        <button type="button" className="soft-button h-9 w-9 shrink-0 px-0 py-0" onClick={() => commit(safeValue + step)}>
+        <button type="button" className="soft-button h-9 w-9 shrink-0 px-0 py-0" onClick={() => commit(safeValue + step)} aria-label={`Увеличить: ${label}`}>
           <Plus className="h-4 w-4" />
         </button>
       </div>
@@ -2201,10 +2202,11 @@ export default function ShiftsPage() {
         }}
         title="Время реакции обработки брони"
         description="Настройте время реакции обработки заявок: сколько держать бронь, когда включать эскалацию и сколько повторов отправлять до уведомления управляющего."
-        panelClassName="w-[min(860px,calc(100vw-2rem))] max-w-none"
+        panelClassName="w-[min(680px,calc(100vw-2rem))] max-w-none"
+        bodyClassName="px-5 py-5 sm:px-6 sm:py-5"
       >
         <form
-          className="space-y-5"
+          className="space-y-4"
           onSubmit={(event) => {
             event.preventDefault();
             if (!selectedCampId) {
@@ -2223,7 +2225,7 @@ export default function ShiftsPage() {
             setIsSettingsModalOpen(false);
           }}
         >
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="mx-auto grid max-w-[560px] gap-x-4 gap-y-4 sm:grid-cols-2">
             <StepperField
               label="Заморозка заявки, ч."
               value={settingsForm.bookingHoldHours}
@@ -2261,7 +2263,7 @@ export default function ShiftsPage() {
             />
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-border pt-2 sm:flex-row sm:justify-end">
+          <div className="mx-auto flex max-w-[560px] flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:justify-end">
             <button type="button" className="soft-button px-4 py-2.5 text-sm" onClick={() => setIsSettingsModalOpen(false)}>
               Отмена
             </button>
