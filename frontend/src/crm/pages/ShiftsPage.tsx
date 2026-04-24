@@ -255,6 +255,79 @@ function clampTimeAtLeast(value: string, minValue?: string | null) {
   return timeToMinutes(value) < timeToMinutes(minValue) ? minValue : value;
 }
 
+function resolveShiftEndDate(shiftDate: string, startsAt: string, endsAt: string, requestedEndDate?: string | null) {
+  const baseEndDate = requestedEndDate || shiftDate;
+  if (baseEndDate !== shiftDate) {
+    return baseEndDate;
+  }
+  return timeToMinutes(endsAt) <= timeToMinutes(startsAt) ? formatDateParam(addDays(parseDateParam(shiftDate), 1)) : baseEndDate;
+}
+
+function normalizeRulePreset(rule: CrmShiftRule): ShiftPresetForm {
+  return {
+    startsAt: rule.starts_at?.slice(0, 5) || emptyPresetForm.startsAt,
+    endsAt: rule.ends_at?.slice(0, 5) || emptyPresetForm.endsAt,
+  };
+}
+
+function samePreset(left: ShiftPresetForm, right: ShiftPresetForm) {
+  return left.startsAt === right.startsAt && left.endsAt === right.endsAt;
+}
+
+function isRuleOnPreset(rule: CrmShiftRule, preset: ShiftPresetForm) {
+  return samePreset(normalizeRulePreset(rule), preset);
+}
+
+function getPresetStorageKey(campId: number) {
+  return `tourist03.crm.shifts.base-hours.${campId}`;
+}
+
+function readStoredPreset(campId: number): ShiftPresetForm | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  try {
+    const raw = window.localStorage.getItem(getPresetStorageKey(campId));
+    if (!raw) {
+      return null;
+    }
+    const parsed = JSON.parse(raw) as Partial<ShiftPresetForm>;
+    if (!parsed.startsAt || !parsed.endsAt) {
+      return null;
+    }
+    return {
+      startsAt: parsed.startsAt.slice(0, 5),
+      endsAt: parsed.endsAt.slice(0, 5),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredPreset(campId: number, preset: ShiftPresetForm) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.localStorage.setItem(getPresetStorageKey(campId), JSON.stringify(preset));
+}
+
+function inferPresetFromRules(rules: CrmShiftRule[]) {
+  const counter = new Map<string, { preset: ShiftPresetForm; count: number }>();
+  rules.forEach((rule) => {
+    if (!rule.is_active) {
+      return;
+    }
+    const preset = normalizeRulePreset(rule);
+    const key = `${preset.startsAt}|${preset.endsAt}`;
+    const current = counter.get(key);
+    counter.set(key, { preset, count: (current?.count || 0) + 1 });
+  });
+  return (
+    Array.from(counter.values()).sort((left, right) => right.count - left.count)[0]?.preset ||
+    emptyPresetForm
+  );
+}
+
 function formatShiftSummary(
   rule: {
     shift_date?: string | null;
@@ -751,10 +824,11 @@ function mapRuleForm(rule: CrmShiftRule): ShiftRuleForm {
 
 function toRulePayload(form: ShiftRuleForm, target: ShiftTarget): CrmShiftRuleUpsertPayload {
   const nextComment = form.comment.trim();
+  const endsOnDate = resolveShiftEndDate(target.shiftDate, form.startsAt, form.endsAt, form.endsOnDate);
   return {
     admin_id: target.adminId,
     shift_date: target.shiftDate,
-    ends_on_date: form.endsOnDate || target.shiftDate,
+    ends_on_date: endsOnDate,
     starts_at: form.startsAt,
     ends_at: form.endsAt,
     is_night_shift: target.existingRule?.is_night_shift || false,
@@ -811,6 +885,7 @@ export default function ShiftsPage() {
   const [activeTarget, setActiveTarget] = useState<ShiftTarget | null>(null);
   const [ruleForm, setRuleForm] = useState<ShiftRuleForm>(emptyRuleForm);
   const [presetForm, setPresetForm] = useState<ShiftPresetForm>(emptyPresetForm);
+  const [presetDraftForm, setPresetDraftForm] = useState<ShiftPresetForm>(emptyPresetForm);
   const [ruleError, setRuleError] = useState("");
   const [isSavingRule, setIsSavingRule] = useState(false);
   const [, setDeletingRuleId] = useState<number | null>(null);
@@ -951,6 +1026,8 @@ export default function ShiftsPage() {
       setOverview(null);
       setSettingsForm(emptySettingsForm);
       setSettingsDraftForm(emptySettingsForm);
+      setPresetForm(emptyPresetForm);
+      setPresetDraftForm(emptyPresetForm);
       return;
     }
 
@@ -962,8 +1039,11 @@ export default function ShiftsPage() {
     fetchCrmShifts(selectedCampId, controller.signal)
       .then((payload) => {
         const nextSettingsForm = mapSettingsForm(payload.settings);
+        const nextPresetForm = readStoredPreset(selectedCampId) || inferPresetFromRules(payload.rules);
         setSettingsForm(nextSettingsForm);
         setSettingsDraftForm(nextSettingsForm);
+        setPresetForm(nextPresetForm);
+        setPresetDraftForm(nextPresetForm);
         setRules(payload.rules);
         setStaff(payload.staff);
         setOverview(payload.overview);
@@ -1354,12 +1434,14 @@ export default function ShiftsPage() {
   }
 
   function openTargetModal(target: ShiftTarget, rule?: CrmShiftRule | null) {
+    const isAdditionalPeriod = !rule && Boolean(target.minStartsAt);
     const defaultStart = clampTimeAtLeast(presetForm.startsAt, target.minStartsAt);
     const defaultStartMinute = timeToMinutes(defaultStart);
     const defaultEnd =
-      timeToMinutes(presetForm.endsAt) > defaultStartMinute
-        ? presetForm.endsAt
-        : minutesToTime(defaultStartMinute + 60);
+      isAdditionalPeriod && timeToMinutes(presetForm.endsAt) <= defaultStartMinute
+        ? minutesToTime(defaultStartMinute + 60)
+        : presetForm.endsAt;
+    const defaultEndDate = resolveShiftEndDate(target.shiftDate, defaultStart, defaultEnd, target.shiftDate);
     setActiveTarget(target);
     setEditingRule(rule || null);
     setRuleForm(
@@ -1370,7 +1452,7 @@ export default function ShiftsPage() {
           }
         : {
             startsAt: defaultStart,
-            endsOnDate: target.shiftDate,
+            endsOnDate: defaultEndDate,
             endsAt: defaultEnd,
             comment: "",
           },
@@ -1381,8 +1463,15 @@ export default function ShiftsPage() {
   }
 
   function openCreateRuleModal() {
+    setPresetDraftForm(presetForm);
     setActivePresetTimeField(null);
     setIsPresetModalOpen(true);
+  }
+
+  function closePresetModal() {
+    setPresetDraftForm(presetForm);
+    setActivePresetTimeField(null);
+    setIsPresetModalOpen(false);
   }
 
   function openSettingsModal() {
@@ -1513,6 +1602,7 @@ export default function ShiftsPage() {
         setIsSavingRule(false);
         return;
       }
+      const nextEndsOnDate = resolveShiftEndDate(activeTarget.shiftDate, ruleForm.startsAt, ruleForm.endsAt, ruleForm.endsOnDate);
       if (editingRule) {
         await updateCrmShiftRule(selectedCampId, editingRule.id, toRulePayload(ruleForm, activeTarget));
         setRules((current) =>
@@ -1523,7 +1613,7 @@ export default function ShiftsPage() {
                   admin_id: activeTarget.adminId,
                   admin_name: activeTarget.adminName,
                   shift_date: activeTarget.shiftDate,
-                  ends_on_date: ruleForm.endsOnDate || activeTarget.shiftDate,
+                  ends_on_date: nextEndsOnDate,
                   weekday: getWeekdayIndex(parseDateParam(activeTarget.shiftDate)),
                   starts_at: ruleForm.startsAt,
                   ends_at: ruleForm.endsAt,
@@ -1536,7 +1626,7 @@ export default function ShiftsPage() {
               : item,
           ),
         );
-        setSuccessMessage("Параметры смены сохранены.");
+        setSuccessMessage("Период смены сохранён.");
       } else {
         const response = await createCrmShiftRule(selectedCampId, toRulePayload(ruleForm, activeTarget));
         setRules((current) => [
@@ -1548,7 +1638,7 @@ export default function ShiftsPage() {
             admin_name: activeTarget.adminName,
             admin_email: "",
             shift_date: activeTarget.shiftDate,
-            ends_on_date: ruleForm.endsOnDate || activeTarget.shiftDate,
+            ends_on_date: nextEndsOnDate,
             weekday: getWeekdayIndex(parseDateParam(activeTarget.shiftDate)),
             starts_at: ruleForm.startsAt,
             ends_at: ruleForm.endsAt,
@@ -1564,19 +1654,77 @@ export default function ShiftsPage() {
         ]);
         setSuccessMessage("Смена назначена.");
       }
-      setPresetForm((current) => ({
-        ...current,
-        startsAt: ruleForm.startsAt,
-        endsAt: ruleForm.endsAt,
-      }));
       setIsRuleModalOpen(false);
       setEditingRule(null);
       setActiveTarget(null);
       void refreshShiftsSilently(selectedCampId);
     } catch (error) {
-      setRuleError(error instanceof Error ? error.message : "Не удалось сохранить параметры смены");
+      setRuleError(error instanceof Error ? error.message : "Не удалось сохранить период смены");
     } finally {
       setIsSavingRule(false);
+    }
+  }
+
+  async function handleSavePreset(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedCampId) {
+      setErrorMessage("Сначала выберите базу.");
+      return;
+    }
+
+    const previousPreset = presetForm;
+    const nextPreset = {
+      startsAt: presetDraftForm.startsAt,
+      endsAt: presetDraftForm.endsAt,
+    };
+
+    try {
+      setErrorMessage("");
+      setSuccessMessage("");
+      const baseRules = rules.filter((rule) => isRuleOnPreset(rule, previousPreset));
+      await Promise.all(
+        baseRules.map((rule) => {
+          const shiftDate = rule.shift_date || formatDateParam(new Date());
+          const endsOnDate = resolveShiftEndDate(shiftDate, nextPreset.startsAt, nextPreset.endsAt, shiftDate);
+          return updateCrmShiftRule(selectedCampId, rule.id, {
+            admin_id: rule.admin_id,
+            shift_date: shiftDate,
+            ends_on_date: endsOnDate,
+            starts_at: nextPreset.startsAt,
+            ends_at: nextPreset.endsAt,
+            is_night_shift: rule.is_night_shift,
+            is_active: rule.is_active,
+            comment: rule.comment || undefined,
+            comment_date: rule.comment ? rule.comment_date || shiftDate : undefined,
+          });
+        }),
+      );
+
+      writeStoredPreset(selectedCampId, nextPreset);
+      setPresetForm(nextPreset);
+      setPresetDraftForm(nextPreset);
+      setRules((current) =>
+        current.map((rule) => {
+          if (!isRuleOnPreset(rule, previousPreset)) {
+            return rule;
+          }
+          const shiftDate = rule.shift_date || formatDateParam(new Date());
+          return {
+            ...rule,
+            shift_date: shiftDate,
+            ends_on_date: resolveShiftEndDate(shiftDate, nextPreset.startsAt, nextPreset.endsAt, shiftDate),
+            starts_at: nextPreset.startsAt,
+            ends_at: nextPreset.endsAt,
+            updated_at: new Date().toISOString(),
+          };
+        }),
+      );
+      setSuccessMessage(`Базовые часы графика сохранены: ${formatDisplayTime(nextPreset.startsAt)} → ${formatDisplayTime(nextPreset.endsAt)}. Обновлено смен: ${baseRules.length}.`);
+      setIsPresetModalOpen(false);
+      setActivePresetTimeField(null);
+      void refreshShiftsSilently(selectedCampId);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Не удалось сохранить базовые часы графика");
     }
   }
 
@@ -1615,7 +1763,7 @@ export default function ShiftsPage() {
         toRulePayload(
           {
             startsAt: presetForm.startsAt,
-            endsOnDate: formatDateParam(date),
+            endsOnDate: resolveShiftEndDate(formatDateParam(date), presetForm.startsAt, presetForm.endsAt),
             endsAt: presetForm.endsAt,
             comment: "",
           },
@@ -1631,7 +1779,7 @@ export default function ShiftsPage() {
           admin_name: member.display_name,
           admin_email: "",
           shift_date: formatDateParam(date),
-          ends_on_date: formatDateParam(date),
+          ends_on_date: resolveShiftEndDate(formatDateParam(date), presetForm.startsAt, presetForm.endsAt),
           weekday: getWeekdayIndex(date),
           starts_at: presetForm.startsAt,
           ends_at: presetForm.endsAt,
@@ -1689,6 +1837,17 @@ export default function ShiftsPage() {
   const hasCampOptions = camps.length > 0;
   const pageIsLoading = isBootLoading || isLoading;
   const { showInitialSkeleton, showRefreshOverlay, isPageVisible } = usePageLoadState(pageIsLoading);
+  const isAdditionalRuleModal = Boolean(!editingRule && activeTarget?.minStartsAt);
+  const ruleModalTitle = editingRule
+    ? "Редактирование периода смены"
+    : isAdditionalRuleModal
+      ? "Дополнительные часы смены"
+      : "Назначение смены";
+  const ruleModalDescription = isAdditionalRuleModal
+    ? `Начало дополнительного периода не может быть раньше окончания уже указанного периода: не раньше ${formatDisplayTime(activeTarget?.minStartsAt || "")}.`
+    : editingRule
+      ? "Измените время, дату окончания или комментарий только для выбранной смены. Базовые часы графика от этого не меняются."
+      : "Назначьте смену для выбранной ячейки. По умолчанию используется базовое время графика, если его не изменить вручную.";
 
   return (
     <PageMotion className="space-y-6" isReady={isPageVisible}>
@@ -1969,7 +2128,7 @@ export default function ShiftsPage() {
 
                 <button type="button" className="soft-button gap-2 px-4 py-2.5 text-sm" onClick={openCreateRuleModal} disabled={!sortedStaff.length}>
                   <PencilLine className="h-4 w-4" />
-                  Параметры
+                  Базовые часы
                 </button>
               </div>
             </div>
@@ -2338,53 +2497,40 @@ export default function ShiftsPage() {
 
       <ModalShell
         open={isPresetModalOpen}
-        onClose={() => {
-          setIsPresetModalOpen(false);
-          setActivePresetTimeField(null);
-        }}
-        title="Параметры смены"
+        onClose={closePresetModal}
+        title="Базовые часы графика"
+        description="Это основа для новых смен и всех ячеек, где время не меняли вручную. При изменении базовых часов CRM обновит только смены со старым базовым временем."
         panelClassName="!w-[min(500px,calc(100vw-2rem))] !max-w-none"
       >
-        <form
-          className="space-y-5"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setPresetForm({
-              startsAt: presetForm.startsAt,
-              endsAt: presetForm.endsAt,
-            });
-            setSuccessMessage(`Параметры смены сохранены: ${presetForm.startsAt} → ${presetForm.endsAt}`);
-            setIsPresetModalOpen(false);
-          }}
-        >
+        <form className="space-y-5" onSubmit={handleSavePreset}>
           <div className="mx-auto grid max-w-[392px] gap-4 md:grid-cols-[180px_180px] md:items-start md:justify-center md:gap-6">
             <ShiftTimeField
               label="Начало смены"
-              value={presetForm.startsAt}
+              value={presetDraftForm.startsAt}
               open={activePresetTimeField === "start"}
               onToggle={() => setActivePresetTimeField((current) => (current === "start" ? null : "start"))}
               onClose={() => setActivePresetTimeField(null)}
-              onChange={(value) => setPresetForm((current) => ({ ...current, startsAt: value }))}
+              onChange={(value) => setPresetDraftForm((current) => ({ ...current, startsAt: value }))}
               fieldClassName="w-full"
             />
             <ShiftTimeField
               label="Конец смены"
-              value={presetForm.endsAt}
+              value={presetDraftForm.endsAt}
               open={activePresetTimeField === "end"}
               onToggle={() => setActivePresetTimeField((current) => (current === "end" ? null : "end"))}
               onClose={() => setActivePresetTimeField(null)}
-              onChange={(value) => setPresetForm((current) => ({ ...current, endsAt: value }))}
+              onChange={(value) => setPresetDraftForm((current) => ({ ...current, endsAt: value }))}
               fieldClassName="w-full"
             />
           </div>
 
           <div className="mx-auto grid w-full max-w-[392px] grid-cols-[minmax(0,1fr)_auto] gap-3 border-t border-border pt-2">
-            <button type="button" className="soft-button w-full justify-center px-4 py-2.5 text-sm" onClick={() => setIsPresetModalOpen(false)}>
+            <button type="button" className="soft-button w-full justify-center px-4 py-2.5 text-sm" onClick={closePresetModal}>
               Отмена
             </button>
             <button type="submit" className="brand-button justify-center gap-2 px-5 py-2.5 text-sm">
               <Save className="h-4 w-4" />
-              Сохранить параметры
+              Сохранить базовые часы
             </button>
           </div>
         </form>
@@ -2493,7 +2639,8 @@ export default function ShiftsPage() {
           setRuleError("");
           setActiveRulePicker(null);
         }}
-        title="Параметры смены"
+        title={ruleModalTitle}
+        description={ruleModalDescription}
         panelClassName="!w-[min(720px,calc(100vw-2rem))] !max-w-none"
       >
         <form className="space-y-4" onSubmit={handleSaveRule}>
