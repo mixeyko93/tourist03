@@ -2199,7 +2199,7 @@ export default function ShiftsPage() {
                   className="grid border-b border-border bg-white dark:bg-card"
                   style={{ gridTemplateColumns: `${staffColumnWidth}px repeat(${visibleDates.length}, minmax(${dayColumnWidth}px, 1fr))` }}
                 >
-                  <div className="sticky left-0 z-[80] flex min-h-[96px] items-center border-r border-border bg-white px-5 py-4 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground shadow-[10px_0_0_0_rgba(255,255,255,1)] dark:bg-[#171b24] dark:shadow-[10px_0_0_0_rgba(23,27,36,1)]">
+                  <div className="sticky left-0 z-[80] flex min-h-[64px] items-center border-r border-border bg-white px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground shadow-[10px_0_0_0_rgba(255,255,255,1)] dark:bg-[#171b24] dark:shadow-[10px_0_0_0_rgba(23,27,36,1)]">
                     Сотрудник
                   </div>
                   {visibleDates.map((date) => {
@@ -2208,7 +2208,7 @@ export default function ShiftsPage() {
                     <div
                       key={formatDateParam(date)}
                       data-grid-date={formatDateParam(date)}
-                      className={`border-r border-border px-2 py-3 text-center last:border-r-0 ${
+                      className={`border-r border-border px-2 py-2 text-center last:border-r-0 ${
                         getProductionDayTone(date) === "holiday"
                           ? "bg-rose-50/85 dark:bg-rose-500/10"
                           : getProductionDayTone(date) === "weekend"
@@ -2216,8 +2216,8 @@ export default function ShiftsPage() {
                             : ""
                       } ${isToday ? "relative bg-sky-50/85 shadow-[inset_0_0_0_2px_rgba(14,165,233,0.55)] dark:bg-sky-400/10 dark:shadow-[inset_0_0_0_2px_rgba(125,211,252,0.45)]" : ""}`}
                     >
-                      <div className="text-base font-semibold text-foreground">{getDayNumberLabel(date)}</div>
-                      <div className={`mt-1 text-[11px] uppercase tracking-[0.18em] ${isToday ? "font-semibold text-sky-600 dark:text-sky-300" : getProductionDayTone(date) === "holiday" ? "text-rose-500 dark:text-rose-300" : "text-muted-foreground"}`}>{getWeekdayShortLabel(date)}</div>
+                      <div className="text-[0.95rem] font-semibold leading-tight text-foreground">{getDayNumberLabel(date)}</div>
+                      <div className={`mt-0.5 text-[10px] uppercase tracking-[0.18em] ${isToday ? "font-semibold text-sky-600 dark:text-sky-300" : getProductionDayTone(date) === "holiday" ? "text-rose-500 dark:text-rose-300" : "text-muted-foreground"}`}>{getWeekdayShortLabel(date)}</div>
                     </div>
                     );
                   })}
@@ -2408,7 +2408,7 @@ export default function ShiftsPage() {
             className="grid border-b border-border bg-white dark:bg-[#171b24]"
             style={{ gridTemplateColumns: `${fullscreenStaffColumnWidth}px repeat(${fullscreenVisibleDates.length}, minmax(${fullscreenDayColumnWidth}px, 1fr))` }}
           >
-            <div className="sticky left-0 z-[80] flex min-h-[72px] items-center border-r border-border bg-white px-5 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground shadow-[10px_0_0_0_rgba(255,255,255,1)] dark:bg-[#171b24] dark:shadow-[10px_0_0_0_rgba(23,27,36,1)]">
+            <div className="sticky left-0 z-[80] flex min-h-[48px] items-center border-r border-border bg-white px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground shadow-[10px_0_0_0_rgba(255,255,255,1)] dark:bg-[#171b24] dark:shadow-[10px_0_0_0_rgba(23,27,36,1)]">
               Сотрудник
             </div>
             {fullscreenVisibleDates.map((date) => {
@@ -2416,7 +2416,7 @@ export default function ShiftsPage() {
               return (
               <div
                 key={`fullscreen-${formatDateParam(date)}`}
-                className={`border-r border-border px-1 py-3 text-center last:border-r-0 ${
+                className={`border-r border-border px-1 py-1.5 text-center last:border-r-0 ${
                   getProductionDayTone(date) === "holiday"
                     ? "bg-rose-50/85 dark:bg-rose-500/10"
                     : getProductionDayTone(date) === "weekend"
@@ -2424,8 +2424,8 @@ export default function ShiftsPage() {
                       : ""
                 } ${isToday ? "relative bg-sky-50/85 shadow-[inset_0_0_0_2px_rgba(14,165,233,0.55)] dark:bg-sky-400/10 dark:shadow-[inset_0_0_0_2px_rgba(125,211,252,0.45)]" : ""}`}
               >
-                <div className="text-sm font-semibold text-foreground">{getDayNumberLabel(date)}</div>
-                <div className={`mt-1 text-[10px] uppercase tracking-[0.18em] ${isToday ? "font-semibold text-sky-600 dark:text-sky-300" : getProductionDayTone(date) === "holiday" ? "text-rose-500 dark:text-rose-300" : "text-muted-foreground"}`}>{getWeekdayShortLabel(date)}</div>
+                <div className="text-sm font-semibold leading-tight text-foreground">{getDayNumberLabel(date)}</div>
+                <div className={`mt-0.5 text-[9px] uppercase tracking-[0.18em] ${isToday ? "font-semibold text-sky-600 dark:text-sky-300" : getProductionDayTone(date) === "holiday" ? "text-rose-500 dark:text-rose-300" : "text-muted-foreground"}`}>{getWeekdayShortLabel(date)}</div>
               </div>
               );
             })}
@@ -2434,10 +2434,10 @@ export default function ShiftsPage() {
           {sortedStaff.length ? sortedStaff.map((member) => (
             <div
               key={`fullscreen-${member.id}`}
-              className="grid border-b border-border last:border-b-0"
+              className="grid min-h-[74px] border-b border-border last:border-b-0"
               style={{ gridTemplateColumns: `${fullscreenStaffColumnWidth}px repeat(${fullscreenVisibleDates.length}, minmax(${fullscreenDayColumnWidth}px, 1fr))` }}
             >
-              <div className="sticky left-0 z-[80] flex min-h-[58px] flex-col justify-center border-r border-border bg-white px-5 py-3 shadow-[10px_0_0_0_rgba(255,255,255,1)] dark:bg-[#171b24] dark:shadow-[10px_0_0_0_rgba(23,27,36,1)]">
+              <div className="sticky left-0 z-[80] flex min-h-[74px] flex-col justify-center border-r border-border bg-white px-5 py-3 shadow-[10px_0_0_0_rgba(255,255,255,1)] dark:bg-[#171b24] dark:shadow-[10px_0_0_0_rgba(23,27,36,1)]">
                 <p className="text-[1.1rem] font-semibold leading-tight text-foreground">{member.display_name}</p>
                 <p className="mt-1 text-[8px] uppercase tracking-[0.16em] text-muted-foreground">{member.role_label}</p>
               </div>
@@ -2448,7 +2448,7 @@ export default function ShiftsPage() {
                 return (
                   <div
                     key={`fullscreen-${member.id}-${dateKey}`}
-                    className={`min-h-[32px] overflow-visible border-r border-border/80 px-0.5 py-0.5 last:border-r-0 ${
+                    className={`min-h-[74px] overflow-visible border-r border-border/80 px-0.5 py-0.5 last:border-r-0 ${
                       getProductionDayTone(date) === "holiday"
                         ? "bg-rose-50/65 dark:bg-rose-500/6"
                         : getProductionDayTone(date) === "weekend"
