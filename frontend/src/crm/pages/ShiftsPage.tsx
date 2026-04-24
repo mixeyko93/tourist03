@@ -52,6 +52,7 @@ type ShiftTarget = {
   dateLabel: string;
   existingRule?: CrmShiftRule | null;
   minStartsAt?: string | null;
+  isFullyCovered?: boolean;
 };
 
 type PendingSensitiveChange = {
@@ -326,6 +327,50 @@ function inferPresetFromRules(rules: CrmShiftRule[]) {
     Array.from(counter.values()).sort((left, right) => right.count - left.count)[0]?.preset ||
     emptyPresetForm
   );
+}
+
+function getRuleDurationMinutes(rule: CrmShiftRule) {
+  const startDate = rule.shift_date ? parseDateParam(rule.shift_date) : new Date();
+  const endDate = rule.ends_on_date ? parseDateParam(rule.ends_on_date) : startDate;
+  const dayDiff = Math.max(0, Math.round((endDate.getTime() - startDate.getTime()) / 86_400_000));
+  const duration = dayDiff * 24 * 60 + timeToMinutes(rule.ends_at) - timeToMinutes(rule.starts_at);
+  return duration > 0 ? duration : 24 * 60;
+}
+
+function getRuleCoverageOnDate(rule: CrmShiftRule, dateKey: string) {
+  const ruleStartDate = rule.shift_date || "";
+  const ruleEndDate = rule.ends_on_date || ruleStartDate;
+  if (ruleStartDate === dateKey && getRuleDurationMinutes(rule) >= 24 * 60) {
+    return { start: 0, end: 24 * 60 };
+  }
+  if (ruleStartDate === dateKey && ruleEndDate !== dateKey) {
+    return { start: timeToMinutes(rule.starts_at), end: 24 * 60 };
+  }
+  if (ruleEndDate === dateKey && ruleStartDate !== dateKey) {
+    return { start: 0, end: timeToMinutes(rule.ends_at) };
+  }
+  if (ruleStartDate < dateKey && ruleEndDate > dateKey) {
+    return { start: 0, end: 24 * 60 };
+  }
+  return { start: timeToMinutes(rule.starts_at), end: timeToMinutes(rule.ends_at) };
+}
+
+function isWholeDayCovered(rules: CrmShiftRule[], dateKey: string) {
+  const intervals = rules
+    .map((rule) => getRuleCoverageOnDate(rule, dateKey))
+    .filter((interval) => interval.end > interval.start)
+    .sort((left, right) => left.start - right.start);
+  let coveredUntil = 0;
+  for (const interval of intervals) {
+    if (interval.start > coveredUntil) {
+      return false;
+    }
+    coveredUntil = Math.max(coveredUntil, interval.end);
+    if (coveredUntil >= 24 * 60) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function formatShiftSummary(
@@ -1406,9 +1451,11 @@ export default function ShiftsPage() {
   function buildTarget(member: CrmShiftStaffOption, date: Date, existingRule?: CrmShiftRule | null): ShiftTarget {
     const shiftDate = existingRule?.shift_date || formatDateParam(date);
     const cellDateKey = formatDateParam(date);
+    const cellRules = rulesByCell.get(`${member.id}:${cellDateKey}`) || [];
+    const isFullyCovered = !existingRule && isWholeDayCovered(cellRules, cellDateKey);
     const minStartsAt = existingRule
       ? null
-      : (rulesByCell.get(`${member.id}:${cellDateKey}`) || []).reduce<string | null>((latest, rule) => {
+      : cellRules.reduce<string | null>((latest, rule) => {
           const ruleStartDate = rule.shift_date || "";
           const ruleEndDate = rule.ends_on_date || ruleStartDate;
           let endMinute = timeToMinutes(rule.ends_at);
@@ -1430,10 +1477,15 @@ export default function ShiftsPage() {
       dateLabel: formatTargetDate(parseDateParam(shiftDate)),
       existingRule,
       minStartsAt,
+      isFullyCovered,
     };
   }
 
   function openTargetModal(target: ShiftTarget, rule?: CrmShiftRule | null) {
+    if (!rule && target.isFullyCovered) {
+      setErrorMessage("В этой смене уже задействованы полные сутки. Дополнительное время добавить нельзя.");
+      return;
+    }
     const isAdditionalPeriod = !rule && Boolean(target.minStartsAt);
     const defaultStart = clampTimeAtLeast(presetForm.startsAt, target.minStartsAt);
     const defaultStartMinute = timeToMinutes(defaultStart);
