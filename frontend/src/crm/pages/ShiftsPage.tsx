@@ -2198,7 +2198,7 @@ export default function ShiftsPage() {
                   className="grid border-b border-border bg-white dark:bg-card"
                   style={{ gridTemplateColumns: `${staffColumnWidth}px repeat(${visibleDates.length}, minmax(${dayColumnWidth}px, 1fr))` }}
                 >
-                  <div className="sticky left-0 z-[80] flex min-h-[64px] items-center border-r border-border bg-white px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground shadow-[10px_0_0_0_rgba(255,255,255,1)] dark:bg-[#171b24] dark:shadow-[10px_0_0_0_rgba(23,27,36,1)]">
+                  <div className="sticky left-0 z-[80] flex min-h-[64px] items-center border-r border-border bg-white px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground dark:bg-[#171b24]">
                     Сотрудник
                   </div>
                   {visibleDates.map((date) => {
@@ -2229,7 +2229,7 @@ export default function ShiftsPage() {
                       className="grid border-b border-border last:border-b-0"
                       style={{ gridTemplateColumns: `${staffColumnWidth}px repeat(${visibleDates.length}, minmax(${dayColumnWidth}px, 1fr))` }}
                     >
-                      <div className="sticky left-0 z-[80] flex min-h-[62px] flex-col justify-center border-r border-border bg-white px-5 py-3 shadow-[10px_0_0_0_rgba(255,255,255,1)] dark:bg-[#171b24] dark:shadow-[10px_0_0_0_rgba(23,27,36,1)]">
+                      <div className="sticky left-0 z-[80] flex min-h-[62px] flex-col justify-center border-r border-border bg-white px-5 py-3 dark:bg-[#171b24]">
                         <p className="text-[1.28rem] font-semibold leading-tight text-foreground">{member.display_name}</p>
                         <p className="mt-1 text-[8px] uppercase tracking-[0.16em] text-muted-foreground">{member.role_label}</p>
                       </div>
@@ -2407,7 +2407,7 @@ export default function ShiftsPage() {
             className="grid border-b border-border bg-white dark:bg-[#171b24]"
             style={{ gridTemplateColumns: `${fullscreenStaffColumnWidth}px repeat(${fullscreenVisibleDates.length}, minmax(${fullscreenDayColumnWidth}px, 1fr))` }}
           >
-            <div className="sticky left-0 z-[80] flex min-h-[48px] items-center border-r border-border bg-white px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground shadow-[10px_0_0_0_rgba(255,255,255,1)] dark:bg-[#171b24] dark:shadow-[10px_0_0_0_rgba(23,27,36,1)]">
+            <div className="sticky left-0 z-[80] flex min-h-[48px] items-center border-r border-border bg-white px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground dark:bg-[#171b24]">
               Сотрудник
             </div>
             {fullscreenVisibleDates.map((date) => {
@@ -2436,7 +2436,7 @@ export default function ShiftsPage() {
               className="grid min-h-[74px] border-b border-border last:border-b-0"
               style={{ gridTemplateColumns: `${fullscreenStaffColumnWidth}px repeat(${fullscreenVisibleDates.length}, minmax(${fullscreenDayColumnWidth}px, 1fr))` }}
             >
-              <div className="sticky left-0 z-[80] flex min-h-[74px] flex-col justify-center border-r border-border bg-white px-5 py-3 shadow-[10px_0_0_0_rgba(255,255,255,1)] dark:bg-[#171b24] dark:shadow-[10px_0_0_0_rgba(23,27,36,1)]">
+              <div className="sticky left-0 z-[80] flex min-h-[74px] flex-col justify-center border-r border-border bg-white px-5 py-3 dark:bg-[#171b24]">
                 <p className="text-[1.1rem] font-semibold leading-tight text-foreground">{member.display_name}</p>
                 <p className="mt-1 text-[8px] uppercase tracking-[0.16em] text-muted-foreground">{member.role_label}</p>
               </div>
