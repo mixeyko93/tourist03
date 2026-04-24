@@ -412,6 +412,9 @@ type ShiftTimeFieldProps = {
   onClose: () => void;
   onChange: (value: string) => void;
   fieldClassName?: string;
+  hideIcon?: boolean;
+  centerValue?: boolean;
+  compact?: boolean;
 };
 
 function DrumColumn({ items, selected, onSelect }: { items: string[]; selected: string; onSelect: (v: string) => void }) {
@@ -478,7 +481,7 @@ const bookingHoldItems = Array.from({ length: 72 }, (_, i) => String(i + 1));
 const minuteSettingItems = Array.from({ length: 241 }, (_, i) => String(i));
 const escalationRepeatItems = Array.from({ length: 50 }, (_, i) => String(i + 1));
 
-function ShiftTimeField({ label, value, open, onToggle, onClose, onChange, fieldClassName = "" }: ShiftTimeFieldProps) {
+function ShiftTimeField({ label, value, open, onToggle, onClose, onChange, fieldClassName = "", hideIcon = false, centerValue = false, compact = false }: ShiftTimeFieldProps) {
   const parts = splitTimeParts(value);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -528,8 +531,13 @@ function ShiftTimeField({ label, value, open, onToggle, onClose, onChange, field
 
   return (
     <div className={`space-y-2 ${fieldClassName}`}>
-      <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">{label}</span>
-      <button ref={triggerRef} type="button" className="soft-input flex h-14 items-center justify-between gap-3 rounded-[1.35rem] px-4 py-1 text-left" onClick={onToggle}>
+      <span className={`${compact ? "text-[0.68rem]" : "text-xs"} font-medium uppercase tracking-[0.18em] text-muted-foreground`}>{label}</span>
+      <button
+        ref={triggerRef}
+        type="button"
+        className={`soft-input flex ${compact ? "h-12 rounded-[1.15rem]" : "h-14 rounded-[1.35rem]"} items-center ${centerValue ? "justify-center" : "justify-between"} gap-3 px-4 py-1 ${centerValue ? "text-center" : "text-left"}`.trim()}
+        onClick={onToggle}
+      >
         <input
           type="text"
           inputMode="numeric"
@@ -546,11 +554,15 @@ function ShiftTimeField({ label, value, open, onToggle, onClose, onChange, field
             }
             setManualValue(value);
           }}
-          onClick={(event) => event.stopPropagation()}
-          className="w-20 bg-transparent text-base font-semibold text-foreground outline-none"
+          onClick={(event) => {
+            if (!centerValue) {
+              event.stopPropagation();
+            }
+          }}
+          className={`w-20 bg-transparent text-base font-semibold text-foreground outline-none ${centerValue ? "text-center" : ""}`.trim()}
           aria-label={label}
         />
-        <span className="shrink-0 text-foreground"><Clock3 className="h-5 w-5" /></span>
+        {!hideIcon ? <span className="shrink-0 text-foreground"><Clock3 className="h-5 w-5" /></span> : null}
       </button>
       {open && popoverStyle ? createPortal(
         <div
@@ -591,9 +603,10 @@ type DrumNumberFieldProps = {
   onClose: () => void;
   onChange: (value: string) => void;
   className?: string;
+  placement?: "top" | "bottom";
 };
 
-function DrumNumberField({ label, value, items, suffix, open, onToggle, onClose, onChange, className = "" }: DrumNumberFieldProps) {
+function DrumNumberField({ label, value, items, suffix, open, onToggle, onClose, onChange, className = "", placement = "bottom" }: DrumNumberFieldProps) {
   const normalizedValue = items.includes(value) ? value : items[0];
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -603,11 +616,14 @@ function DrumNumberField({ label, value, items, suffix, open, onToggle, onClose,
     if (open && triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
       const popW = 120;
+      const popH = 278;
       let left = rect.left + rect.width / 2 - popW / 2;
       left = Math.max(8, Math.min(left, window.innerWidth - popW - 8));
-      setPopoverStyle({ top: rect.bottom + 10, left });
+      const preferredTop = placement === "top" ? rect.top - popH - 10 : rect.bottom + 10;
+      const top = Math.max(8, Math.min(preferredTop, window.innerHeight - popH - 8));
+      setPopoverStyle({ top, left });
     }
-  }, [open]);
+  }, [open, placement]);
 
   useEffect(() => {
     if (!open) {
@@ -741,6 +757,7 @@ export default function ShiftsPage() {
   const [camps, setCamps] = useState<CrmCamp[]>([]);
   const [selectedCampId, setSelectedCampId] = useState<number | null>(null);
   const [settingsForm, setSettingsForm] = useState<ShiftSettingsForm>(emptySettingsForm);
+  const [settingsDraftForm, setSettingsDraftForm] = useState<ShiftSettingsForm>(emptySettingsForm);
   const [rules, setRules] = useState<CrmShiftRule[]>([]);
   const [staff, setStaff] = useState<CrmShiftStaffOption[]>([]);
   const [overview, setOverview] = useState<Awaited<ReturnType<typeof fetchCrmShifts>>["overview"] | null>(null);
@@ -761,6 +778,7 @@ export default function ShiftsPage() {
   const [, setDeletingRuleId] = useState<number | null>(null);
   const [pendingChange, setPendingChange] = useState<PendingSensitiveChange | null>(null);
   const [isSubmittingChange, setIsSubmittingChange] = useState(false);
+  const [sensitiveAction, setSensitiveAction] = useState<"confirm" | "apply" | null>(null);
   const [activePresetTimeField, setActivePresetTimeField] = useState<"start" | "end" | null>(null);
   const [activeRulePicker, setActiveRulePicker] = useState<"start" | "date" | "end" | null>(null);
   const [activeSettingsPicker, setActiveSettingsPicker] = useState<SettingsPicker | null>(null);
@@ -894,6 +912,7 @@ export default function ShiftsPage() {
       setStaff([]);
       setOverview(null);
       setSettingsForm(emptySettingsForm);
+      setSettingsDraftForm(emptySettingsForm);
       return;
     }
 
@@ -904,7 +923,9 @@ export default function ShiftsPage() {
 
     fetchCrmShifts(selectedCampId, controller.signal)
       .then((payload) => {
-        setSettingsForm(mapSettingsForm(payload.settings));
+        const nextSettingsForm = mapSettingsForm(payload.settings);
+        setSettingsForm(nextSettingsForm);
+        setSettingsDraftForm(nextSettingsForm);
         setRules(payload.rules);
         setStaff(payload.staff);
         setOverview(payload.overview);
@@ -1095,7 +1116,9 @@ export default function ShiftsPage() {
   async function refreshShiftsSilently(campId: number) {
     try {
       const payload = await fetchCrmShifts(campId);
-      setSettingsForm(mapSettingsForm(payload.settings));
+      const nextSettingsForm = mapSettingsForm(payload.settings);
+      setSettingsForm(nextSettingsForm);
+      setSettingsDraftForm(nextSettingsForm);
       setRules(payload.rules);
       setStaff(payload.staff);
       setOverview(payload.overview);
@@ -1289,6 +1312,18 @@ export default function ShiftsPage() {
   function openCreateRuleModal() {
     setActivePresetTimeField(null);
     setIsPresetModalOpen(true);
+  }
+
+  function openSettingsModal() {
+    setSettingsDraftForm(settingsForm);
+    setActiveSettingsPicker(null);
+    setIsSettingsModalOpen(true);
+  }
+
+  function closeSettingsModal() {
+    setSettingsDraftForm(settingsForm);
+    setActiveSettingsPicker(null);
+    setIsSettingsModalOpen(false);
   }
 
   function openCellModal(member: CrmShiftStaffOption, date: Date, rule?: CrmShiftRule | null) {
@@ -1545,8 +1580,13 @@ export default function ShiftsPage() {
     if (!selectedCampId || !pendingChange) {
       return;
     }
+    if (!comment.trim()) {
+      setErrorMessage("Комментарий обязателен для согласования или применения под ответственность.");
+      return;
+    }
     try {
       setIsSubmittingChange(true);
+      setSensitiveAction(applyMode === "pending_review" ? "confirm" : "apply");
       setErrorMessage("");
       setSuccessMessage("");
       await createCrmChangeRequest(selectedCampId, {
@@ -1557,6 +1597,7 @@ export default function ShiftsPage() {
       });
       setSuccessMessage(applyMode === "pending_review" ? pendingChange.successPending : pendingChange.successApplied);
       if (applyMode === "apply_with_responsibility") {
+        setSettingsForm(settingsDraftForm);
         setReloadKey((value) => value + 1);
       }
       setPendingChange(null);
@@ -1564,6 +1605,7 @@ export default function ShiftsPage() {
       setErrorMessage(error instanceof Error ? error.message : "Не удалось обработать чувствительное изменение");
     } finally {
       setIsSubmittingChange(false);
+      setSensitiveAction(null);
       setDeletingRuleId(null);
     }
   }
@@ -1736,7 +1778,7 @@ export default function ShiftsPage() {
                 type="button"
                 aria-label="Изменить параметры реакции"
                 className="soft-button absolute right-2.5 top-2.5 flex h-6 w-6 items-center justify-center rounded-full px-0 py-0"
-                onClick={() => setIsSettingsModalOpen(true)}
+                onClick={openSettingsModal}
               >
                 <PencilLine className="h-2.5 w-2.5" />
               </button>
@@ -2232,14 +2274,11 @@ export default function ShiftsPage() {
 
       <ModalShell
         open={isSettingsModalOpen}
-        onClose={() => {
-          setIsSettingsModalOpen(false);
-          setActiveSettingsPicker(null);
-        }}
+        onClose={closeSettingsModal}
         title="Время реакции обработки брони"
         description="Настройте время реакции обработки заявок: сколько держать бронь, когда включать эскалацию и сколько повторов отправлять до уведомления управляющего."
-        panelClassName="!w-[min(380px,calc(100vw-1rem))] !max-w-none [&>div:first-child]:px-5 [&>div:first-child]:py-4"
-        bodyClassName="px-4 py-4 sm:px-4 sm:py-4"
+        panelClassName="!w-[min(520px,calc(100vw-1rem))] !max-w-none [&>div:first-child]:px-5 [&>div:first-child]:py-4"
+        bodyClassName="px-5 py-4 sm:px-5 sm:py-4"
       >
         <form
           className="space-y-3"
@@ -2253,7 +2292,7 @@ export default function ShiftsPage() {
               title: "Необходимо согласование управляющего",
               description: "Изменение этих параметров влияет на заморозку заявок, ночную обработку и эскалацию. Решите, отправлять ли его управляющему на подтверждение или применять сразу под свою ответственность.",
               operation: "shift_settings_update",
-              payload: toSettingsPayload(settingsForm) as Record<string, unknown>,
+              payload: toSettingsPayload(settingsDraftForm) as Record<string, unknown>,
               successPending: "Параметры времени реакции отправлены на подтверждение.",
               successApplied: "Параметры времени реакции применены под вашу ответственность.",
             });
@@ -2261,58 +2300,62 @@ export default function ShiftsPage() {
             setIsSettingsModalOpen(false);
           }}
         >
-          <div className="mx-auto grid max-w-[280px] gap-2.5">
+          <div className="mx-auto grid max-w-[400px] grid-cols-2 gap-x-4 gap-y-3">
             <DrumNumberField
               label="Заморозка заявки, ч."
-              value={settingsForm.bookingHoldHours}
+              value={settingsDraftForm.bookingHoldHours}
               items={bookingHoldItems}
               suffix="ч."
               open={activeSettingsPicker === "booking-hold"}
               onToggle={() => setActiveSettingsPicker((current) => (current === "booking-hold" ? null : "booking-hold"))}
               onClose={() => setActiveSettingsPicker(null)}
-              onChange={(value) => setSettingsForm((current) => ({ ...current, bookingHoldHours: value }))}
+              onChange={(value) => setSettingsDraftForm((current) => ({ ...current, bookingHoldHours: value }))}
             />
             <ShiftTimeField
               label="Начало ночи"
-              value={settingsForm.nightStartsAt}
+              value={settingsDraftForm.nightStartsAt}
               open={activeSettingsPicker === "night-start"}
               onToggle={() => setActiveSettingsPicker((current) => (current === "night-start" ? null : "night-start"))}
               onClose={() => setActiveSettingsPicker(null)}
-              onChange={(value) => setSettingsForm((current) => ({ ...current, nightStartsAt: value }))}
+              onChange={(value) => setSettingsDraftForm((current) => ({ ...current, nightStartsAt: value }))}
+              hideIcon
+              centerValue
+              compact
             />
             <DrumNumberField
               label="Ночной запас, мин."
-              value={settingsForm.nightReleaseAfterShiftMinutes}
+              value={settingsDraftForm.nightReleaseAfterShiftMinutes}
               items={minuteSettingItems}
               suffix="мин."
               open={activeSettingsPicker === "night-release"}
               onToggle={() => setActiveSettingsPicker((current) => (current === "night-release" ? null : "night-release"))}
               onClose={() => setActiveSettingsPicker(null)}
-              onChange={(value) => setSettingsForm((current) => ({ ...current, nightReleaseAfterShiftMinutes: value }))}
+              onChange={(value) => setSettingsDraftForm((current) => ({ ...current, nightReleaseAfterShiftMinutes: value }))}
             />
             <DrumNumberField
               label="Шаг эскалации, мин."
-              value={settingsForm.escalationStepMinutes}
+              value={settingsDraftForm.escalationStepMinutes}
               items={minuteSettingItems.slice(1)}
               suffix="мин."
               open={activeSettingsPicker === "escalation-step"}
               onToggle={() => setActiveSettingsPicker((current) => (current === "escalation-step" ? null : "escalation-step"))}
               onClose={() => setActiveSettingsPicker(null)}
-              onChange={(value) => setSettingsForm((current) => ({ ...current, escalationStepMinutes: value }))}
+              onChange={(value) => setSettingsDraftForm((current) => ({ ...current, escalationStepMinutes: value }))}
             />
             <DrumNumberField
               label="Повторы до управляющего"
-              value={settingsForm.escalationRepeatsBeforeManager}
+              value={settingsDraftForm.escalationRepeatsBeforeManager}
               items={escalationRepeatItems}
               open={activeSettingsPicker === "escalation-repeats"}
               onToggle={() => setActiveSettingsPicker((current) => (current === "escalation-repeats" ? null : "escalation-repeats"))}
               onClose={() => setActiveSettingsPicker(null)}
-              onChange={(value) => setSettingsForm((current) => ({ ...current, escalationRepeatsBeforeManager: value }))}
+              onChange={(value) => setSettingsDraftForm((current) => ({ ...current, escalationRepeatsBeforeManager: value }))}
+              placement="top"
             />
           </div>
 
-          <div className="mx-auto flex max-w-[280px] flex-col gap-2.5 border-t border-border pt-3 sm:flex-row sm:justify-end">
-            <button type="button" className="soft-button px-4 py-2.5 text-sm" onClick={() => setIsSettingsModalOpen(false)}>
+          <div className="mx-auto flex max-w-[400px] flex-col gap-2.5 border-t border-border pt-3 sm:flex-row sm:justify-end">
+            <button type="button" className="soft-button px-4 py-2.5 text-sm" onClick={closeSettingsModal}>
               Отмена
             </button>
             <button type="submit" className="brand-button justify-center gap-2 px-4 py-2.5 text-sm">
@@ -2423,9 +2466,12 @@ export default function ShiftsPage() {
         title={pendingChange?.title || "Чувствительное изменение"}
         description={pendingChange?.description || ""}
         loading={isSubmittingChange}
+        loadingAction={sensitiveAction}
         onClose={() => {
           if (!isSubmittingChange) {
             setPendingChange(null);
+            setSettingsDraftForm(settingsForm);
+            setSensitiveAction(null);
             setDeletingRuleId(null);
           }
         }}

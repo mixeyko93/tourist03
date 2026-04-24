@@ -7,11 +7,12 @@ type ModalShellProps = PropsWithChildren<{
   onClose: () => void;
   title: string;
   description?: string;
+  disableBackdropClose?: boolean;
   panelClassName?: string;
   bodyClassName?: string;
 }>;
 
-export function ModalShell({ open, onClose, title, description, panelClassName = "", bodyClassName = "", children }: ModalShellProps) {
+export function ModalShell({ open, onClose, title, description, disableBackdropClose = false, panelClassName = "", bodyClassName = "", children }: ModalShellProps) {
   if (typeof document === "undefined") {
     return null;
   }
@@ -24,7 +25,11 @@ export function ModalShell({ open, onClose, title, description, panelClassName =
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 backdrop-blur-md dark:bg-black/55 sm:items-center sm:p-4 lg:left-[var(--crm-shell-offset,0px)] lg:top-16"
-          onClick={onClose}
+          onClick={() => {
+            if (!disableBackdropClose) {
+              onClose();
+            }
+          }}
         >
           <motion.div
             initial={{ opacity: 0, y: 16, scale: 0.98 }}
