@@ -2193,9 +2193,9 @@ export default function ShiftsPage() {
               onPointerCancel={stopGridDragging}
               className={`crm-calendar-grid-scroll mt-4 overflow-x-auto overflow-y-hidden rounded-3xl border border-border bg-white dark:bg-background/55 ${isGridDragging ? "crm-calendar-grid-scroll--dragging" : ""}`}
             >
-              <div style={{ width: `${gridWidth}px`, minWidth: "100%" }}>
+              <div className="transition-[width] duration-300 ease-out" style={{ width: `${gridWidth}px`, minWidth: "100%" }}>
                 <div
-                  className="grid border-b border-border bg-white dark:bg-card"
+                  className="grid border-b border-border bg-white transition-[grid-template-columns] duration-300 ease-out dark:bg-card"
                   style={{ gridTemplateColumns: `${staffColumnWidth}px repeat(${visibleDates.length}, minmax(${dayColumnWidth}px, 1fr))` }}
                 >
                   <div className="sticky left-0 z-[80] flex min-h-[64px] items-center border-r border-border bg-white px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground dark:bg-[#171b24]">
@@ -2226,7 +2226,7 @@ export default function ShiftsPage() {
                   sortedStaff.map((member) => (
                     <div
                       key={member.id}
-                      className="grid border-b border-border last:border-b-0"
+                      className="grid border-b border-border transition-[grid-template-columns] duration-300 ease-out last:border-b-0"
                       style={{ gridTemplateColumns: `${staffColumnWidth}px repeat(${visibleDates.length}, minmax(${dayColumnWidth}px, 1fr))` }}
                     >
                       <div className="sticky left-0 z-[80] flex min-h-[62px] flex-col justify-center border-r border-border bg-white px-5 py-3 dark:bg-[#171b24]">
