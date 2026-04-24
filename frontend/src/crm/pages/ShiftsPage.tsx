@@ -2343,7 +2343,7 @@ export default function ShiftsPage() {
           setActivePresetTimeField(null);
         }}
         title="Параметры смены"
-        panelClassName="w-[min(500px,calc(100vw-2rem))] max-w-none"
+        panelClassName="!w-[min(500px,calc(100vw-2rem))] !max-w-none"
       >
         <form
           className="space-y-5"
@@ -2494,7 +2494,7 @@ export default function ShiftsPage() {
           setActiveRulePicker(null);
         }}
         title="Параметры смены"
-        panelClassName="w-[min(720px,calc(100vw-2rem))] max-w-none"
+        panelClassName="!w-[min(720px,calc(100vw-2rem))] !max-w-none"
       >
         <form className="space-y-4" onSubmit={handleSaveRule}>
           {ruleError ? (
