@@ -263,6 +263,10 @@ function getShiftCellLabel(rule: CrmShiftRule, dateKey: string) {
   return `${startTime} → ${endTime}`;
 }
 
+function isTodayDate(value: Date) {
+  return formatDateParam(value) === formatDateParam(new Date());
+}
+
 function getMonthGridStart(value: Date) {
   return startOfWeek(new Date(value.getFullYear(), value.getMonth(), 1));
 }
@@ -1260,14 +1264,18 @@ export default function ShiftsPage() {
     const today = new Date();
     if (today.getFullYear() === focusDate.getFullYear() && today.getMonth() === focusDate.getMonth()) {
       const targetCell = gridNode.querySelector<HTMLElement>(`[data-grid-date='${formatDateParam(today)}']`);
-      const targetScroll = targetCell ? Math.max(0, targetCell.offsetLeft - staffColumnWidth) : 0;
+      const visibleGridWidth = Math.max(0, gridNode.clientWidth - staffColumnWidth);
+      const maxScroll = Math.max(0, gridNode.scrollWidth - gridNode.clientWidth);
+      const targetScroll = targetCell
+        ? Math.min(maxScroll, Math.max(0, targetCell.offsetLeft - staffColumnWidth - visibleGridWidth / 2 + targetCell.offsetWidth / 2))
+        : 0;
       gridNode.scrollLeft = targetScroll;
       syncScrollFromGrid();
     } else {
       gridNode.scrollLeft = 0;
       syncScrollFromGrid();
     }
-  }, [dayColumnWidth, focusDate, viewMode]);
+  }, [dayColumnWidth, focusDate, gridWidth, sortedStaff.length, viewMode, visibleDates.length]);
 
   useEffect(() => {
     return () => {
@@ -1915,7 +1923,9 @@ export default function ShiftsPage() {
                   <div className="sticky left-0 z-[80] flex min-h-[96px] items-center border-r border-border bg-white px-5 py-4 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground shadow-[10px_0_0_0_rgba(255,255,255,1)] dark:bg-[#171b24] dark:shadow-[10px_0_0_0_rgba(23,27,36,1)]">
                     Сотрудник
                   </div>
-                  {visibleDates.map((date) => (
+                  {visibleDates.map((date) => {
+                    const isToday = isTodayDate(date);
+                    return (
                     <div
                       key={formatDateParam(date)}
                       data-grid-date={formatDateParam(date)}
@@ -1925,12 +1935,13 @@ export default function ShiftsPage() {
                           : getProductionDayTone(date) === "weekend"
                             ? "bg-[#FFF8EE]/85 dark:bg-[#E5D3B3]/6"
                             : ""
-                      }`}
+                      } ${isToday ? "relative bg-sky-50/85 shadow-[inset_0_0_0_2px_rgba(14,165,233,0.55)] dark:bg-sky-400/10 dark:shadow-[inset_0_0_0_2px_rgba(125,211,252,0.45)]" : ""}`}
                     >
                       <div className="text-base font-semibold text-foreground">{getDayNumberLabel(date)}</div>
-                      <div className={`mt-1 text-[11px] uppercase tracking-[0.18em] ${getProductionDayTone(date) === "holiday" ? "text-rose-500 dark:text-rose-300" : "text-muted-foreground"}`}>{getWeekdayShortLabel(date)}</div>
+                      <div className={`mt-1 text-[11px] uppercase tracking-[0.18em] ${isToday ? "font-semibold text-sky-600 dark:text-sky-300" : getProductionDayTone(date) === "holiday" ? "text-rose-500 dark:text-rose-300" : "text-muted-foreground"}`}>{getWeekdayShortLabel(date)}</div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 {sortedStaff.length ? (
@@ -1948,6 +1959,7 @@ export default function ShiftsPage() {
                       {visibleDates.map((date) => {
                         const dateKey = formatDateParam(date);
                         const cellRules = rulesByCell.get(`${member.id}:${dateKey}`) || [];
+                        const isToday = isTodayDate(date);
 
                         return (
                           <div
@@ -1958,7 +1970,7 @@ export default function ShiftsPage() {
                                 : getProductionDayTone(date) === "weekend"
                                   ? "bg-[#FFF8EE]/65 dark:bg-[#E5D3B3]/4"
                                   : ""
-                            }`}
+                            } ${isToday ? "bg-sky-50/55 shadow-[inset_0_0_0_1px_rgba(14,165,233,0.35)] dark:bg-sky-400/7 dark:shadow-[inset_0_0_0_1px_rgba(125,211,252,0.28)]" : ""}`}
                           >
                             {cellRules.length ? (
                               <div className="flex h-full flex-col gap-1">
@@ -2103,7 +2115,9 @@ export default function ShiftsPage() {
             <div className="sticky left-0 z-[80] flex min-h-[72px] items-center border-r border-border bg-white px-5 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground shadow-[10px_0_0_0_rgba(255,255,255,1)] dark:bg-[#171b24] dark:shadow-[10px_0_0_0_rgba(23,27,36,1)]">
               Сотрудник
             </div>
-            {fullscreenVisibleDates.map((date) => (
+            {fullscreenVisibleDates.map((date) => {
+              const isToday = isTodayDate(date);
+              return (
               <div
                 key={`fullscreen-${formatDateParam(date)}`}
                 className={`border-r border-border px-1 py-3 text-center last:border-r-0 ${
@@ -2112,12 +2126,13 @@ export default function ShiftsPage() {
                     : getProductionDayTone(date) === "weekend"
                       ? "bg-[#FFF8EE]/85 dark:bg-[#E5D3B3]/6"
                       : ""
-                }`}
+                } ${isToday ? "relative bg-sky-50/85 shadow-[inset_0_0_0_2px_rgba(14,165,233,0.55)] dark:bg-sky-400/10 dark:shadow-[inset_0_0_0_2px_rgba(125,211,252,0.45)]" : ""}`}
               >
                 <div className="text-sm font-semibold text-foreground">{getDayNumberLabel(date)}</div>
-                <div className={`mt-1 text-[10px] uppercase tracking-[0.18em] ${getProductionDayTone(date) === "holiday" ? "text-rose-500 dark:text-rose-300" : "text-muted-foreground"}`}>{getWeekdayShortLabel(date)}</div>
+                <div className={`mt-1 text-[10px] uppercase tracking-[0.18em] ${isToday ? "font-semibold text-sky-600 dark:text-sky-300" : getProductionDayTone(date) === "holiday" ? "text-rose-500 dark:text-rose-300" : "text-muted-foreground"}`}>{getWeekdayShortLabel(date)}</div>
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {sortedStaff.length ? sortedStaff.map((member) => (
@@ -2133,6 +2148,7 @@ export default function ShiftsPage() {
               {fullscreenVisibleDates.map((date) => {
                 const dateKey = formatDateParam(date);
                 const cellRules = rulesByCell.get(`${member.id}:${dateKey}`) || [];
+                const isToday = isTodayDate(date);
                 return (
                   <div
                     key={`fullscreen-${member.id}-${dateKey}`}
@@ -2142,7 +2158,7 @@ export default function ShiftsPage() {
                         : getProductionDayTone(date) === "weekend"
                           ? "bg-[#FFF8EE]/65 dark:bg-[#E5D3B3]/4"
                           : ""
-                    }`}
+                    } ${isToday ? "bg-sky-50/55 shadow-[inset_0_0_0_1px_rgba(14,165,233,0.35)] dark:bg-sky-400/7 dark:shadow-[inset_0_0_0_1px_rgba(125,211,252,0.28)]" : ""}`}
                   >
                     {cellRules.length ? (
                       <div className="flex h-full flex-col gap-1">

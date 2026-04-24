@@ -1,5 +1,5 @@
 import { BedDouble, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, PencilLine, Users } from "lucide-react";
-import { type PointerEvent as ReactPointerEvent, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { type PointerEvent as ReactPointerEvent, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { EmptyState } from "../components/EmptyState";
 import { ModalShell } from "../components/ModalShell";
@@ -99,6 +99,10 @@ function formatDateParam(value: Date) {
   const month = `${value.getMonth() + 1}`.padStart(2, "0");
   const day = `${value.getDate()}`.padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function isTodayDate(value: Date) {
+  return formatDateParam(value) === formatDateParam(new Date());
 }
 
 function getMonthLabel(value: Date) {
@@ -432,6 +436,35 @@ export default function CalendarPage() {
   useEffect(() => {
     updateScrollMetrics();
   }, [hasHorizontalOverflow]);
+
+  useLayoutEffect(() => {
+    const gridNode = gridScrollRef.current;
+    if (!gridNode) {
+      return;
+    }
+
+    if (viewMode !== "month") {
+      gridNode.scrollLeft = 0;
+      updateScrollMetrics();
+      return;
+    }
+
+    const today = new Date();
+    if (today.getFullYear() === focusDate.getFullYear() && today.getMonth() === focusDate.getMonth()) {
+      const targetCell = gridNode.querySelector<HTMLElement>(`[data-calendar-date='${formatDateParam(today)}']`);
+      const visibleGridWidth = Math.max(0, gridNode.clientWidth - roomColumnWidth);
+      const maxScroll = Math.max(0, gridNode.scrollWidth - gridNode.clientWidth);
+      const targetScroll = targetCell
+        ? Math.min(maxScroll, Math.max(0, targetCell.offsetLeft - roomColumnWidth - visibleGridWidth / 2 + targetCell.offsetWidth / 2))
+        : 0;
+      gridNode.scrollLeft = targetScroll;
+      updateScrollMetrics();
+      return;
+    }
+
+    gridNode.scrollLeft = 0;
+    updateScrollMetrics();
+  }, [calendarContentWidth, feed.rooms.length, focusDate, viewMode, visibleDates.length]);
 
   useEffect(() => {
     return () => {
@@ -945,21 +978,25 @@ export default function CalendarPage() {
                     Апартамент
                   </div>
                   <div className="grid flex-1" style={{ gridTemplateColumns: `repeat(${visibleDates.length}, minmax(${dayColumnWidth}px, 1fr))` }}>
-                    {visibleDates.map((value) => (
-                      <div
-                        key={formatDateParam(value)}
-                        className={`border-r border-border px-2 py-3 text-center last:border-r-0 ${
-                          getProductionDayTone(value) === "holiday"
-                            ? "bg-rose-50/85 dark:bg-rose-500/10"
-                            : getProductionDayTone(value) === "weekend"
-                              ? "bg-[#FFF8EE]/85 dark:bg-[#E5D3B3]/6"
-                              : ""
-                        }`}
-                      >
-                        <div className="text-sm font-semibold text-foreground">{getDayNumberLabel(value)}</div>
-                        <div className={`mt-1 text-[10px] uppercase tracking-[0.18em] ${getProductionDayTone(value) === "holiday" ? "text-rose-500 dark:text-rose-300" : "text-muted-foreground"}`}>{getWeekdayLabel(value)}</div>
-                      </div>
-                    ))}
+                    {visibleDates.map((value) => {
+                      const isToday = isTodayDate(value);
+                      return (
+                        <div
+                          key={formatDateParam(value)}
+                          data-calendar-date={formatDateParam(value)}
+                          className={`border-r border-border px-2 py-3 text-center last:border-r-0 ${
+                            getProductionDayTone(value) === "holiday"
+                              ? "bg-rose-50/85 dark:bg-rose-500/10"
+                              : getProductionDayTone(value) === "weekend"
+                                ? "bg-[#FFF8EE]/85 dark:bg-[#E5D3B3]/6"
+                                : ""
+                          } ${isToday ? "relative bg-sky-50/85 shadow-[inset_0_0_0_2px_rgba(14,165,233,0.55)] dark:bg-sky-400/10 dark:shadow-[inset_0_0_0_2px_rgba(125,211,252,0.45)]" : ""}`}
+                        >
+                          <div className="text-sm font-semibold text-foreground">{getDayNumberLabel(value)}</div>
+                          <div className={`mt-1 text-[10px] uppercase tracking-[0.18em] ${isToday ? "font-semibold text-sky-600 dark:text-sky-300" : getProductionDayTone(value) === "holiday" ? "text-rose-500 dark:text-rose-300" : "text-muted-foreground"}`}>{getWeekdayLabel(value)}</div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -989,25 +1026,28 @@ export default function CalendarPage() {
                         className="relative grid flex-1"
                         style={{ gridTemplateColumns: `repeat(${visibleDates.length}, minmax(${dayColumnWidth}px, 1fr))` }}
                       >
-                        {visibleDates.map((value) => (
-                          <button
-                            key={`${room.id}-${formatDateParam(value)}`}
-                            type="button"
-                            onDoubleClick={() => openCreateBooking(room, value)}
-                            className={`h-18 border-r border-border/80 text-transparent last:border-r-0 ${
-                              getProductionDayTone(value) === "holiday"
-                                ? "bg-rose-50/70 dark:bg-rose-500/6"
-                                : getProductionDayTone(value) === "weekend"
-                                  ? "bg-[#FFF8EE]/70 dark:bg-[#E5D3B3]/4"
-                                  : highlightedRoomId === room.id
-                                    ? "bg-[#E5D3B3]/5 dark:bg-[#E5D3B3]/3"
-                                    : "bg-transparent"
-                            }`}
-                            aria-label={`Создать бронь для ${room.title} на ${formatDateLabel(formatDateParam(value))}`}
-                          >
-                            ·
-                          </button>
-                        ))}
+                        {visibleDates.map((value) => {
+                          const isToday = isTodayDate(value);
+                          return (
+                            <button
+                              key={`${room.id}-${formatDateParam(value)}`}
+                              type="button"
+                              onDoubleClick={() => openCreateBooking(room, value)}
+                              className={`h-18 border-r border-border/80 text-transparent last:border-r-0 ${
+                                getProductionDayTone(value) === "holiday"
+                                  ? "bg-rose-50/70 dark:bg-rose-500/6"
+                                  : getProductionDayTone(value) === "weekend"
+                                    ? "bg-[#FFF8EE]/70 dark:bg-[#E5D3B3]/4"
+                                    : highlightedRoomId === room.id
+                                      ? "bg-[#E5D3B3]/5 dark:bg-[#E5D3B3]/3"
+                                      : "bg-transparent"
+                              } ${isToday ? "bg-sky-50/55 shadow-[inset_0_0_0_1px_rgba(14,165,233,0.35)] dark:bg-sky-400/7 dark:shadow-[inset_0_0_0_1px_rgba(125,211,252,0.28)]" : ""}`}
+                              aria-label={`Создать бронь для ${room.title} на ${formatDateLabel(formatDateParam(value))}`}
+                            >
+                              ·
+                            </button>
+                          );
+                        })}
 
                         <div className="pointer-events-none absolute inset-0 px-1 py-2">
                           {room.bookings.map((booking) => (
