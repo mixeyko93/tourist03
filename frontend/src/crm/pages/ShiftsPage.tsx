@@ -51,6 +51,7 @@ type ShiftTarget = {
   shiftDate: string;
   dateLabel: string;
   existingRule?: CrmShiftRule | null;
+  minStartsAt?: string | null;
 };
 
 type PendingSensitiveChange = {
@@ -238,6 +239,20 @@ function formatShiftTime(value: string) {
 function timeToMinutes(value: string) {
   const [hours = "0", minutes = "0"] = value.slice(0, 5).split(":");
   return Number(hours) * 60 + Number(minutes);
+}
+
+function minutesToTime(value: number) {
+  const clamped = Math.max(0, Math.min(value, 23 * 60 + 59));
+  const hours = Math.floor(clamped / 60);
+  const minutes = clamped % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+function clampTimeAtLeast(value: string, minValue?: string | null) {
+  if (!minValue) {
+    return value;
+  }
+  return timeToMinutes(value) < timeToMinutes(minValue) ? minValue : value;
 }
 
 function formatShiftSummary(
@@ -436,6 +451,7 @@ type ShiftTimeFieldProps = {
   hideIcon?: boolean;
   centerValue?: boolean;
   compact?: boolean;
+  minValue?: string | null;
 };
 
 function DrumColumn({ items, selected, onSelect }: { items: string[]; selected: string; onSelect: (v: string) => void }) {
@@ -502,8 +518,9 @@ const bookingHoldItems = Array.from({ length: 72 }, (_, i) => String(i + 1));
 const minuteSettingItems = Array.from({ length: 241 }, (_, i) => String(i));
 const escalationRepeatItems = Array.from({ length: 50 }, (_, i) => String(i + 1));
 
-function ShiftTimeField({ label, value, open, onToggle, onClose, onChange, fieldClassName = "", hideIcon = false, centerValue = false, compact = false }: ShiftTimeFieldProps) {
+function ShiftTimeField({ label, value, open, onToggle, onClose, onChange, fieldClassName = "", hideIcon = false, centerValue = false, compact = false, minValue = null }: ShiftTimeFieldProps) {
   const parts = splitTimeParts(value);
+  const commitChange = (nextValue: string) => onChange(clampTimeAtLeast(nextValue, minValue));
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const [manualValue, setManualValue] = useState(value);
@@ -569,7 +586,7 @@ function ShiftTimeField({ label, value, open, onToggle, onClose, onChange, field
             if (/^\d{1,2}:\d{2}$/.test(normalized)) {
               const [hours, minutes] = normalized.split(":").map(Number);
               if (hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59) {
-                onChange(`${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`);
+                commitChange(`${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`);
                 return;
               }
             }
@@ -598,13 +615,13 @@ function ShiftTimeField({ label, value, open, onToggle, onClose, onChange, field
             <DrumColumn
               items={hourItems}
               selected={parts.hours}
-              onSelect={(h) => onChange(`${h}:${parts.minutes}`)}
+              onSelect={(h) => commitChange(`${h}:${parts.minutes}`)}
             />
             <div className="flex items-center justify-center text-xl font-bold text-white/40 px-1">:</div>
             <DrumColumn
               items={minuteItems}
               selected={parts.minutes}
-              onSelect={(m) => onChange(`${parts.hours}:${m}`)}
+              onSelect={(m) => commitChange(`${parts.hours}:${m}`)}
             />
           </div>
         </div>,
@@ -1308,16 +1325,41 @@ export default function ShiftsPage() {
 
   function buildTarget(member: CrmShiftStaffOption, date: Date, existingRule?: CrmShiftRule | null): ShiftTarget {
     const shiftDate = existingRule?.shift_date || formatDateParam(date);
+    const cellDateKey = formatDateParam(date);
+    const minStartsAt = existingRule
+      ? null
+      : (rulesByCell.get(`${member.id}:${cellDateKey}`) || []).reduce<string | null>((latest, rule) => {
+          const ruleStartDate = rule.shift_date || "";
+          const ruleEndDate = rule.ends_on_date || ruleStartDate;
+          let endMinute = timeToMinutes(rule.ends_at);
+          if (ruleStartDate === cellDateKey && ruleEndDate !== cellDateKey) {
+            endMinute = 24 * 60;
+          }
+          if (ruleEndDate !== cellDateKey && ruleStartDate !== cellDateKey) {
+            return latest;
+          }
+          if (!latest || endMinute > timeToMinutes(latest)) {
+            return minutesToTime(endMinute);
+          }
+          return latest;
+        }, null);
     return {
       adminId: member.id,
       adminName: member.display_name,
       shiftDate,
       dateLabel: formatTargetDate(parseDateParam(shiftDate)),
       existingRule,
+      minStartsAt,
     };
   }
 
   function openTargetModal(target: ShiftTarget, rule?: CrmShiftRule | null) {
+    const defaultStart = clampTimeAtLeast(presetForm.startsAt, target.minStartsAt);
+    const defaultStartMinute = timeToMinutes(defaultStart);
+    const defaultEnd =
+      timeToMinutes(presetForm.endsAt) > defaultStartMinute
+        ? presetForm.endsAt
+        : minutesToTime(defaultStartMinute + 60);
     setActiveTarget(target);
     setEditingRule(rule || null);
     setRuleForm(
@@ -1327,9 +1369,9 @@ export default function ShiftsPage() {
             comment: rule.comment_date === target.shiftDate ? rule.comment || "" : "",
           }
         : {
-            startsAt: presetForm.startsAt,
+            startsAt: defaultStart,
             endsOnDate: target.shiftDate,
-            endsAt: presetForm.endsAt,
+            endsAt: defaultEnd,
             comment: "",
           },
     );
@@ -1466,6 +1508,11 @@ export default function ShiftsPage() {
       setIsSavingRule(true);
       setRuleError("");
       setErrorMessage("");
+      if (!editingRule && activeTarget.minStartsAt && timeToMinutes(ruleForm.startsAt) < timeToMinutes(activeTarget.minStartsAt)) {
+        setRuleError(`Новый период можно начать не раньше ${formatDisplayTime(activeTarget.minStartsAt)}.`);
+        setIsSavingRule(false);
+        return;
+      }
       if (editingRule) {
         await updateCrmShiftRule(selectedCampId, editingRule.id, toRulePayload(ruleForm, activeTarget));
         setRules((current) =>
@@ -2077,7 +2124,9 @@ export default function ShiftsPage() {
                                     openCellModal(member, date);
                                   }}
                                 >
-                                  +
+                                  <svg viewBox="0 0 10 10" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                                    <line x1="5" y1="2" x2="5" y2="8" /><line x1="2" y1="5" x2="8" y2="5" />
+                                  </svg>
                                 </button>
                               </div>
                             ) : (
@@ -2250,7 +2299,9 @@ export default function ShiftsPage() {
                             openCellModal(member, date);
                           }}
                         >
-                          +
+                          <svg viewBox="0 0 10 10" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                            <line x1="5" y1="2" x2="5" y2="8" /><line x1="2" y1="5" x2="8" y2="5" />
+                          </svg>
                         </button>
                       </div>
                     ) : (
@@ -2292,7 +2343,7 @@ export default function ShiftsPage() {
           setActivePresetTimeField(null);
         }}
         title="Параметры смены"
-        panelClassName="w-[min(620px,calc(100vw-2rem))] max-w-none"
+        panelClassName="w-[min(500px,calc(100vw-2rem))] max-w-none"
       >
         <form
           className="space-y-5"
@@ -2306,7 +2357,7 @@ export default function ShiftsPage() {
             setIsPresetModalOpen(false);
           }}
         >
-          <div className="mx-auto grid max-w-[420px] gap-4 md:grid-cols-[180px_180px] md:items-start md:justify-center md:gap-6">
+          <div className="mx-auto grid max-w-[392px] gap-4 md:grid-cols-[180px_180px] md:items-start md:justify-center md:gap-6">
             <ShiftTimeField
               label="Начало смены"
               value={presetForm.startsAt}
@@ -2327,8 +2378,8 @@ export default function ShiftsPage() {
             />
           </div>
 
-          <div className="mx-auto flex w-full max-w-[420px] flex-col gap-3 border-t border-border pt-2 sm:flex-row sm:justify-center">
-            <button type="button" className="soft-button px-4 py-2.5 text-sm" onClick={() => setIsPresetModalOpen(false)}>
+          <div className="mx-auto grid w-full max-w-[392px] grid-cols-[minmax(0,1fr)_auto] gap-3 border-t border-border pt-2">
+            <button type="button" className="soft-button w-full justify-center px-4 py-2.5 text-sm" onClick={() => setIsPresetModalOpen(false)}>
               Отмена
             </button>
             <button type="submit" className="brand-button justify-center gap-2 px-5 py-2.5 text-sm">
@@ -2443,7 +2494,7 @@ export default function ShiftsPage() {
           setActiveRulePicker(null);
         }}
         title="Параметры смены"
-        panelClassName="w-[min(820px,calc(100vw-2rem))] max-w-none"
+        panelClassName="w-[min(720px,calc(100vw-2rem))] max-w-none"
       >
         <form className="space-y-4" onSubmit={handleSaveRule}>
           {ruleError ? (
@@ -2457,8 +2508,19 @@ export default function ShiftsPage() {
               open={activeRulePicker === "start"}
               onToggle={() => setActiveRulePicker((current) => (current === "start" ? null : "start"))}
               onClose={() => setActiveRulePicker(null)}
-              onChange={(value) => setRuleForm((current) => ({ ...current, startsAt: value }))}
+              onChange={(value) => {
+                const nextStartsAt = clampTimeAtLeast(value, !editingRule ? activeTarget?.minStartsAt : null);
+                setRuleForm((current) => ({
+                  ...current,
+                  startsAt: nextStartsAt,
+                  endsAt:
+                    (current.endsOnDate || activeTarget?.shiftDate) === activeTarget?.shiftDate && timeToMinutes(current.endsAt) <= timeToMinutes(nextStartsAt)
+                      ? minutesToTime(timeToMinutes(nextStartsAt) + 60)
+                      : current.endsAt,
+                }));
+              }}
               fieldClassName="w-full"
+              minValue={!editingRule ? activeTarget?.minStartsAt : null}
             />
             <ShiftDateField
               label="Дата окончания"
