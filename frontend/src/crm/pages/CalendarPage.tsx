@@ -974,8 +974,10 @@ export default function CalendarPage() {
             >
               <div style={{ minWidth: calendarContentWidth }}>
                 <div className="flex border-b border-border bg-card/70">
-                  <div className="sticky left-0 z-[90] shrink-0 border-r border-border bg-white px-5 py-4 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground shadow-[10px_0_0_0_rgba(255,255,255,1)] dark:bg-[#171b24] dark:shadow-[10px_0_0_0_rgba(23,27,36,1)]" style={{ width: roomColumnWidth }}>
+                  <div className="sticky left-0 z-[90] flex shrink-0 self-stretch border-r border-border bg-white px-5 py-4 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground dark:bg-[#171b24]" style={{ width: roomColumnWidth }}>
+                    <span className="self-center">
                     Апартамент
+                    </span>
                   </div>
                   <div className="grid flex-1" style={{ gridTemplateColumns: `repeat(${visibleDates.length}, minmax(${dayColumnWidth}px, 1fr))` }}>
                     {visibleDates.map((value) => {
@@ -1011,7 +1013,7 @@ export default function CalendarPage() {
                         data-calendar-no-drag="true"
                         onClick={() => setHighlightedRoomId(room.id)}
                         onDoubleClick={() => openRoomDetails(room.room_id)}
-                        className={`sticky left-0 z-[90] flex shrink-0 cursor-pointer flex-col justify-center border-r border-border px-5 py-5 text-left shadow-[10px_0_0_0_rgba(255,255,255,1)] transition dark:shadow-[10px_0_0_0_rgba(23,27,36,1)] ${
+                        className={`sticky left-0 z-[90] flex shrink-0 self-stretch cursor-pointer flex-col justify-center border-r border-border px-5 py-5 text-left transition ${
                           highlightedRoomId === room.id
                             ? "bg-[#F8F0E2] shadow-[inset_0_0_0_1px_rgba(229,211,179,0.26)] dark:bg-[#1b202b] dark:shadow-[inset_0_0_0_1px_rgba(229,211,179,0.16)]"
                             : "bg-white hover:bg-accent/55 dark:bg-[#171b24]"

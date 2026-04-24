@@ -2198,8 +2198,10 @@ export default function ShiftsPage() {
                   className="grid border-b border-border bg-white transition-[grid-template-columns] duration-300 ease-out dark:bg-card"
                   style={{ gridTemplateColumns: `${staffColumnWidth}px repeat(${visibleDates.length}, minmax(${dayColumnWidth}px, 1fr))` }}
                 >
-                  <div className="sticky left-0 z-[80] flex min-h-[64px] items-center border-r border-border bg-white px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground dark:bg-[#171b24]">
+                  <div className="sticky left-0 z-[80] flex h-full min-h-[64px] self-stretch border-r border-border bg-white px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground dark:bg-[#171b24]">
+                    <span className="self-center">
                     Сотрудник
+                    </span>
                   </div>
                   {visibleDates.map((date) => {
                     const isToday = isTodayDate(date);
@@ -2229,7 +2231,7 @@ export default function ShiftsPage() {
                       className="grid border-b border-border transition-[grid-template-columns] duration-300 ease-out last:border-b-0"
                       style={{ gridTemplateColumns: `${staffColumnWidth}px repeat(${visibleDates.length}, minmax(${dayColumnWidth}px, 1fr))` }}
                     >
-                      <div className="sticky left-0 z-[80] flex min-h-[62px] flex-col justify-center border-r border-border bg-white px-5 py-3 dark:bg-[#171b24]">
+                      <div className="sticky left-0 z-[80] flex h-full min-h-[62px] self-stretch flex-col justify-center border-r border-border bg-white px-5 py-3 dark:bg-[#171b24]">
                         <p className="text-[1.28rem] font-semibold leading-tight text-foreground">{member.display_name}</p>
                         <p className="mt-1 text-[8px] uppercase tracking-[0.16em] text-muted-foreground">{member.role_label}</p>
                       </div>
@@ -2407,8 +2409,10 @@ export default function ShiftsPage() {
             className="grid border-b border-border bg-white dark:bg-[#171b24]"
             style={{ gridTemplateColumns: `${fullscreenStaffColumnWidth}px repeat(${fullscreenVisibleDates.length}, minmax(${fullscreenDayColumnWidth}px, 1fr))` }}
           >
-            <div className="sticky left-0 z-[80] flex min-h-[48px] items-center border-r border-border bg-white px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground dark:bg-[#171b24]">
+            <div className="sticky left-0 z-[80] flex h-full min-h-[48px] self-stretch border-r border-border bg-white px-5 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground dark:bg-[#171b24]">
+              <span className="self-center">
               Сотрудник
+              </span>
             </div>
             {fullscreenVisibleDates.map((date) => {
               const isToday = isTodayDate(date);
@@ -2436,7 +2440,7 @@ export default function ShiftsPage() {
               className="grid min-h-[74px] border-b border-border last:border-b-0"
               style={{ gridTemplateColumns: `${fullscreenStaffColumnWidth}px repeat(${fullscreenVisibleDates.length}, minmax(${fullscreenDayColumnWidth}px, 1fr))` }}
             >
-              <div className="sticky left-0 z-[80] flex min-h-[74px] flex-col justify-center border-r border-border bg-white px-5 py-3 dark:bg-[#171b24]">
+              <div className="sticky left-0 z-[80] flex h-full min-h-[74px] self-stretch flex-col justify-center border-r border-border bg-white px-5 py-3 dark:bg-[#171b24]">
                 <p className="text-[1.1rem] font-semibold leading-tight text-foreground">{member.display_name}</p>
                 <p className="mt-1 text-[8px] uppercase tracking-[0.16em] text-muted-foreground">{member.role_label}</p>
               </div>
