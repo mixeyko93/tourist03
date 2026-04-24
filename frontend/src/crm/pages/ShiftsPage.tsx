@@ -1,4 +1,4 @@
-import { AlarmClockCheck, CalendarClock, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Clock3, Expand, Minus, PencilLine, Plus, Save, Trash2, UserRoundCheck } from "lucide-react";
+import { AlarmClockCheck, CalendarClock, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Clock3, Expand, PencilLine, Save, Trash2, UserRoundCheck } from "lucide-react";
 import { type PointerEvent as ReactPointerEvent, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { EmptyState } from "../components/EmptyState";
@@ -93,6 +93,7 @@ type ActiveTooltip = {
 };
 
 type ViewMode = "month" | "week";
+type SettingsPicker = "booking-hold" | "night-start" | "night-release" | "escalation-step" | "escalation-repeats";
 
 const weekdayLabels = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
 
@@ -473,6 +474,9 @@ function DrumColumn({ items, selected, onSelect }: { items: string[]; selected: 
 
 const hourItems = Array.from({ length: 24 }, (_, i) => `${i}`.padStart(2, "0"));
 const minuteItems = Array.from({ length: 60 }, (_, i) => `${i}`.padStart(2, "0"));
+const bookingHoldItems = Array.from({ length: 72 }, (_, i) => String(i + 1));
+const minuteSettingItems = Array.from({ length: 241 }, (_, i) => String(i));
+const escalationRepeatItems = Array.from({ length: 50 }, (_, i) => String(i + 1));
 
 function ShiftTimeField({ label, value, open, onToggle, onClose, onChange, fieldClassName = "" }: ShiftTimeFieldProps) {
   const parts = splitTimeParts(value);
@@ -577,53 +581,85 @@ function ShiftTimeField({ label, value, open, onToggle, onClose, onChange, field
   );
 }
 
-type StepperFieldProps = {
+type DrumNumberFieldProps = {
   label: string;
   value: string;
-  min: number;
-  max?: number;
-  step?: number;
+  items: string[];
   suffix?: string;
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
   onChange: (value: string) => void;
   className?: string;
 };
 
-function StepperField({ label, value, min, max, step = 1, suffix, onChange, className = "" }: StepperFieldProps) {
-  const numericValue = Number(value || min);
-  const safeValue = Number.isFinite(numericValue) ? numericValue : min;
-  const commit = (next: number) => {
-    const clamped = Math.max(min, max === undefined ? next : Math.min(next, max));
-    onChange(String(clamped));
-  };
+function DrumNumberField({ label, value, items, suffix, open, onToggle, onClose, onChange, className = "" }: DrumNumberFieldProps) {
+  const normalizedValue = items.includes(value) ? value : items[0];
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [popoverStyle, setPopoverStyle] = useState<{ top: number; left: number } | null>(null);
+
+  useEffect(() => {
+    if (open && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      const popW = 120;
+      let left = rect.left + rect.width / 2 - popW / 2;
+      left = Math.max(8, Math.min(left, window.innerWidth - popW - 8));
+      setPopoverStyle({ top: rect.bottom + 10, left });
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (!target) {
+        return;
+      }
+      if (triggerRef.current?.contains(target) || popoverRef.current?.contains(target)) {
+        return;
+      }
+      onClose();
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    };
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+      document.removeEventListener("keydown", handleKeyDown, true);
+    };
+  }, [onClose, open]);
 
   return (
     <div className={`space-y-2 ${className}`.trim()}>
-      <span className="block text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">{label}</span>
-      <div className="soft-input flex h-14 items-center gap-2 rounded-[1.35rem] px-2 py-1">
-        <button type="button" className="soft-button h-9 w-9 shrink-0 px-0 py-0" onClick={() => commit(safeValue - step)} aria-label={`Уменьшить: ${label}`}>
-          <Minus className="h-4 w-4" />
-        </button>
-        <div className="min-w-0 flex-1 text-center">
-          <input
-            type="text"
-            inputMode="numeric"
-            value={safeValue}
-            onChange={(event) => {
-              const nextValue = event.target.value.replace(/[^\d-]/g, "");
-              if (!nextValue) {
-                commit(min);
-                return;
-              }
-              commit(Number(nextValue));
-            }}
-            className="w-16 appearance-none bg-transparent text-center text-lg font-semibold text-foreground outline-none"
-          />
-          {suffix ? <div className="-mt-1 text-center text-xs font-medium text-muted-foreground">{suffix}</div> : null}
+      <span className="block text-[0.68rem] font-medium uppercase tracking-[0.18em] text-muted-foreground">{label}</span>
+      <button ref={triggerRef} type="button" className="soft-input flex h-12 items-center justify-center rounded-[1.15rem] px-4 py-1 text-center" onClick={onToggle}>
+        <div className="min-w-0 text-center">
+          <div className="text-lg font-semibold text-foreground">{normalizedValue}</div>
+          {suffix ? <div className="-mt-1 text-xs font-medium text-muted-foreground">{suffix}</div> : null}
         </div>
-        <button type="button" className="soft-button h-9 w-9 shrink-0 px-0 py-0" onClick={() => commit(safeValue + step)} aria-label={`Увеличить: ${label}`}>
-          <Plus className="h-4 w-4" />
-        </button>
-      </div>
+      </button>
+      {open && popoverStyle ? createPortal(
+        <div
+          ref={popoverRef}
+          style={{ position: "fixed", top: popoverStyle.top, left: popoverStyle.left, width: 120, zIndex: 9999 }}
+          className="overflow-hidden rounded-3xl border border-white/10 bg-[#18181b]/96 shadow-2xl backdrop-blur-xl"
+        >
+          <div className="px-3 pt-4 pb-1 text-center text-2xl font-bold tracking-[-0.04em] text-white">
+            {normalizedValue}
+          </div>
+          <div className="px-3 pb-3">
+            <DrumColumn items={items} selected={normalizedValue} onSelect={onChange} />
+          </div>
+        </div>,
+        document.body,
+      ) : null}
     </div>
   );
 }
@@ -727,7 +763,7 @@ export default function ShiftsPage() {
   const [isSubmittingChange, setIsSubmittingChange] = useState(false);
   const [activePresetTimeField, setActivePresetTimeField] = useState<"start" | "end" | null>(null);
   const [activeRulePicker, setActiveRulePicker] = useState<"start" | "date" | "end" | null>(null);
-  const [activeSettingsTimeField, setActiveSettingsTimeField] = useState<"night-start" | null>(null);
+  const [activeSettingsPicker, setActiveSettingsPicker] = useState<SettingsPicker | null>(null);
   const [isBoardModalOpen, setIsBoardModalOpen] = useState(false);
   const [hasHorizontalOverflow, setHasHorizontalOverflow] = useState(false);
   const [isScrollIndicatorActive, setIsScrollIndicatorActive] = useState(false);
@@ -2198,15 +2234,15 @@ export default function ShiftsPage() {
         open={isSettingsModalOpen}
         onClose={() => {
           setIsSettingsModalOpen(false);
-          setActiveSettingsTimeField(null);
+          setActiveSettingsPicker(null);
         }}
         title="Время реакции обработки брони"
         description="Настройте время реакции обработки заявок: сколько держать бронь, когда включать эскалацию и сколько повторов отправлять до уведомления управляющего."
-        panelClassName="w-[min(680px,calc(100vw-2rem))] max-w-none"
-        bodyClassName="px-5 py-5 sm:px-6 sm:py-5"
+        panelClassName="!w-[min(380px,calc(100vw-1rem))] !max-w-none [&>div:first-child]:px-5 [&>div:first-child]:py-4"
+        bodyClassName="px-4 py-4 sm:px-4 sm:py-4"
       >
         <form
-          className="space-y-4"
+          className="space-y-3"
           onSubmit={(event) => {
             event.preventDefault();
             if (!selectedCampId) {
@@ -2221,53 +2257,65 @@ export default function ShiftsPage() {
               successPending: "Параметры времени реакции отправлены на подтверждение.",
               successApplied: "Параметры времени реакции применены под вашу ответственность.",
             });
-            setActiveSettingsTimeField(null);
+            setActiveSettingsPicker(null);
             setIsSettingsModalOpen(false);
           }}
         >
-          <div className="mx-auto grid max-w-[560px] gap-x-4 gap-y-4 sm:grid-cols-2">
-            <StepperField
+          <div className="mx-auto grid max-w-[280px] gap-2.5">
+            <DrumNumberField
               label="Заморозка заявки, ч."
               value={settingsForm.bookingHoldHours}
-              min={1}
+              items={bookingHoldItems}
               suffix="ч."
+              open={activeSettingsPicker === "booking-hold"}
+              onToggle={() => setActiveSettingsPicker((current) => (current === "booking-hold" ? null : "booking-hold"))}
+              onClose={() => setActiveSettingsPicker(null)}
               onChange={(value) => setSettingsForm((current) => ({ ...current, bookingHoldHours: value }))}
             />
             <ShiftTimeField
               label="Начало ночи"
               value={settingsForm.nightStartsAt}
-              open={activeSettingsTimeField === "night-start"}
-              onToggle={() => setActiveSettingsTimeField((current) => (current === "night-start" ? null : "night-start"))}
-              onClose={() => setActiveSettingsTimeField(null)}
+              open={activeSettingsPicker === "night-start"}
+              onToggle={() => setActiveSettingsPicker((current) => (current === "night-start" ? null : "night-start"))}
+              onClose={() => setActiveSettingsPicker(null)}
               onChange={(value) => setSettingsForm((current) => ({ ...current, nightStartsAt: value }))}
             />
-            <StepperField
+            <DrumNumberField
               label="Ночной запас, мин."
               value={settingsForm.nightReleaseAfterShiftMinutes}
-              min={0}
+              items={minuteSettingItems}
               suffix="мин."
+              open={activeSettingsPicker === "night-release"}
+              onToggle={() => setActiveSettingsPicker((current) => (current === "night-release" ? null : "night-release"))}
+              onClose={() => setActiveSettingsPicker(null)}
               onChange={(value) => setSettingsForm((current) => ({ ...current, nightReleaseAfterShiftMinutes: value }))}
             />
-            <StepperField
+            <DrumNumberField
               label="Шаг эскалации, мин."
               value={settingsForm.escalationStepMinutes}
-              min={1}
+              items={minuteSettingItems.slice(1)}
               suffix="мин."
+              open={activeSettingsPicker === "escalation-step"}
+              onToggle={() => setActiveSettingsPicker((current) => (current === "escalation-step" ? null : "escalation-step"))}
+              onClose={() => setActiveSettingsPicker(null)}
               onChange={(value) => setSettingsForm((current) => ({ ...current, escalationStepMinutes: value }))}
             />
-            <StepperField
+            <DrumNumberField
               label="Повторы до управляющего"
               value={settingsForm.escalationRepeatsBeforeManager}
-              min={1}
+              items={escalationRepeatItems}
+              open={activeSettingsPicker === "escalation-repeats"}
+              onToggle={() => setActiveSettingsPicker((current) => (current === "escalation-repeats" ? null : "escalation-repeats"))}
+              onClose={() => setActiveSettingsPicker(null)}
               onChange={(value) => setSettingsForm((current) => ({ ...current, escalationRepeatsBeforeManager: value }))}
             />
           </div>
 
-          <div className="mx-auto flex max-w-[560px] flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:justify-end">
+          <div className="mx-auto flex max-w-[280px] flex-col gap-2.5 border-t border-border pt-3 sm:flex-row sm:justify-end">
             <button type="button" className="soft-button px-4 py-2.5 text-sm" onClick={() => setIsSettingsModalOpen(false)}>
               Отмена
             </button>
-            <button type="submit" className="brand-button justify-center gap-2 px-5 py-2.5 text-sm">
+            <button type="submit" className="brand-button justify-center gap-2 px-4 py-2.5 text-sm">
               <Save className="h-4 w-4" />
               Сохранить параметры
             </button>
