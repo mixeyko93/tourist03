@@ -66,7 +66,7 @@ PROJECT_PATH="${DEPLOY_PATH:-/opt/tourist03}"
 DEPLOY_REMOTE="${DEPLOY_REMOTE:-origin}"
 DEPLOY_BRANCH="${DEPLOY_BRANCH:-$(git branch --show-current)}"
 DEPLOY_REVISION="${DEPLOY_REVISION:-$(git rev-parse HEAD)}"
-DEPLOY_CMD="${DEPLOY_CMD:-sudo -u tourist03 git -C \"$PROJECT_PATH\" fetch \"$DEPLOY_REMOTE\" \"$DEPLOY_BRANCH\" && sudo -u tourist03 git -C \"$PROJECT_PATH\" reset --hard \"$DEPLOY_REVISION\" && sudo -u tourist03 git -C \"$PROJECT_PATH\" clean -fd -e archive/ -e static/uploads/ -e .env && chown -R tourist03:tourist03 \"$PROJECT_PATH\" && cd \"$PROJECT_PATH\" && ./.venv/bin/pip install -r requirements.txt && ./.venv/bin/python -c 'from tourist03.migrations import run_migrations; run_migrations()' && systemctl restart tourist03-app tourist03-bot caddy}"
+DEPLOY_CMD="${DEPLOY_CMD:-sudo -u tourist03 git -C \"$PROJECT_PATH\" fetch \"$DEPLOY_REMOTE\" \"$DEPLOY_BRANCH\" && sudo -u tourist03 git -C \"$PROJECT_PATH\" reset --hard \"$DEPLOY_REVISION\" && sudo -u tourist03 git -C \"$PROJECT_PATH\" clean -fd -e archive/ -e static/uploads/ -e .env && chown -R tourist03:tourist03 \"$PROJECT_PATH\" && cd \"$PROJECT_PATH\" && ./.venv/bin/pip install -r requirements.txt && ./.venv/bin/python -c 'from tourist03.migrations import run_migrations; run_migrations()' && systemctl restart tourist03-app tourist03-bot caddy && (systemctl try-restart tourist03-vk-bot || true)}"
 
 resolve_deploy_password
 

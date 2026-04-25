@@ -1,0 +1,17 @@
+[Unit]
+Description=Tourist03 VK Bot
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tourist03
+Group=tourist03
+WorkingDirectory=/opt/tourist03
+EnvironmentFile=/opt/tourist03/.env
+ExecStart=/opt/tourist03/.venv/bin/python /opt/tourist03/vk_bot.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
