@@ -1,8 +1,20 @@
-import { BellRing, LogOut, Menu, MoonStar, SunMedium, UserCircle2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { BellRing, KeyRound, Loader2, LogOut, Menu, MoonStar, ShieldCheck, SunMedium, UserCircle2, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router";
 import { useTheme } from "next-themes";
-import { fetchCrmEventCenterSummary, fetchCrmSession, logoutCrmSession, type CrmSession } from "../session";
+import {
+  completeCrmProfilePinReset,
+  fetchCrmEventCenterSummary,
+  fetchCrmProfileSwitcher,
+  fetchCrmSession,
+  logoutCrmSession,
+  requestCrmProfilePinReset,
+  requestCrmProfilePinSetup,
+  switchCrmProfile,
+  type CrmProfileSwitchProfile,
+  type CrmProfileSwitcherResponse,
+  type CrmSession,
+} from "../session";
 import { crmPath } from "../paths";
 import { PageLoadingState } from "./PageLoadingState";
 import { useDocumentTitle } from "./useDocumentTitle";
@@ -21,6 +33,12 @@ const navItems = [
   { label: "Карта", path: "/map" },
 ];
 
+type ProfileSwitchMode = "list" | "pin" | "setup" | "pending_setup" | "pending_reset" | "reset_ready" | "success";
+
+function sanitizePin(value: string) {
+  return value.replace(/\D/g, "").slice(0, 4);
+}
+
 export default function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -33,6 +51,17 @@ export default function AppLayout() {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [eventNewCount, setEventNewCount] = useState(0);
   const [isRouteTransitioning, setIsRouteTransitioning] = useState(false);
+  const [profileSwitcherOpen, setProfileSwitcherOpen] = useState(false);
+  const [profileSwitcher, setProfileSwitcher] = useState<CrmProfileSwitcherResponse | null>(null);
+  const [profileSwitcherLoading, setProfileSwitcherLoading] = useState(false);
+  const [profileSwitcherError, setProfileSwitcherError] = useState("");
+  const [profileMode, setProfileMode] = useState<ProfileSwitchMode>("list");
+  const [selectedProfileId, setSelectedProfileId] = useState<number | null>(null);
+  const [profileMessage, setProfileMessage] = useState("");
+  const [pinValue, setPinValue] = useState("");
+  const [pinConfirmValue, setPinConfirmValue] = useState("");
+  const [profileActionPending, setProfileActionPending] = useState(false);
+  const pendingSetupPinRef = useRef("");
   const calendarPath = crmPath("/calendar");
   const activeNavItem = navItems.find((item) => location.pathname === crmPath(item.path));
 
@@ -164,6 +193,200 @@ export default function AppLayout() {
     }
   };
 
+  const selectedProfile = selectedProfileId
+    ? profileSwitcher?.profiles.find((profile) => profile.id === selectedProfileId) || null
+    : null;
+
+  const resetProfileForm = () => {
+    setProfileMode("list");
+    setSelectedProfileId(null);
+    setProfileMessage("");
+    setProfileSwitcherError("");
+    setPinValue("");
+    setPinConfirmValue("");
+    setProfileActionPending(false);
+    pendingSetupPinRef.current = "";
+  };
+
+  const loadProfileSwitcher = async (signal?: AbortSignal) => {
+    setProfileSwitcherLoading(true);
+    setProfileSwitcherError("");
+    try {
+      const payload = await fetchCrmProfileSwitcher(signal);
+      setProfileSwitcher(payload);
+      return payload;
+    } catch (error: unknown) {
+      if (!signal?.aborted) {
+        setProfileSwitcherError(error instanceof Error ? error.message : "Не удалось загрузить карточки сотрудников");
+      }
+      return null;
+    } finally {
+      if (!signal?.aborted) {
+        setProfileSwitcherLoading(false);
+      }
+    }
+  };
+
+  const openProfileSwitcher = () => {
+    resetProfileForm();
+    setProfileSwitcherOpen(true);
+    void loadProfileSwitcher();
+  };
+
+  const closeProfileSwitcher = () => {
+    setProfileSwitcherOpen(false);
+    resetProfileForm();
+  };
+
+  const handleSelectProfile = (profile: CrmProfileSwitchProfile) => {
+    setSelectedProfileId(profile.id);
+    setPinValue("");
+    setPinConfirmValue("");
+    setProfileMessage("");
+    setProfileSwitcherError("");
+    if (profile.is_current && profile.has_pin) {
+      setProfileMessage("Вы уже работаете под этой карточкой сотрудника.");
+      setProfileMode("list");
+      return;
+    }
+    if (!profile.has_pin) {
+      if (!profile.has_telegram_link) {
+        setProfileSwitcherError("Сначала привяжите Telegram к этой карточке сотрудника в настройках CRM.");
+        setProfileMode("list");
+        return;
+      }
+      setProfileMode("setup");
+      return;
+    }
+    if (profile.pin_reset_ready) {
+      setProfileMode("reset_ready");
+      return;
+    }
+    setProfileMode("pin");
+  };
+
+  const handleProfilePinSubmit = async () => {
+    if (!selectedProfile) {
+      return;
+    }
+    const pin = sanitizePin(pinValue);
+    const pinConfirm = sanitizePin(pinConfirmValue);
+    if (pin.length !== 4) {
+      setProfileSwitcherError("Введите PIN-код из 4 цифр.");
+      return;
+    }
+    if ((profileMode === "setup" || profileMode === "reset_ready") && pin !== pinConfirm) {
+      setProfileSwitcherError("PIN-коды не совпадают.");
+      return;
+    }
+
+    setProfileActionPending(true);
+    setProfileSwitcherError("");
+    try {
+      if (profileMode === "pin") {
+        const nextSession = await switchCrmProfile(selectedProfile.id, pin);
+        setSession(nextSession);
+        closeProfileSwitcher();
+        return;
+      }
+      if (profileMode === "setup") {
+        pendingSetupPinRef.current = pin;
+        await requestCrmProfilePinSetup(selectedProfile.id, pin);
+        setProfileMessage("Подтвердите создание PIN-кода в Telegram. После подтверждения CRM переключит карточку автоматически.");
+        setProfileMode("pending_setup");
+        return;
+      }
+      if (profileMode === "reset_ready") {
+        const nextSession = await completeCrmProfilePinReset(selectedProfile.id, pin);
+        setSession(nextSession);
+        setProfileMessage(`PIN-код создан. Добро пожаловать, ${nextSession.name}.`);
+        setProfileMode("success");
+      }
+    } catch (error: unknown) {
+      pendingSetupPinRef.current = "";
+      setProfileSwitcherError(error instanceof Error ? error.message : "Не удалось выполнить действие");
+    } finally {
+      setProfileActionPending(false);
+    }
+  };
+
+  const handleForgotProfilePin = async () => {
+    if (!selectedProfile) {
+      return;
+    }
+    setProfileActionPending(true);
+    setProfileSwitcherError("");
+    try {
+      await requestCrmProfilePinReset(selectedProfile.id);
+      setProfileMessage("В Telegram отправлено подтверждение сброса PIN-кода.");
+      setProfileMode("pending_reset");
+    } catch (error: unknown) {
+      setProfileSwitcherError(error instanceof Error ? error.message : "Не удалось отправить запрос на сброс PIN");
+    } finally {
+      setProfileActionPending(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!profileSwitcherOpen || !selectedProfileId || !["pending_setup", "pending_reset"].includes(profileMode)) {
+      return;
+    }
+
+    let active = true;
+    const poll = async () => {
+      try {
+        const payload = await fetchCrmProfileSwitcher();
+        if (!active) {
+          return;
+        }
+        setProfileSwitcher(payload);
+        const profile = payload.profiles.find((item) => item.id === selectedProfileId);
+        if (!profile) {
+          setProfileSwitcherError("Карточка сотрудника больше недоступна.");
+          setProfileMode("list");
+          return;
+        }
+        if (profileMode === "pending_setup") {
+          if (profile.has_pin && pendingSetupPinRef.current) {
+            const nextSession = await switchCrmProfile(profile.id, pendingSetupPinRef.current);
+            if (!active) {
+              return;
+            }
+            pendingSetupPinRef.current = "";
+            setSession(nextSession);
+            setProfileMessage(`PIN-код создан. Добро пожаловать, ${nextSession.name}.`);
+            setProfileMode("success");
+          } else if (!profile.pin_pending_action && !profile.has_pin) {
+            pendingSetupPinRef.current = "";
+            setProfileSwitcherError("Создание PIN-кода отклонено или срок подтверждения истёк.");
+            setProfileMode("setup");
+          }
+          return;
+        }
+        if (profileMode === "pending_reset") {
+          if (profile.pin_reset_ready) {
+            setProfileMessage("Сброс подтверждён. Создайте новый PIN-код.");
+            setProfileMode("reset_ready");
+          } else if (!profile.pin_pending_action) {
+            setProfileSwitcherError("Сброс PIN-кода отклонён или срок подтверждения истёк.");
+            setProfileMode("pin");
+          }
+        }
+      } catch (error: unknown) {
+        if (active) {
+          setProfileSwitcherError(error instanceof Error ? error.message : "Не удалось проверить подтверждение Telegram");
+        }
+      }
+    };
+
+    void poll();
+    const intervalId = window.setInterval(poll, 2000);
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+    };
+  }, [profileMode, profileSwitcherOpen, selectedProfileId]);
+
   if (isAuthLoading) {
     return (
       <div className="crm-ambient flex min-h-screen items-center justify-center bg-background px-4 text-foreground">
@@ -221,16 +444,23 @@ export default function AppLayout() {
 
   const sidebarFooter = (
     <div className="absolute inset-x-3 bottom-4 space-y-3 border-t border-border/80 pt-4">
-      <div className="rounded-[1.65rem] border border-border bg-background/72 px-4 py-3 shadow-sm">
+      <button
+        type="button"
+        onClick={openProfileSwitcher}
+        className="w-full rounded-[1.65rem] border border-border bg-background/72 px-4 py-3 text-left shadow-sm transition hover:border-[#E5D3B3]/40 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5D3B3]/60"
+      >
         <div className="flex items-center gap-3">
           <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[#E5D3B3]/25 bg-[#E5D3B3]/10 text-[#E5D3B3]">
             <UserCircle2 className="h-5 w-5" />
           </span>
-          <div className="min-w-0">
-            <p className="truncate text-base font-semibold text-foreground">{session.name}</p>
+          <div className="min-w-0 flex-1">
+            <p className="line-clamp-2 text-sm font-semibold leading-5 text-foreground" title={session.name}>
+              {session.name}
+            </p>
+            <p className="mt-0.5 truncate text-[11px] text-muted-foreground">Сменить профиль</p>
           </div>
         </div>
-      </div>
+      </button>
 
       <button
         type="button"
@@ -243,6 +473,211 @@ export default function AppLayout() {
       </button>
     </div>
   );
+
+  const pinTitle =
+    profileMode === "setup"
+      ? "Создайте PIN-код"
+      : profileMode === "reset_ready"
+        ? "Задайте новый PIN-код"
+        : "Введите PIN-код";
+  const pinDescription =
+    profileMode === "setup"
+      ? "PIN активируется только после подтверждения сотрудником в Telegram."
+      : profileMode === "reset_ready"
+        ? "Сброс уже подтверждён в Telegram, дополнительное подтверждение не требуется."
+        : "Для переключения профиля нужен личный PIN сотрудника.";
+  const submitLabel =
+    profileMode === "setup"
+      ? "Отправить в Telegram"
+      : profileMode === "reset_ready"
+        ? "Создать PIN"
+        : "Войти";
+  const profileSwitcherModal = profileSwitcherOpen ? (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/62 px-4 py-6 backdrop-blur-md">
+      <div className="glass-card flex max-h-[min(760px,calc(100dvh-2rem))] w-full max-w-5xl flex-col overflow-hidden rounded-[2rem] border border-border bg-card/95 shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-5">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#E5D3B3]">Профили CRM</p>
+            <h2 className="mt-2 text-2xl font-semibold tracking-[-0.05em] text-foreground">Быстрое переключение сотрудника</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+              Действия в CRM будут логироваться от имени активной карточки сотрудника.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={closeProfileSwitcher}
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border bg-background/70 text-muted-foreground transition hover:bg-accent hover:text-foreground"
+            aria-label="Закрыть переключение профиля"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="grid min-h-0 flex-1 gap-0 overflow-hidden lg:grid-cols-[minmax(0,1fr)_minmax(360px,0.85fr)]">
+          <div className="min-h-0 overflow-y-auto border-b border-border p-5 lg:border-b-0 lg:border-r">
+            {profileSwitcherLoading && !profileSwitcher ? (
+              <div className="flex min-h-60 items-center justify-center rounded-3xl border border-border bg-background/45">
+                <Loader2 className="h-6 w-6 animate-spin text-[#E5D3B3]" />
+              </div>
+            ) : null}
+            {profileSwitcher?.profiles.length ? (
+              <div className="space-y-3">
+                {profileSwitcher.profiles.map((profile) => (
+                  <button
+                    type="button"
+                    key={profile.id}
+                    onClick={() => handleSelectProfile(profile)}
+                    className={[
+                      "w-full rounded-3xl border px-4 py-4 text-left transition",
+                      selectedProfileId === profile.id
+                        ? "border-[#E5D3B3]/55 bg-[#E5D3B3]/12"
+                        : "border-border bg-background/55 hover:border-[#E5D3B3]/35 hover:bg-accent",
+                    ].join(" ")}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="break-words text-lg font-semibold leading-6 text-foreground">{profile.display_name}</p>
+                        <p className="mt-1 text-xs uppercase tracking-[0.18em] text-muted-foreground">{profile.role_label}</p>
+                        {profile.camp_names.length ? (
+                          <p className="mt-2 truncate text-sm text-muted-foreground">{profile.camp_names.join(", ")}</p>
+                        ) : null}
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-2">
+                        {profile.is_current ? (
+                          <span className="rounded-full border border-emerald-400/35 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-200">
+                            Активен
+                          </span>
+                        ) : null}
+                        {!profile.has_pin ? (
+                          <span className="rounded-full border border-amber-400/35 bg-amber-400/10 px-3 py-1 text-xs font-semibold text-amber-100">
+                            PIN не создан
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : !profileSwitcherLoading ? (
+              <div className="rounded-3xl border border-border bg-background/45 p-6 text-sm text-muted-foreground">
+                Нет доступных карточек сотрудников.
+              </div>
+            ) : null}
+          </div>
+
+          <div className="min-h-0 overflow-y-auto p-5">
+            {profileSwitcherError ? (
+              <div className="mb-4 rounded-3xl border border-rose-400/35 bg-rose-500/12 px-4 py-3 text-sm text-rose-100">
+                {profileSwitcherError}
+              </div>
+            ) : null}
+            {profileMessage ? (
+              <div className="mb-4 rounded-3xl border border-[#E5D3B3]/35 bg-[#E5D3B3]/10 px-4 py-3 text-sm leading-6 text-[#F6E7C7]">
+                {profileMessage}
+              </div>
+            ) : null}
+
+            {profileMode === "success" ? (
+              <div className="rounded-[1.75rem] border border-border bg-background/55 p-5">
+                <ShieldCheck className="h-9 w-9 text-emerald-300" />
+                <h3 className="mt-4 text-xl font-semibold text-foreground">Профиль активирован</h3>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">{profileMessage}</p>
+                <button type="button" onClick={closeProfileSwitcher} className="brand-button mt-6 w-full justify-center">
+                  ОК
+                </button>
+              </div>
+            ) : selectedProfile && ["pin", "setup", "reset_ready"].includes(profileMode) ? (
+              <form
+                className="rounded-[1.75rem] border border-border bg-background/55 p-5"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void handleProfilePinSubmit();
+                }}
+              >
+                <KeyRound className="h-8 w-8 text-[#E5D3B3]" />
+                <h3 className="mt-4 text-xl font-semibold text-foreground">{pinTitle}</h3>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">{pinDescription}</p>
+                <div className="mt-5 space-y-4">
+                  <label className="block">
+                    <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">PIN-код</span>
+                    <input
+                      value={pinValue}
+                      onChange={(event) => setPinValue(sanitizePin(event.target.value))}
+                      inputMode="numeric"
+                      type="password"
+                      autoComplete="one-time-code"
+                      className="mt-2 w-full rounded-2xl border border-border bg-background px-4 py-3 text-lg font-semibold text-foreground outline-none transition focus:border-[#E5D3B3]"
+                      placeholder="0000"
+                    />
+                  </label>
+                  {profileMode === "setup" || profileMode === "reset_ready" ? (
+                    <label className="block">
+                      <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Повторите PIN</span>
+                      <input
+                        value={pinConfirmValue}
+                        onChange={(event) => setPinConfirmValue(sanitizePin(event.target.value))}
+                        inputMode="numeric"
+                        type="password"
+                        autoComplete="one-time-code"
+                        className="mt-2 w-full rounded-2xl border border-border bg-background px-4 py-3 text-lg font-semibold text-foreground outline-none transition focus:border-[#E5D3B3]"
+                        placeholder="0000"
+                      />
+                    </label>
+                  ) : null}
+                </div>
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={resetProfileForm}
+                    className="flex-1 rounded-2xl border border-border px-4 py-3 text-sm font-semibold text-foreground transition hover:bg-accent"
+                  >
+                    Отмена
+                  </button>
+                  {profileMode === "pin" ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleForgotProfilePin()}
+                      disabled={profileActionPending}
+                      className="flex-1 rounded-2xl border border-[#E5D3B3]/30 bg-[#E5D3B3]/10 px-4 py-3 text-sm font-semibold text-[#F6E7C7] transition hover:bg-[#E5D3B3]/15 disabled:opacity-60"
+                    >
+                      Забыл PIN
+                    </button>
+                  ) : null}
+                  <button type="submit" disabled={profileActionPending} className="brand-button flex-1 justify-center disabled:opacity-60">
+                    {profileActionPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    {submitLabel}
+                  </button>
+                </div>
+              </form>
+            ) : ["pending_setup", "pending_reset"].includes(profileMode) ? (
+              <div className="rounded-[1.75rem] border border-border bg-background/55 p-5">
+                <Loader2 className="h-8 w-8 animate-spin text-[#E5D3B3]" />
+                <h3 className="mt-4 text-xl font-semibold text-foreground">Ожидаем Telegram</h3>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  Нажмите кнопку подтверждения в боте. CRM проверяет статус автоматически.
+                </p>
+                <button
+                  type="button"
+                  onClick={resetProfileForm}
+                  className="mt-6 w-full rounded-2xl border border-border px-4 py-3 text-sm font-semibold text-foreground transition hover:bg-accent"
+                >
+                  Отмена
+                </button>
+              </div>
+            ) : (
+              <div className="rounded-[1.75rem] border border-border bg-background/55 p-5">
+                <UserCircle2 className="h-8 w-8 text-[#E5D3B3]" />
+                <h3 className="mt-4 text-xl font-semibold text-foreground">Выберите сотрудника</h3>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  Управляющий тоже переключается через свой PIN. Это защищает рабочее место, если CRM уже открыта на ПК.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  ) : null;
 
   return (
     <div className="flex h-screen min-h-screen flex-col overflow-hidden bg-background text-foreground">
@@ -339,6 +774,7 @@ export default function AppLayout() {
           </div>
         </main>
       </div>
+      {profileSwitcherModal}
     </div>
   );
 }

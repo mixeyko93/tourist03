@@ -8,6 +8,31 @@ export type CrmSession = {
   defaultRoleKey: string;
 };
 
+export type CrmProfileSwitchProfile = {
+  id: number;
+  login: string;
+  display_name: string;
+  default_role_key: string;
+  role_label: string;
+  camp_ids: number[];
+  camp_names: string[];
+  has_pin: boolean;
+  has_telegram_link: boolean;
+  telegram_username: string | null;
+  pin_pending_action: "set" | "reset" | string | null;
+  pin_pending_expires_at: string | null;
+  pin_reset_ready: boolean;
+  is_current: boolean;
+  is_root: boolean;
+  is_locked: boolean;
+};
+
+export type CrmProfileSwitcherResponse = {
+  current_admin_id: number;
+  root_admin_id: number;
+  profiles: CrmProfileSwitchProfile[];
+};
+
 export type CrmLoginPayload = {
   login: string;
   password: string;
@@ -503,6 +528,11 @@ type AdminSessionPayload = {
   default_role_key?: string;
 };
 
+type AdminProfileSwitchSessionResponse = {
+  ok: boolean;
+  session: AdminSessionPayload;
+};
+
 async function parseJsonOrNull(response: Response) {
   return (await response.json().catch(() => null)) as { detail?: string } | null;
 }
@@ -561,6 +591,69 @@ export async function logoutCrmSession() {
     credentials: "same-origin",
   });
   await assertOk(response);
+}
+
+export async function fetchCrmProfileSwitcher(signal?: AbortSignal): Promise<CrmProfileSwitcherResponse> {
+  const response = await fetch("/api/admin/profile-switcher", {
+    credentials: "same-origin",
+    signal,
+  });
+  await assertOk(response);
+  return (await response.json()) as CrmProfileSwitcherResponse;
+}
+
+export async function requestCrmProfilePinSetup(staffId: number, pin: string) {
+  const response = await fetch("/api/admin/profile-switcher/setup-pin", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ staff_id: staffId, pin }),
+  });
+  await assertOk(response);
+  return (await response.json()) as { ok: boolean; status: string };
+}
+
+export async function switchCrmProfile(staffId: number, pin: string): Promise<CrmSession> {
+  const response = await fetch("/api/admin/profile-switcher/switch", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ staff_id: staffId, pin }),
+  });
+  await assertOk(response);
+  const payload = (await response.json()) as AdminProfileSwitchSessionResponse;
+  return mapSession(payload.session);
+}
+
+export async function requestCrmProfilePinReset(staffId: number) {
+  const response = await fetch("/api/admin/profile-switcher/forgot-pin", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ staff_id: staffId }),
+  });
+  await assertOk(response);
+  return (await response.json()) as { ok: boolean; status: string };
+}
+
+export async function completeCrmProfilePinReset(staffId: number, pin: string): Promise<CrmSession> {
+  const response = await fetch("/api/admin/profile-switcher/reset-pin", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ staff_id: staffId, pin }),
+  });
+  await assertOk(response);
+  const payload = (await response.json()) as AdminProfileSwitchSessionResponse;
+  return mapSession(payload.session);
 }
 
 export async function fetchPublicUiOverride(key: string, signal?: AbortSignal): Promise<CrmUiOverrideResponse> {

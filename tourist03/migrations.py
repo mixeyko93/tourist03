@@ -919,6 +919,25 @@ MIGRATIONS = (
           AND comment_date IS NULL;
         """,
     ),
+    MigrationStep(
+        version="0013_admin_profile_pins",
+        sql="""
+        ALTER TABLE auth.camp_admin_accounts ADD COLUMN IF NOT EXISTS profile_pin_hash TEXT;
+        ALTER TABLE auth.camp_admin_accounts ADD COLUMN IF NOT EXISTS profile_pin_set_at TIMESTAMPTZ;
+        ALTER TABLE auth.camp_admin_accounts ADD COLUMN IF NOT EXISTS profile_pin_pending_hash TEXT;
+        ALTER TABLE auth.camp_admin_accounts ADD COLUMN IF NOT EXISTS profile_pin_pending_token TEXT;
+        ALTER TABLE auth.camp_admin_accounts ADD COLUMN IF NOT EXISTS profile_pin_pending_action TEXT;
+        ALTER TABLE auth.camp_admin_accounts ADD COLUMN IF NOT EXISTS profile_pin_pending_requested_by_admin_id INTEGER;
+        ALTER TABLE auth.camp_admin_accounts ADD COLUMN IF NOT EXISTS profile_pin_pending_expires_at TIMESTAMPTZ;
+        ALTER TABLE auth.camp_admin_accounts ADD COLUMN IF NOT EXISTS profile_pin_reset_confirmed_until TIMESTAMPTZ;
+        ALTER TABLE auth.camp_admin_accounts ADD COLUMN IF NOT EXISTS profile_pin_failed_attempts INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE auth.camp_admin_accounts ADD COLUMN IF NOT EXISTS profile_pin_locked_until TIMESTAMPTZ;
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_camp_admin_profile_pin_pending_token
+        ON auth.camp_admin_accounts(profile_pin_pending_token)
+        WHERE profile_pin_pending_token IS NOT NULL;
+        """,
+    ),
 )
 
 

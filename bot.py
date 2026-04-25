@@ -16,6 +16,7 @@ from tourist03.config import CRM_BASE_URL, STAFF_BOT_POLL_INTERVAL, STAFF_BOT_TO
 from tourist03.repositories import notifications as notification_repo
 from tourist03.services import admin as admin_service
 from tourist03.services.staff_bot import (
+    apply_profile_pin_action,
     apply_superadmin_media_action,
     build_staff_rollback_confirm_keyboard,
     build_staff_event_keyboard,
@@ -246,7 +247,7 @@ async def staff_cmd_events(message: Message) -> None:
 @staff_router.callback_query()
 async def staff_callback_router(callback: CallbackQuery) -> None:
     raw = (callback.data or "").strip()
-    if not raw.startswith("cr:") and not raw.startswith("sa:"):
+    if not raw.startswith("cr:") and not raw.startswith("sa:") and not raw.startswith("pin:"):
         await callback.answer()
         return
 
@@ -256,6 +257,51 @@ async def staff_callback_router(callback: CallbackQuery) -> None:
         return
 
     try:
+        if parts[0] == "pin":
+            if len(parts) < 4:
+                await callback.answer("Некорректная команда.", show_alert=True)
+                return
+            action = parts[1]
+            decision = parts[2]
+            token = parts[3]
+            if action not in {"set", "reset"} or decision not in {"confirm", "reject"}:
+                await callback.answer("Некорректная команда.", show_alert=True)
+                return
+            chat_id = callback.message.chat.id if callback.message else callback.from_user.id
+            result = apply_profile_pin_action(
+                telegram_chat_id=int(chat_id),
+                action=action,
+                token=token,
+                approved=decision == "confirm",
+            )
+            result_status = str(result.get("status") or "")
+            message_map = {
+                "confirmed": "PIN-код подтверждён. Можно вернуться в CRM.",
+                "reset_confirmed": "Сброс PIN-кода подтверждён. Вернитесь в CRM и задайте новый PIN.",
+                "rejected": "Запрос отклонён.",
+                "expired": "Запрос истёк. Повторите действие в CRM.",
+                "forbidden": "Эта кнопка предназначена для другого Telegram.",
+                "not_found": "Запрос уже обработан или не найден.",
+                "missing": "Запрос не найден.",
+                "invalid": "Запрос некорректен.",
+            }
+            text = message_map.get(result_status, "Не удалось обработать запрос.")
+            if callback.message:
+                await callback.message.edit_reply_markup(reply_markup=crm_button("/settings"))
+                await callback.message.answer(
+                    format_staff_event_message(
+                        {
+                            "title": "Быстрый профиль CRM",
+                            "body": text,
+                            "severity": "info" if result_status in {"confirmed", "reset_confirmed", "rejected"} else "warning",
+                            "created_at": None,
+                        }
+                    ),
+                    reply_markup=crm_button("/settings"),
+                )
+            await callback.answer(text, show_alert=result_status not in {"confirmed", "reset_confirmed", "rejected"})
+            return
+
         if parts[0] == "sa":
             account = notification_repo.get_superadmin_account_by_chat_id(callback.message.chat.id if callback.message else callback.from_user.id)
             if not account:

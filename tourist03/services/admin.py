@@ -22,6 +22,9 @@ from tourist03.schemas import (
     AdminCreateBookingRequest,
     AdminLoginRequest,
     AdminNotificationStatusUpdateRequest,
+    AdminProfilePinResetRequest,
+    AdminProfilePinSetupRequest,
+    AdminProfileSwitchRequest,
     AdminRoomUpsertRequest,
     AdminShiftRuleUpsertRequest,
     AdminShiftSettingsUpdateRequest,
@@ -378,16 +381,242 @@ def admin_login(req: AdminLoginRequest, request: Request):
     if not row or not row["is_active"] or not verify_password(req.password, row["password_hash"]):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неверный логин или пароль")
     request.session["admin_id"] = row["id"]
+    request.session["crm_root_admin_id"] = row["id"]
     return {"status": "ok"}
 
 
 def admin_logout(request: Request):
     request.session.pop("admin_id", None)
+    request.session.pop("crm_root_admin_id", None)
     return {"status": "ok"}
 
 
 def admin_me(admin: dict = Depends(get_current_admin)):
     return admin
+
+
+def _session_root_admin_id(request: Request, admin: dict) -> int:
+    root_admin_id = request.session.get("crm_root_admin_id")
+    if not root_admin_id:
+        root_admin_id = int(admin["id"])
+        request.session["crm_root_admin_id"] = root_admin_id
+    return int(root_admin_id)
+
+
+def _role_label(role_key: str) -> str:
+    normalized = (role_key or "").strip() or "administrator"
+    return crm_domain.STAFF_ROLE_LABELS.get(normalized, normalized or "Сотрудник")
+
+
+def _serialize_switch_profile(row: dict, *, current_admin_id: int, root_admin_id: int) -> dict:
+    pending_expires_at = row.get("profile_pin_pending_expires_at")
+    reset_confirmed_until = row.get("profile_pin_reset_confirmed_until")
+    return {
+        "id": int(row["id"]),
+        "login": row.get("email") or "",
+        "display_name": row.get("display_name") or row.get("email") or "Сотрудник",
+        "default_role_key": row.get("default_role_key") or "administrator",
+        "role_label": _role_label(row.get("default_role_key") or "administrator"),
+        "camp_ids": [int(value) for value in (row.get("camp_ids") or [])],
+        "camp_names": [str(value) for value in (row.get("camp_names") or []) if value],
+        "has_pin": bool(row.get("profile_pin_hash")),
+        "has_telegram_link": bool(row.get("telegram_chat_id")),
+        "telegram_username": row.get("telegram_username") or None,
+        "pin_pending_action": row.get("profile_pin_pending_action") or None,
+        "pin_pending_expires_at": pending_expires_at.isoformat() if isinstance(pending_expires_at, datetime) else None,
+        "pin_reset_ready": bool(isinstance(reset_confirmed_until, datetime) and reset_confirmed_until > datetime.now(reset_confirmed_until.tzinfo)),
+        "is_current": int(row["id"]) == int(current_admin_id),
+        "is_root": int(row["id"]) == int(root_admin_id),
+        "is_locked": bool(isinstance(row.get("profile_pin_locked_until"), datetime) and row["profile_pin_locked_until"] > datetime.now(row["profile_pin_locked_until"].tzinfo)),
+    }
+
+
+def _switcher_payload(request: Request, admin: dict) -> dict:
+    root_admin_id = _session_root_admin_id(request, admin)
+    profiles = admin_repo.list_switchable_admin_profiles(root_admin_id)
+    return {
+        "current_admin_id": int(admin["id"]),
+        "root_admin_id": root_admin_id,
+        "profiles": [
+            _serialize_switch_profile(row, current_admin_id=int(admin["id"]), root_admin_id=root_admin_id)
+            for row in profiles
+        ],
+    }
+
+
+def _get_switchable_profile_or_403(request: Request, admin: dict, staff_id: int) -> dict:
+    root_admin_id = _session_root_admin_id(request, admin)
+    for row in admin_repo.list_switchable_admin_profiles(root_admin_id):
+        if int(row["id"]) == int(staff_id):
+            return row
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нет доступа к выбранной карточке сотрудника")
+
+
+def _validate_profile_pin(value: str) -> str:
+    pin = str(value or "").strip()
+    if len(pin) != 4 or not pin.isdigit():
+        raise HTTPException(status_code=400, detail="PIN-код должен состоять из 4 цифр")
+    return pin
+
+
+def _session_payload_for_admin(admin_id: int) -> dict:
+    account = admin_repo.get_admin_account_by_id(admin_id)
+    if not account:
+        raise HTTPException(status_code=404, detail="Карточка сотрудника не найдена")
+    return {
+        "id": int(account["id"]),
+        "login": account.get("email") or "",
+        "email": account.get("email") or "",
+        "display_name": account.get("display_name") or account.get("email") or "Сотрудник",
+        "phone": account.get("phone") or "",
+        "default_role_key": account.get("default_role_key") or "administrator",
+        "telegram_chat_id": account.get("telegram_chat_id"),
+    }
+
+
+def _enqueue_profile_pin_confirmation(profile: dict, *, action: str, token: str):
+    profile_name = profile.get("display_name") or profile.get("email") or "Сотрудник"
+    if action == "reset":
+        title = "Подтвердите сброс PIN-кода CRM"
+        body = (
+            f"Для вашей карточки «{profile_name}» запросили сброс PIN-кода.\n\n"
+            "Если это вы, подтвердите действие. Если нет — отклоните и сообщите управляющему."
+        )
+        event_type = "profile_pin_reset_request"
+    else:
+        title = "Подтвердите создание PIN-кода CRM"
+        body = (
+            f"Для вашей карточки «{profile_name}» создаётся PIN-код для быстрого переключения в CRM.\n\n"
+            "Сам PIN в Telegram не отправляется. Если это вы, подтвердите действие. Если нет — отклоните и сообщите управляющему."
+        )
+        event_type = "profile_pin_setup_request"
+    create_notification_event(
+        event_type=event_type,
+        title=title,
+        body=body,
+        channel="telegram",
+        recipient_scope="crm",
+        recipient_admin_id=int(profile["id"]),
+        severity="warning",
+        metadata={
+            "profile_pin_token": token,
+            "profile_pin_action": action,
+        },
+    )
+
+
+def api_admin_profile_switcher(request: Request, admin: dict = Depends(get_current_admin)):
+    return _switcher_payload(request, admin)
+
+
+def api_admin_profile_setup_pin(
+    payload: AdminProfilePinSetupRequest,
+    request: Request,
+    admin: dict = Depends(get_current_admin),
+):
+    profile = _get_switchable_profile_or_403(request, admin, payload.staff_id)
+    pin = _validate_profile_pin(payload.pin)
+    if profile.get("profile_pin_hash"):
+        raise HTTPException(status_code=409, detail="PIN-код уже создан. Используйте вход по PIN или сброс.")
+    if not profile.get("telegram_chat_id"):
+        raise HTTPException(status_code=400, detail="Сначала привяжите Telegram к карточке сотрудника")
+    pending = admin_repo.create_admin_profile_pin_request(
+        int(profile["id"]),
+        action="set",
+        requested_by_admin_id=int(admin["id"]),
+        pending_hash=hash_password(pin),
+    )
+    if not pending:
+        raise HTTPException(status_code=404, detail="Карточка сотрудника не найдена")
+    _enqueue_profile_pin_confirmation(
+        pending,
+        action="set",
+        token=str(pending["profile_pin_pending_token"]),
+    )
+    return {"ok": True, "status": "pending_telegram_confirmation"}
+
+
+def api_admin_profile_switch(
+    payload: AdminProfileSwitchRequest,
+    request: Request,
+    admin: dict = Depends(get_current_admin),
+):
+    profile = _get_switchable_profile_or_403(request, admin, payload.staff_id)
+    pin = _validate_profile_pin(payload.pin)
+    account = admin_repo.get_admin_account_by_id(int(profile["id"]))
+    if not account or not account.get("profile_pin_hash"):
+        raise HTTPException(status_code=400, detail="Для этой карточки ещё не создан PIN-код")
+    locked_until = account.get("profile_pin_locked_until")
+    if isinstance(locked_until, datetime) and locked_until > datetime.now(locked_until.tzinfo):
+        raise HTTPException(status_code=429, detail="Слишком много неверных PIN. Повторите через несколько минут.")
+    if not verify_password(pin, account["profile_pin_hash"]):
+        admin_repo.register_admin_profile_pin_attempt(int(account["id"]), success=False)
+        raise HTTPException(status_code=400, detail="Неверный PIN-код")
+    admin_repo.register_admin_profile_pin_attempt(int(account["id"]), success=True)
+    request.session["admin_id"] = int(account["id"])
+    if not request.session.get("crm_root_admin_id"):
+        request.session["crm_root_admin_id"] = int(admin["id"])
+    session_payload = _session_payload_for_admin(int(account["id"]))
+    log_crm_audit_event(
+        actor_type="camp_admin",
+        actor_id=int(account["id"]),
+        actor_display=session_payload["display_name"],
+        target_type="crm_profile",
+        target_id=account["id"],
+        action_type="crm_profile_switch",
+        action_label="Переключился на карточку сотрудника",
+        was_auto_applied=True,
+    )
+    return {"ok": True, "session": session_payload}
+
+
+def api_admin_profile_forgot_pin(
+    payload: AdminProfilePinResetRequest,
+    request: Request,
+    admin: dict = Depends(get_current_admin),
+):
+    profile = _get_switchable_profile_or_403(request, admin, payload.staff_id)
+    if not profile.get("telegram_chat_id"):
+        raise HTTPException(status_code=400, detail="Сначала привяжите Telegram к карточке сотрудника")
+    pending = admin_repo.create_admin_profile_pin_request(
+        int(profile["id"]),
+        action="reset",
+        requested_by_admin_id=int(admin["id"]),
+        pending_hash=None,
+    )
+    if not pending:
+        raise HTTPException(status_code=404, detail="Карточка сотрудника не найдена")
+    _enqueue_profile_pin_confirmation(
+        pending,
+        action="reset",
+        token=str(pending["profile_pin_pending_token"]),
+    )
+    return {"ok": True, "status": "pending_telegram_confirmation"}
+
+
+def api_admin_profile_reset_pin(
+    payload: AdminProfilePinSetupRequest,
+    request: Request,
+    admin: dict = Depends(get_current_admin),
+):
+    profile = _get_switchable_profile_or_403(request, admin, payload.staff_id)
+    pin = _validate_profile_pin(payload.pin)
+    account = admin_repo.set_admin_profile_pin_after_reset(int(profile["id"]), hash_password(pin))
+    if not account:
+        raise HTTPException(status_code=400, detail="Сброс PIN-кода ещё не подтверждён в Telegram или срок подтверждения истёк")
+    request.session["admin_id"] = int(account["id"])
+    session_payload = _session_payload_for_admin(int(account["id"]))
+    log_crm_audit_event(
+        actor_type="camp_admin",
+        actor_id=int(account["id"]),
+        actor_display=session_payload["display_name"],
+        target_type="crm_profile",
+        target_id=account["id"],
+        action_type="crm_profile_pin_reset",
+        action_label="Сбросил PIN-код карточки сотрудника",
+        was_auto_applied=True,
+    )
+    return {"ok": True, "session": session_payload}
 
 
 def _validate_ui_override_key(override_key: str) -> str:

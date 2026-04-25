@@ -454,6 +454,16 @@ def build_staff_event_keyboard(event: dict):
                 ]
             )
             rows.append([InlineKeyboardButton(text="Вернуть на модерацию", callback_data=f"sa:media:pending:{entity_type}:{media_id}")])
+    elif event.get("event_type") in {"profile_pin_setup_request", "profile_pin_reset_request"}:
+        token = str(metadata.get("profile_pin_token") or "").strip()
+        action = str(metadata.get("profile_pin_action") or "").strip()
+        if token and action in {"set", "reset"}:
+            rows.append(
+                [
+                    InlineKeyboardButton(text="Подтвердить", callback_data=f"pin:{action}:confirm:{token}"),
+                    InlineKeyboardButton(text="Отклонить", callback_data=f"pin:{action}:reject:{token}"),
+                ]
+            )
 
     if url:
         rows.append([InlineKeyboardButton(text="Открыть в панели", url=url)])
@@ -473,6 +483,16 @@ def build_staff_rollback_confirm_keyboard(request_id: int, *, action_url: Option
     if url:
         rows.append([InlineKeyboardButton(text="Открыть в CRM", url=url)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def apply_profile_pin_action(*, telegram_chat_id: int, action: str, token: str, approved: bool):
+    if action not in {"set", "reset"}:
+        return {"status": "invalid"}
+    return admin_repo.resolve_admin_profile_pin_request(
+        token,
+        telegram_chat_id=int(telegram_chat_id),
+        approve=bool(approved),
+    )
 
 
 async def deliver_pending_telegram_notifications(bot: Bot, *, limit: int = 100) -> int:

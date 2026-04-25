@@ -28,6 +28,20 @@ class AdminMeResponse(BaseModel):
     telegram_chat_id: Optional[int] = None
 
 
+class AdminProfileSwitchRequest(BaseModel):
+    staff_id: int
+    pin: str
+
+
+class AdminProfilePinSetupRequest(BaseModel):
+    staff_id: int
+    pin: str
+
+
+class AdminProfilePinResetRequest(BaseModel):
+    staff_id: int
+
+
 class SuperAdminCreateAccountRequest(BaseModel):
     login: str
     password: str

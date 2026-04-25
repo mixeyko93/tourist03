@@ -28,6 +28,36 @@ router.add_api_route(
     responses=error_responses(401, 500),
 )
 router.add_api_route(
+    "/api/admin/profile-switcher",
+    admin_service.api_admin_profile_switcher,
+    methods=["GET"],
+    responses=error_responses(401, 500),
+)
+router.add_api_route(
+    "/api/admin/profile-switcher/setup-pin",
+    admin_service.api_admin_profile_setup_pin,
+    methods=["POST"],
+    responses=error_responses(400, 401, 403, 404, 409, 422, 500),
+)
+router.add_api_route(
+    "/api/admin/profile-switcher/switch",
+    admin_service.api_admin_profile_switch,
+    methods=["POST"],
+    responses=error_responses(400, 401, 403, 404, 422, 429, 500),
+)
+router.add_api_route(
+    "/api/admin/profile-switcher/forgot-pin",
+    admin_service.api_admin_profile_forgot_pin,
+    methods=["POST"],
+    responses=error_responses(400, 401, 403, 404, 422, 500),
+)
+router.add_api_route(
+    "/api/admin/profile-switcher/reset-pin",
+    admin_service.api_admin_profile_reset_pin,
+    methods=["POST"],
+    responses=error_responses(400, 401, 403, 404, 422, 500),
+)
+router.add_api_route(
     "/api/admin/ui-overrides/{override_key}",
     admin_service.api_admin_save_ui_override,
     methods=["PUT"],

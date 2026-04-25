@@ -1,5 +1,6 @@
 import json
-from datetime import date
+import secrets
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from tourist03.repositories import catalog as catalog_repo
@@ -32,6 +33,324 @@ def find_admin_account_by_login(login: str):
         )
         row = cur.fetchone()
         return dict(row) if row else None
+
+
+def get_admin_account_by_id(admin_id: int):
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT
+                id,
+                email,
+                password_hash,
+                display_name,
+                phone,
+                default_role_key,
+                is_active,
+                notifications_enabled,
+                telegram_chat_id,
+                telegram_username,
+                profile_pin_hash,
+                profile_pin_set_at,
+                profile_pin_pending_action,
+                profile_pin_pending_expires_at,
+                profile_pin_reset_confirmed_until,
+                profile_pin_failed_attempts,
+                profile_pin_locked_until,
+                archived_at,
+                created_at,
+                updated_at
+            FROM auth.camp_admin_accounts
+            WHERE id = %s
+            LIMIT 1
+            """,
+            (int(admin_id),),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+
+def list_switchable_admin_profiles(root_admin_id: int):
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT camp_id
+            FROM crm.camp_admin_links
+            WHERE admin_id = %s
+            ORDER BY camp_id ASC
+            """,
+            (int(root_admin_id),),
+        )
+        root_camp_ids = [int(row["camp_id"]) for row in cur.fetchall()]
+        if not root_camp_ids:
+            return []
+
+        cur.execute(
+            """
+            SELECT
+                a.id,
+                a.email,
+                a.display_name,
+                a.phone,
+                a.default_role_key,
+                a.is_active,
+                a.notifications_enabled,
+                a.telegram_chat_id,
+                a.telegram_username,
+                a.profile_pin_hash,
+                a.profile_pin_set_at,
+                a.profile_pin_pending_action,
+                a.profile_pin_pending_expires_at,
+                a.profile_pin_reset_confirmed_until,
+                a.profile_pin_locked_until,
+                BOOL_OR(l.is_primary) AS is_primary,
+                BOOL_OR(l.can_manage_staff) AS can_manage_staff,
+                ARRAY_AGG(DISTINCT l.camp_id ORDER BY l.camp_id) AS camp_ids,
+                ARRAY_REMOVE(ARRAY_AGG(DISTINCT c.name ORDER BY c.name), NULL) AS camp_names,
+                ARRAY_REMOVE(ARRAY_AGG(DISTINCT l.role_key ORDER BY l.role_key), NULL) AS role_keys
+            FROM crm.camp_admin_links l
+            JOIN auth.camp_admin_accounts a ON a.id = l.admin_id
+            LEFT JOIN catalog.camps c ON c.id = l.camp_id
+            WHERE l.camp_id = ANY(%s)
+              AND a.archived_at IS NULL
+              AND a.is_active = TRUE
+            GROUP BY a.id
+            ORDER BY (a.id = %s) DESC, BOOL_OR(l.is_primary) DESC, a.display_name ASC, a.id ASC
+            """,
+            (root_camp_ids, int(root_admin_id)),
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+
+def create_admin_profile_pin_request(
+    staff_id: int,
+    *,
+    action: str,
+    requested_by_admin_id: int,
+    pending_hash: Optional[str] = None,
+    ttl_minutes: int = 10,
+):
+    token = secrets.token_urlsafe(24)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=max(int(ttl_minutes or 10), 1))
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE auth.camp_admin_accounts
+            SET profile_pin_pending_hash = %s,
+                profile_pin_pending_token = %s,
+                profile_pin_pending_action = %s,
+                profile_pin_pending_requested_by_admin_id = %s,
+                profile_pin_pending_expires_at = %s,
+                updated_at = NOW()
+            WHERE id = %s
+              AND archived_at IS NULL
+              AND is_active = TRUE
+            RETURNING
+                id,
+                email,
+                display_name,
+                telegram_chat_id,
+                telegram_username,
+                profile_pin_pending_action,
+                profile_pin_pending_expires_at
+            """,
+            (
+                pending_hash,
+                token,
+                action,
+                int(requested_by_admin_id),
+                expires_at,
+                int(staff_id),
+            ),
+        )
+        row = cur.fetchone()
+        conn.commit()
+        if not row:
+            return None
+        result = dict(row)
+        result["profile_pin_pending_token"] = token
+        return result
+
+
+def resolve_admin_profile_pin_request(token: str, *, telegram_chat_id: int, approve: bool):
+    normalized_token = (token or "").strip()
+    if not normalized_token:
+        return {"status": "missing"}
+    reset_until = datetime.now(timezone.utc) + timedelta(minutes=10)
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT
+                id,
+                email,
+                display_name,
+                telegram_chat_id,
+                profile_pin_pending_hash,
+                profile_pin_pending_action,
+                profile_pin_pending_expires_at
+            FROM auth.camp_admin_accounts
+            WHERE profile_pin_pending_token = %s
+              AND archived_at IS NULL
+              AND is_active = TRUE
+            FOR UPDATE
+            """,
+            (normalized_token,),
+        )
+        row = cur.fetchone()
+        if not row:
+            conn.rollback()
+            return {"status": "not_found"}
+        item = dict(row)
+        if int(item.get("telegram_chat_id") or 0) != int(telegram_chat_id):
+            conn.rollback()
+            return {"status": "forbidden", "item": item}
+        expires_at = item.get("profile_pin_pending_expires_at")
+        now_utc = datetime.now(timezone.utc)
+        if isinstance(expires_at, datetime):
+            expires_cmp = expires_at if expires_at.tzinfo else expires_at.replace(tzinfo=timezone.utc)
+            if expires_cmp < now_utc:
+                cur.execute(
+                    """
+                    UPDATE auth.camp_admin_accounts
+                    SET profile_pin_pending_hash = NULL,
+                        profile_pin_pending_token = NULL,
+                        profile_pin_pending_action = NULL,
+                        profile_pin_pending_requested_by_admin_id = NULL,
+                        profile_pin_pending_expires_at = NULL,
+                        updated_at = NOW()
+                    WHERE id = %s
+                    """,
+                    (int(item["id"]),),
+                )
+                conn.commit()
+                return {"status": "expired", "item": item}
+
+        if not approve:
+            cur.execute(
+                """
+                UPDATE auth.camp_admin_accounts
+                SET profile_pin_pending_hash = NULL,
+                    profile_pin_pending_token = NULL,
+                    profile_pin_pending_action = NULL,
+                    profile_pin_pending_requested_by_admin_id = NULL,
+                    profile_pin_pending_expires_at = NULL,
+                    updated_at = NOW()
+                WHERE id = %s
+                """,
+                (int(item["id"]),),
+            )
+            conn.commit()
+            return {"status": "rejected", "item": item}
+
+        action = str(item.get("profile_pin_pending_action") or "").strip()
+        if action == "reset":
+            cur.execute(
+                """
+                UPDATE auth.camp_admin_accounts
+                SET profile_pin_reset_confirmed_until = %s,
+                    profile_pin_pending_hash = NULL,
+                    profile_pin_pending_token = NULL,
+                    profile_pin_pending_action = NULL,
+                    profile_pin_pending_requested_by_admin_id = NULL,
+                    profile_pin_pending_expires_at = NULL,
+                    updated_at = NOW()
+                WHERE id = %s
+                """,
+                (reset_until, int(item["id"])),
+            )
+            conn.commit()
+            return {"status": "reset_confirmed", "item": item}
+
+        if action == "set" and item.get("profile_pin_pending_hash"):
+            cur.execute(
+                """
+                UPDATE auth.camp_admin_accounts
+                SET profile_pin_hash = profile_pin_pending_hash,
+                    profile_pin_set_at = NOW(),
+                    profile_pin_reset_confirmed_until = NULL,
+                    profile_pin_failed_attempts = 0,
+                    profile_pin_locked_until = NULL,
+                    profile_pin_pending_hash = NULL,
+                    profile_pin_pending_token = NULL,
+                    profile_pin_pending_action = NULL,
+                    profile_pin_pending_requested_by_admin_id = NULL,
+                    profile_pin_pending_expires_at = NULL,
+                    updated_at = NOW()
+                WHERE id = %s
+                """,
+                (int(item["id"]),),
+            )
+            conn.commit()
+            return {"status": "confirmed", "item": item}
+
+        conn.rollback()
+        return {"status": "invalid", "item": item}
+
+
+def set_admin_profile_pin_after_reset(staff_id: int, pin_hash: str):
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE auth.camp_admin_accounts
+            SET profile_pin_hash = %s,
+                profile_pin_set_at = NOW(),
+                profile_pin_reset_confirmed_until = NULL,
+                profile_pin_failed_attempts = 0,
+                profile_pin_locked_until = NULL,
+                updated_at = NOW()
+            WHERE id = %s
+              AND profile_pin_reset_confirmed_until IS NOT NULL
+              AND profile_pin_reset_confirmed_until >= NOW()
+              AND archived_at IS NULL
+              AND is_active = TRUE
+            RETURNING id, email, display_name, phone, default_role_key, telegram_chat_id
+            """,
+            (pin_hash, int(staff_id)),
+        )
+        row = cur.fetchone()
+        conn.commit()
+        return dict(row) if row else None
+
+
+def register_admin_profile_pin_attempt(staff_id: int, *, success: bool):
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        if success:
+            cur.execute(
+                """
+                UPDATE auth.camp_admin_accounts
+                SET profile_pin_failed_attempts = 0,
+                    profile_pin_locked_until = NULL,
+                    updated_at = NOW()
+                WHERE id = %s
+                """,
+                (int(staff_id),),
+            )
+        else:
+            cur.execute(
+                """
+                UPDATE auth.camp_admin_accounts
+                SET profile_pin_failed_attempts = COALESCE(profile_pin_failed_attempts, 0) + 1,
+                    profile_pin_locked_until = CASE
+                        WHEN COALESCE(profile_pin_failed_attempts, 0) + 1 >= 5 THEN NOW() + INTERVAL '5 minutes'
+                        ELSE profile_pin_locked_until
+                    END,
+                    updated_at = NOW()
+                WHERE id = %s
+                RETURNING profile_pin_failed_attempts, profile_pin_locked_until
+                """,
+                (int(staff_id),),
+            )
+            row = cur.fetchone()
+            conn.commit()
+            return dict(row) if row else None
+        conn.commit()
+        return None
 
 
 def list_admin_camps(camp_ids: list[int]):
