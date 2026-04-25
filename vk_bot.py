@@ -91,7 +91,6 @@ def _main_keyboard(webapp_url: str) -> str:
                         "label": "Турист_03 ⛺️",
                         "payload": _button_payload("open_app"),
                     },
-                    "color": "primary",
                 }
             ],
             [
