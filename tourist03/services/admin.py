@@ -378,7 +378,11 @@ def _ensure_change_request_review_access(admin: dict, request_item: dict):
 
 def admin_login(req: AdminLoginRequest, request: Request):
     row = admin_repo.find_admin_account_by_login(_normalize_admin_login_or_400(req.login, allow_legacy_email=True))
-    if not row or not row["is_active"] or not verify_password(req.password, row["password_hash"]):
+    if not row:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неверный логин или пароль")
+    if not row["is_active"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Эта учётная запись отключена, обратитесь в тех.поддержку")
+    if not verify_password(req.password, row["password_hash"]):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неверный логин или пароль")
     request.session["admin_id"] = row["id"]
     request.session["crm_root_admin_id"] = row["id"]

@@ -24,13 +24,88 @@ type AccountDraft = {
   baseIds: number[];
 };
 
+const PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+
+const RU_TRANSLIT: Record<string, string> = {
+  а: "a",
+  б: "b",
+  в: "v",
+  г: "g",
+  д: "d",
+  е: "e",
+  ё: "e",
+  ж: "zh",
+  з: "z",
+  и: "i",
+  й: "i",
+  к: "k",
+  л: "l",
+  м: "m",
+  н: "n",
+  о: "o",
+  п: "p",
+  р: "r",
+  с: "s",
+  т: "t",
+  у: "u",
+  ф: "f",
+  х: "kh",
+  ц: "ts",
+  ч: "ch",
+  ш: "sh",
+  щ: "shch",
+  ъ: "",
+  ы: "y",
+  ь: "",
+  э: "e",
+  ю: "iu",
+  я: "ia",
+};
+
+function generatePassword(length = 14) {
+  const bytes = new Uint32Array(length);
+  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+    crypto.getRandomValues(bytes);
+  } else {
+    for (let index = 0; index < length; index += 1) {
+      bytes[index] = Math.floor(Math.random() * 10_000);
+    }
+  }
+  return Array.from(bytes, (value) => PASSWORD_ALPHABET[value % PASSWORD_ALPHABET.length]).join("");
+}
+
+function transliterateNamePart(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .split("")
+    .map((char) => RU_TRANSLIT[char] ?? char)
+    .join("")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "")
+    .replace(/_{2,}/g, "_");
+}
+
+function buildLoginFromFullName(value: string) {
+  const [surname = "", name = ""] = value.trim().split(/\s+/).filter(Boolean);
+  const loginName = transliterateNamePart(name);
+  const loginSurname = transliterateNamePart(surname);
+  if (loginName && loginSurname) {
+    return `${loginName}.${loginSurname}`;
+  }
+  return transliterateNamePart(value)
+    .replace(/[._-]{2,}/g, ".")
+    .replace(/^[._-]+|[._-]+$/g, "");
+}
+
 function createAccountDraft(account: SuperadminAccount | null): AccountDraft {
   if (!account) {
     return {
       id: null,
       login: "",
       name: "",
-      password: "",
+      password: generatePassword(),
       active: true,
       baseIds: [],
     };
@@ -60,10 +135,12 @@ export default function AdminAccountsPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
+  const [loginWasEdited, setLoginWasEdited] = useState(false);
 
   useEffect(() => {
     const currentAccount = typeof editingAccountId === "number" ? accounts.find((item) => item.id === editingAccountId) ?? null : null;
     setDraft(createAccountDraft(currentAccount));
+    setLoginWasEdited(Boolean(currentAccount));
   }, [editingAccountId, accounts]);
 
   useEffect(() => {
@@ -97,12 +174,27 @@ export default function AdminAccountsPage() {
   }, [reloadKey]);
 
   const baseNamesById = useMemo(() => new Map(bases.map((base) => [base.id, base.name || `База #${base.id}`])), [bases]);
+  const activeAccounts = useMemo(() => accounts.filter((account) => account.is_active), [accounts]);
+  const disabledAccounts = useMemo(() => accounts.filter((account) => !account.is_active), [accounts]);
 
   const toggleBase = (baseId: number) => {
     setDraft((current) => ({
       ...current,
       baseIds: current.baseIds.includes(baseId) ? current.baseIds.filter((id) => id !== baseId) : [...current.baseIds, baseId],
     }));
+  };
+
+  const handleDraftNameChange = (value: string) => {
+    setDraft((current) => ({
+      ...current,
+      name: value,
+      login: current.id || loginWasEdited ? current.login : buildLoginFromFullName(value),
+    }));
+  };
+
+  const handleDraftLoginChange = (value: string) => {
+    setLoginWasEdited(true);
+    setDraft((current) => ({ ...current, login: value }));
   };
 
   async function handleSave() {
@@ -119,24 +211,26 @@ export default function AdminAccountsPage() {
       if (!draft.baseIds.length) {
         throw new Error("Назначьте хотя бы одну базу");
       }
-      if (!draft.id && !draft.password.trim()) {
-        throw new Error("Для новой учётной записи требуется пароль");
+      if (!draft.password.trim() && !draft.id) {
+        setDraft((current) => ({ ...current, password: generatePassword() }));
+        throw new Error("Пароль создаётся автоматически. Проверьте форму и нажмите сохранить ещё раз.");
       }
 
+      const plainPassword = draft.password.trim();
       const payload = {
         login: draft.login.trim(),
         display_name: draft.name.trim(),
-        password: draft.password.trim() || undefined,
+        password: plainPassword || undefined,
         is_active: draft.active,
         camp_ids: draft.baseIds,
       };
 
       if (draft.id) {
         await updateSuperadminAccount(draft.id, payload);
-        setSuccessMessage("Учётная запись обновлена.");
+        setSuccessMessage(plainPassword ? `Учётная запись обновлена. Новый пароль: ${plainPassword}` : "Учётная запись обновлена.");
       } else {
         await createSuperadminAccount(payload);
-        setSuccessMessage("Учётная запись создана.");
+        setSuccessMessage(`Учётная запись создана. Пароль: ${plainPassword}`);
       }
 
       setEditingAccountId(null);
@@ -149,6 +243,53 @@ export default function AdminAccountsPage() {
   }
 
   const { isPageVisible } = usePageLoadState(isLoading);
+
+  const renderAccountRows = (items: SuperadminAccount[], emptyText: string) => {
+    if (isLoading) {
+      return (
+        <tr>
+          <td colSpan={7}>Загружаем учётные записи…</td>
+        </tr>
+      );
+    }
+    if (!items.length) {
+      return (
+        <tr>
+          <td colSpan={7}>{emptyText}</td>
+        </tr>
+      );
+    }
+    return items.map((account) => (
+      <tr key={account.id}>
+        <td>#{account.id}</td>
+        <td className="crm-copy-safe font-medium text-foreground">{account.login}</td>
+        <td>{account.display_name}</td>
+        <td>
+          <div className="flex flex-wrap gap-2">
+            {account.camps.length ? (
+              account.camps.map((camp) => (
+                <span key={`${account.id}-${camp.camp_id}`} className="rounded-full border border-border bg-background/75 px-3 py-1 text-xs text-foreground">
+                  {camp.camp_name || baseNamesById.get(camp.camp_id) || `База #${camp.camp_id}`}
+                </span>
+              ))
+            ) : (
+              <span className="text-muted-foreground">Базы не назначены</span>
+            )}
+          </div>
+        </td>
+        <td>
+          <AdminStatusBadge tone={account.is_active ? "success" : "neutral"}>{account.is_active ? "Активна" : "Отключена"}</AdminStatusBadge>
+        </td>
+        <td>{formatDateTime(account.created_at)}</td>
+        <td className="text-right">
+          <button type="button" className="admin-button gap-2" onClick={() => setEditingAccountId(account.id)}>
+            <PencilLine className="h-4 w-4" />
+            Редактировать
+          </button>
+        </td>
+      </tr>
+    ));
+  };
 
   return (
     <PageMotion className="space-y-6" isReady={isPageVisible}>
@@ -195,47 +336,34 @@ export default function AdminAccountsPage() {
               </tr>
             </thead>
             <tbody>
-              {isLoading ? (
-                <tr>
-                  <td colSpan={7}>Загружаем учётные записи…</td>
-                </tr>
-              ) : accounts.length ? (
-                accounts.map((account) => (
-                  <tr key={account.id}>
-                    <td>#{account.id}</td>
-                    <td className="crm-copy-safe font-medium text-foreground">{account.login}</td>
-                    <td>{account.display_name}</td>
-                    <td>
-                      <div className="flex flex-wrap gap-2">
-                        {account.camps.length ? (
-                          account.camps.map((camp) => (
-                            <span key={`${account.id}-${camp.camp_id}`} className="rounded-full border border-border bg-background/75 px-3 py-1 text-xs text-foreground">
-                              {camp.camp_name || baseNamesById.get(camp.camp_id) || `База #${camp.camp_id}`}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="text-muted-foreground">Базы не назначены</span>
-                        )}
-                      </div>
-                    </td>
-                    <td>
-                      <AdminStatusBadge tone={account.is_active ? "success" : "neutral"}>{account.is_active ? "Активна" : "Отключена"}</AdminStatusBadge>
-                    </td>
-                    <td>{formatDateTime(account.created_at)}</td>
-                    <td className="text-right">
-                      <button type="button" className="admin-button gap-2" onClick={() => setEditingAccountId(account.id)}>
-                        <PencilLine className="h-4 w-4" />
-                        Редактировать
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={7}>Учётные записи пока не созданы.</td>
-                </tr>
-              )}
+              {renderAccountRows(activeAccounts, "Активные учётные записи пока не созданы.")}
             </tbody>
+          </table>
+        </div>
+      </AdminCard>
+
+      <AdminCard className="overflow-hidden">
+        <div className="border-b border-border px-5 py-5 sm:px-6">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Архив доступа</p>
+          <h3 className="mt-2 text-xl font-semibold tracking-[-0.03em] text-foreground">Отключённые учётные записи</h3>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+            Эти учётки не могут войти в CRM и не мешают основному списку активных доступов.
+          </p>
+        </div>
+        <div className="admin-table-shell">
+          <table className="admin-table min-w-[1040px]">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Логин</th>
+                <th>Имя</th>
+                <th>Базы отдыха</th>
+                <th>Статус</th>
+                <th>Создана</th>
+                <th className="text-right">Действия</th>
+              </tr>
+            </thead>
+            <tbody>{renderAccountRows(disabledAccounts, "Отключённых учётных записей нет.")}</tbody>
           </table>
         </div>
       </AdminCard>
@@ -263,19 +391,29 @@ export default function AdminAccountsPage() {
       >
         <div className="space-y-6">
           <div className="grid gap-4">
+            <AdminField label="Имя Фамилия Отчество">
+              <input className="admin-input" value={draft.name} onChange={(event) => handleDraftNameChange(event.target.value)} />
+            </AdminField>
             <AdminField label="Логин">
-              <input className="admin-input" value={draft.login} onChange={(event) => setDraft((current) => ({ ...current, login: event.target.value }))} />
+              <input className="admin-input" value={draft.login} onChange={(event) => handleDraftLoginChange(event.target.value)} />
             </AdminField>
-            <AdminField label={draft.id ? "Новый пароль" : "Пароль"} hint={draft.id ? "Оставьте пустым, чтобы не менять текущий пароль." : "Пароль нужен для первого входа."}>
-              <input
-                type="password"
-                className="admin-input"
-                value={draft.password}
-                onChange={(event) => setDraft((current) => ({ ...current, password: event.target.value }))}
-              />
-            </AdminField>
-            <AdminField label="Имя управляющего">
-              <input className="admin-input" value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))} />
+            <AdminField
+              label={draft.id ? "Новый пароль" : "Пароль создан автоматически"}
+              hint={draft.id ? "Заполните только если нужно сбросить пароль управляющему." : "Передайте пароль управляющему для первого входа."}
+            >
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input
+                  type="text"
+                  className="admin-input"
+                  value={draft.password}
+                  onChange={(event) => setDraft((current) => ({ ...current, password: event.target.value }))}
+                  placeholder={draft.id ? "Нажмите «Сгенерировать пароль» или оставьте пустым" : undefined}
+                />
+                <button type="button" className="admin-button shrink-0 gap-2" onClick={() => setDraft((current) => ({ ...current, password: generatePassword() }))}>
+                  <RefreshCcw className="h-4 w-4" />
+                  {draft.id ? "Сгенерировать пароль" : "Обновить пароль"}
+                </button>
+              </div>
             </AdminField>
           </div>
 

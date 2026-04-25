@@ -12,7 +12,7 @@ from tourist03.services import catalog as catalog_service
 
 router = APIRouter()
 
-router.add_api_route("/api/admin/login", admin_service.admin_login, methods=["POST"], responses=error_responses(400, 422, 500))
+router.add_api_route("/api/admin/login", admin_service.admin_login, methods=["POST"], responses=error_responses(400, 403, 422, 500))
 router.add_api_route("/api/admin/logout", admin_service.admin_logout, methods=["POST"], responses=error_responses(500))
 router.add_api_route(
     "/api/public/ui-overrides/{override_key}",
