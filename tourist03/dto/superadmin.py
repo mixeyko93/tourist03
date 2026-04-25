@@ -110,7 +110,7 @@ class SuperAdminAccountCampDTO(BaseModel):
 
 class SuperAdminAccountDTO(BaseModel):
     id: int
-    email: EmailStr
+    login: str
     display_name: str
     is_active: bool
     created_at: Optional[datetime] = None
