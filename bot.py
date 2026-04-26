@@ -201,11 +201,10 @@ async def _handle_notification_link(message: Message, code: str) -> None:
 
 def crm_start_keyboard() -> InlineKeyboardMarkup:
     crm_base = (CRM_BASE_URL or "https://crm.turist03.ru").rstrip("/")
-    rows = [
+    return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Открыть CRM", url=crm_base)],
-        [InlineKeyboardButton(text="📷 Сканировать QR", web_app=WebAppInfo(url=f"{crm_base}/tg-link"))],
-    ]
-    return InlineKeyboardMarkup(inline_keyboard=rows)
+        [InlineKeyboardButton(text="📷 Сканировать QR", callback_data="scan_qr_help")],
+    ])
 
 
 @staff_router.message(CommandStart())
@@ -289,6 +288,18 @@ async def staff_cmd_events(message: Message) -> None:
 @staff_router.callback_query()
 async def staff_callback_router(callback: CallbackQuery) -> None:
     raw = (callback.data or "").strip()
+
+    if raw == "scan_qr_help":
+        await callback.answer()
+        if callback.message:
+            await callback.message.answer(
+                "📷 <b>Как привязать аккаунт через QR</b>\n\n"
+                "1. Откройте CRM → вкладка <b>Настройки</b>.\n"
+                "2. Найдите свою карточку сотрудника, нажмите <b>«Привязать Telegram»</b>.\n"
+                "3. На экране появится QR-код — <b>сфотографируйте его</b> и отправьте это фото сюда в чат.\n\n"
+                "Бот сам считает код с фото и привяжет аккаунт автоматически."
+            )
+        return
 
     if not raw.startswith("cr:") and not raw.startswith("sa:") and not raw.startswith("pin:"):
         await callback.answer()
