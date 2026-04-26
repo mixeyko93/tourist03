@@ -1112,7 +1112,7 @@ export default function ShiftsPage() {
   }, [selectedCampId, reloadKey]);
 
   const sortedStaff = useMemo(
-    () => [...staff].sort((left, right) => left.display_name.localeCompare(right.display_name, "ru")),
+    () => [...staff].filter((member) => member.is_active).sort((left, right) => left.display_name.localeCompare(right.display_name, "ru")),
     [staff],
   );
 

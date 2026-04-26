@@ -455,7 +455,7 @@ export default function AppLayout() {
           </span>
           <div className="min-w-0 flex-1">
             <p className="line-clamp-2 text-sm font-semibold leading-5 text-foreground" title={session.name}>
-              {session.name}
+              {session.name.split(" ").slice(0, 2).join(" ")}
             </p>
             <p className="mt-0.5 truncate text-[11px] text-muted-foreground">Сменить профиль</p>
           </div>

@@ -481,6 +481,15 @@ export async function updateSuperadminAccount(accountId: number, payload: Supera
   return (await response.json()) as { ok: boolean };
 }
 
+export async function deleteSuperadminAccount(accountId: number) {
+  const response = await fetch(`/api/superadmin/accounts/${accountId}`, {
+    method: "DELETE",
+    credentials: "same-origin",
+  });
+  await assertOk(response);
+  return (await response.json()) as { ok: boolean };
+}
+
 export async function fetchSuperadminUsers(params: { search?: string; signal?: AbortSignal } = {}): Promise<SuperadminUserSummary[]> {
   const response = await fetch(`/api/superadmin/users${buildQuery({ search: params.search })}`, {
     credentials: "same-origin",

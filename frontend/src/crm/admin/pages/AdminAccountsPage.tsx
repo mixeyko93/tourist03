@@ -1,4 +1,4 @@
-import { Check, PencilLine, Plus, RefreshCcw } from "lucide-react";
+import { Check, PencilLine, Plus, RefreshCcw, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { PageMotion } from "../../components/PageMotion";
 import { usePageLoadState } from "../../components/usePageLoadState";
@@ -8,6 +8,7 @@ import { AdminModal } from "../components/AdminModal";
 import { AdminStatusBadge } from "../components/AdminStatusBadge";
 import {
   createSuperadminAccount,
+  deleteSuperadminAccount,
   fetchSuperadminAccounts,
   fetchSuperadminBases,
   updateSuperadminAccount,
@@ -89,10 +90,10 @@ function transliterateNamePart(value: string) {
 
 function buildLoginFromFullName(value: string) {
   const [surname = "", name = ""] = value.trim().split(/\s+/).filter(Boolean);
-  const loginName = transliterateNamePart(name);
   const loginSurname = transliterateNamePart(surname);
-  if (loginName && loginSurname) {
-    return `${loginName}.${loginSurname}`;
+  const loginName = transliterateNamePart(name);
+  if (loginSurname && loginName) {
+    return `${loginSurname}.${loginName}`;
   }
   return transliterateNamePart(value)
     .replace(/[._-]{2,}/g, ".")
@@ -132,6 +133,8 @@ export default function AdminAccountsPage() {
   const [draft, setDraft] = useState<AccountDraft>(() => createAccountDraft(null));
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
@@ -196,6 +199,24 @@ export default function AdminAccountsPage() {
     setLoginWasEdited(true);
     setDraft((current) => ({ ...current, login: value }));
   };
+
+  async function handleDelete() {
+    if (!draft.id) return;
+    if (!deleteConfirm) { setDeleteConfirm(true); return; }
+    try {
+      setIsDeleting(true);
+      setErrorMessage("");
+      await deleteSuperadminAccount(draft.id);
+      setSuccessMessage("Учётная запись удалена.");
+      setEditingAccountId(null);
+      setDeleteConfirm(false);
+      setReloadKey((value) => value + 1);
+    } catch (error: unknown) {
+      setErrorMessage(error instanceof Error ? error.message : "Не удалось удалить учётную запись");
+    } finally {
+      setIsDeleting(false);
+    }
+  }
 
   async function handleSave() {
     try {
@@ -371,27 +392,43 @@ export default function AdminAccountsPage() {
       <AdminModal
         open={editingAccountId !== null}
         onClose={() => {
-          if (!isSaving) {
+          if (!isSaving && !isDeleting) {
             setEditingAccountId(null);
+            setDeleteConfirm(false);
           }
         }}
         title={draft.id ? "Редактировать учётную запись" : "Создать учётную запись"}
         description={draft.id ? `ID: #${draft.id}` : "Новый доступ для управляющего или администратора базы."}
         panelClassName="max-w-2xl"
         footer={
-          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-            <button type="button" className="admin-button" onClick={() => setEditingAccountId(null)} disabled={isSaving}>
-              Отмена
-            </button>
-            <button type="button" className="admin-primary-button" onClick={handleSave} disabled={isSaving}>
-              {isSaving ? "Сохраняем..." : "Сохранить"}
-            </button>
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              {draft.id ? (
+                <button
+                  type="button"
+                  className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium transition ${deleteConfirm ? "border-rose-500 bg-rose-500 text-white hover:bg-rose-600" : "border-rose-500/30 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20"}`}
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {isDeleting ? "Удаляем..." : deleteConfirm ? "Подтвердить удаление" : "Удалить учётную запись"}
+                </button>
+              ) : null}
+            </div>
+            <div className="flex flex-col-reverse gap-3 sm:flex-row">
+              <button type="button" className="admin-button" onClick={() => { setEditingAccountId(null); setDeleteConfirm(false); }} disabled={isSaving || isDeleting}>
+                Отмена
+              </button>
+              <button type="button" className="admin-primary-button" onClick={handleSave} disabled={isSaving || isDeleting}>
+                {isSaving ? "Сохраняем..." : "Сохранить"}
+              </button>
+            </div>
           </div>
         }
       >
         <div className="space-y-6">
           <div className="grid gap-4">
-            <AdminField label="Имя Фамилия Отчество">
+            <AdminField label="Фамилия Имя Отчество">
               <input className="admin-input" value={draft.name} onChange={(event) => handleDraftNameChange(event.target.value)} />
             </AdminField>
             <AdminField label="Логин">

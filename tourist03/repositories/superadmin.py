@@ -457,6 +457,14 @@ def update_admin_account(
         conn.commit()
 
 
+def delete_admin_account(account_id: int):
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM crm.camp_admin_links WHERE admin_id=%s", (account_id,))
+        cur.execute("DELETE FROM auth.camp_admin_accounts WHERE id=%s", (account_id,))
+        conn.commit()
+
+
 def list_accounts():
     with _db_conn("crm") as conn:
         cur = conn.cursor()

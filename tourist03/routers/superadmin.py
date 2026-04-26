@@ -131,6 +131,13 @@ router.add_api_route(
     responses=error_responses(400, 401, 404, 409, 422, 500),
 )
 router.add_api_route(
+    "/api/superadmin/accounts/{account_id}",
+    superadmin_service.delete_camp_admin_account,
+    methods=["DELETE"],
+    dependencies=superadmin_guard,
+    responses=error_responses(400, 401, 404, 500),
+)
+router.add_api_route(
     "/api/superadmin/users",
     superadmin_service.superadmin_list_users,
     methods=["GET"],

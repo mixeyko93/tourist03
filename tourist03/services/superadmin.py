@@ -265,6 +265,16 @@ def update_camp_admin_account(account_id: int, payload: SuperAdminUpdateAccountR
     return {"ok": True}
 
 
+def delete_camp_admin_account(account_id: int, request: Request):
+    principal = get_superadmin_session_principal(request) or {}
+    existing = superadmin_repo.get_admin_account(account_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Учётная запись не найдена")
+    superadmin_repo.delete_admin_account(account_id)
+    logger.info("Учётка управляющего удалена: id=%s актором %s", account_id, principal.get("login"))
+    return {"ok": True}
+
+
 def superadmin_list_accounts():
     return superadmin_repo.list_accounts()
 
