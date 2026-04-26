@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import logging
 import os
+import re
 from contextlib import suppress
 
 from dotenv import load_dotenv
 
-from aiogram import Bot, Dispatcher, Router
+from aiogram import Bot, Dispatcher, F, Router
 from aiogram.client.default import DefaultBotProperties
 from aiogram.filters import Command, CommandStart
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, MenuButtonWebApp, Message, WebAppInfo
@@ -223,6 +225,37 @@ async def staff_cmd_help(message: Message) -> None:
 @staff_router.message(Command("link"))
 async def staff_cmd_link(message: Message) -> None:
     await _handle_notification_link(message, _extract_command_arg(message.text))
+
+
+@staff_router.message(F.photo)
+async def staff_photo_handler(message: Message) -> None:
+    photo = message.photo[-1]
+
+    try:
+        from PIL import Image
+        from pyzbar.pyzbar import decode as qr_decode
+    except ImportError:
+        await message.answer("Декодирование QR временно недоступно на сервере.")
+        return
+
+    bot = message.bot
+    file_info = await bot.get_file(photo.file_id)
+    file_bytes = await bot.download_file(file_info.file_path)
+    img = Image.open(io.BytesIO(file_bytes.read()))
+    codes = qr_decode(img)
+
+    if not codes:
+        await message.answer("QR-код не найден на фото. Убедитесь, что изображение чёткое и QR хорошо виден.")
+        return
+
+    raw_data = codes[0].data.decode("utf-8", errors="ignore").strip()
+    # Извлекаем код: может быть deep link https://t.me/bot?start=CODE или просто CODE
+    code = raw_data
+    m = re.search(r"[?&]start=([^&\s]+)", raw_data)
+    if m:
+        code = m.group(1)
+
+    await _handle_notification_link(message, code)
 
 
 @staff_router.message(Command("events"))
