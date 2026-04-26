@@ -24,6 +24,7 @@ router.add_api_route("/rooms", pages_service.react_map_page, methods=["GET"], re
 router.add_api_route("/guests", pages_service.react_map_page, methods=["GET"], response_class=HTMLResponse)
 router.add_api_route("/services", pages_service.react_map_page, methods=["GET"], response_class=HTMLResponse)
 router.add_api_route("/settings", pages_service.react_map_page, methods=["GET"], response_class=HTMLResponse)
+router.add_api_route("/tg-link", pages_service.react_map_page, methods=["GET"], response_class=HTMLResponse)
 router.add_api_route("/map", pages_service.react_map_page, methods=["GET"], response_class=HTMLResponse)
 router.add_api_route("/admin", pages_service.react_map_page, methods=["GET"], response_class=HTMLResponse)
 router.add_api_route("/admin/{path:path}", pages_service.react_map_page, methods=["GET"], response_class=HTMLResponse)

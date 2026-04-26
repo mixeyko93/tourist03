@@ -1,6 +1,7 @@
 import { Navigate, createBrowserRouter, type RouteObject } from "react-router";
 import LegacyMapPage from "./routes/LegacyMapPage";
 import AppLayout from "./components/AppLayout";
+import TelegramLinkScanPage from "./pages/TelegramLinkScanPage";
 import AdminLayout from "./admin/components/AdminLayout";
 import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -84,6 +85,8 @@ function createAdminRoutes(base: "" | "/react-map"): RouteObject[] {
 }
 
 export const router = createBrowserRouter([
+  { path: "/tg-link", Component: TelegramLinkScanPage },
+  { path: "/react-map/tg-link", Component: TelegramLinkScanPage },
   ...createCrmRoutes(""),
   ...createAdminRoutes(""),
   ...createCrmRoutes("/react-map"),

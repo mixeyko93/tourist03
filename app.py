@@ -8,7 +8,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from tourist03.bootstrap import bootstrap_database
 from tourist03.config import SESSION_SECRET_KEY, STATIC_DIR, logger
-from tourist03.routers import admin, auth, bookings, catalog, pages, superadmin
+from tourist03.routers import admin, auth, bookings, bot_webhook, catalog, pages, superadmin
 
 
 bootstrap_database()
@@ -38,6 +38,7 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 app.include_router(pages.router)
 app.include_router(auth.router)
+app.include_router(bot_webhook.router)
 app.include_router(bookings.router)
 app.include_router(superadmin.router)
 app.include_router(catalog.router)
