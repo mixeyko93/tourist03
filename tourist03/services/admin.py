@@ -399,6 +399,12 @@ def admin_me(admin: dict = Depends(get_current_admin)):
     return admin
 
 
+def api_admin_self_telegram_link(admin: dict = Depends(get_current_admin)):
+    code = issue_admin_telegram_link_code(int(admin["id"]))
+    deep_link = f"https://t.me/{STAFF_BOT_USERNAME}?start={code}" if STAFF_BOT_USERNAME else None
+    return {"ok": True, "code": code, "command": f"/start {code}", "deep_link": deep_link}
+
+
 def _session_root_admin_id(request: Request, admin: dict) -> int:
     root_admin_id = request.session.get("crm_root_admin_id")
     if not root_admin_id:

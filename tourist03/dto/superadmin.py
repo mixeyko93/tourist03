@@ -113,6 +113,7 @@ class SuperAdminAccountDTO(BaseModel):
     login: str
     display_name: str
     is_active: bool
+    default_role_key: Optional[str] = None
     created_at: Optional[datetime] = None
     camps: List[SuperAdminAccountCampDTO]
 

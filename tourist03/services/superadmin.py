@@ -208,8 +208,9 @@ def create_camp_admin_account(payload: SuperAdminCreateAccountRequest):
         raise HTTPException(status_code=400, detail="Учётная запись с таким логином уже существует")
 
     password_hash = hash_password(password_raw)
+    role_key = (payload.default_role_key or "").strip() or "administrator"
     try:
-        admin_id = superadmin_repo.create_admin_account(login, password_hash, display_name, payload.camp_ids)
+        admin_id = superadmin_repo.create_admin_account(login, password_hash, display_name, payload.camp_ids, default_role_key=role_key)
     except Exception:
         logger.exception("Техническая ошибка при создании учётки login=%s", login)
         raise
@@ -249,6 +250,7 @@ def update_camp_admin_account(account_id: int, payload: SuperAdminUpdateAccountR
         next_is_active = bool(is_active)
 
     try:
+        next_role_key = (payload.default_role_key or "").strip() or None
         superadmin_repo.update_admin_account(
             account_id,
             login=next_login,
@@ -256,6 +258,7 @@ def update_camp_admin_account(account_id: int, payload: SuperAdminUpdateAccountR
             password_hash=next_password_hash,
             is_active=next_is_active,
             camp_ids=camp_ids,
+            default_role_key=next_role_key,
         )
     except Exception:
         logger.exception("Техническая ошибка при обновлении учётки id=%s", account_id)

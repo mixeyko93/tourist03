@@ -18,6 +18,7 @@ import { ModalShell } from "../components/ModalShell";
 import { PageLoadingState } from "../components/PageLoadingState";
 import { PageMotion } from "../components/PageMotion";
 import { usePageLoadState } from "../components/usePageLoadState";
+import { QrCanvas } from "../components/QrCanvas";
 import { SectionHeading } from "../components/SectionHeading";
 import { SensitiveChangeModal } from "../components/SensitiveChangeModal";
 import { buildMediaItems, captureVideoPosterFile, splitMediaItems } from "../mediaTools";
@@ -998,7 +999,7 @@ export default function SettingsPage() {
                         onClick={() => handleIssueTelegramCode(staff)}
                         disabled={issuingTelegramCodeId === staff.id}
                       >
-                        {issuingTelegramCodeId === staff.id ? "Генерируем..." : "Код Telegram"}
+                        {issuingTelegramCodeId === staff.id ? "Генерируем..." : staff.has_telegram_link ? "Перепривязать Telegram" : "Привязать Telegram"}
                       </button>
                     </div>
                   </div>
@@ -1186,27 +1187,24 @@ export default function SettingsPage() {
           ) : null}
 
           {telegramLinkInfo ? (
-            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-              <p>
-                Код привязки Telegram: <span className="font-semibold text-emerald-100">{telegramLinkInfo.code}</span>
-              </p>
-              <p className="mt-2 text-emerald-100/90">
-                Команда для сотрудника: <span className="font-semibold">{telegramLinkInfo.command}</span>
-              </p>
+            <div className="flex flex-col items-center gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">Привязка Telegram</p>
+              {telegramLinkInfo.deepLink ? (
+                <QrCanvas value={telegramLinkInfo.deepLink} size={180} />
+              ) : null}
+              <p className="text-center text-xs text-emerald-200/70">QR-код действителен 15 минут</p>
               {telegramLinkInfo.deepLink ? (
                 <a
-                  className="mt-3 inline-flex items-center gap-2 rounded-xl border border-emerald-300/30 bg-black/20 px-3 py-2 text-sm font-medium text-emerald-50 transition hover:bg-black/30"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-300/30 bg-black/20 px-3 py-2.5 text-sm font-medium text-emerald-50 transition hover:bg-black/30"
                   href={telegramLinkInfo.deepLink}
                   target="_blank"
                   rel="noreferrer"
                 >
                   <Link2 className="h-4 w-4" />
-                  Открыть бот уведомлений
+                  Открыть бот
                 </a>
               ) : (
-                <p className="mt-2 text-xs text-emerald-100/75">
-                  Укажите `STAFF_BOT_USERNAME`, чтобы CRM могла открыть бот уведомлений одной кнопкой.
-                </p>
+                <p className="font-mono text-sm text-emerald-100">{telegramLinkInfo.command}</p>
               )}
             </div>
           ) : null}

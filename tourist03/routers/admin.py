@@ -28,6 +28,12 @@ router.add_api_route(
     responses=error_responses(401, 500),
 )
 router.add_api_route(
+    "/api/admin/self/telegram-link",
+    admin_service.api_admin_self_telegram_link,
+    methods=["POST"],
+    responses=error_responses(401, 500),
+)
+router.add_api_route(
     "/api/admin/profile-switcher",
     admin_service.api_admin_profile_switcher,
     methods=["GET"],

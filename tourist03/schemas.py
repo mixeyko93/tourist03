@@ -47,6 +47,7 @@ class SuperAdminCreateAccountRequest(BaseModel):
     password: str
     display_name: str
     camp_ids: List[int]
+    default_role_key: Optional[str] = None
 
 
 class SuperAdminUpdateAccountRequest(BaseModel):
@@ -55,6 +56,7 @@ class SuperAdminUpdateAccountRequest(BaseModel):
     display_name: Optional[str] = None
     is_active: Optional[bool] = None
     camp_ids: Optional[List[int]] = None
+    default_role_key: Optional[str] = None
 
 
 class SuperAdminCreateSuperadminRequest(BaseModel):

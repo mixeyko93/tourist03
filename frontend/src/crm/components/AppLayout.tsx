@@ -7,6 +7,7 @@ import {
   fetchCrmEventCenterSummary,
   fetchCrmProfileSwitcher,
   fetchCrmSession,
+  issueSelfTelegramLink,
   logoutCrmSession,
   requestCrmProfilePinReset,
   requestCrmProfilePinSetup,
@@ -18,6 +19,7 @@ import {
 import { crmPath } from "../paths";
 import { PageLoadingState } from "./PageLoadingState";
 import { useDocumentTitle } from "./useDocumentTitle";
+import { QrCanvas } from "./QrCanvas";
 
 const navItems = [
   { label: "Календарь", path: "/calendar" },
@@ -62,6 +64,10 @@ export default function AppLayout() {
   const [pinConfirmValue, setPinConfirmValue] = useState("");
   const [profileActionPending, setProfileActionPending] = useState(false);
   const pendingSetupPinRef = useRef("");
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [onboardingLink, setOnboardingLink] = useState<{ deep_link: string | null; command: string } | null>(null);
+  const [onboardingLoading, setOnboardingLoading] = useState(false);
+  const [onboardingError, setOnboardingError] = useState("");
   const calendarPath = crmPath("/calendar");
   const activeNavItem = navItems.find((item) => location.pathname === crmPath(item.path));
 
@@ -133,6 +139,29 @@ export default function AppLayout() {
 
     return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    if (!session || session.hasTelegramLink) {
+      return;
+    }
+    const dismissed = sessionStorage.getItem("tg_onboarding_dismissed");
+    if (dismissed) {
+      return;
+    }
+    setOnboardingOpen(true);
+    setOnboardingLoading(true);
+    setOnboardingError("");
+    issueSelfTelegramLink()
+      .then((data) => {
+        setOnboardingLink({ deep_link: data.deep_link, command: data.command });
+      })
+      .catch((err: unknown) => {
+        setOnboardingError(err instanceof Error ? err.message : "Не удалось получить ссылку");
+      })
+      .finally(() => {
+        setOnboardingLoading(false);
+      });
+  }, [session]);
 
   useEffect(() => {
     if (!session) {
@@ -237,6 +266,29 @@ export default function AppLayout() {
     setProfileSwitcherOpen(false);
     resetProfileForm();
   };
+
+  // Polling пока открыт онбординг — как только TG привязан, предлагаем PIN
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!onboardingOpen || !session) return;
+    let active = true;
+    const poll = async () => {
+      try {
+        const next = await fetchCrmSession();
+        if (!active) return;
+        if (next?.hasTelegramLink) {
+          setSession(next);
+          sessionStorage.setItem("tg_onboarding_dismissed", "1");
+          setOnboardingOpen(false);
+          resetProfileForm();
+          setProfileSwitcherOpen(true);
+          void loadProfileSwitcher();
+        }
+      } catch { /* ignore */ }
+    };
+    const id = window.setInterval(poll, 3000);
+    return () => { active = false; window.clearInterval(id); };
+  }, [onboardingOpen, session]);
 
   const handleSelectProfile = (profile: CrmProfileSwitchProfile) => {
     setSelectedProfileId(profile.id);
@@ -775,6 +827,74 @@ export default function AppLayout() {
         </main>
       </div>
       {profileSwitcherModal}
+      {onboardingOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-md">
+          <div className="glass-card flex w-full max-w-md flex-col overflow-hidden rounded-[2rem] border border-border bg-card/95 shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-5">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#E5D3B3]">Привязка Telegram</p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-[-0.05em] text-foreground">Подключите бота</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  sessionStorage.setItem("tg_onboarding_dismissed", "1");
+                  setOnboardingOpen(false);
+                }}
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border bg-background/70 text-muted-foreground transition hover:bg-accent hover:text-foreground"
+                aria-label="Закрыть"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="p-6">
+              <p className="text-sm leading-6 text-muted-foreground">
+                Для получения уведомлений и подтверждения PIN-кода привяжите ваш аккаунт к Telegram-боту. Отсканируйте QR-код или перейдите по ссылке.
+              </p>
+              {onboardingLoading ? (
+                <div className="mt-6 flex items-center justify-center">
+                  <Loader2 className="h-8 w-8 animate-spin text-[#E5D3B3]" />
+                </div>
+              ) : onboardingError ? (
+                <div className="mt-4 rounded-3xl border border-rose-400/35 bg-rose-500/12 px-4 py-3 text-sm text-rose-100">
+                  {onboardingError}
+                </div>
+              ) : onboardingLink ? (
+                <div className="mt-6 flex flex-col items-center gap-4">
+                  {onboardingLink.deep_link ? (
+                    <QrCanvas value={onboardingLink.deep_link} size={200} />
+                  ) : null}
+                  <p className="text-center text-xs text-muted-foreground">QR-код действителен 15 минут</p>
+                  {onboardingLink.deep_link ? (
+                    <a
+                      href={onboardingLink.deep_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="brand-button w-full justify-center"
+                    >
+                      Открыть бот в Telegram
+                    </a>
+                  ) : (
+                    <div className="w-full rounded-2xl border border-border bg-background/55 px-4 py-3 text-center font-mono text-sm text-foreground">
+                      {onboardingLink.command}
+                    </div>
+                  )}
+                </div>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => {
+                  sessionStorage.setItem("tg_onboarding_dismissed", "1");
+                  setOnboardingOpen(false);
+                }}
+                className="mt-4 w-full rounded-2xl border border-border px-4 py-3 text-sm font-semibold text-foreground transition hover:bg-accent"
+              >
+                Позже
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

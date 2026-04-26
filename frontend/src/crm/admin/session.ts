@@ -137,6 +137,7 @@ export type SuperadminAccount = {
   login: string;
   display_name: string;
   is_active: boolean;
+  default_role_key?: string | null;
   created_at?: string | null;
   archived_at?: string | null;
   camps: Array<{ camp_id: number; camp_name?: string | null }>;
@@ -148,6 +149,7 @@ export type SuperadminAccountPayload = {
   display_name: string;
   is_active?: boolean;
   camp_ids: number[];
+  default_role_key?: string;
 };
 
 export type SuperadminUserSummary = {

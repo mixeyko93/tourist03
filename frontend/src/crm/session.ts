@@ -6,6 +6,7 @@ export type CrmSession = {
   name: string;
   phone: string;
   defaultRoleKey: string;
+  hasTelegramLink: boolean;
 };
 
 export type CrmProfileSwitchProfile = {
@@ -526,6 +527,7 @@ type AdminSessionPayload = {
   display_name: string;
   phone?: string;
   default_role_key?: string;
+  telegram_chat_id?: number | null;
 };
 
 type AdminProfileSwitchSessionResponse = {
@@ -552,6 +554,7 @@ function mapSession(payload: AdminSessionPayload): CrmSession {
     name: String(payload.display_name || ""),
     phone: String(payload.phone || ""),
     defaultRoleKey: String(payload.default_role_key || "administrator"),
+    hasTelegramLink: Boolean(payload.telegram_chat_id),
   };
 }
 
@@ -583,6 +586,15 @@ export async function loginCrmSession(payload: CrmLoginPayload) {
     throw new Error("Сессия не открылась после входа");
   }
   return session;
+}
+
+export async function issueSelfTelegramLink(): Promise<{ ok: boolean; code: string; deep_link: string | null; command: string }> {
+  const response = await fetch("/api/admin/self/telegram-link", {
+    method: "POST",
+    credentials: "same-origin",
+  });
+  await assertOk(response);
+  return (await response.json()) as { ok: boolean; code: string; deep_link: string | null; command: string };
 }
 
 export async function logoutCrmSession() {
