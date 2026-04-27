@@ -198,10 +198,7 @@ async def _handle_notification_link(message: Message, code: str) -> None:
 
 
 def crm_start_keyboard() -> InlineKeyboardMarkup:
-    crm_base = (CRM_BASE_URL or "https://crm.turist03.ru").rstrip("/")
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Открыть CRM", url=crm_base)],
-    ])
+    return InlineKeyboardMarkup(inline_keyboard=[])
 
 
 @staff_router.message(CommandStart())
