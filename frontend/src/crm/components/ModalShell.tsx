@@ -1,4 +1,4 @@
-import type { PropsWithChildren } from "react";
+import { type PropsWithChildren, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
 
@@ -13,6 +13,13 @@ type ModalShellProps = PropsWithChildren<{
 }>;
 
 export function ModalShell({ open, onClose, title, description, disableBackdropClose = false, panelClassName = "", bodyClassName = "", children }: ModalShellProps) {
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
+
   if (typeof document === "undefined") {
     return null;
   }
@@ -25,7 +32,7 @@ export function ModalShell({ open, onClose, title, description, disableBackdropC
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 backdrop-blur-md dark:bg-black/55 sm:items-center sm:p-4 lg:left-[var(--crm-shell-offset,0px)] lg:top-16"
-          onClick={() => {
+onClick={() => {
             if (!disableBackdropClose) {
               onClose();
             }
