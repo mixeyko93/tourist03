@@ -20,6 +20,7 @@ type AccountDraft = {
   id: number | null;
   login: string;
   name: string;
+  phone: string;
   password: string;
   active: boolean;
   baseIds: number[];
@@ -109,6 +110,7 @@ function createAccountDraft(account: SuperadminAccount | null): AccountDraft {
       id: null,
       login: "",
       name: "",
+      phone: "",
       password: generatePassword(),
       active: true,
       baseIds: [],
@@ -119,6 +121,7 @@ function createAccountDraft(account: SuperadminAccount | null): AccountDraft {
     id: account.id,
     login: account.login,
     name: account.display_name,
+    phone: account.phone || "",
     password: "",
     active: account.is_active,
     baseIds: account.camps.map((camp) => camp.camp_id),
@@ -246,6 +249,7 @@ export default function AdminAccountsPage() {
       const payload = {
         login: draft.login.trim(),
         display_name: draft.name.trim(),
+        phone: draft.phone.trim() || undefined,
         password: plainPassword || undefined,
         is_active: draft.active,
         camp_ids: draft.baseIds,
@@ -445,6 +449,9 @@ export default function AdminAccountsPage() {
             </AdminField>
             <AdminField label="Логин">
               <input className="admin-input" value={draft.login} onChange={(event) => handleDraftLoginChange(event.target.value)} placeholder="иванов.иван" title="Логин для входа в CRM" />
+            </AdminField>
+            <AdminField label="Номер телефона">
+              <input className="admin-input" value={draft.phone} onChange={(event) => setDraft((current) => ({ ...current, phone: event.target.value }))} placeholder="+7 999 000 00 00" title="Номер телефона управляющего" />
             </AdminField>
             <AdminField
               label={draft.id ? "Новый пароль" : "Пароль создан автоматически"}

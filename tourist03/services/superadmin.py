@@ -17,6 +17,7 @@ from tourist03.schemas import (
     SuperAdminUpdateSuperadminRequest,
 )
 from tourist03.security import (
+    _normalize_phone,
     extract_superadmin_header_token,
     get_root_superadmin,
     get_superadmin_session_principal,
@@ -212,8 +213,16 @@ def create_camp_admin_account(payload: SuperAdminCreateAccountRequest):
 
     password_hash = hash_password(password_raw)
     role_key = SUPERADMIN_MANAGED_ROLE_KEY
+    phone = _normalize_phone(payload.phone or "")
     try:
-        admin_id = superadmin_repo.create_admin_account(login, password_hash, display_name, payload.camp_ids, default_role_key=role_key)
+        admin_id = superadmin_repo.create_admin_account(
+            login,
+            password_hash,
+            display_name,
+            payload.camp_ids,
+            default_role_key=role_key,
+            phone=phone,
+        )
     except Exception:
         logger.exception("Техническая ошибка при создании учётки login=%s", login)
         raise
@@ -226,6 +235,7 @@ def update_camp_admin_account(account_id: int, payload: SuperAdminUpdateAccountR
     login = _normalize_manager_login_or_400(payload.login) if payload.login is not None else None
     display_name = (payload.display_name or "").strip() if payload.display_name is not None else None
     password_raw = (payload.password or "").strip() if payload.password is not None else None
+    phone = _normalize_phone(payload.phone or "") if payload.phone is not None else None
     is_active = payload.is_active
     camp_ids = payload.camp_ids if payload.camp_ids is not None else None
 
@@ -259,6 +269,7 @@ def update_camp_admin_account(account_id: int, payload: SuperAdminUpdateAccountR
             login=next_login,
             display_name=next_display_name,
             password_hash=next_password_hash,
+            phone=phone,
             is_active=next_is_active,
             camp_ids=camp_ids,
             default_role_key=next_role_key,

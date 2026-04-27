@@ -339,17 +339,24 @@ def find_admin_account_by_login(login: str):
         return dict(row) if row else None
 
 
-def create_admin_account(login: str, password_hash: str, display_name: str, camp_ids: list[int], default_role_key: Optional[str] = None):
+def create_admin_account(
+    login: str,
+    password_hash: str,
+    display_name: str,
+    camp_ids: list[int],
+    default_role_key: Optional[str] = None,
+    phone: Optional[str] = None,
+):
     role_for_link = (default_role_key or "").strip() or "chief_manager"
     with _db_conn("crm") as conn:
         cur = conn.cursor()
         cur.execute(
             """
-            INSERT INTO auth.camp_admin_accounts (email, password_hash, display_name, default_role_key)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO auth.camp_admin_accounts (email, password_hash, display_name, phone, default_role_key)
+            VALUES (%s, %s, %s, %s, %s)
             RETURNING id
             """,
-            (login, password_hash, display_name, role_for_link),
+            (login, password_hash, display_name, phone, role_for_link),
         )
         admin_id = cur.fetchone()["id"]
         linked: set[int] = set()
@@ -395,7 +402,7 @@ def get_admin_account(account_id: int):
         cur = conn.cursor()
         cur.execute(
             """
-            SELECT id, email, display_name, is_active
+            SELECT id, email, display_name, phone, is_active
             FROM auth.camp_admin_accounts
             WHERE id=%s
               AND archived_at IS NULL
@@ -434,6 +441,7 @@ def update_admin_account(
     login: Optional[str] = None,
     display_name: Optional[str] = None,
     password_hash: Optional[str] = None,
+    phone: Optional[str] = None,
     is_active: Optional[bool] = None,
     camp_ids: Optional[list[int]] = None,
     default_role_key: Optional[str] = None,
@@ -451,6 +459,9 @@ def update_admin_account(
         if password_hash is not None:
             updates.append("password_hash=%s")
             params.append(password_hash)
+        if phone is not None:
+            updates.append("phone=%s")
+            params.append(phone)
         if is_active is not None:
             updates.append("is_active=%s")
             params.append(bool(is_active))
@@ -561,6 +572,7 @@ def list_accounts():
                 a.id,
                 a.email AS login,
                 a.display_name,
+                a.phone,
                 a.is_active,
                 a.default_role_key,
                 a.created_at,
@@ -578,7 +590,7 @@ def list_accounts():
             LEFT JOIN crm.camp_admin_links AS l ON l.admin_id = a.id
             LEFT JOIN catalog.camps AS c ON c.id = l.camp_id
             WHERE a.archived_at IS NULL
-            GROUP BY a.id, a.email, a.display_name, a.is_active, a.default_role_key, a.created_at
+            GROUP BY a.id, a.email, a.display_name, a.phone, a.is_active, a.default_role_key, a.created_at
             ORDER BY a.created_at DESC, a.id DESC
             """
         )
@@ -599,6 +611,7 @@ def list_accounts():
                 "id": row["id"],
                 "login": row["login"],
                 "display_name": row["display_name"],
+                "phone": row.get("phone"),
                 "is_active": row["is_active"],
                 "default_role_key": row.get("default_role_key") or "chief_manager",
                 "created_at": row["created_at"],

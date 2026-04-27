@@ -136,6 +136,7 @@ export type SuperadminAccount = {
   id: number;
   login: string;
   display_name: string;
+  phone?: string | null;
   is_active: boolean;
   default_role_key?: string | null;
   created_at?: string | null;
@@ -147,6 +148,7 @@ export type SuperadminAccountPayload = {
   login: string;
   password?: string;
   display_name: string;
+  phone?: string;
   is_active?: boolean;
   camp_ids: number[];
   default_role_key?: string;

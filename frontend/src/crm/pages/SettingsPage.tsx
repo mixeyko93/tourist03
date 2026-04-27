@@ -81,6 +81,10 @@ type TelegramLinkInfo = {
   bot_username: string;
 };
 
+type TelegramQuickLinkInfo = TelegramLinkInfo & {
+  staffName: string;
+};
+
 const emptyProfileForm: ProfileForm = {
   name: "",
   lakeName: "",
@@ -328,6 +332,7 @@ export default function SettingsPage() {
   const [staffFormError, setStaffFormError] = useState("");
   const [isSavingStaff, setIsSavingStaff] = useState(false);
   const [telegramLinkInfo, setTelegramLinkInfo] = useState<TelegramLinkInfo | null>(null);
+  const [telegramQuickLinkInfo, setTelegramQuickLinkInfo] = useState<TelegramQuickLinkInfo | null>(null);
   const [issuingTelegramCodeId, setIssuingTelegramCodeId] = useState<number | null>(null);
   const [createdStaff, setCreatedStaff] = useState<CrmStaffMember | null>(null);
   const [auditItems, setAuditItems] = useState<CrmAuditEntry[]>([]);
@@ -679,11 +684,12 @@ export default function SettingsPage() {
       setIssuingTelegramCodeId(staff.id);
       setStaffFormError("");
       setTeamError("");
-      if (!isStaffModalOpen) {
-        openEditStaffModal(staff);
-      }
       const response = await issueCrmStaffTelegramLink(selectedCampId, staff.id);
-      setTelegramLinkInfo({ code: response.code, bot_username: response.bot_username });
+      setTelegramQuickLinkInfo({
+        code: response.code,
+        bot_username: response.bot_username,
+        staffName: staff.display_name || staff.login || `Сотрудник #${staff.id}`,
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Не удалось выпустить код привязки Telegram";
       setTeamError(message);
@@ -1362,31 +1368,36 @@ export default function SettingsPage() {
             </>
           ) : null}
 
-          {editingStaff || createdStaff ? (
-            <div className="rounded-3xl border border-border bg-background/65 p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm font-medium text-foreground">Привязка к боту уведомлений</p>
-                  <p className="text-sm text-muted-foreground">
-                    {createdStaff && !editingStaff
-                      ? "Сотрудник открывает бот, вводит этот код — Telegram привяжется автоматически."
-                      : "Сгенерируйте одноразовый код, чтобы сотрудник подключил Telegram к своей учётке."}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="soft-button"
-                  onClick={() => {
-                    if (editingStaff) handleIssueTelegramCode(editingStaff);
-                    else handleIssueTelegramCodeForCreated();
-                  }}
-                  disabled={issuingTelegramCodeId !== null}
-                >
-                  {issuingTelegramCodeId !== null ? "Генерируем..." : "Выдать код"}
-                </button>
+          <div className="rounded-3xl border border-border bg-background/65 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-medium text-foreground">Привязка к боту уведомлений</p>
+                <p className="text-sm text-muted-foreground">
+                  {createdStaff || editingStaff
+                    ? "Сгенерируйте одноразовый код, чтобы сотрудник подключил Telegram к своей учётке."
+                    : "Кнопка станет активной сразу после создания учётки сотрудника."}
+                </p>
               </div>
+              <button
+                type="button"
+                className="soft-button"
+                onClick={() => {
+                  if (editingStaff) {
+                    handleIssueTelegramCode(editingStaff);
+                    return;
+                  }
+                  handleIssueTelegramCodeForCreated();
+                }}
+                disabled={issuingTelegramCodeId !== null || (!editingStaff && !createdStaff)}
+              >
+                {issuingTelegramCodeId !== null
+                  ? "Генерируем..."
+                  : editingStaff || createdStaff
+                  ? "Выдать код"
+                  : "Создайте учётку"}
+              </button>
             </div>
-          ) : null}
+          </div>
 
           <div className="flex flex-col gap-3 border-t border-border pt-2 sm:flex-row sm:justify-end">
             {createdStaff ? (
@@ -1423,6 +1434,40 @@ export default function SettingsPage() {
             )}
           </div>
         </form>
+      </ModalShell>
+
+      <ModalShell
+        open={Boolean(telegramQuickLinkInfo)}
+        onClose={() => setTelegramQuickLinkInfo(null)}
+        title="Код привязки Telegram"
+        description={telegramQuickLinkInfo ? `Сотрудник: ${telegramQuickLinkInfo.staffName}` : undefined}
+        panelClassName="max-w-md"
+      >
+        {telegramQuickLinkInfo ? (
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-4 text-center">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">Привязка Telegram</p>
+              <p className="mt-3 font-mono text-4xl font-bold tracking-[0.2em] text-emerald-100">{telegramQuickLinkInfo.code}</p>
+              <p className="mt-2 text-xs text-emerald-200/70">Код действителен 15 минут</p>
+            </div>
+            {telegramQuickLinkInfo.bot_username ? (
+              <a
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-300/30 bg-black/20 px-3 py-2.5 text-sm font-medium text-emerald-50 transition hover:bg-black/30"
+                href={`https://t.me/${telegramQuickLinkInfo.bot_username}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <Link2 className="h-4 w-4" />
+                Открыть бот
+              </a>
+            ) : null}
+            <div className="flex justify-end">
+              <button type="button" className="brand-button" onClick={() => setTelegramQuickLinkInfo(null)}>
+                Закрыть
+              </button>
+            </div>
+          </div>
+        ) : null}
       </ModalShell>
 
       <ModalShell
