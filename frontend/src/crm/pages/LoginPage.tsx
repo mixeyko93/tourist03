@@ -261,6 +261,7 @@ export default function LoginPage() {
         login,
         password,
       });
+      sessionStorage.removeItem("tg_onboarding_dismissed");
       navigate(nextPath, { replace: true });
     } catch (error) {
       setErrorMessage(error instanceof Error ? error.message : "Не удалось открыть рабочее пространство");

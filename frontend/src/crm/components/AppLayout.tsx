@@ -217,6 +217,7 @@ export default function AppLayout() {
     } catch {
       // Даже при сетевой ошибке локально выходим из защищённого контура.
     } finally {
+      sessionStorage.removeItem("tg_onboarding_dismissed");
       setSession(null);
       navigate(loginPath, { replace: true });
     }
