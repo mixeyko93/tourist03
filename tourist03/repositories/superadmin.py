@@ -359,14 +359,17 @@ def create_admin_account(login: str, password_hash: str, display_name: str, camp
             if cid in linked:
                 continue
             linked.add(cid)
-            cur.execute(
-                """
-                INSERT INTO crm.camp_admin_links (admin_id, camp_id)
-                VALUES (%s, %s)
-                ON CONFLICT (admin_id, camp_id) DO NOTHING
-                """,
-                (admin_id, cid),
-            )
+            try:
+                cur.execute(
+                    """
+                    INSERT INTO crm.camp_admin_links (admin_id, camp_id)
+                    VALUES (%s, %s)
+                    """,
+                    (admin_id, cid),
+                )
+            except Exception:
+                # Ignore duplicates
+                pass
         conn.commit()
         return admin_id
 
@@ -454,14 +457,17 @@ def update_admin_account(
                     (account_id, list(to_remove)),
                 )
             for cid in target_camps:
-                cur.execute(
-                    """
-                    INSERT INTO crm.camp_admin_links (admin_id, camp_id)
-                    VALUES (%s, %s)
-                    ON CONFLICT (admin_id, camp_id) DO NOTHING
-                    """,
-                    (account_id, cid),
-                )
+                try:
+                    cur.execute(
+                        """
+                        INSERT INTO crm.camp_admin_links (admin_id, camp_id)
+                        VALUES (%s, %s)
+                        """,
+                        (account_id, cid),
+                    )
+                except Exception:
+                    # Ignore duplicates
+                    pass
         conn.commit()
 
 
