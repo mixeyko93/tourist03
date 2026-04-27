@@ -343,11 +343,11 @@ def create_admin_account(login: str, password_hash: str, display_name: str, camp
         cur = conn.cursor()
         cur.execute(
             """
-            INSERT INTO auth.camp_admin_accounts (email, password_hash, display_name, default_role_key)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO auth.camp_admin_accounts (email, password_hash, display_name)
+            VALUES (%s, %s, %s)
             RETURNING id
             """,
-            (login, password_hash, display_name, default_role_key or "administrator"),
+            (login, password_hash, display_name),
         )
         admin_id = cur.fetchone()["id"]
         linked: set[int] = set()
@@ -435,9 +435,6 @@ def update_admin_account(
         if is_active is not None:
             updates.append("is_active=%s")
             params.append(bool(is_active))
-        if default_role_key is not None:
-            updates.append("default_role_key=%s")
-            params.append(default_role_key)
         if updates:
             cur.execute(f"UPDATE auth.camp_admin_accounts SET {', '.join(updates)} WHERE id=%s", tuple([*params, account_id]))
 
@@ -486,7 +483,6 @@ def list_accounts():
                 a.email AS login,
                 a.display_name,
                 a.is_active,
-                a.default_role_key,
                 a.created_at,
                 COALESCE(
                     json_agg(
@@ -502,7 +498,7 @@ def list_accounts():
             LEFT JOIN crm.camp_admin_links AS l ON l.admin_id = a.id
             LEFT JOIN catalog.camps AS c ON c.id = l.camp_id
             WHERE a.archived_at IS NULL
-            GROUP BY a.id, a.email, a.display_name, a.is_active, a.default_role_key, a.created_at
+            GROUP BY a.id, a.email, a.display_name, a.is_active, a.created_at
             ORDER BY a.created_at DESC, a.id DESC
             """
         )
@@ -524,7 +520,7 @@ def list_accounts():
                 "login": row["login"],
                 "display_name": row["display_name"],
                 "is_active": row["is_active"],
-                "default_role_key": row.get("default_role_key") or "administrator",
+                "default_role_key": "administrator",
                 "created_at": row["created_at"],
                 "camps": camps_data,
             }
