@@ -233,7 +233,7 @@ def create_notification_event(
 def issue_admin_telegram_link_code(admin_id: int, *, ttl_minutes: int = 15) -> str:
     if not admin_id:
         raise ValueError("admin_id is required")
-    code = secrets.token_urlsafe(12)
+    code = str(secrets.randbelow(900000) + 100000)  # 6-значный код 100000–999999
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=max(int(ttl_minutes or 15), 1))
     with _db_conn("crm") as conn:
         cur = conn.cursor()

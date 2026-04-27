@@ -19,7 +19,6 @@ import {
 import { crmPath } from "../paths";
 import { PageLoadingState } from "./PageLoadingState";
 import { useDocumentTitle } from "./useDocumentTitle";
-import { QrCanvas } from "./QrCanvas";
 
 const navItems = [
   { label: "Календарь", path: "/calendar" },
@@ -65,7 +64,7 @@ export default function AppLayout() {
   const [profileActionPending, setProfileActionPending] = useState(false);
   const pendingSetupPinRef = useRef("");
   const [onboardingOpen, setOnboardingOpen] = useState(false);
-  const [onboardingLink, setOnboardingLink] = useState<{ deep_link: string | null; command: string } | null>(null);
+  const [onboardingLink, setOnboardingLink] = useState<{ code: string; bot_username: string } | null>(null);
   const [onboardingLoading, setOnboardingLoading] = useState(false);
   const [onboardingError, setOnboardingError] = useState("");
   const calendarPath = crmPath("/calendar");
@@ -153,7 +152,7 @@ export default function AppLayout() {
     setOnboardingError("");
     issueSelfTelegramLink()
       .then((data) => {
-        setOnboardingLink({ deep_link: data.deep_link, command: data.command });
+        setOnboardingLink({ code: data.code, bot_username: data.bot_username });
       })
       .catch((err: unknown) => {
         setOnboardingError(err instanceof Error ? err.message : "Не удалось получить ссылку");
@@ -850,7 +849,7 @@ export default function AppLayout() {
             </div>
             <div className="p-6">
               <p className="text-sm leading-6 text-muted-foreground">
-                Для получения уведомлений и подтверждения PIN-кода привяжите ваш аккаунт к Telegram-боту. Отсканируйте QR-код или перейдите по ссылке.
+                Для уведомлений и подтверждения PIN-кода привяжите аккаунт к Telegram-боту.
               </p>
               {onboardingLoading ? (
                 <div className="mt-6 flex items-center justify-center">
@@ -861,25 +860,27 @@ export default function AppLayout() {
                   {onboardingError}
                 </div>
               ) : onboardingLink ? (
-                <div className="mt-6 flex flex-col items-center gap-4">
-                  {onboardingLink.deep_link ? (
-                    <QrCanvas value={onboardingLink.deep_link} size={200} />
-                  ) : null}
-                  <p className="text-center text-xs text-muted-foreground">QR-код действителен 15 минут</p>
-                  {onboardingLink.deep_link ? (
+                <div className="mt-5 flex flex-col gap-4">
+                  <div className="rounded-2xl border border-[#E5D3B3]/30 bg-[#E5D3B3]/8 px-4 py-5 text-center">
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#E5D3B3]/70">Ваш код привязки</p>
+                    <p className="mt-2 font-mono text-5xl font-bold tracking-[0.18em] text-foreground">{onboardingLink.code}</p>
+                    <p className="mt-2 text-xs text-muted-foreground">Действителен 15 минут</p>
+                  </div>
+                  <ol className="space-y-1.5 text-sm leading-6 text-muted-foreground">
+                    <li>1. Откройте Telegram-бот{onboardingLink.bot_username ? ` @${onboardingLink.bot_username}` : ""}</li>
+                    <li>2. Напишите боту этот код: <span className="font-mono font-semibold text-foreground">{onboardingLink.code}</span></li>
+                    <li>3. Бот подтвердит привязку — CRM обновится автоматически</li>
+                  </ol>
+                  {onboardingLink.bot_username ? (
                     <a
-                      href={onboardingLink.deep_link}
+                      href={`https://t.me/${onboardingLink.bot_username}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="brand-button w-full justify-center"
                     >
                       Открыть бот в Telegram
                     </a>
-                  ) : (
-                    <div className="w-full rounded-2xl border border-border bg-background/55 px-4 py-3 text-center font-mono text-sm text-foreground">
-                      {onboardingLink.command}
-                    </div>
-                  )}
+                  ) : null}
                 </div>
               ) : null}
               <button

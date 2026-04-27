@@ -588,13 +588,13 @@ export async function loginCrmSession(payload: CrmLoginPayload) {
   return session;
 }
 
-export async function issueSelfTelegramLink(): Promise<{ ok: boolean; code: string; deep_link: string | null; command: string }> {
+export async function issueSelfTelegramLink(): Promise<{ ok: boolean; code: string; bot_username: string }> {
   const response = await fetch("/api/admin/self/telegram-link", {
     method: "POST",
     credentials: "same-origin",
   });
   await assertOk(response);
-  return (await response.json()) as { ok: boolean; code: string; deep_link: string | null; command: string };
+  return (await response.json()) as { ok: boolean; code: string; bot_username: string };
 }
 
 export async function logoutCrmSession() {
@@ -1095,7 +1095,7 @@ export async function issueCrmStaffTelegramLink(campId: number, staffId: number)
     credentials: "same-origin",
   });
   await assertOk(response);
-  return (await response.json()) as { ok: boolean; code: string; command: string; deep_link: string | null };
+  return (await response.json()) as { ok: boolean; code: string; bot_username: string };
 }
 
 export async function saveCrmShiftSettings(campId: number, payload: CrmShiftSettingsUpdatePayload) {

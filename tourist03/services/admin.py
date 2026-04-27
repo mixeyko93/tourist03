@@ -401,8 +401,8 @@ def admin_me(admin: dict = Depends(get_current_admin)):
 
 def api_admin_self_telegram_link(admin: dict = Depends(get_current_admin)):
     code = issue_admin_telegram_link_code(int(admin["id"]))
-    deep_link = f"https://t.me/{STAFF_BOT_USERNAME}?start={code}" if STAFF_BOT_USERNAME else None
-    return {"ok": True, "code": code, "command": f"/start {code}", "deep_link": deep_link}
+    bot_username = STAFF_BOT_USERNAME or ""
+    return {"ok": True, "code": code, "bot_username": bot_username}
 
 
 def _session_root_admin_id(request: Request, admin: dict) -> int:
@@ -2715,8 +2715,8 @@ def api_admin_issue_staff_telegram_link(
         is_sensitive=False,
         was_auto_applied=True,
     )
-    deep_link = f"https://t.me/{STAFF_BOT_USERNAME}?start={code}" if STAFF_BOT_USERNAME else None
-    return {"ok": True, "code": code, "command": f"/start {code}", "deep_link": deep_link}
+    bot_username = STAFF_BOT_USERNAME or ""
+    return {"ok": True, "code": code, "bot_username": bot_username}
 
 
 def api_admin_audit_log(

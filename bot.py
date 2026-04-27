@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-import io
 import logging
 import os
-import re
 from contextlib import suppress
 
 from dotenv import load_dotenv
@@ -203,7 +201,6 @@ def crm_start_keyboard() -> InlineKeyboardMarkup:
     crm_base = (CRM_BASE_URL or "https://crm.turist03.ru").rstrip("/")
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="Открыть CRM", url=crm_base)],
-        [InlineKeyboardButton(text="📷 Сканировать QR", callback_data="scan_qr_help")],
     ])
 
 
@@ -226,92 +223,10 @@ async def staff_cmd_link(message: Message) -> None:
     await _handle_notification_link(message, _extract_command_arg(message.text))
 
 
-def _decode_qr_robust(img_bytes: bytes) -> list:
-    """Пробует несколько вариантов предобработки для надёжного распознавания QR с фото экрана."""
-    from PIL import Image, ImageEnhance, ImageFilter
-    from pyzbar.pyzbar import decode as qr_decode
-
-    img = Image.open(io.BytesIO(img_bytes))
-
-    # Пробуем варианты от простого к сложному
-    candidates = []
-
-    # 1. Оригинал
-    candidates.append(img)
-
-    # 2. Grayscale
-    gray = img.convert("L")
-    candidates.append(gray)
-
-    # 3. Увеличенный grayscale (pyzbar лучше работает с большими изображениями)
-    w, h = gray.size
-    if max(w, h) < 1200:
-        scale = 1200 / max(w, h)
-        big = gray.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
-        candidates.append(big)
-
-    # 4. Повышенный контраст
-    enhanced = ImageEnhance.Contrast(gray).enhance(2.5)
-    candidates.append(enhanced)
-
-    # 5. Резкость + контраст
-    sharpened = ImageEnhance.Sharpness(enhanced).enhance(2.0)
-    candidates.append(sharpened)
-
-    # 6. Бинаризация через пороговое значение (средняя яркость)
-    import statistics
-    pixels = list(gray.getdata())
-    threshold = statistics.median(pixels)
-    bw = gray.point(lambda p: 255 if p > threshold else 0, "L")
-    candidates.append(bw)
-
-    # 7. Инвертированная бинаризация (для светлых QR на тёмном фоне)
-    bw_inv = gray.point(lambda p: 0 if p > threshold else 255, "L")
-    candidates.append(bw_inv)
-
-    for candidate in candidates:
-        codes = qr_decode(candidate)
-        if codes:
-            return codes
-
-    return []
-
-
-@staff_router.message(F.photo)
-async def staff_photo_handler(message: Message) -> None:
-    photo = message.photo[-1]
-
-    try:
-        from pyzbar.pyzbar import decode as qr_decode  # noqa: F401
-    except ImportError:
-        await message.answer("Декодирование QR временно недоступно на сервере.")
-        return
-
-    bot = message.bot
-    file_info = await bot.get_file(photo.file_id)
-    file_bytes = await bot.download_file(file_info.file_path)
-    raw_bytes = file_bytes.read()
-
-    codes = _decode_qr_robust(raw_bytes)
-
-    if not codes:
-        await message.answer(
-            "QR-код не найден на фото.\n\n"
-            "Советы:\n"
-            "• Убедитесь, что весь QR-код попал в кадр\n"
-            "• Снимайте прямо (без наклона)\n"
-            "• Избегайте засветки и бликов на экране\n"
-            "• Сделайте скриншот экрана и отправьте его — это надёжнее фото"
-        )
-        return
-
-    raw_data = codes[0].data.decode("utf-8", errors="ignore").strip()
-    # Извлекаем код: может быть deep link https://t.me/bot?start=CODE или просто CODE
-    code = raw_data
-    m = re.search(r"[?&]start=([^&\s]+)", raw_data)
-    if m:
-        code = m.group(1)
-
+@staff_router.message(F.text.regexp(r"^\d{6}$"))
+async def staff_code_handler(message: Message) -> None:
+    """Пользователь прислал 6-значный код привязки."""
+    code = (message.text or "").strip()
     await _handle_notification_link(message, code)
 
 
@@ -346,18 +261,6 @@ async def staff_cmd_events(message: Message) -> None:
 @staff_router.callback_query()
 async def staff_callback_router(callback: CallbackQuery) -> None:
     raw = (callback.data or "").strip()
-
-    if raw == "scan_qr_help":
-        await callback.answer()
-        if callback.message:
-            await callback.message.answer(
-                "📷 <b>Как привязать аккаунт через QR</b>\n\n"
-                "1. Откройте CRM → вкладка <b>Настройки</b>.\n"
-                "2. Найдите свою карточку сотрудника, нажмите <b>«Привязать Telegram»</b>.\n"
-                "3. На экране появится QR-код — <b>сфотографируйте его</b> и отправьте это фото сюда в чат.\n\n"
-                "Бот сам считает код с фото и привяжет аккаунт автоматически."
-            )
-        return
 
     if not raw.startswith("cr:") and not raw.startswith("sa:") and not raw.startswith("pin:"):
         await callback.answer()

@@ -18,7 +18,6 @@ import { ModalShell } from "../components/ModalShell";
 import { PageLoadingState } from "../components/PageLoadingState";
 import { PageMotion } from "../components/PageMotion";
 import { usePageLoadState } from "../components/usePageLoadState";
-import { QrCanvas } from "../components/QrCanvas";
 import { SectionHeading } from "../components/SectionHeading";
 import { SensitiveChangeModal } from "../components/SensitiveChangeModal";
 import { buildMediaItems, captureVideoPosterFile, splitMediaItems } from "../mediaTools";
@@ -82,8 +81,7 @@ type SettingsTab = "profile" | "team" | "audit";
 
 type TelegramLinkInfo = {
   code: string;
-  command: string;
-  deepLink: string | null;
+  bot_username: string;
 };
 
 const emptyProfileForm: ProfileForm = {
@@ -665,8 +663,7 @@ export default function SettingsPage() {
       const response = await issueCrmStaffTelegramLink(selectedCampId, staff.id);
       setTelegramLinkInfo({
         code: response.code,
-        command: response.command,
-        deepLink: response.deep_link,
+        bot_username: response.bot_username,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Не удалось выпустить код привязки Telegram";
@@ -1187,25 +1184,26 @@ export default function SettingsPage() {
           ) : null}
 
           {telegramLinkInfo ? (
-            <div className="flex flex-col items-center gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-4">
+            <div className="flex flex-col gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-4">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">Привязка Telegram</p>
-              {telegramLinkInfo.deepLink ? (
-                <QrCanvas value={telegramLinkInfo.deepLink} size={180} />
-              ) : null}
-              <p className="text-center text-xs text-emerald-200/70">QR-код действителен 15 минут</p>
-              {telegramLinkInfo.deepLink ? (
+              <div className="rounded-xl bg-black/20 px-4 py-4 text-center">
+                <p className="font-mono text-4xl font-bold tracking-[0.2em] text-emerald-100">{telegramLinkInfo.code}</p>
+                <p className="mt-1 text-xs text-emerald-200/60">Код действителен 15 минут</p>
+              </div>
+              <p className="text-xs leading-5 text-emerald-200/80">
+                Откройте бот{telegramLinkInfo.bot_username ? ` @${telegramLinkInfo.bot_username}` : ""} в Telegram и отправьте этот код. Бот привяжет аккаунт автоматически.
+              </p>
+              {telegramLinkInfo.bot_username ? (
                 <a
                   className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-300/30 bg-black/20 px-3 py-2.5 text-sm font-medium text-emerald-50 transition hover:bg-black/30"
-                  href={telegramLinkInfo.deepLink}
+                  href={`https://t.me/${telegramLinkInfo.bot_username}`}
                   target="_blank"
                   rel="noreferrer"
                 >
                   <Link2 className="h-4 w-4" />
                   Открыть бот
                 </a>
-              ) : (
-                <p className="font-mono text-sm text-emerald-100">{telegramLinkInfo.command}</p>
-              )}
+              ) : null}
             </div>
           ) : null}
 
