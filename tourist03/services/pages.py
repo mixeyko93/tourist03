@@ -82,7 +82,7 @@ def react_map_page(request: Request):
         try:
             html = Path(react_index).read_text(encoding="utf-8")
             html = html.replace("<title>Tourist03 Панель</title>", f"<title>{_react_shell_title(request)}</title>", 1)
-            return HTMLResponse(content=html)
+            return HTMLResponse(content=html, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
         except Exception:
             return FileResponse(react_index)
     return JSONResponse({"detail": "React map build is missing"}, status_code=503)
