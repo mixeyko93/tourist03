@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import secrets
+import string
 from datetime import date, datetime, time, timedelta
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
@@ -2563,6 +2565,9 @@ def api_admin_create_staff(
     if role_key not in crm_domain.STAFF_ROLE_KEYS:
         raise HTTPException(status_code=400, detail="Некорректная роль сотрудника")
     password_raw = (payload.password or "").strip()
+    if not password_raw:
+        alphabet = string.ascii_letters + string.digits
+        password_raw = "".join(secrets.choice(alphabet) for _ in range(20))
     permission_keys = _normalize_staff_permission_keys(payload.permission_keys or [])
     if not permission_keys:
         permission_keys = list(crm_domain.DEFAULT_ROLE_PERMISSIONS.get(role_key, ()))
@@ -2582,16 +2587,20 @@ def api_admin_create_staff(
                 "permission_keys": permission_keys,
             },
             int(admin["id"]),
-            hash_password(password_raw) if password_raw else None,
+            hash_password(password_raw),
         )
     except ValueError as exc:
-        if str(exc) == "password_required":
-            raise HTTPException(status_code=400, detail="Для новой учётки задайте пароль") from exc
         if str(exc) == "already_linked":
             raise HTTPException(status_code=409, detail="Сотрудник уже привязан к этой базе") from exc
         raise
 
     staff = admin_repo.get_admin_staff_member(camp_id, staff_id)
+    if staff:
+        rk = (staff.get("role_key") or staff.get("default_role_key") or "administrator").strip() or "administrator"
+        staff["role_key"] = rk
+        staff["role_label"] = crm_domain.STAFF_ROLE_LABELS.get(rk, rk)
+        staff["has_telegram_link"] = bool(staff.get("telegram_chat_id"))
+        staff["permission_keys"] = staff.get("permission_keys") or list(crm_domain.DEFAULT_ROLE_PERMISSIONS.get(rk, ()))
     log_crm_audit_event(
         actor_type="camp_admin",
         actor_id=admin.get("id"),

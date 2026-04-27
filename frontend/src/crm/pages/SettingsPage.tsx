@@ -68,7 +68,6 @@ type StaffForm = {
   firstName: string;
   lastName: string;
   phone: string;
-  password: string;
   roleKey: string;
   isActive: boolean;
   notificationsEnabled: boolean;
@@ -219,7 +218,6 @@ function createEmptyStaffForm(roleKey = "administrator"): StaffForm {
     firstName: "",
     lastName: "",
     phone: "",
-    password: "",
     roleKey,
     isActive: true,
     notificationsEnabled: true,
@@ -233,7 +231,6 @@ function mapStaffForm(staff: CrmStaffMember): StaffForm {
     lastName: parts[0] || "",
     firstName: parts.slice(1).join(" "),
     phone: staff.phone || "",
-    password: "",
     roleKey: staff.role_key || "administrator",
     isActive: staff.is_active,
     notificationsEnabled: staff.notifications_enabled,
@@ -247,7 +244,6 @@ function toStaffPayload(form: StaffForm): CrmStaffUpsertPayload {
     login: buildLoginFromName(form.firstName, form.lastName) || displayName.toLowerCase().replace(/\s+/g, "."),
     display_name: displayName,
     phone: form.phone || undefined,
-    password: form.password || undefined,
     role_key: form.roleKey,
     can_manage_staff: false,
     is_primary: false,
@@ -320,6 +316,7 @@ export default function SettingsPage() {
   const [isSavingStaff, setIsSavingStaff] = useState(false);
   const [telegramLinkInfo, setTelegramLinkInfo] = useState<TelegramLinkInfo | null>(null);
   const [issuingTelegramCodeId, setIssuingTelegramCodeId] = useState<number | null>(null);
+  const [createdStaff, setCreatedStaff] = useState<CrmStaffMember | null>(null);
   const [auditItems, setAuditItems] = useState<CrmAuditEntry[]>([]);
   const [auditActors, setAuditActors] = useState<Array<{ id: number; label: string }>>([]);
   const [auditTargetTypes, setAuditTargetTypes] = useState<string[]>([]);
@@ -609,6 +606,7 @@ export default function SettingsPage() {
   function openCreateStaffModal() {
     const firstStaffRole = teamRoles.find((r) => r.key !== "chief_manager")?.key || "administrator";
     setEditingStaff(null);
+    setCreatedStaff(null);
     setStaffForm(createEmptyStaffForm(firstStaffRole));
     setStaffFormError("");
     setTeamSuccess("");
@@ -618,6 +616,7 @@ export default function SettingsPage() {
 
   function openEditStaffModal(staff: CrmStaffMember) {
     setEditingStaff(staff);
+    setCreatedStaff(null);
     setStaffForm(mapStaffForm(staff));
     setStaffFormError("");
     setTelegramLinkInfo(null);
@@ -634,10 +633,6 @@ export default function SettingsPage() {
       setStaffFormError("Заполните имя и фамилию сотрудника.");
       return;
     }
-    if (!editingStaff && !staffForm.password.trim()) {
-      setStaffFormError("Для новой учётки нужно задать пароль.");
-      return;
-    }
     try {
       setIsSavingStaff(true);
       setStaffFormError("");
@@ -646,14 +641,16 @@ export default function SettingsPage() {
       if (editingStaff) {
         await updateCrmStaff(selectedCampId, editingStaff.id, toStaffPayload(staffForm));
         setTeamSuccess(`Карточка ${staffForm.lastName} ${staffForm.firstName} обновлена.`);
+        setIsStaffModalOpen(false);
+        setEditingStaff(null);
+        setTelegramLinkInfo(null);
+        setReloadKey((value) => value + 1);
       } else {
-        await createCrmStaff(selectedCampId, toStaffPayload(staffForm));
+        const result = await createCrmStaff(selectedCampId, toStaffPayload(staffForm));
         setTeamSuccess(`Карточка ${staffForm.lastName} ${staffForm.firstName} создана.`);
+        setCreatedStaff(result.item ?? null);
+        setReloadKey((value) => value + 1);
       }
-      setIsStaffModalOpen(false);
-      setEditingStaff(null);
-      setTelegramLinkInfo(null);
-      setReloadKey((value) => value + 1);
     } catch (error) {
       setStaffFormError(error instanceof Error ? error.message : "Не удалось сохранить учётку сотрудника");
     } finally {
@@ -673,14 +670,28 @@ export default function SettingsPage() {
         openEditStaffModal(staff);
       }
       const response = await issueCrmStaffTelegramLink(selectedCampId, staff.id);
-      setTelegramLinkInfo({
-        code: response.code,
-        bot_username: response.bot_username,
-      });
+      setTelegramLinkInfo({ code: response.code, bot_username: response.bot_username });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Не удалось выпустить код привязки Telegram";
       setTeamError(message);
       setStaffFormError(message);
+    } finally {
+      setIssuingTelegramCodeId(null);
+    }
+  }
+
+  async function handleIssueTelegramCodeForCreated() {
+    const staff = createdStaff;
+    if (!staff || !selectedCampId) {
+      return;
+    }
+    try {
+      setIssuingTelegramCodeId(staff.id);
+      setStaffFormError("");
+      const response = await issueCrmStaffTelegramLink(selectedCampId, staff.id);
+      setTelegramLinkInfo({ code: response.code, bot_username: response.bot_username });
+    } catch (error) {
+      setStaffFormError(error instanceof Error ? error.message : "Не удалось выпустить код привязки Telegram");
     } finally {
       setIssuingTelegramCodeId(null);
     }
@@ -1186,13 +1197,20 @@ export default function SettingsPage() {
         onClose={() => {
           setIsStaffModalOpen(false);
           setEditingStaff(null);
+          setCreatedStaff(null);
           setStaffFormError("");
           setTelegramLinkInfo(null);
         }}
-        title={editingStaff ? "Редактирование сотрудника" : "Новая учётка сотрудника"}
-        description="Задайте роль, права и параметры уведомлений для команды базы. Все изменения попадут в аудит."
+        title={editingStaff ? "Редактирование сотрудника" : createdStaff ? "Сотрудник создан" : "Новая учётка сотрудника"}
+        description={
+          editingStaff
+            ? "Имя, должность, права и привязка Telegram. Все изменения попадут в аудит."
+            : createdStaff
+            ? "Учётка создана. Выдайте сотруднику код для привязки Telegram — он войдёт в бот и введёт его."
+            : "Укажите имя, должность и права. После создания выдайте сотруднику код для привязки Telegram."
+        }
       >
-        <form className="space-y-5" onSubmit={handleStaffSubmit}>
+        <form className="space-y-5" onSubmit={createdStaff ? (e) => e.preventDefault() : handleStaffSubmit}>
           {staffFormError ? (
             <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{staffFormError}</div>
           ) : null}
@@ -1221,152 +1239,169 @@ export default function SettingsPage() {
             </div>
           ) : null}
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="space-y-2">
-              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Фамилия</span>
-              <input className="soft-input" value={staffForm.lastName} onChange={(event) => setStaffForm((current) => ({ ...current, lastName: event.target.value }))} placeholder="Иванов" required />
-            </label>
-            <label className="space-y-2">
-              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Имя</span>
-              <input className="soft-input" value={staffForm.firstName} onChange={(event) => setStaffForm((current) => ({ ...current, firstName: event.target.value }))} placeholder="Иван" required />
-            </label>
-            <label className="space-y-2">
-              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Телефон</span>
-              <input className="soft-input" value={staffForm.phone} onChange={(event) => setStaffForm((current) => ({ ...current, phone: event.target.value }))} placeholder="+7 999 000 00 00" />
-            </label>
-            <label className="space-y-2">
-              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                {editingStaff ? "Новый пароль" : "Пароль"}
-              </span>
-              <input
-                type="password"
-                className="soft-input"
-                value={staffForm.password}
-                onChange={(event) => setStaffForm((current) => ({ ...current, password: event.target.value }))}
-                placeholder={editingStaff ? "Оставьте пустым, если не нужно менять" : ""}
-              />
-            </label>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="space-y-2">
-              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Должность</span>
-              <select
-                className="soft-input"
-                value={staffForm.roleKey}
-                onChange={(event) => {
-                  const nextRole = event.target.value;
-                  setStaffForm((current) => ({
-                    ...current,
-                    roleKey: nextRole,
-                    permissionKeys: [...(defaultRolePermissions[nextRole] || [])],
-                  }));
-                }}
-              >
-                {teamRoles.filter((r) => r.key !== "chief_manager").map((role) => (
-                  <option key={role.key} value={role.key}>
-                    {role.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="flex items-center gap-3 rounded-2xl border border-border bg-background/65 px-4 py-3">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-border bg-background"
-                  checked={staffForm.isActive}
-                  onChange={(event) => setStaffForm((current) => ({ ...current, isActive: event.target.checked }))}
-                />
-                <span className="text-sm text-foreground">Учётка активна</span>
+          {!createdStaff ? (
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="space-y-2">
+                <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Фамилия</span>
+                <input className="soft-input" value={staffForm.lastName} onChange={(event) => setStaffForm((current) => ({ ...current, lastName: event.target.value }))} placeholder="Иванов" required />
               </label>
-              <label className="flex items-center gap-3 rounded-2xl border border-border bg-background/65 px-4 py-3">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-border bg-background"
-                  checked={staffForm.notificationsEnabled}
-                  onChange={(event) => setStaffForm((current) => ({ ...current, notificationsEnabled: event.target.checked }))}
-                />
-                <span className="text-sm text-foreground">Уведомления включены</span>
+              <label className="space-y-2">
+                <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Имя</span>
+                <input className="soft-input" value={staffForm.firstName} onChange={(event) => setStaffForm((current) => ({ ...current, firstName: event.target.value }))} placeholder="Иван" required />
+              </label>
+              <label className="space-y-2">
+                <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Телефон</span>
+                <input className="soft-input" value={staffForm.phone} onChange={(event) => setStaffForm((current) => ({ ...current, phone: event.target.value }))} placeholder="+7 999 000 00 00" />
               </label>
             </div>
-          </div>
+          ) : null}
 
-          <div className="space-y-3 rounded-3xl border border-border bg-background/65 p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium text-foreground">Права в рамках базы</p>
-                <p className="text-sm text-muted-foreground">Можно быстро заполнить права ролью и затем точечно поправить чекбоксы.</p>
-              </div>
-              <button
-                type="button"
-                className="soft-button"
-                onClick={() => setStaffForm((current) => ({ ...current, permissionKeys: [...(defaultRolePermissions[current.roleKey] || [])] }))}
-              >
-                Заполнить по роли
-              </button>
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              {teamPermissions.map((permission) => {
-                const checked = staffForm.permissionKeys.includes(permission.key);
-                return (
-                  <label key={permission.key} className="flex items-center gap-3 rounded-2xl border border-border bg-card/60 px-4 py-3">
+          {!createdStaff ? (
+            <>
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="space-y-2">
+                  <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Должность</span>
+                  <select
+                    className="soft-input"
+                    value={staffForm.roleKey}
+                    onChange={(event) => {
+                      const nextRole = event.target.value;
+                      setStaffForm((current) => ({
+                        ...current,
+                        roleKey: nextRole,
+                        permissionKeys: [...(defaultRolePermissions[nextRole] || [])],
+                      }));
+                    }}
+                  >
+                    {teamRoles.filter((r) => r.key !== "chief_manager").map((role) => (
+                      <option key={role.key} value={role.key}>
+                        {role.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="flex items-center gap-3 rounded-2xl border border-border bg-background/65 px-4 py-3">
                     <input
                       type="checkbox"
                       className="h-4 w-4 rounded border-border bg-background"
-                      checked={checked}
-                      onChange={(event) =>
-                        setStaffForm((current) => ({
-                          ...current,
-                          permissionKeys: event.target.checked
-                            ? [...current.permissionKeys, permission.key]
-                            : current.permissionKeys.filter((item) => item !== permission.key),
-                        }))
-                      }
+                      checked={staffForm.isActive}
+                      onChange={(event) => setStaffForm((current) => ({ ...current, isActive: event.target.checked }))}
                     />
-                    <span className="text-sm text-foreground">{permission.label}</span>
+                    <span className="text-sm text-foreground">Учётка активна</span>
                   </label>
-                );
-              })}
-            </div>
-          </div>
+                  <label className="flex items-center gap-3 rounded-2xl border border-border bg-background/65 px-4 py-3">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-border bg-background"
+                      checked={staffForm.notificationsEnabled}
+                      onChange={(event) => setStaffForm((current) => ({ ...current, notificationsEnabled: event.target.checked }))}
+                    />
+                    <span className="text-sm text-foreground">Уведомления включены</span>
+                  </label>
+                </div>
+              </div>
 
-          {editingStaff ? (
+              <div className="space-y-3 rounded-3xl border border-border bg-background/65 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Права в рамках базы</p>
+                    <p className="text-sm text-muted-foreground">Можно быстро заполнить права ролью и затем точечно поправить чекбоксы.</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="soft-button"
+                    onClick={() => setStaffForm((current) => ({ ...current, permissionKeys: [...(defaultRolePermissions[current.roleKey] || [])] }))}
+                  >
+                    Заполнить по роли
+                  </button>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {teamPermissions.map((permission) => {
+                    const checked = staffForm.permissionKeys.includes(permission.key);
+                    return (
+                      <label key={permission.key} className="flex items-center gap-3 rounded-2xl border border-border bg-card/60 px-4 py-3">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-border bg-background"
+                          checked={checked}
+                          onChange={(event) =>
+                            setStaffForm((current) => ({
+                              ...current,
+                              permissionKeys: event.target.checked
+                                ? [...current.permissionKeys, permission.key]
+                                : current.permissionKeys.filter((item) => item !== permission.key),
+                            }))
+                          }
+                        />
+                        <span className="text-sm text-foreground">{permission.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          ) : null}
+
+          {editingStaff || createdStaff ? (
             <div className="rounded-3xl border border-border bg-background/65 p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-sm font-medium text-foreground">Привязка к боту уведомлений</p>
-                  <p className="text-sm text-muted-foreground">Сгенерируйте одноразовый код, чтобы сотрудник подключил Telegram к своей учётке.</p>
+                  <p className="text-sm text-muted-foreground">
+                    {createdStaff && !editingStaff
+                      ? "Сотрудник открывает бот, вводит этот код — Telegram привяжется автоматически."
+                      : "Сгенерируйте одноразовый код, чтобы сотрудник подключил Telegram к своей учётке."}
+                  </p>
                 </div>
                 <button
                   type="button"
                   className="soft-button"
-                  onClick={() => editingStaff && handleIssueTelegramCode(editingStaff)}
-                  disabled={issuingTelegramCodeId === editingStaff.id}
+                  onClick={() => {
+                    if (editingStaff) handleIssueTelegramCode(editingStaff);
+                    else handleIssueTelegramCodeForCreated();
+                  }}
+                  disabled={issuingTelegramCodeId !== null}
                 >
-                  {issuingTelegramCodeId === editingStaff.id ? "Генерируем..." : "Выдать код"}
+                  {issuingTelegramCodeId !== null ? "Генерируем..." : "Выдать код"}
                 </button>
               </div>
             </div>
           ) : null}
 
           <div className="flex flex-col gap-3 border-t border-border pt-2 sm:flex-row sm:justify-end">
-            <button
-              type="button"
-              className="soft-button"
-              onClick={() => {
-                setIsStaffModalOpen(false);
-                setEditingStaff(null);
-                setStaffFormError("");
-                setTelegramLinkInfo(null);
-              }}
-            >
-              Отмена
-            </button>
-            <button type="submit" className="brand-button justify-center gap-2" disabled={isSavingStaff}>
-              <Save className="h-4 w-4" />
-              {isSavingStaff ? "Сохраняем..." : editingStaff ? "Сохранить сотрудника" : "Создать учётку"}
-            </button>
+            {createdStaff ? (
+              <button
+                type="button"
+                className="brand-button justify-center"
+                onClick={() => {
+                  setIsStaffModalOpen(false);
+                  setCreatedStaff(null);
+                  setTelegramLinkInfo(null);
+                }}
+              >
+                Готово
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="soft-button"
+                  onClick={() => {
+                    setIsStaffModalOpen(false);
+                    setEditingStaff(null);
+                    setStaffFormError("");
+                    setTelegramLinkInfo(null);
+                  }}
+                >
+                  Отмена
+                </button>
+                <button type="submit" className="brand-button justify-center gap-2" disabled={isSavingStaff}>
+                  <Save className="h-4 w-4" />
+                  {isSavingStaff ? "Сохраняем..." : editingStaff ? "Сохранить сотрудника" : "Создать учётку"}
+                </button>
+              </>
+            )}
           </div>
         </form>
       </ModalShell>

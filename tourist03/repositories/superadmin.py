@@ -351,6 +351,7 @@ def create_admin_account(login: str, password_hash: str, display_name: str, camp
         )
         admin_id = cur.fetchone()["id"]
         linked: set[int] = set()
+        role_for_link = default_role_key or "administrator"
         for camp_id in camp_ids:
             try:
                 cid = int(camp_id)
@@ -361,10 +362,11 @@ def create_admin_account(login: str, password_hash: str, display_name: str, camp
             linked.add(cid)
             cur.execute(
                 """
-                INSERT INTO crm.camp_admin_links (admin_id, camp_id)
-                VALUES (%s, %s)
+                INSERT INTO crm.camp_admin_links (admin_id, camp_id, role_key)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (admin_id, camp_id) DO UPDATE SET role_key = EXCLUDED.role_key
                 """,
-                (admin_id, cid),
+                (admin_id, cid, role_for_link),
             )
         conn.commit()
         return admin_id
@@ -440,24 +442,47 @@ def update_admin_account(
         if updates:
             cur.execute(f"UPDATE auth.camp_admin_accounts SET {', '.join(updates)} WHERE id=%s", tuple([*params, account_id]))
 
+        if default_role_key is not None:
+            cur.execute(
+                "UPDATE crm.camp_admin_links SET role_key = %s WHERE admin_id = %s",
+                (default_role_key, account_id),
+            )
+
         if camp_ids is not None:
-            cur.execute("DELETE FROM crm.camp_admin_links WHERE admin_id=%s", (account_id,))
-            linked: set[int] = set()
+            cur.execute("SELECT camp_id FROM crm.camp_admin_links WHERE admin_id=%s", (account_id,))
+            existing_camps = {int(row["camp_id"]) for row in cur.fetchall()}
+            target_camps: set[int] = set()
             for camp_id in camp_ids:
                 try:
-                    cid = int(camp_id)
+                    target_camps.add(int(camp_id))
                 except (TypeError, ValueError):
                     continue
-                if cid in linked:
-                    continue
-                linked.add(cid)
+            to_remove = existing_camps - target_camps
+            if to_remove:
                 cur.execute(
-                    """
-                    INSERT INTO crm.camp_admin_links (admin_id, camp_id)
-                    VALUES (%s, %s)
-                    """,
-                    (account_id, cid),
+                    "DELETE FROM crm.camp_admin_links WHERE admin_id=%s AND camp_id = ANY(%s)",
+                    (account_id, list(to_remove)),
                 )
+            role_for_link = default_role_key or None
+            for cid in target_camps:
+                if role_for_link is not None:
+                    cur.execute(
+                        """
+                        INSERT INTO crm.camp_admin_links (admin_id, camp_id, role_key)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (admin_id, camp_id) DO UPDATE SET role_key = EXCLUDED.role_key
+                        """,
+                        (account_id, cid, role_for_link),
+                    )
+                else:
+                    cur.execute(
+                        """
+                        INSERT INTO crm.camp_admin_links (admin_id, camp_id)
+                        VALUES (%s, %s)
+                        ON CONFLICT (admin_id, camp_id) DO NOTHING
+                        """,
+                        (account_id, cid),
+                    )
         conn.commit()
 
 
