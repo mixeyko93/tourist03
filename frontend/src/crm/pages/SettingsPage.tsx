@@ -65,13 +65,11 @@ type ProfileForm = {
 };
 
 type StaffForm = {
-  login: string;
-  displayName: string;
+  firstName: string;
+  lastName: string;
   phone: string;
   password: string;
   roleKey: string;
-  canManageStaff: boolean;
-  isPrimary: boolean;
   isActive: boolean;
   notificationsEnabled: boolean;
   permissionKeys: string[];
@@ -200,15 +198,29 @@ function toProfilePayload(form: ProfileForm): CrmCampProfileUpdatePayload {
   };
 }
 
+function buildLoginFromName(firstName: string, lastName: string): string {
+  const translitMap: Record<string, string> = {
+    а:"a",б:"b",в:"v",г:"g",д:"d",е:"e",ё:"yo",ж:"zh",з:"z",и:"i",й:"y",к:"k",л:"l",м:"m",
+    н:"n",о:"o",п:"p",р:"r",с:"s",т:"t",у:"u",ф:"f",х:"kh",ц:"ts",ч:"ch",ш:"sh",щ:"shch",
+    ъ:"",ы:"y",ь:"",э:"e",ю:"yu",я:"ya",
+  };
+  const translit = (s: string) =>
+    s.toLowerCase().split("").map((c) => translitMap[c] ?? c).join("").replace(/[^a-z0-9]/g, "");
+  const last = translit(lastName.trim());
+  const first = translit(firstName.trim());
+  if (!last && !first) return "";
+  if (!first) return last;
+  if (!last) return first;
+  return `${last}.${first}`;
+}
+
 function createEmptyStaffForm(roleKey = "administrator"): StaffForm {
   return {
-    login: "",
-    displayName: "",
+    firstName: "",
+    lastName: "",
     phone: "",
     password: "",
     roleKey,
-    canManageStaff: roleKey === "chief_manager" || roleKey === "administrator",
-    isPrimary: false,
     isActive: true,
     notificationsEnabled: true,
     permissionKeys: [...(defaultRolePermissions[roleKey] || [])],
@@ -216,14 +228,13 @@ function createEmptyStaffForm(roleKey = "administrator"): StaffForm {
 }
 
 function mapStaffForm(staff: CrmStaffMember): StaffForm {
+  const parts = staff.display_name.split(" ");
   return {
-    login: staff.login,
-    displayName: staff.display_name,
+    lastName: parts[0] || "",
+    firstName: parts.slice(1).join(" "),
     phone: staff.phone || "",
     password: "",
     roleKey: staff.role_key || "administrator",
-    canManageStaff: staff.can_manage_staff,
-    isPrimary: staff.is_primary,
     isActive: staff.is_active,
     notificationsEnabled: staff.notifications_enabled,
     permissionKeys: [...staff.permission_keys],
@@ -231,14 +242,15 @@ function mapStaffForm(staff: CrmStaffMember): StaffForm {
 }
 
 function toStaffPayload(form: StaffForm): CrmStaffUpsertPayload {
+  const displayName = [form.lastName, form.firstName].filter(Boolean).join(" ");
   return {
-    login: form.login,
-    display_name: form.displayName,
+    login: buildLoginFromName(form.firstName, form.lastName) || displayName.toLowerCase().replace(/\s+/g, "."),
+    display_name: displayName,
     phone: form.phone || undefined,
     password: form.password || undefined,
     role_key: form.roleKey,
-    can_manage_staff: form.canManageStaff,
-    is_primary: form.isPrimary,
+    can_manage_staff: false,
+    is_primary: false,
     is_active: form.isActive,
     notifications_enabled: form.notificationsEnabled,
     permission_keys: form.permissionKeys,
@@ -595,9 +607,9 @@ export default function SettingsPage() {
   }
 
   function openCreateStaffModal() {
-    const firstRole = teamRoles[0]?.key || "administrator";
+    const firstStaffRole = teamRoles.find((r) => r.key !== "chief_manager")?.key || "administrator";
     setEditingStaff(null);
-    setStaffForm(createEmptyStaffForm(firstRole));
+    setStaffForm(createEmptyStaffForm(firstStaffRole));
     setStaffFormError("");
     setTeamSuccess("");
     setTelegramLinkInfo(null);
@@ -618,8 +630,8 @@ export default function SettingsPage() {
       setStaffFormError("Сначала выберите базу.");
       return;
     }
-    if (!staffForm.login.trim() || !staffForm.displayName.trim()) {
-      setStaffFormError("Заполните логин и имя сотрудника.");
+    if (!staffForm.lastName.trim() || !staffForm.firstName.trim()) {
+      setStaffFormError("Заполните имя и фамилию сотрудника.");
       return;
     }
     if (!editingStaff && !staffForm.password.trim()) {
@@ -633,10 +645,10 @@ export default function SettingsPage() {
       setTeamSuccess("");
       if (editingStaff) {
         await updateCrmStaff(selectedCampId, editingStaff.id, toStaffPayload(staffForm));
-        setTeamSuccess(`Учётка ${staffForm.displayName} обновлена.`);
+        setTeamSuccess(`Карточка ${staffForm.lastName} ${staffForm.firstName} обновлена.`);
       } else {
         await createCrmStaff(selectedCampId, toStaffPayload(staffForm));
-        setTeamSuccess(`Учётка ${staffForm.displayName} создана.`);
+        setTeamSuccess(`Карточка ${staffForm.lastName} ${staffForm.firstName} создана.`);
       }
       setIsStaffModalOpen(false);
       setEditingStaff(null);
@@ -987,9 +999,11 @@ export default function SettingsPage() {
                     </div>
 
                     <div className="flex flex-col gap-2 sm:min-w-[150px]">
-                      <button type="button" className="soft-button" onClick={() => openEditStaffModal(staff)}>
-                        Редактировать
-                      </button>
+                      {staff.role_key !== "chief_manager" ? (
+                        <button type="button" className="soft-button" onClick={() => openEditStaffModal(staff)}>
+                          Редактировать
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         className="rounded-2xl border border-border bg-background/70 px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-accent"
@@ -1209,16 +1223,16 @@ export default function SettingsPage() {
 
           <div className="grid gap-4 md:grid-cols-2">
             <label className="space-y-2">
-              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Логин</span>
-              <input className="soft-input" value={staffForm.login} onChange={(event) => setStaffForm((current) => ({ ...current, login: event.target.value }))} placeholder="mikhail.stasenko" required />
+              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Фамилия</span>
+              <input className="soft-input" value={staffForm.lastName} onChange={(event) => setStaffForm((current) => ({ ...current, lastName: event.target.value }))} placeholder="Иванов" required />
             </label>
             <label className="space-y-2">
-              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Имя сотрудника</span>
-              <input className="soft-input" value={staffForm.displayName} onChange={(event) => setStaffForm((current) => ({ ...current, displayName: event.target.value }))} required />
+              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Имя</span>
+              <input className="soft-input" value={staffForm.firstName} onChange={(event) => setStaffForm((current) => ({ ...current, firstName: event.target.value }))} placeholder="Иван" required />
             </label>
             <label className="space-y-2">
               <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Телефон</span>
-              <input className="soft-input" value={staffForm.phone} onChange={(event) => setStaffForm((current) => ({ ...current, phone: event.target.value }))} />
+              <input className="soft-input" value={staffForm.phone} onChange={(event) => setStaffForm((current) => ({ ...current, phone: event.target.value }))} placeholder="+7 999 000 00 00" />
             </label>
             <label className="space-y-2">
               <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
@@ -1236,7 +1250,7 @@ export default function SettingsPage() {
 
           <div className="grid gap-4 md:grid-cols-2">
             <label className="space-y-2">
-              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Роль</span>
+              <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Должность</span>
               <select
                 className="soft-input"
                 value={staffForm.roleKey}
@@ -1245,12 +1259,11 @@ export default function SettingsPage() {
                   setStaffForm((current) => ({
                     ...current,
                     roleKey: nextRole,
-                    canManageStaff: nextRole === "chief_manager" || nextRole === "administrator" ? true : current.canManageStaff,
                     permissionKeys: [...(defaultRolePermissions[nextRole] || [])],
                   }));
                 }}
               >
-                {teamRoles.map((role) => (
+                {teamRoles.filter((r) => r.key !== "chief_manager").map((role) => (
                   <option key={role.key} value={role.key}>
                     {role.label}
                   </option>
@@ -1258,24 +1271,6 @@ export default function SettingsPage() {
               </select>
             </label>
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="flex items-center gap-3 rounded-2xl border border-border bg-background/65 px-4 py-3">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-border bg-background"
-                  checked={staffForm.canManageStaff}
-                  onChange={(event) => setStaffForm((current) => ({ ...current, canManageStaff: event.target.checked }))}
-                />
-                <span className="text-sm text-foreground">Управляет сотрудниками</span>
-              </label>
-              <label className="flex items-center gap-3 rounded-2xl border border-border bg-background/65 px-4 py-3">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-border bg-background"
-                  checked={staffForm.isPrimary}
-                  onChange={(event) => setStaffForm((current) => ({ ...current, isPrimary: event.target.checked }))}
-                />
-                <span className="text-sm text-foreground">Главный в базе</span>
-              </label>
               <label className="flex items-center gap-3 rounded-2xl border border-border bg-background/65 px-4 py-3">
                 <input
                   type="checkbox"
