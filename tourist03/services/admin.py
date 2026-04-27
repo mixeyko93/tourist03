@@ -778,6 +778,13 @@ def _normalize_staff_permission_keys(permission_keys: list[str]) -> list[str]:
     return result
 
 
+def _is_locked_manager_account(staff_item: dict | None) -> bool:
+    if not staff_item:
+        return False
+    role_key = (staff_item.get("role_key") or staff_item.get("default_role_key") or "").strip()
+    return role_key == "chief_manager"
+
+
 def _booking_status_label(status_value: Optional[str]) -> str:
     return crm_domain.BOOKING_STATUS_UI_LABELS.get((status_value or "").strip().lower(), (status_value or "").strip() or "Без статуса")
 
@@ -2619,7 +2626,7 @@ def api_admin_create_staff(
         admin=admin,
         event_type="staff_created",
         title="В команду базы добавлен сотрудник",
-        body=f"{staff.get('display_name') or staff.get('login') or staff.get('email') or 'Новый сотрудник'} · роль: {staff.get('role_label') or 'Не указана'}.",
+        body=f"{staff.get('display_name') or staff.get('login') or staff.get('email') or 'Новый сотрудник'} · должность: {staff.get('role_label') or 'Не указана'}.",
         severity="warning",
         action_url="/settings",
         action_payload={"camp_id": camp_id, "tab": "team", "staff_id": staff_id},
@@ -2647,6 +2654,10 @@ def api_admin_update_staff(
     permission_keys = _normalize_staff_permission_keys(payload.permission_keys or [])
     if not permission_keys:
         permission_keys = list(crm_domain.DEFAULT_ROLE_PERMISSIONS.get(role_key, ()))
+    is_locked_manager = _is_locked_manager_account(before)
+    if is_locked_manager:
+        role_key = "chief_manager"
+        permission_keys = list(crm_domain.STAFF_PERMISSION_KEYS)
 
     try:
         changed = admin_repo.update_admin_staff(
@@ -2657,7 +2668,7 @@ def api_admin_update_staff(
                 "display_name": display_name,
                 "phone": _normalize_phone(payload.phone or ""),
                 "role_key": role_key,
-                "can_manage_staff": bool(payload.can_manage_staff),
+                "can_manage_staff": True if is_locked_manager else bool(payload.can_manage_staff),
                 "is_primary": bool(payload.is_primary),
                 "is_active": bool(payload.is_active),
                 "notifications_enabled": bool(payload.notifications_enabled),
@@ -2673,6 +2684,12 @@ def api_admin_update_staff(
     if not changed:
         raise HTTPException(status_code=404, detail="Сотрудник не найден")
     after = admin_repo.get_admin_staff_member(camp_id, staff_id)
+    if after:
+        rk = (after.get("role_key") or after.get("default_role_key") or "administrator").strip() or "administrator"
+        after["role_key"] = rk
+        after["role_label"] = crm_domain.STAFF_ROLE_LABELS.get(rk, rk)
+        after["has_telegram_link"] = bool(after.get("telegram_chat_id"))
+        after["permission_keys"] = after.get("permission_keys") or list(crm_domain.DEFAULT_ROLE_PERMISSIONS.get(rk, ()))
     log_crm_audit_event(
         actor_type="camp_admin",
         actor_id=admin.get("id"),
@@ -2692,7 +2709,7 @@ def api_admin_update_staff(
         admin=admin,
         event_type="staff_updated",
         title="Учётка сотрудника обновлена",
-        body=f"{after.get('display_name') or after.get('login') or after.get('email') or 'Сотрудник'} · роль: {after.get('role_label') or 'Не указана'}.",
+        body=f"{after.get('display_name') or after.get('login') or after.get('email') or 'Сотрудник'} · должность: {after.get('role_label') or 'Не указана'}.",
         severity="warning",
         action_url="/settings",
         action_payload={"camp_id": camp_id, "tab": "team", "staff_id": staff_id},

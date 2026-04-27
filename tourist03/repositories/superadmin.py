@@ -2,6 +2,7 @@ import json
 from typing import Optional
 
 from tourist03.db import _db_conn
+from tourist03.domain import crm as crm_domain
 from tourist03.repositories import catalog as catalog_repo
 
 _MISSING = object()
@@ -339,15 +340,16 @@ def find_admin_account_by_login(login: str):
 
 
 def create_admin_account(login: str, password_hash: str, display_name: str, camp_ids: list[int], default_role_key: Optional[str] = None):
+    role_for_link = (default_role_key or "").strip() or "chief_manager"
     with _db_conn("crm") as conn:
         cur = conn.cursor()
         cur.execute(
             """
-            INSERT INTO auth.camp_admin_accounts (email, password_hash, display_name)
-            VALUES (%s, %s, %s)
+            INSERT INTO auth.camp_admin_accounts (email, password_hash, display_name, default_role_key)
+            VALUES (%s, %s, %s, %s)
             RETURNING id
             """,
-            (login, password_hash, display_name),
+            (login, password_hash, display_name, role_for_link),
         )
         admin_id = cur.fetchone()["id"]
         linked: set[int] = set()
@@ -359,17 +361,31 @@ def create_admin_account(login: str, password_hash: str, display_name: str, camp
             if cid in linked:
                 continue
             linked.add(cid)
-            try:
+            cur.execute(
+                """
+                INSERT INTO crm.camp_admin_links (admin_id, camp_id, role_key, can_manage_staff, is_primary, updated_at)
+                SELECT %s, %s, %s, TRUE, FALSE, NOW()
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM crm.camp_admin_links WHERE admin_id = %s AND camp_id = %s
+                )
+                """,
+                (admin_id, cid, role_for_link, admin_id, cid),
+            )
+            cur.execute(
+                """
+                DELETE FROM crm.camp_admin_permissions
+                WHERE admin_id = %s AND camp_id = %s
+                """,
+                (admin_id, cid),
+            )
+            for permission_key in crm_domain.STAFF_PERMISSION_KEYS:
                 cur.execute(
                     """
-                    INSERT INTO crm.camp_admin_links (admin_id, camp_id)
-                    VALUES (%s, %s)
+                    INSERT INTO crm.camp_admin_permissions (admin_id, camp_id, permission_key, is_allowed, created_by_admin_id, created_at, updated_at)
+                    VALUES (%s, %s, %s, TRUE, NULL, NOW(), NOW())
                     """,
-                    (admin_id, cid),
+                    (admin_id, cid, permission_key),
                 )
-            except Exception:
-                # Ignore duplicates
-                pass
         conn.commit()
         return admin_id
 
@@ -438,8 +454,24 @@ def update_admin_account(
         if is_active is not None:
             updates.append("is_active=%s")
             params.append(bool(is_active))
+        role_for_link = (default_role_key or "").strip() or None
+        if role_for_link is not None:
+            updates.append("default_role_key=%s")
+            params.append(role_for_link)
         if updates:
             cur.execute(f"UPDATE auth.camp_admin_accounts SET {', '.join(updates)} WHERE id=%s", tuple([*params, account_id]))
+
+        if role_for_link is not None:
+            cur.execute(
+                """
+                UPDATE crm.camp_admin_links
+                SET role_key = %s,
+                    can_manage_staff = TRUE,
+                    updated_at = NOW()
+                WHERE admin_id = %s
+                """,
+                (role_for_link, account_id),
+            )
 
         if camp_ids is not None:
             cur.execute("SELECT camp_id FROM crm.camp_admin_links WHERE admin_id=%s", (account_id,))
@@ -456,18 +488,59 @@ def update_admin_account(
                     "DELETE FROM crm.camp_admin_links WHERE admin_id=%s AND camp_id = ANY(%s)",
                     (account_id, list(to_remove)),
                 )
+                cur.execute(
+                    "DELETE FROM crm.camp_admin_permissions WHERE admin_id=%s AND camp_id = ANY(%s)",
+                    (account_id, list(to_remove)),
+                )
             for cid in target_camps:
-                try:
+                if role_for_link is not None:
                     cur.execute(
                         """
-                        INSERT INTO crm.camp_admin_links (admin_id, camp_id)
-                        VALUES (%s, %s)
+                        INSERT INTO crm.camp_admin_links (admin_id, camp_id, role_key, can_manage_staff, is_primary, updated_at)
+                        SELECT %s, %s, %s, TRUE, FALSE, NOW()
+                        WHERE NOT EXISTS (
+                            SELECT 1 FROM crm.camp_admin_links WHERE admin_id = %s AND camp_id = %s
+                        )
+                        """,
+                        (account_id, cid, role_for_link, account_id, cid),
+                    )
+                    cur.execute(
+                        """
+                        UPDATE crm.camp_admin_links
+                        SET role_key = %s,
+                            can_manage_staff = TRUE,
+                            updated_at = NOW()
+                        WHERE admin_id = %s
+                          AND camp_id = %s
+                        """,
+                        (role_for_link, account_id, cid),
+                    )
+                    cur.execute(
+                        """
+                        DELETE FROM crm.camp_admin_permissions
+                        WHERE admin_id = %s AND camp_id = %s
                         """,
                         (account_id, cid),
                     )
-                except Exception:
-                    # Ignore duplicates
-                    pass
+                    for permission_key in crm_domain.STAFF_PERMISSION_KEYS:
+                        cur.execute(
+                            """
+                            INSERT INTO crm.camp_admin_permissions (admin_id, camp_id, permission_key, is_allowed, created_by_admin_id, created_at, updated_at)
+                            VALUES (%s, %s, %s, TRUE, NULL, NOW(), NOW())
+                            """,
+                            (account_id, cid, permission_key),
+                        )
+                else:
+                    cur.execute(
+                        """
+                        INSERT INTO crm.camp_admin_links (admin_id, camp_id)
+                        SELECT %s, %s
+                        WHERE NOT EXISTS (
+                            SELECT 1 FROM crm.camp_admin_links WHERE admin_id = %s AND camp_id = %s
+                        )
+                        """,
+                        (account_id, cid, account_id, cid),
+                    )
         conn.commit()
 
 
@@ -489,6 +562,7 @@ def list_accounts():
                 a.email AS login,
                 a.display_name,
                 a.is_active,
+                a.default_role_key,
                 a.created_at,
                 COALESCE(
                     json_agg(
@@ -504,7 +578,7 @@ def list_accounts():
             LEFT JOIN crm.camp_admin_links AS l ON l.admin_id = a.id
             LEFT JOIN catalog.camps AS c ON c.id = l.camp_id
             WHERE a.archived_at IS NULL
-            GROUP BY a.id, a.email, a.display_name, a.is_active, a.created_at
+            GROUP BY a.id, a.email, a.display_name, a.is_active, a.default_role_key, a.created_at
             ORDER BY a.created_at DESC, a.id DESC
             """
         )
@@ -526,7 +600,7 @@ def list_accounts():
                 "login": row["login"],
                 "display_name": row["display_name"],
                 "is_active": row["is_active"],
-                "default_role_key": "administrator",
+                "default_role_key": row.get("default_role_key") or "chief_manager",
                 "created_at": row["created_at"],
                 "camps": camps_data,
             }

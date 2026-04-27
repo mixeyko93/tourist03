@@ -213,6 +213,19 @@ function buildLoginFromName(firstName: string, lastName: string): string {
   return `${last}.${first}`;
 }
 
+function splitFullName(value: string): { lastName: string; firstName: string } {
+  const normalized = value.trim().replace(/\s+/g, " ");
+  if (!normalized) {
+    return { lastName: "", firstName: "" };
+  }
+  const [lastName = "", ...rest] = normalized.split(" ");
+  return { lastName, firstName: rest.join(" ") };
+}
+
+function formatFullName(firstName: string, lastName: string): string {
+  return [lastName, firstName].filter(Boolean).join(" ").trim();
+}
+
 function createEmptyStaffForm(roleKey = "administrator"): StaffForm {
   return {
     firstName: "",
@@ -239,7 +252,7 @@ function mapStaffForm(staff: CrmStaffMember): StaffForm {
 }
 
 function toStaffPayload(form: StaffForm): CrmStaffUpsertPayload {
-  const displayName = [form.lastName, form.firstName].filter(Boolean).join(" ");
+  const displayName = formatFullName(form.firstName, form.lastName);
   return {
     login: buildLoginFromName(form.firstName, form.lastName) || displayName.toLowerCase().replace(/\s+/g, "."),
     display_name: displayName,
@@ -714,6 +727,7 @@ export default function SettingsPage() {
               className="soft-input appearance-none pr-10 disabled:cursor-not-allowed disabled:opacity-60"
               value={selectedCampId ?? ""}
               onChange={(event) => setSelectedCampId(event.target.value ? Number(event.target.value) : null)}
+              title="Выбор базы"
               disabled={!hasCampOptions || isBootLoading}
             >
               {hasCampOptions ? (
@@ -1072,7 +1086,7 @@ export default function SettingsPage() {
               <EmptyState
                 icon={Users2}
                 title="Команда пока не настроена"
-                description="Создайте сотрудников базы, задайте роли, права и выпустите код привязки Telegram для оперативных уведомлений."
+                description="Создайте сотрудников базы, задайте должности, права и выпустите код привязки Telegram для оперативных уведомлений."
               />
             </section>
           )}
@@ -1093,7 +1107,7 @@ export default function SettingsPage() {
                   onChange={(event) => setAuditSearch(event.target.value)}
                 />
               </div>
-              <select className="soft-input" value={auditActorId ?? ""} onChange={(event) => setAuditActorId(event.target.value ? Number(event.target.value) : null)}>
+              <select className="soft-input" value={auditActorId ?? ""} onChange={(event) => setAuditActorId(event.target.value ? Number(event.target.value) : null)} title="Фильтр по сотруднику">
                 <option value="">Все сотрудники</option>
                 {auditActors.map((actor) => (
                   <option key={actor.id} value={actor.id}>
@@ -1101,7 +1115,7 @@ export default function SettingsPage() {
                   </option>
                 ))}
               </select>
-              <select className="soft-input" value={auditTargetType} onChange={(event) => setAuditTargetType(event.target.value)}>
+              <select className="soft-input" value={auditTargetType} onChange={(event) => setAuditTargetType(event.target.value)} title="Фильтр по объекту">
                 <option value="">Все объекты</option>
                 {auditTargetTypes.map((targetType) => (
                   <option key={targetType} value={targetType}>
@@ -1207,7 +1221,7 @@ export default function SettingsPage() {
             ? "Имя, должность, права и привязка Telegram. Все изменения попадут в аудит."
             : createdStaff
             ? "Учётка создана. Выдайте сотруднику код для привязки Telegram — он войдёт в бот и введёт его."
-            : "Укажите имя, должность и права. После создания выдайте сотруднику код для привязки Telegram."
+            : "Укажите имя и фамилию, номер телефона, должность и права. После создания выдайте сотруднику код для привязки Telegram."
         }
       >
         <form className="space-y-5" onSubmit={createdStaff ? (e) => e.preventDefault() : handleStaffSubmit}>
@@ -1242,15 +1256,20 @@ export default function SettingsPage() {
           {!createdStaff ? (
             <div className="grid gap-4 md:grid-cols-2">
               <label className="space-y-2">
-                <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Фамилия</span>
-                <input className="soft-input" value={staffForm.lastName} onChange={(event) => setStaffForm((current) => ({ ...current, lastName: event.target.value }))} placeholder="Иванов" required />
+                <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Имя и Фамилия</span>
+                <input
+                  className="soft-input"
+                  value={formatFullName(staffForm.firstName, staffForm.lastName)}
+                  onChange={(event) => {
+                    const parsed = splitFullName(event.target.value);
+                    setStaffForm((current) => ({ ...current, firstName: parsed.firstName, lastName: parsed.lastName }));
+                  }}
+                  placeholder="Иванов Иван"
+                  required
+                />
               </label>
               <label className="space-y-2">
-                <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Имя</span>
-                <input className="soft-input" value={staffForm.firstName} onChange={(event) => setStaffForm((current) => ({ ...current, firstName: event.target.value }))} placeholder="Иван" required />
-              </label>
-              <label className="space-y-2">
-                <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Телефон</span>
+                <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Номер телефона</span>
                 <input className="soft-input" value={staffForm.phone} onChange={(event) => setStaffForm((current) => ({ ...current, phone: event.target.value }))} placeholder="+7 999 000 00 00" />
               </label>
             </div>
@@ -1306,14 +1325,14 @@ export default function SettingsPage() {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-medium text-foreground">Права в рамках базы</p>
-                    <p className="text-sm text-muted-foreground">Можно быстро заполнить права ролью и затем точечно поправить чекбоксы.</p>
+                    <p className="text-sm text-muted-foreground">Можно быстро заполнить права должностью и затем точечно поправить чекбоксы.</p>
                   </div>
                   <button
                     type="button"
                     className="soft-button"
                     onClick={() => setStaffForm((current) => ({ ...current, permissionKeys: [...(defaultRolePermissions[current.roleKey] || [])] }))}
                   >
-                    Заполнить по роли
+                    Заполнить по должности
                   </button>
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">

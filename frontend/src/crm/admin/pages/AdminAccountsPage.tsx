@@ -26,14 +26,7 @@ type AccountDraft = {
   roleKey: string;
 };
 
-const ROLE_OPTIONS = [
-  { value: "chief_manager", label: "Главный управляющий" },
-  { value: "administrator", label: "Администратор" },
-  { value: "booking_manager", label: "Менеджер бронирований" },
-  { value: "content_manager", label: "Контент-менеджер" },
-  { value: "finance_manager", label: "Финансист" },
-  { value: "viewer", label: "Только просмотр" },
-];
+const ROLE_OPTIONS = [{ value: "chief_manager", label: "Управляющий (полный доступ)" }];
 
 const PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
 
@@ -119,7 +112,7 @@ function createAccountDraft(account: SuperadminAccount | null): AccountDraft {
       password: generatePassword(),
       active: true,
       baseIds: [],
-      roleKey: "administrator",
+      roleKey: "chief_manager",
     };
   }
   return {
@@ -129,7 +122,7 @@ function createAccountDraft(account: SuperadminAccount | null): AccountDraft {
     password: "",
     active: account.is_active,
     baseIds: account.camps.map((camp) => camp.camp_id),
-    roleKey: account.default_role_key || "administrator",
+    roleKey: account.default_role_key || "chief_manager",
   };
 }
 
@@ -256,7 +249,7 @@ export default function AdminAccountsPage() {
         password: plainPassword || undefined,
         is_active: draft.active,
         camp_ids: draft.baseIds,
-        default_role_key: draft.roleKey,
+        default_role_key: "chief_manager",
       };
 
       if (draft.id) {
@@ -298,7 +291,7 @@ export default function AdminAccountsPage() {
         <td>#{account.id}</td>
         <td className="crm-copy-safe font-medium text-foreground">{account.login}</td>
         <td>{account.display_name}</td>
-        <td>{ROLE_OPTIONS.find((r) => r.value === account.default_role_key)?.label || account.default_role_key || "Администратор"}</td>
+        <td>{ROLE_OPTIONS.find((r) => r.value === account.default_role_key)?.label || "Управляющий (полный доступ)"}</td>
         <td>
           <div className="flex flex-wrap gap-2">
             {account.camps.length ? (
@@ -334,7 +327,7 @@ export default function AdminAccountsPage() {
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Доступы в CRM</p>
             <h2 className="text-2xl font-semibold tracking-[-0.04em] text-foreground">Учётные записи управляющих</h2>
             <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-              Реальные учётки управляющих и администраторов баз с привязкой к объектам, статусами и быстрым редактированием доступа.
+              Реальные учётки управляющих баз с привязкой к объектам, статусами и быстрым редактированием доступа.
             </p>
           </div>
 
@@ -364,7 +357,7 @@ export default function AdminAccountsPage() {
                 <th>ID</th>
                 <th>Логин</th>
                 <th>Имя</th>
-                <th>Роль</th>
+                <th>Должность</th>
                 <th>Базы отдыха</th>
                 <th>Статус</th>
                 <th>Создана</th>
@@ -393,7 +386,7 @@ export default function AdminAccountsPage() {
                 <th>ID</th>
                 <th>Логин</th>
                 <th>Имя</th>
-                <th>Роль</th>
+                <th>Должность</th>
                 <th>Базы отдыха</th>
                 <th>Статус</th>
                 <th>Создана</th>
@@ -447,17 +440,8 @@ export default function AdminAccountsPage() {
             <AdminField label="Фамилия Имя Отчество">
               <input className="admin-input" value={draft.name} onChange={(event) => handleDraftNameChange(event.target.value)} placeholder="Иванов Иван Иванович" title="Фамилия Имя Отчество" />
             </AdminField>
-            <AdminField label="Должность / роль">
-              <select
-                className="admin-input"
-                value={draft.roleKey}
-                onChange={(event) => setDraft((current) => ({ ...current, roleKey: event.target.value }))}
-                title="Должность / роль"
-              >
-                {ROLE_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>{option.label}</option>
-                ))}
-              </select>
+            <AdminField label="Должность">
+              <input className="admin-input" value="Управляющий (полный доступ)" title="Должность" readOnly />
             </AdminField>
             <AdminField label="Логин">
               <input className="admin-input" value={draft.login} onChange={(event) => handleDraftLoginChange(event.target.value)} placeholder="иванов.иван" title="Логин для входа в CRM" />

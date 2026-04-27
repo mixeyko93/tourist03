@@ -82,6 +82,9 @@ def _serialize_session(principal: Optional[dict]):
     }
 
 
+SUPERADMIN_MANAGED_ROLE_KEY = "chief_manager"
+
+
 def _principal_public(account: dict | None) -> dict | None:
     if not account:
         return None
@@ -208,7 +211,7 @@ def create_camp_admin_account(payload: SuperAdminCreateAccountRequest):
         raise HTTPException(status_code=400, detail="Учётная запись с таким логином уже существует")
 
     password_hash = hash_password(password_raw)
-    role_key = (payload.default_role_key or "").strip() or "administrator"
+    role_key = SUPERADMIN_MANAGED_ROLE_KEY
     try:
         admin_id = superadmin_repo.create_admin_account(login, password_hash, display_name, payload.camp_ids, default_role_key=role_key)
     except Exception:
@@ -250,7 +253,7 @@ def update_camp_admin_account(account_id: int, payload: SuperAdminUpdateAccountR
         next_is_active = bool(is_active)
 
     try:
-        next_role_key = (payload.default_role_key or "").strip() or None
+        next_role_key = SUPERADMIN_MANAGED_ROLE_KEY
         superadmin_repo.update_admin_account(
             account_id,
             login=next_login,
