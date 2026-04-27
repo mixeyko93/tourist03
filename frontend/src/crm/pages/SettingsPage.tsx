@@ -1261,12 +1261,17 @@ export default function SettingsPage() {
           {!createdStaff ? (
             <div className="grid gap-4 md:grid-cols-2">
               <label className="space-y-2">
-                <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Имя и Фамилия</span>
+                <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Фамилия Имя</span>
                 <input
+                  type="text"
                   className="soft-input"
                   value={staffForm.fullName}
                   onChange={(event) => setStaffForm((current) => ({ ...current, fullName: event.target.value }))}
                   placeholder="Иванов Иван"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="words"
+                  spellCheck={false}
                   required
                 />
               </label>
