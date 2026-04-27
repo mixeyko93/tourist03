@@ -65,8 +65,7 @@ type ProfileForm = {
 };
 
 type StaffForm = {
-  firstName: string;
-  lastName: string;
+  fullName: string;
   phone: string;
   roleKey: string;
   isActive: boolean;
@@ -218,7 +217,7 @@ function buildLoginFromName(firstName: string, lastName: string): string {
 }
 
 function splitFullName(value: string): { lastName: string; firstName: string } {
-  const normalized = value.trim().replace(/\s+/g, " ");
+  const normalized = value.replace(/\s+/g, " ").trim();
   if (!normalized) {
     return { lastName: "", firstName: "" };
   }
@@ -226,14 +225,13 @@ function splitFullName(value: string): { lastName: string; firstName: string } {
   return { lastName, firstName: rest.join(" ") };
 }
 
-function formatFullName(firstName: string, lastName: string): string {
-  return [lastName, firstName].filter(Boolean).join(" ").trim();
+function normalizeFullName(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
 }
 
 function createEmptyStaffForm(roleKey = "administrator"): StaffForm {
   return {
-    firstName: "",
-    lastName: "",
+    fullName: "",
     phone: "",
     roleKey,
     isActive: true,
@@ -243,10 +241,8 @@ function createEmptyStaffForm(roleKey = "administrator"): StaffForm {
 }
 
 function mapStaffForm(staff: CrmStaffMember): StaffForm {
-  const parts = staff.display_name.split(" ");
   return {
-    lastName: parts[0] || "",
-    firstName: parts.slice(1).join(" "),
+    fullName: staff.display_name || "",
     phone: staff.phone || "",
     roleKey: staff.role_key || "administrator",
     isActive: staff.is_active,
@@ -256,9 +252,10 @@ function mapStaffForm(staff: CrmStaffMember): StaffForm {
 }
 
 function toStaffPayload(form: StaffForm): CrmStaffUpsertPayload {
-  const displayName = formatFullName(form.firstName, form.lastName);
+  const displayName = normalizeFullName(form.fullName);
+  const parsedName = splitFullName(displayName);
   return {
-    login: buildLoginFromName(form.firstName, form.lastName) || displayName.toLowerCase().replace(/\s+/g, "."),
+    login: buildLoginFromName(parsedName.firstName, parsedName.lastName) || displayName.toLowerCase().replace(/\s+/g, "."),
     display_name: displayName,
     phone: form.phone || undefined,
     role_key: form.roleKey,
@@ -647,7 +644,9 @@ export default function SettingsPage() {
       setStaffFormError("Сначала выберите базу.");
       return;
     }
-    if (!staffForm.lastName.trim() || !staffForm.firstName.trim()) {
+    const displayNameForMessage = normalizeFullName(staffForm.fullName);
+    const parsedName = splitFullName(displayNameForMessage);
+    if (!parsedName.lastName.trim() || !parsedName.firstName.trim()) {
       setStaffFormError("Заполните имя и фамилию сотрудника.");
       return;
     }
@@ -658,14 +657,14 @@ export default function SettingsPage() {
       setTeamSuccess("");
       if (editingStaff) {
         await updateCrmStaff(selectedCampId, editingStaff.id, toStaffPayload(staffForm));
-        setTeamSuccess(`Карточка ${staffForm.lastName} ${staffForm.firstName} обновлена.`);
+        setTeamSuccess(`Карточка ${displayNameForMessage} обновлена.`);
         setIsStaffModalOpen(false);
         setEditingStaff(null);
         setTelegramLinkInfo(null);
         setReloadKey((value) => value + 1);
       } else {
         const result = await createCrmStaff(selectedCampId, toStaffPayload(staffForm));
-        setTeamSuccess(`Карточка ${staffForm.lastName} ${staffForm.firstName} создана.`);
+        setTeamSuccess(`Карточка ${displayNameForMessage} создана.`);
         setCreatedStaff(result.item ?? null);
         setReloadKey((value) => value + 1);
       }
@@ -1265,11 +1264,8 @@ export default function SettingsPage() {
                 <span className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Имя и Фамилия</span>
                 <input
                   className="soft-input"
-                  value={formatFullName(staffForm.firstName, staffForm.lastName)}
-                  onChange={(event) => {
-                    const parsed = splitFullName(event.target.value);
-                    setStaffForm((current) => ({ ...current, firstName: parsed.firstName, lastName: parsed.lastName }));
-                  }}
+                  value={staffForm.fullName}
+                  onChange={(event) => setStaffForm((current) => ({ ...current, fullName: event.target.value }))}
                   placeholder="Иванов Иван"
                   required
                 />
