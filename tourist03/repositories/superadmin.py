@@ -520,7 +520,7 @@ def list_accounts():
             LEFT JOIN crm.camp_admin_links AS l ON l.admin_id = a.id
             LEFT JOIN catalog.camps AS c ON c.id = l.camp_id
             WHERE a.archived_at IS NULL
-            GROUP BY a.id
+            GROUP BY a.id, a.email, a.display_name, a.is_active, a.default_role_key, a.created_at
             ORDER BY a.created_at DESC, a.id DESC
             """
         )
