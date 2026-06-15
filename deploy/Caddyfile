@@ -3,7 +3,7 @@
   # email you@example.com
 }
 
-{$DOMAIN_ROOT}, www.{$DOMAIN_ROOT}, {$DOMAIN_APP} {
+{$DOMAIN_ROOT}, {$DOMAIN_APP} {
   reverse_proxy app:8000
 }
 
