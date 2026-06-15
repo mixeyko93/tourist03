@@ -65,7 +65,7 @@ def webapp_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="Турист_03 ⛺️",
+                    text="Открыть Туристику",
                     web_app=WebAppInfo(url=WEBAPP_URL),
                 )
             ]
@@ -80,7 +80,7 @@ def crm_button(action_url: str = "/events") -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="Открыть CRM",
+                    text="Открыть «Туристика CRM»",
                     url=f"{base_url}{normalized}",
                 )
             ]
@@ -95,7 +95,7 @@ def superadmin_button(action_url: str = "/admin/moderation") -> InlineKeyboardMa
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="Открыть панель",
+                    text="Открыть «Туристика Admin»",
                     url=f"{base_url}{normalized}",
                 )
             ]
@@ -110,8 +110,8 @@ def _staff_account_for_chat(chat_id: int):
 @user_router.message(CommandStart())
 async def user_cmd_start(message: Message) -> None:
     text = (
-        "🏕️ <b>Добро пожаловать в Турист03!</b>\n\n"
-        "Найди идеальное место для отдыха на природе. В мини-приложении вы можете:\n"
+        "🏕️ <b>Добро пожаловать в «Туристику»</b>\n\n"
+        "Сервис для поиска баз отдыха, домиков и бронирования рядом. В мини-приложении вы можете:\n"
         "🗺️ смотреть карту баз отдыха\n"
         "📅 проверять даты и доступность\n"
         "🏡 выбирать номера и дома\n"
@@ -125,8 +125,8 @@ async def user_cmd_start(message: Message) -> None:
 async def user_cmd_help(message: Message) -> None:
     await message.answer(
         "Доступные команды:\n"
-        "/start — открыть мини-приложение\n"
-        "/help — помощь"
+        "/start — открыть Туристику\n"
+        "/help — помощь по сервису"
     )
 
 

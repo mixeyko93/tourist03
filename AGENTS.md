@@ -2,7 +2,7 @@
 
 ## Идентичность проекта
 
-- Проект: `Tourist03`
+- Проект: `Туристика` (технический репозиторий/пакет: `tourist03`)
 - Назначение: публичный сайт, Telegram-бот, CRM управляющих баз и Superadmin-панель
 - Основной backend: `FastAPI`
 - Основной frontend CRM/Superadmin: `React + TypeScript + Vite`

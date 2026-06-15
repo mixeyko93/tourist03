@@ -36,7 +36,7 @@ export default function AdminLayout() {
   const adminTabs = isRoot ? [...baseAdminTabs, ...rootOnlyTabs] : baseAdminTabs;
   const activeTab = adminTabs.find((item) => location.pathname === crmPath(item.path));
 
-  useDocumentTitle(activeTab ? `${activeTab.label} — Tourist03 Superadmin` : "Tourist03 Superadmin");
+  useDocumentTitle(activeTab ? `${activeTab.label} — Туристика Admin` : "Туристика Admin");
 
   useEffect(() => {
     setMounted(true);
@@ -104,9 +104,9 @@ export default function AdminLayout() {
         <div className="mx-auto flex min-w-0 max-w-[2400px] flex-col gap-4 px-4 py-4 md:px-6 lg:px-8">
           <div className="flex min-w-0 flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div className="min-w-0 space-y-1">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">Tourist_03 Superadmin</p>
-              <h1 className="text-lg font-semibold tracking-[-0.04em] text-foreground">Суперадмин. Администрирование CRM</h1>
-              <p className="text-sm text-muted-foreground">Централизованное управление базами отдыха, пользователями, управляющими и superadmin-учётками.</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">Туристика Admin</p>
+              <h1 className="text-lg font-semibold tracking-[-0.04em] text-foreground">Панель суперадминистратора</h1>
+              <p className="text-sm text-muted-foreground">Управление базами, пользователями и каталогом.</p>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">

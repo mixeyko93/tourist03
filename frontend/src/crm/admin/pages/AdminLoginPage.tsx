@@ -18,7 +18,7 @@ export default function AdminLoginPage() {
   const [error, setError] = useState("");
 
   const homePath = crmPath("/admin/bases");
-  useDocumentTitle("Tourist03 Superadmin — Вход");
+  useDocumentTitle("Туристика Admin — Вход");
   const nextPath =
     typeof (location.state as { from?: unknown } | null)?.from === "string"
       ? (location.state as { from: string }).from
@@ -75,7 +75,7 @@ export default function AdminLoginPage() {
 
               <div className="space-y-4">
                 <h1 className="max-w-xl text-3xl font-semibold tracking-[-0.06em] text-foreground sm:text-4xl md:text-5xl">
-                  Централизованный доступ к базам, пользователям и учётным записям Tourist_03.
+                  Централизованный доступ к базам, пользователям и учётным записям Туристика Admin.
                 </h1>
                 <p className="max-w-lg text-base leading-7 text-muted-foreground">
                   Рабочее пространство суперадмина объединяет модерацию объектов, аудит действий пользователей,
@@ -115,7 +115,7 @@ export default function AdminLoginPage() {
             <div className="mx-auto w-full max-w-md">
               <div className="glass-card rounded-[2rem] p-5 sm:p-8">
                 <div className="space-y-2 text-center">
-                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#E5D3B3]">Tourist_03 Superadmin</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#E5D3B3]">Туристика Admin</p>
                   <h2 className="text-2xl font-semibold tracking-[-0.05em] text-foreground sm:text-3xl">Вход в систему</h2>
                   <p className="text-sm leading-6 text-muted-foreground">
                     Авторизуйтесь по логину и паролю, чтобы открыть панель суперадмина.

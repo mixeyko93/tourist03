@@ -24,8 +24,8 @@ logger = logging.getLogger("tourist03.vk_bot")
 
 
 WELCOME_TEXT = (
-    "🏕️ Добро пожаловать в Турист03!\n\n"
-    "Найдите идеальное место для отдыха на природе. В приложении вы можете:\n"
+    "🏕️ Добро пожаловать в «Туристику»!\n\n"
+    "Сервис для поиска баз отдыха, домиков и бронирования рядом. В приложении вы можете:\n"
     "🗺️ смотреть карту баз отдыха\n"
     "📅 проверять даты и доступность\n"
     "🏡 выбирать номера и дома\n"
@@ -35,8 +35,8 @@ WELCOME_TEXT = (
 
 HELP_TEXT = (
     "Доступные команды:\n"
-    "Начать или /start — открыть приложение\n"
-    "Помощь или /help — помощь"
+    "Начать или /start — открыть Туристику\n"
+    "Помощь или /help — помощь по сервису"
 )
 
 
@@ -88,7 +88,7 @@ def _main_keyboard(webapp_url: str) -> str:
                     "action": {
                         "type": "open_link",
                         "link": webapp_url,
-                        "label": "Турист_03 ⛺️",
+                        "label": "Открыть Туристику",
                         "payload": _button_payload("open_app"),
                     },
                 }
@@ -179,7 +179,7 @@ def run() -> None:
     keyboard = _main_keyboard(settings.webapp_url)
 
     logger.info(
-        "VK-бот Tourist03 запущен. group_id=%s, webapp=%s",
+        "VK-бот Туристика запущен. group_id=%s, webapp=%s",
         settings.group_id,
         settings.webapp_url,
     )

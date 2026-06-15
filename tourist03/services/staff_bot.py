@@ -518,9 +518,9 @@ async def deliver_pending_telegram_notifications(bot: Bot, *, limit: int = 100) 
 
 def build_staff_start_text() -> str:
     return (
-        "👋 <b>Бот уведомлений CRM Tourist_03</b>\n\n"
+        "👋 <b>Бот уведомлений Туристика CRM</b>\n\n"
         "Для привязки вашей учётки — просто напишите <b>6-значный код</b> из CRM прямо сюда в чат.\n\n"
-        "Код можно найти в CRM → Настройки → ваша карточка → «Привязать Telegram»."
+        "Код можно найти в «Туристика CRM» → Настройки → ваша карточка → «Привязать Telegram»."
     )
 
 

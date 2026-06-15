@@ -1,6 +1,6 @@
-# Frontend Marker Lab
+# Туристика Frontend
 
-Первый вынос UI в отдельный frontend-слой на `React + TypeScript + Vite`.
+Frontend-слой пользовательского приложения, Туристика CRM и Туристика Admin на `React + TypeScript + Vite`.
 
 Что уже есть:
 

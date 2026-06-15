@@ -69,11 +69,11 @@ def _react_shell_title(request: Request) -> str:
     is_superadmin = host.startswith("superadmin.") or path.startswith("/admin")
     if is_superadmin:
         if path.startswith("/admin/login"):
-            return "Tourist03 Superadmin — Вход"
-        return "Tourist03 Superadmin"
+            return "Туристика Admin — Вход"
+        return "Туристика Admin"
     if path.startswith("/login"):
-        return "Tourist03 CRM — Вход"
-    return "Tourist03 CRM"
+        return "Туристика CRM — Вход"
+    return "Туристика CRM"
 
 
 def react_map_page(request: Request):
@@ -81,7 +81,7 @@ def react_map_page(request: Request):
     if os.path.exists(react_index):
         try:
             html = Path(react_index).read_text(encoding="utf-8")
-            html = html.replace("<title>Tourist03 Панель</title>", f"<title>{_react_shell_title(request)}</title>", 1)
+            html = html.replace("<title>Туристика Панель</title>", f"<title>{_react_shell_title(request)}</title>", 1)
             return HTMLResponse(content=html, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
         except Exception:
             return FileResponse(react_index)

@@ -1,1 +1,1 @@
-"""Domain service layer for Tourist03."""
+"""Domain service layer for Turistika."""

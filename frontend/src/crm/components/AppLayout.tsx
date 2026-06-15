@@ -70,7 +70,7 @@ export default function AppLayout() {
   const calendarPath = crmPath("/calendar");
   const activeNavItem = navItems.find((item) => location.pathname === crmPath(item.path));
 
-  useDocumentTitle(activeNavItem ? `${activeNavItem.label} — Tourist03 CRM` : "Tourist03 CRM");
+  useDocumentTitle(activeNavItem ? `${activeNavItem.label} — Туристика CRM` : "Туристика CRM");
 
   useEffect(() => {
     setMounted(true);
@@ -453,7 +453,7 @@ export default function AppLayout() {
     return (
       <div className="crm-ambient flex min-h-screen items-center justify-center bg-background px-4 text-foreground">
         <div className="glass-card w-full max-w-md rounded-3xl p-8 text-center">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#E5D3B3]">Tourist_03 CRM</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#E5D3B3]">Туристика CRM</p>
           <h1 className="mt-3 text-2xl font-semibold tracking-[-0.05em] text-foreground">CRM временно недоступен</h1>
           <p className="mt-3 text-sm leading-6 text-muted-foreground">{authError}</p>
           <button
@@ -744,8 +744,8 @@ export default function AppLayout() {
             <Menu className="h-5 w-5" />
           </button>
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#E5D3B3]">Tourist_03 CRM</p>
-            <p className="truncate text-sm text-muted-foreground">Панель управления базой отдыха</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#E5D3B3]">Туристика CRM</p>
+            <p className="truncate text-sm text-muted-foreground">Управление базой отдыха, бронями и гостями</p>
           </div>
         </div>
 

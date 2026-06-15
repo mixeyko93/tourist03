@@ -1,5 +1,5 @@
 [Unit]
-Description=Tourist03 VK Bot
+Description=Turistika VK Bot
 After=network-online.target postgresql.service
 Wants=network-online.target
 

@@ -57,8 +57,8 @@ const loginPageDefaults: LoginPageConfig = {
   badgeText: "Premium Control Room",
   heroTitle: "Управляйте бронированиями, загрузкой и сервисом базы в одном интерфейсе.",
   heroText:
-    "Новый CRM-раздел для Турист03 объединяет календарь размещения, управление бронями, номерным фондом, услугами и клиентской базой в одном потоке работы.",
-  loginEyebrow: "Tourist03 CRM",
+    "Туристика CRM объединяет календарь размещения, управление бронями, номерным фондом, услугами и клиентской базой в одном потоке работы.",
+  loginEyebrow: "Туристика CRM",
   loginTitle: "Вход в систему",
   loginText: "",
   submitText: "Войти в CRM",
@@ -197,7 +197,7 @@ export default function LoginPage() {
   const { theme, setTheme } = useTheme();
   const homePath = crmPath("/calendar");
 
-  useDocumentTitle("Tourist03 CRM — Вход");
+  useDocumentTitle("Туристика CRM — Вход");
 
   const nextPath =
     typeof (location.state as { from?: unknown } | null)?.from === "string"

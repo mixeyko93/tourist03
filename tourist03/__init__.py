@@ -1,1 +1,1 @@
-"""Tourist03 application package."""
+"""Technical application package for Turistika."""

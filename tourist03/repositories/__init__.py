@@ -1,1 +1,1 @@
-"""Persistence layer for Tourist03."""
+"""Persistence layer for Turistika."""

@@ -1,1 +1,1 @@
-"""HTTP routers for Tourist03."""
+"""HTTP routers for Turistika."""

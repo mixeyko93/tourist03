@@ -13,7 +13,10 @@ from tourist03.routers import admin, auth, bookings, bot_webhook, catalog, pages
 
 bootstrap_database()
 
-app = FastAPI(title="Tourist_03 Admin")
+app = FastAPI(
+    title="Turistika API",
+    description="API сервиса «Туристика»: каталог баз отдыха, бронирования, CRM и администрирование.",
+)
 
 
 @app.exception_handler(Exception)

@@ -164,7 +164,7 @@ export default function AdminSuperadminsPage() {
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Root-only раздел</p>
             <h2 className="text-2xl font-semibold tracking-[-0.04em] text-foreground">Учётки суперадминов</h2>
             <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-              Создание, изменение, архивирование и контроль root-доступов к системе Tourist_03.
+              Создание, изменение, архивирование и контроль root-доступов к системе Туристика Admin.
             </p>
           </div>
 

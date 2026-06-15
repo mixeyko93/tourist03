@@ -1,4 +1,4 @@
-## Быстрый деплой (Docker + Caddy + Postgres)
+## Быстрый деплой Туристики (Docker + Caddy + Postgres)
 
 ### 1) Установить Docker на сервере
 ```bash
@@ -39,4 +39,3 @@ docker compose logs -f caddy
 docker compose logs -f app
 docker compose logs -f bot
 ```
-
