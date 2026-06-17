@@ -59,27 +59,20 @@ export default function AdminLoginPage() {
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-4 py-4 sm:py-8 lg:py-10">
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute left-1/2 top-0 h-72 w-72 -translate-x-1/2 rounded-full bg-[#E5D3B3]/18 blur-3xl" />
-        <div className="absolute bottom-0 right-0 h-72 w-72 rounded-full bg-blue-500/12 blur-3xl" />
-        <div className="absolute left-0 top-1/3 h-64 w-64 rounded-full bg-emerald-500/10 blur-3xl" />
-      </div>
-
       <PageMotion className="glass-card relative w-full max-w-6xl overflow-hidden">
         <div className="grid lg:min-h-[700px] lg:grid-cols-[1.05fr_0.95fr]">
           <section className="crm-ambient order-2 flex flex-col justify-between border-t border-border px-5 py-6 sm:px-6 lg:order-1 lg:border-r lg:border-t-0 lg:px-8 lg:py-10">
             <div className="space-y-8">
-              <span className="inline-flex rounded-full border border-[#E5D3B3]/30 bg-[#E5D3B3]/10 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.26em] text-[#E5D3B3] sm:text-xs">
-                Superadmin Control
+              <span className="inline-flex rounded-full border border-[#2F80ED]/30 bg-[#2F80ED]/10 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.26em] text-[#2F80ED] sm:text-xs">
+                Туристика Admin
               </span>
 
               <div className="space-y-4">
                 <h1 className="max-w-xl text-3xl font-semibold tracking-[-0.06em] text-foreground sm:text-4xl md:text-5xl">
-                  Централизованный доступ к базам, пользователям и учётным записям Туристика Admin.
+                  Панель суперадминистратора
                 </h1>
                 <p className="max-w-lg text-base leading-7 text-muted-foreground">
-                  Рабочее пространство суперадмина объединяет модерацию объектов, аудит действий пользователей,
-                  управление управляющими и архивом в одном интерфейсе.
+                  Управление базами, пользователями и учётными записями в едином рабочем интерфейсе.
                 </p>
               </div>
             </div>
@@ -103,7 +96,7 @@ export default function AdminLoginPage() {
                 },
               ].map((item) => (
                 <article key={item.title} className="rounded-3xl border border-border bg-card/55 p-4 backdrop-blur-lg">
-                  <item.icon className="h-5 w-5 text-[#E5D3B3]" />
+                  <item.icon className="h-5 w-5 text-[#2F80ED]" />
                   <h2 className="mt-5 text-sm font-semibold text-foreground">{item.title}</h2>
                   <p className="mt-2 text-sm leading-6 text-muted-foreground">{item.text}</p>
                 </article>
@@ -115,8 +108,8 @@ export default function AdminLoginPage() {
             <div className="mx-auto w-full max-w-md">
               <div className="glass-card rounded-[2rem] p-5 sm:p-8">
                 <div className="space-y-2 text-center">
-                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#E5D3B3]">Туристика Admin</p>
-                  <h2 className="text-2xl font-semibold tracking-[-0.05em] text-foreground sm:text-3xl">Вход в систему</h2>
+                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#2F80ED]">Туристика Admin</p>
+                  <h2 className="text-2xl font-semibold tracking-[-0.05em] text-foreground sm:text-3xl">Панель суперадминистратора</h2>
                   <p className="text-sm leading-6 text-muted-foreground">
                     Авторизуйтесь по логину и паролю, чтобы открыть панель суперадмина.
                   </p>

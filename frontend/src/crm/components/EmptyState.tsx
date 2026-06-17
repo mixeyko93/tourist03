@@ -10,11 +10,11 @@ type EmptyStateProps = {
 export function EmptyState({ icon: Icon, title, description, compact = false }: EmptyStateProps) {
   return (
     <div
-      className={`rounded-[1.8rem] border border-dashed border-[#E5D3B3]/25 bg-background/60 text-center ${
+      className={`rounded-[1.8rem] border border-dashed border-[#2F80ED]/25 bg-background/60 text-center ${
         compact ? "px-5 py-8" : "px-6 py-12"
       }`}
     >
-      <span className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-[#E5D3B3]/25 bg-[#E5D3B3]/10 text-[#E5D3B3]">
+      <span className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-[#2F80ED]/25 bg-[#2F80ED]/10 text-[#2F80ED]">
         <Icon className="h-5 w-5" />
       </span>
       <h2 className="mt-4 text-lg font-semibold tracking-[-0.03em] text-foreground">{title}</h2>

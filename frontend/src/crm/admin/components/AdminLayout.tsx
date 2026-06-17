@@ -106,7 +106,7 @@ export default function AdminLayout() {
             <div className="min-w-0 space-y-1">
               <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">Туристика Admin</p>
               <h1 className="text-lg font-semibold tracking-[-0.04em] text-foreground">Панель суперадминистратора</h1>
-              <p className="text-sm text-muted-foreground">Управление базами, пользователями и каталогом.</p>
+              <p className="text-sm text-muted-foreground">Управление базами, пользователями и учётными записями.</p>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">

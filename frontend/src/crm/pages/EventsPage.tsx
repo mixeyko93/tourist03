@@ -52,7 +52,7 @@ const severityLabels: Record<string, string> = {
 };
 
 const severityClasses: Record<string, string> = {
-  info: "border-[#D6BE8C] bg-[#FFF5DF] text-[#8E6E2C] dark:border-[#E5D3B3]/25 dark:bg-[#E5D3B3]/10 dark:text-[#E5D3B3]",
+  info: "border-[#2F80ED] bg-[#EEF5FF] text-[#226ED1] dark:border-[#2F80ED]/25 dark:bg-[#2F80ED]/10 dark:text-[#2F80ED]",
   warning: "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-300",
   critical: "border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-500/25 dark:bg-rose-500/10 dark:text-rose-300",
 };
@@ -193,7 +193,7 @@ export default function EventsPage() {
         value: summary.total_count,
         note: "Только заявки и бронирования",
         icon: CircleDot,
-        className: "border-[#D6BE8C] bg-[#FFF5DF] text-[#8E6E2C] dark:border-[#E5D3B3]/25 dark:bg-[#E5D3B3]/10 dark:text-[#E5D3B3]",
+        className: "border-[#2F80ED] bg-[#EEF5FF] text-[#226ED1] dark:border-[#2F80ED]/25 dark:bg-[#2F80ED]/10 dark:text-[#2F80ED]",
         isActive: !statusFilter && !severityFilter,
         onClick: () => {
           setStatusFilter("");
@@ -321,8 +321,8 @@ export default function EventsPage() {
               key={stat.label}
               type="button"
               onClick={stat.onClick}
-              className={`glass-card p-5 text-left transition hover:-translate-y-0.5 hover:border-[#E5D3B3]/50 hover:bg-accent/25 ${
-                stat.isActive ? "border-[#E5D3B3]/60 ring-1 ring-[#E5D3B3]/40" : ""
+              className={`glass-card p-5 text-left transition hover:-translate-y-0.5 hover:border-[#2F80ED]/50 hover:bg-accent/25 ${
+                stat.isActive ? "border-[#2F80ED]/60 ring-1 ring-[#2F80ED]/40" : ""
               }`}
             >
               <div className="flex items-start justify-between gap-4">

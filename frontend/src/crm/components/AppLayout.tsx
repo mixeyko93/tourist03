@@ -453,7 +453,7 @@ export default function AppLayout() {
     return (
       <div className="crm-ambient flex min-h-screen items-center justify-center bg-background px-4 text-foreground">
         <div className="glass-card w-full max-w-md rounded-3xl p-8 text-center">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#E5D3B3]">Туристика CRM</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#2F80ED]">Туристика CRM</p>
           <h1 className="mt-3 text-2xl font-semibold tracking-[-0.05em] text-foreground">CRM временно недоступен</h1>
           <p className="mt-3 text-sm leading-6 text-muted-foreground">{authError}</p>
           <button
@@ -483,7 +483,7 @@ export default function AppLayout() {
             [
               "rounded-2xl border px-4 py-3 text-sm font-medium transition",
               isActive
-                ? "border-[#E5D3B3]/30 bg-[#E5D3B3]/10 text-foreground shadow-sm"
+                ? "border-[#2F80ED]/30 bg-[#2F80ED]/10 text-foreground shadow-sm"
                 : "border-transparent text-muted-foreground hover:border-border hover:bg-accent hover:text-foreground",
             ].join(" ")
           }
@@ -499,10 +499,10 @@ export default function AppLayout() {
       <button
         type="button"
         onClick={openProfileSwitcher}
-        className="w-full rounded-[1.65rem] border border-border bg-background/72 px-4 py-3 text-left shadow-sm transition hover:border-[#E5D3B3]/40 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5D3B3]/60"
+        className="w-full rounded-[1.65rem] border border-border bg-background/72 px-4 py-3 text-left shadow-sm transition hover:border-[#2F80ED]/40 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2F80ED]/60"
       >
         <div className="flex items-center gap-3">
-          <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[#E5D3B3]/25 bg-[#E5D3B3]/10 text-[#E5D3B3]">
+          <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[#2F80ED]/25 bg-[#2F80ED]/10 text-[#2F80ED]">
             <UserCircle2 className="h-5 w-5" />
           </span>
           <div className="min-w-0 flex-1">
@@ -518,7 +518,7 @@ export default function AppLayout() {
         type="button"
         disabled={isLoggingOut}
         onClick={handleLogout}
-        className="flex w-full items-center justify-center gap-2 rounded-[1.65rem] border border-border bg-background/72 px-4 py-3 text-sm font-semibold text-foreground transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5D3B3]/60"
+        className="flex w-full items-center justify-center gap-2 rounded-[1.65rem] border border-border bg-background/72 px-4 py-3 text-sm font-semibold text-foreground transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2F80ED]/60"
       >
         <LogOut className="h-4 w-4" />
         {isLoggingOut ? "Выходим..." : "Выйти"}
@@ -549,7 +549,7 @@ export default function AppLayout() {
       <div className="glass-card flex max-h-[min(760px,calc(100dvh-2rem))] w-full max-w-5xl flex-col overflow-hidden rounded-[2rem] border border-border bg-card/95 shadow-2xl">
         <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-5">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#E5D3B3]">Профили CRM</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#2F80ED]">Профили CRM</p>
             <h2 className="mt-2 text-2xl font-semibold tracking-[-0.05em] text-foreground">Быстрое переключение сотрудника</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
               Действия в CRM будут логироваться от имени активной карточки сотрудника.
@@ -569,7 +569,7 @@ export default function AppLayout() {
           <div className="min-h-0 overflow-y-auto border-b border-border p-5 lg:border-b-0 lg:border-r">
             {profileSwitcherLoading && !profileSwitcher ? (
               <div className="flex min-h-60 items-center justify-center rounded-3xl border border-border bg-background/45">
-                <Loader2 className="h-6 w-6 animate-spin text-[#E5D3B3]" />
+                <Loader2 className="h-6 w-6 animate-spin text-[#2F80ED]" />
               </div>
             ) : null}
             {profileSwitcher?.profiles.length ? (
@@ -582,8 +582,8 @@ export default function AppLayout() {
                     className={[
                       "w-full rounded-3xl border px-4 py-4 text-left transition",
                       selectedProfileId === profile.id
-                        ? "border-[#E5D3B3]/55 bg-[#E5D3B3]/12"
-                        : "border-border bg-background/55 hover:border-[#E5D3B3]/35 hover:bg-accent",
+                        ? "border-[#2F80ED]/55 bg-[#2F80ED]/12"
+                        : "border-border bg-background/55 hover:border-[#2F80ED]/35 hover:bg-accent",
                     ].join(" ")}
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -624,7 +624,7 @@ export default function AppLayout() {
               </div>
             ) : null}
             {profileMessage ? (
-              <div className="mb-4 rounded-3xl border border-[#E5D3B3]/35 bg-[#E5D3B3]/10 px-4 py-3 text-sm leading-6 text-[#F6E7C7]">
+              <div className="mb-4 rounded-3xl border border-[#2F80ED]/35 bg-[#2F80ED]/10 px-4 py-3 text-sm leading-6 text-[#FFFFFF]">
                 {profileMessage}
               </div>
             ) : null}
@@ -646,7 +646,7 @@ export default function AppLayout() {
                   void handleProfilePinSubmit();
                 }}
               >
-                <KeyRound className="h-8 w-8 text-[#E5D3B3]" />
+                <KeyRound className="h-8 w-8 text-[#2F80ED]" />
                 <h3 className="mt-4 text-xl font-semibold text-foreground">{pinTitle}</h3>
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">{pinDescription}</p>
                 <div className="mt-5 space-y-4">
@@ -658,7 +658,7 @@ export default function AppLayout() {
                       inputMode="numeric"
                       type="password"
                       autoComplete="one-time-code"
-                      className="mt-2 w-full rounded-2xl border border-border bg-background px-4 py-3 text-lg font-semibold text-foreground outline-none transition focus:border-[#E5D3B3]"
+                      className="mt-2 w-full rounded-2xl border border-border bg-background px-4 py-3 text-lg font-semibold text-foreground outline-none transition focus:border-[#2F80ED]"
                       placeholder="0000"
                     />
                   </label>
@@ -671,7 +671,7 @@ export default function AppLayout() {
                         inputMode="numeric"
                         type="password"
                         autoComplete="one-time-code"
-                        className="mt-2 w-full rounded-2xl border border-border bg-background px-4 py-3 text-lg font-semibold text-foreground outline-none transition focus:border-[#E5D3B3]"
+                        className="mt-2 w-full rounded-2xl border border-border bg-background px-4 py-3 text-lg font-semibold text-foreground outline-none transition focus:border-[#2F80ED]"
                         placeholder="0000"
                       />
                     </label>
@@ -690,7 +690,7 @@ export default function AppLayout() {
                       type="button"
                       onClick={() => void handleForgotProfilePin()}
                       disabled={profileActionPending}
-                      className="flex-1 rounded-2xl border border-[#E5D3B3]/30 bg-[#E5D3B3]/10 px-4 py-3 text-sm font-semibold text-[#F6E7C7] transition hover:bg-[#E5D3B3]/15 disabled:opacity-60"
+                      className="flex-1 rounded-2xl border border-[#2F80ED]/30 bg-[#2F80ED]/10 px-4 py-3 text-sm font-semibold text-[#FFFFFF] transition hover:bg-[#2F80ED]/15 disabled:opacity-60"
                     >
                       Забыл PIN
                     </button>
@@ -703,7 +703,7 @@ export default function AppLayout() {
               </form>
             ) : ["pending_setup", "pending_reset"].includes(profileMode) ? (
               <div className="rounded-[1.75rem] border border-border bg-background/55 p-5">
-                <Loader2 className="h-8 w-8 animate-spin text-[#E5D3B3]" />
+                <Loader2 className="h-8 w-8 animate-spin text-[#2F80ED]" />
                 <h3 className="mt-4 text-xl font-semibold text-foreground">Ожидаем Telegram</h3>
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">
                   Нажмите кнопку подтверждения в боте. CRM проверяет статус автоматически.
@@ -718,7 +718,7 @@ export default function AppLayout() {
               </div>
             ) : (
               <div className="rounded-[1.75rem] border border-border bg-background/55 p-5">
-                <UserCircle2 className="h-8 w-8 text-[#E5D3B3]" />
+                <UserCircle2 className="h-8 w-8 text-[#2F80ED]" />
                 <h3 className="mt-4 text-xl font-semibold text-foreground">Выберите сотрудника</h3>
                 <p className="mt-2 text-sm leading-6 text-muted-foreground">
                   Управляющий тоже переключается через свой PIN. Это защищает рабочее место, если CRM уже открыта на ПК.
@@ -738,13 +738,13 @@ export default function AppLayout() {
           <button
             type="button"
             onClick={() => setSidebarOpen((value) => !value)}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-border bg-background/70 text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5D3B3]/60"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-border bg-background/70 text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2F80ED]/60"
             aria-label="Показать или скрыть меню"
           >
             <Menu className="h-5 w-5" />
           </button>
           <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#E5D3B3]">Туристика CRM</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#2F80ED]">Туристика CRM</p>
             <p className="truncate text-sm text-muted-foreground">Управление базой отдыха, бронями и гостями</p>
           </div>
         </div>
@@ -754,7 +754,7 @@ export default function AppLayout() {
             <button
               type="button"
               onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-border bg-background/70 text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5D3B3]/60"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-border bg-background/70 text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2F80ED]/60"
               aria-label="Переключить тему"
             >
               {theme === "dark" ? <SunMedium className="h-5 w-5" /> : <MoonStar className="h-5 w-5" />}
@@ -765,9 +765,9 @@ export default function AppLayout() {
             to={crmPath("/events")}
             className={({ isActive }) =>
               [
-                "relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5D3B3]/60",
+                "relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2F80ED]/60",
                 isActive
-                  ? "border-[#E5D3B3]/30 bg-[#E5D3B3]/10 text-foreground"
+                  ? "border-[#2F80ED]/30 bg-[#2F80ED]/10 text-foreground"
                   : "border-border bg-background/70 text-muted-foreground hover:bg-accent hover:text-foreground",
               ].join(" ")
             }
@@ -832,7 +832,7 @@ export default function AppLayout() {
           <div className="glass-card flex w-full max-w-md flex-col overflow-hidden rounded-[2rem] border border-border bg-card/95 shadow-2xl">
             <div className="flex items-start justify-between gap-4 border-b border-border px-6 py-5">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#E5D3B3]">Привязка Telegram</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#2F80ED]">Привязка Telegram</p>
                 <h2 className="mt-2 text-2xl font-semibold tracking-[-0.05em] text-foreground">Подключите бота</h2>
               </div>
               <button
@@ -853,7 +853,7 @@ export default function AppLayout() {
               </p>
               {onboardingLoading ? (
                 <div className="mt-6 flex items-center justify-center">
-                  <Loader2 className="h-8 w-8 animate-spin text-[#E5D3B3]" />
+                  <Loader2 className="h-8 w-8 animate-spin text-[#2F80ED]" />
                 </div>
               ) : onboardingError ? (
                 <div className="mt-4 rounded-3xl border border-rose-400/35 bg-rose-500/12 px-4 py-3 text-sm text-rose-100">
@@ -861,8 +861,8 @@ export default function AppLayout() {
                 </div>
               ) : onboardingLink ? (
                 <div className="mt-5 flex flex-col gap-4">
-                  <div className="rounded-2xl border border-[#E5D3B3]/30 bg-[#E5D3B3]/8 px-4 py-5 text-center">
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#E5D3B3]/70">Ваш код привязки</p>
+                  <div className="rounded-2xl border border-[#2F80ED]/30 bg-[#2F80ED]/8 px-4 py-5 text-center">
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#2F80ED]/70">Ваш код привязки</p>
                     <p className="mt-2 font-mono text-5xl font-bold tracking-[0.18em] text-foreground">{onboardingLink.code}</p>
                     <p className="mt-2 text-xs text-muted-foreground">Действителен 15 минут</p>
                   </div>

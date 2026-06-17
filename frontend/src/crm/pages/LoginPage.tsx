@@ -54,14 +54,14 @@ type LoginPageConfig = {
 const featureIcons = [Mountain, ShieldCheck] as const;
 
 const loginPageDefaults: LoginPageConfig = {
-  badgeText: "Premium Control Room",
-  heroTitle: "Управляйте бронированиями, загрузкой и сервисом базы в одном интерфейсе.",
+  badgeText: "Туристика CRM",
+  heroTitle: "CRM управляющего",
   heroText:
-    "Туристика CRM объединяет календарь размещения, управление бронями, номерным фондом, услугами и клиентской базой в одном потоке работы.",
-  loginEyebrow: "Туристика CRM",
-  loginTitle: "Вход в систему",
-  loginText: "",
-  submitText: "Войти в CRM",
+    "Рабочее пространство для управления базами, бронями, номерами, услугами и гостями.",
+  loginEyebrow: "Рабочий доступ",
+  loginTitle: "CRM управляющего",
+  loginText: "Войдите, чтобы управлять базами, бронями и номерами",
+  submitText: "Войти",
   shellMaxWidth: 1166,
   shellMinHeight: 504,
   shellRadius: 20,
@@ -307,12 +307,6 @@ export default function LoginPage() {
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-4 py-4 sm:py-8 lg:py-10">
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute left-1/2 top-0 h-72 w-72 -translate-x-1/2 rounded-full bg-[#E5D3B3]/18 blur-3xl" />
-        <div className="absolute bottom-0 right-0 h-72 w-72 rounded-full bg-sky-500/10 blur-3xl" />
-        <div className="absolute left-0 top-1/3 h-64 w-64 rounded-full bg-emerald-500/10 blur-3xl" />
-      </div>
-
       {isEditMode ? (
         <>
           <button
@@ -328,7 +322,7 @@ export default function LoginPage() {
             <aside className="fixed right-4 top-4 z-40 flex max-h-[calc(100vh-6rem)] w-[min(420px,calc(100vw-2rem))] flex-col overflow-hidden rounded-[2rem] border border-border bg-card/95 shadow-2xl backdrop-blur-xl">
               <div className="border-b border-border px-4 py-4">
                 <div className="flex items-center gap-2">
-                  <SlidersHorizontal className="h-4 w-4 text-[#E5D3B3]" />
+                  <SlidersHorizontal className="h-4 w-4 text-[#2F80ED]" />
                   <h2 className="text-sm font-semibold text-foreground">Редактор страницы входа</h2>
                 </div>
                 <p className="mt-2 text-xs leading-5 text-muted-foreground">{editorNotice}</p>

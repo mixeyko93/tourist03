@@ -505,11 +505,11 @@ export default function RoomsPage() {
 
                   <div className="mt-5 flex flex-wrap gap-4 text-sm text-muted-foreground">
                     <span className="inline-flex items-center gap-2">
-                      <Users className="h-4 w-4 text-[#E5D3B3]" />
+                      <Users className="h-4 w-4 text-[#2F80ED]" />
                       до {room.capacity || 0} гостей
                     </span>
                     <span className="inline-flex items-center gap-2">
-                      <BedDouble className="h-4 w-4 text-[#E5D3B3]" />
+                      <BedDouble className="h-4 w-4 text-[#2F80ED]" />
                       {room.beds_single || 0} односп., {room.beds_double || 0} двусп.
                     </span>
                   </div>
@@ -517,7 +517,7 @@ export default function RoomsPage() {
                   <div className="mt-5 flex flex-wrap gap-2">
                     {buildFeatureList(room).map((feature) => (
                       <span key={`${room.id}-${feature}`} className="inline-flex items-center gap-2 rounded-full border border-border bg-background/70 px-3 py-1.5 text-sm text-foreground">
-                        <Check className="h-3.5 w-3.5 text-[#E5D3B3]" />
+                        <Check className="h-3.5 w-3.5 text-[#2F80ED]" />
                         {feature}
                       </span>
                     ))}

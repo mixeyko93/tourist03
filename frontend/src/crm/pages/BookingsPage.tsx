@@ -492,13 +492,13 @@ export default function BookingsPage() {
           </label>
 
           <button type="button" className="soft-button w-full gap-2 md:col-span-2 xl:w-auto" onClick={() => setReloadKey((value) => value + 1)}>
-            <Filter className="h-4 w-4 text-[#E5D3B3]" />
+            <Filter className="h-4 w-4 text-[#2F80ED]" />
             Обновить
           </button>
         </div>
         {quickFilterLabel ? (
           <div className="mt-3 flex flex-wrap items-center gap-3">
-            <div className="rounded-full border border-[#E5D3B3]/35 bg-[#E5D3B3]/10 px-4 py-2 text-sm font-medium text-foreground">
+            <div className="rounded-full border border-[#2F80ED]/35 bg-[#2F80ED]/10 px-4 py-2 text-sm font-medium text-foreground">
               {quickFilterLabel}
             </div>
             <button

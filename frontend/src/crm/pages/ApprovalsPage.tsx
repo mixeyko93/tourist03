@@ -31,7 +31,7 @@ const statusClasses: Record<string, string> = {
   approved: "border-emerald-500/25 bg-emerald-500/10 text-emerald-300",
   rejected: "border-rose-500/25 bg-rose-500/10 text-rose-300",
   needs_clarification: "border-sky-500/25 bg-sky-500/10 text-sky-300",
-  applied_with_responsibility: "border-[#E5D3B3]/25 bg-[#E5D3B3]/10 text-[#E5D3B3]",
+  applied_with_responsibility: "border-[#2F80ED]/25 bg-[#2F80ED]/10 text-[#2F80ED]",
   rolled_back: "border-slate-500/25 bg-slate-500/10 text-slate-300",
 };
 
@@ -256,7 +256,7 @@ export default function ApprovalsPage() {
         {[
           { label: "На подтверждении", value: counts.pending, className: "border-amber-500/25 bg-amber-500/10 text-amber-300" },
           { label: "Нужно уточнение", value: counts.clarification, className: "border-sky-500/25 bg-sky-500/10 text-sky-300" },
-          { label: "Под ответственность", value: counts.responsibility, className: "border-[#E5D3B3]/25 bg-[#E5D3B3]/10 text-[#E5D3B3]" },
+          { label: "Под ответственность", value: counts.responsibility, className: "border-[#2F80ED]/25 bg-[#2F80ED]/10 text-[#2F80ED]" },
           { label: "Всего запросов", value: counts.total, className: "border-border bg-background/70 text-foreground" },
         ].map((item) => (
           <article key={item.label} className="glass-card p-5">
@@ -278,7 +278,7 @@ export default function ApprovalsPage() {
                   type="button"
                   onClick={() => setSelectedItem(item)}
                   className={`w-full rounded-[1.7rem] border p-4 text-left transition ${
-                    selectedItem?.id === item.id ? "border-[#E5D3B3]/40 bg-[#E5D3B3]/10 shadow-sm" : "border-border bg-background/65 hover:bg-accent"
+                    selectedItem?.id === item.id ? "border-[#2F80ED]/40 bg-[#2F80ED]/10 shadow-sm" : "border-border bg-background/65 hover:bg-accent"
                   }`}
                 >
                   <div className="flex flex-wrap items-center gap-2">

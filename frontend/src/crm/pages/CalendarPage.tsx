@@ -854,7 +854,7 @@ export default function CalendarPage() {
                 type="button"
                 onClick={() => setViewMode("month")}
                 className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
-                  viewMode === "month" ? "border border-[#E5D3B3]/25 bg-[#E5D3B3]/10 text-foreground" : "text-muted-foreground hover:text-foreground"
+                  viewMode === "month" ? "border border-[#2F80ED]/25 bg-[#2F80ED]/10 text-foreground" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 Месяц
@@ -863,7 +863,7 @@ export default function CalendarPage() {
                 type="button"
                 onClick={() => setViewMode("week")}
                 className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
-                  viewMode === "week" ? "border border-[#E5D3B3]/25 bg-[#E5D3B3]/10 text-foreground" : "text-muted-foreground hover:text-foreground"
+                  viewMode === "week" ? "border border-[#2F80ED]/25 bg-[#2F80ED]/10 text-foreground" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 Неделя
@@ -990,7 +990,7 @@ export default function CalendarPage() {
                             getProductionDayTone(value) === "holiday"
                               ? "bg-rose-50/85 dark:bg-rose-500/10"
                               : getProductionDayTone(value) === "weekend"
-                                ? "bg-[#FFF8EE]/85 dark:bg-[#E5D3B3]/6"
+                                ? "bg-[#FFF8EE]/85 dark:bg-[#2F80ED]/6"
                                 : ""
                           } ${isToday ? "relative bg-sky-50/85 shadow-[inset_0_0_0_2px_rgba(14,165,233,0.55)] dark:bg-sky-400/10 dark:shadow-[inset_0_0_0_2px_rgba(125,211,252,0.45)]" : ""}`}
                         >
@@ -1039,9 +1039,9 @@ export default function CalendarPage() {
                                 getProductionDayTone(value) === "holiday"
                                   ? "bg-rose-50/70 dark:bg-rose-500/6"
                                   : getProductionDayTone(value) === "weekend"
-                                    ? "bg-[#FFF8EE]/70 dark:bg-[#E5D3B3]/4"
+                                    ? "bg-[#FFF8EE]/70 dark:bg-[#2F80ED]/4"
                                     : highlightedRoomId === room.id
-                                      ? "bg-[#E5D3B3]/5 dark:bg-[#E5D3B3]/3"
+                                      ? "bg-[#2F80ED]/5 dark:bg-[#2F80ED]/3"
                                       : "bg-transparent"
                               } ${isToday ? "bg-sky-50/55 shadow-[inset_0_0_0_1px_rgba(14,165,233,0.35)] dark:bg-sky-400/7 dark:shadow-[inset_0_0_0_1px_rgba(125,211,252,0.28)]" : ""}`}
                               aria-label={`Создать бронь для ${room.title} на ${formatDateLabel(formatDateParam(value))}`}
@@ -1090,7 +1090,7 @@ export default function CalendarPage() {
                 >
                   <div
                     data-thumb="true"
-                    className="absolute top-1/2 h-2 -translate-y-1/2 rounded-full bg-gradient-to-r from-[#E5D3B3]/55 via-sky-400/35 to-[#E5D3B3]/55 shadow-[0_0_0_1px_rgba(17,24,39,0.16)] transition-[opacity,box-shadow] duration-200 hover:shadow-[0_0_0_1px_rgba(17,24,39,0.28)]"
+                    className="absolute top-1/2 h-2 -translate-y-1/2 rounded-full bg-gradient-to-r from-[#2F80ED]/55 via-sky-400/35 to-[#2F80ED]/55 shadow-[0_0_0_1px_rgba(17,24,39,0.16)] transition-[opacity,box-shadow] duration-200 hover:shadow-[0_0_0_1px_rgba(17,24,39,0.28)]"
                     style={{ width: scrollThumbWidth, left: scrollThumbOffset }}
                   />
                 </div>
@@ -1179,7 +1179,7 @@ export default function CalendarPage() {
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="rounded-2xl border border-border bg-background/65 p-4">
                   <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                    <BedDouble className="h-4 w-4 text-[#E5D3B3]" />
+                    <BedDouble className="h-4 w-4 text-[#2F80ED]" />
                     Формат
                   </div>
                   <p className="mt-2 text-lg font-semibold text-foreground">{activeRoom.room_type || "Апартамент"}</p>
@@ -1189,7 +1189,7 @@ export default function CalendarPage() {
                 </div>
                 <div className="rounded-2xl border border-border bg-background/65 p-4">
                   <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                    <Users className="h-4 w-4 text-[#E5D3B3]" />
+                    <Users className="h-4 w-4 text-[#2F80ED]" />
                     Вместимость и цены
                   </div>
                   <p className="mt-2 text-lg font-semibold text-foreground">{activeRoom.capacity ?? "—"} гостей</p>
@@ -1199,7 +1199,7 @@ export default function CalendarPage() {
                 </div>
                 <div className="rounded-2xl border border-border bg-background/65 p-4 md:col-span-2">
                   <div className="flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                    <CalendarDays className="h-4 w-4 text-[#E5D3B3]" />
+                    <CalendarDays className="h-4 w-4 text-[#2F80ED]" />
                     Описание и размещение
                   </div>
                   <p className="mt-2 text-sm leading-6 text-foreground">{activeRoom.description || "Описание ещё не заполнено."}</p>

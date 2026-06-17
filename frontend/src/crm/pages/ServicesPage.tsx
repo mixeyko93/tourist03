@@ -404,7 +404,7 @@ export default function ServicesPage() {
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
                     {service.category_name || "Без категории"}
                   </p>
-                  <h2 className="line-clamp-2 text-xl font-semibold tracking-[-0.04em] text-foreground transition group-hover:text-[#E5D3B3]">
+                  <h2 className="line-clamp-2 text-xl font-semibold tracking-[-0.04em] text-foreground transition group-hover:text-[#2F80ED]">
                     {service.name}
                   </h2>
                   <p className="line-clamp-3 text-sm leading-6 text-muted-foreground">

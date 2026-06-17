@@ -755,7 +755,7 @@ export default function SettingsPage() {
                 type="button"
                 className={`rounded-2xl border px-4 py-2.5 text-sm font-medium transition ${
                   activeTab === tab.key
-                    ? "border-[#E5D3B3]/30 bg-[#E5D3B3]/10 text-foreground"
+                    ? "border-[#2F80ED]/30 bg-[#2F80ED]/10 text-foreground"
                     : "border-border bg-background/65 text-muted-foreground hover:bg-accent hover:text-foreground"
                 }`}
                 onClick={() => setActiveTab(tab.key)}
@@ -802,7 +802,7 @@ export default function SettingsPage() {
 
               <section className="glass-card p-6 md:p-8">
                 <div className="flex items-center gap-3">
-                  <Building2 className="h-5 w-5 text-[#E5D3B3]" />
+                  <Building2 className="h-5 w-5 text-[#2F80ED]" />
                   <h2 className="text-xl font-semibold tracking-[-0.03em] text-foreground">Основная информация</h2>
                 </div>
 
@@ -836,7 +836,7 @@ export default function SettingsPage() {
 
               <section className="glass-card p-6 md:p-8">
                 <div className="flex items-center gap-3">
-                  <MapPinHouse className="h-5 w-5 text-[#E5D3B3]" />
+                  <MapPinHouse className="h-5 w-5 text-[#2F80ED]" />
                   <h2 className="text-xl font-semibold tracking-[-0.03em] text-foreground">Правила проживания</h2>
                 </div>
 
@@ -872,7 +872,7 @@ export default function SettingsPage() {
 
               <section className="glass-card p-6 md:p-8">
                 <div className="flex items-center gap-3">
-                  <Phone className="h-5 w-5 text-[#E5D3B3]" />
+                  <Phone className="h-5 w-5 text-[#2F80ED]" />
                   <h2 className="text-xl font-semibold tracking-[-0.03em] text-foreground">Контакты и уведомления</h2>
                 </div>
 
@@ -901,21 +901,21 @@ export default function SettingsPage() {
                 <div className="mt-6 grid gap-4 md:grid-cols-3">
                   <div className="rounded-3xl border border-border bg-background/65 p-4">
                     <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                      <Bell className="h-4 w-4 text-[#E5D3B3]" />
+                      <Bell className="h-4 w-4 text-[#2F80ED]" />
                       Уведомления
                     </div>
                     <p className="mt-2 text-sm text-muted-foreground">Базовый переключатель уже связан с серверными настройками базы.</p>
                   </div>
                   <div className="rounded-3xl border border-border bg-background/65 p-4">
                     <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                      <Link2 className="h-4 w-4 text-[#E5D3B3]" />
+                      <Link2 className="h-4 w-4 text-[#2F80ED]" />
                       Контакты
                     </div>
                     <p className="mt-2 text-sm text-muted-foreground">Эти контакты используются в клиентских уведомлениях и в разделе помощи.</p>
                   </div>
                   <div className="rounded-3xl border border-border bg-background/65 p-4">
                     <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                      <ShieldCheck className="h-4 w-4 text-[#E5D3B3]" />
+                      <ShieldCheck className="h-4 w-4 text-[#2F80ED]" />
                       Аудит
                     </div>
                     <p className="mt-2 text-sm text-muted-foreground">Все сохранения профиля уже попадают в журнал действий CRM.</p>
@@ -1014,7 +1014,7 @@ export default function SettingsPage() {
                       <h2 className="truncate text-lg font-semibold tracking-[-0.03em] text-foreground">{staff.display_name}</h2>
                       <p className="mt-1 truncate text-sm text-muted-foreground">{staff.login}</p>
                       <div className="mt-3 flex flex-wrap gap-2">
-                        <span className="rounded-full border border-[#E5D3B3]/25 bg-[#E5D3B3]/10 px-3 py-1 text-xs font-medium text-[#E5D3B3]">
+                        <span className="rounded-full border border-[#2F80ED]/25 bg-[#2F80ED]/10 px-3 py-1 text-xs font-medium text-[#2F80ED]">
                           {staff.role_label}
                         </span>
                         <span className={`rounded-full border px-3 py-1 text-xs font-medium ${staff.is_active ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300" : "border-rose-500/25 bg-rose-500/10 text-rose-300"}`}>
@@ -1173,7 +1173,7 @@ export default function SettingsPage() {
                 <button
                   key={item.id}
                   type="button"
-                  className="glass-card w-full p-5 text-left transition hover:border-[#E5D3B3]/30 hover:bg-card/95"
+                  className="glass-card w-full p-5 text-left transition hover:border-[#2F80ED]/30 hover:bg-card/95"
                   onClick={() => setSelectedAuditEntry(item)}
                 >
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">

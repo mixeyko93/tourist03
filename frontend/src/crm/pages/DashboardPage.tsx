@@ -268,20 +268,20 @@ export default function DashboardPage() {
               key={stat.label}
               type="button"
               onClick={stat.onClick}
-              className="glass-card p-5 text-left transition hover:-translate-y-0.5 hover:border-[#E5D3B3]/50 hover:bg-accent/25"
+              className="glass-card p-5 text-left transition hover:-translate-y-0.5 hover:border-[#2F80ED]/50 hover:bg-accent/25"
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">{stat.label}</p>
                   <p className="text-4xl font-semibold tracking-[-0.06em] text-foreground">{stat.value}</p>
                 </div>
-                <span className="rounded-2xl border border-[#E5D3B3]/30 bg-[#E5D3B3]/10 p-3 text-[#E5D3B3]">
+                <span className="rounded-2xl border border-[#2F80ED]/30 bg-[#2F80ED]/10 p-3 text-[#2F80ED]">
                   <Icon className="h-5 w-5" />
                 </span>
               </div>
               <div className="mt-6 flex items-center justify-between gap-3 text-sm">
                 <span className="text-muted-foreground">{stat.note}</span>
-                <span className="shrink-0 font-semibold text-[#E5D3B3]">{stat.delta}</span>
+                <span className="shrink-0 font-semibold text-[#2F80ED]">{stat.delta}</span>
               </div>
             </button>
           );
@@ -308,7 +308,7 @@ export default function DashboardPage() {
                     <div key={item.key} className="flex flex-1 flex-col items-center gap-3">
                       <div className="flex h-64 w-full items-end rounded-[1.6rem] border border-border bg-background/55 p-2">
                         <div
-                          className="w-full rounded-[1.1rem] bg-gradient-to-t from-[#E5D3B3] via-[#E5D3B3]/70 to-white/30 shadow-lg shadow-[#E5D3B3]/10"
+                          className="w-full rounded-[1.1rem] bg-gradient-to-t from-[#2F80ED] via-[#2F80ED]/70 to-white/30 shadow-lg shadow-[#2F80ED]/10"
                           style={{ height: `${(item.revenue / maxRevenue) * 100}%` }}
                         />
                       </div>
@@ -323,21 +323,21 @@ export default function DashboardPage() {
 
               <div className="space-y-3 rounded-[1.8rem] border border-border bg-background/65 p-4">
                 <div className="flex items-center gap-3 rounded-2xl border border-border bg-card/60 p-4">
-                  <CircleDollarSign className="h-5 w-5 text-[#E5D3B3]" />
+                  <CircleDollarSign className="h-5 w-5 text-[#2F80ED]" />
                   <div>
                     <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Оценка выручки</p>
                     <p className="text-lg font-semibold text-foreground">{formatCurrency(totalRevenue)}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 rounded-2xl border border-border bg-card/60 p-4">
-                  <TrendingUp className="h-5 w-5 text-[#E5D3B3]" />
+                  <TrendingUp className="h-5 w-5 text-[#2F80ED]" />
                   <div>
                     <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Средняя загрузка</p>
                     <p className="text-lg font-semibold text-foreground">{averageOccupancy}%</p>
                   </div>
                 </div>
-                <div className="rounded-2xl border border-[#E5D3B3]/25 bg-[#E5D3B3]/10 p-4">
-                  <p className="text-xs uppercase tracking-[0.18em] text-[#E5D3B3]">Пик периода</p>
+                <div className="rounded-2xl border border-[#2F80ED]/25 bg-[#2F80ED]/10 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-[#2F80ED]">Пик периода</p>
                   <p className="mt-2 text-sm leading-6 text-foreground">
                     {peakMonth ? `Максимальная расчётная загрузка ${peakMonth.occupancy}% пришлась на ${peakMonth.label}.` : "Первые реальные брони покажут динамику автоматически."}
                   </p>
@@ -361,7 +361,7 @@ export default function DashboardPage() {
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Последние брони</p>
               <h2 className="mt-2 text-xl font-semibold tracking-[-0.04em] text-foreground">Живая лента заявок</h2>
             </div>
-            <span className="rounded-full border border-[#E5D3B3]/25 bg-[#E5D3B3]/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#E5D3B3]">
+            <span className="rounded-full border border-[#2F80ED]/25 bg-[#2F80ED]/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#2F80ED]">
               {recentBookings.length ? `${recentBookings.length} записей` : "Нет данных"}
             </span>
           </div>

@@ -45,29 +45,29 @@
 }
 
 :root {
-  --background: oklch(0.982 0.006 95);
-  --foreground: oklch(0.192 0.012 264);
-  --card: oklch(1 0 0 / 0.82);
-  --card-foreground: oklch(0.192 0.012 264);
-  --popover: oklch(1 0 0 / 0.92);
-  --popover-foreground: oklch(0.192 0.012 264);
-  --primary: oklch(0.228 0.017 262);
-  --primary-foreground: oklch(0.982 0.006 95);
-  --secondary: oklch(0.955 0.01 95);
-  --secondary-foreground: oklch(0.22 0.015 264);
-  --muted: oklch(0.968 0.006 95);
-  --muted-foreground: oklch(0.52 0.015 264);
-  --accent: oklch(0.952 0.011 95);
-  --accent-foreground: oklch(0.2 0.015 264);
-  --destructive: oklch(0.62 0.22 25);
-  --destructive-foreground: oklch(0.982 0.006 95);
-  --border: oklch(0.87 0.01 95 / 0.78);
-  --input: oklch(0.9 0.008 95 / 0.8);
-  --ring: oklch(0.82 0.05 85);
-  --crm-gold: oklch(0.72 0.09 78);
-  --crm-gold-border: oklch(0.84 0.05 84 / 0.78);
-  --crm-gold-surface: oklch(0.94 0.02 90 / 0.72);
-  --brand-shadow: 0 28px 80px rgba(20, 18, 13, 0.12);
+  --background:#F6F8F5;
+  --foreground:#17211B;
+  --card:rgb(255 255 255 / 0.92);
+  --card-foreground:#17211B;
+  --popover:rgb(255 255 255 / 0.96);
+  --popover-foreground:#17211B;
+  --primary:#2F80ED;
+  --primary-foreground:#FFFFFF;
+  --secondary:#F3F7F2;
+  --secondary-foreground:#17211B;
+  --muted:#F0F4EF;
+  --muted-foreground:#6B746D;
+  --accent:#EEF5FF;
+  --accent-foreground:#17211B;
+  --destructive:#D94A4A;
+  --destructive-foreground:#FFFFFF;
+  --border:#E3E8E1;
+  --input:#DDE5DB;
+  --ring:#2F80ED;
+  --crm-gold:#2F80ED;
+  --crm-gold-border:rgb(47 128 237 / 0.24);
+  --crm-gold-surface:rgb(47 128 237 / 0.10);
+  --brand-shadow:0 18px 46px rgba(33,49,40,0.10);
 }
 
 .dark {
@@ -151,8 +151,8 @@
 @layer components {
   .crm-ambient {
     background:
-      radial-gradient(circle at top, rgba(229, 211, 179, 0.13), transparent 24%),
-      radial-gradient(circle at bottom right, rgba(96, 165, 250, 0.12), transparent 30%);
+      radial-gradient(circle at top left, rgba(47,128,237,0.08), transparent 28%),
+      linear-gradient(180deg, #F8FBF7 0%, #F6F8F5 100%);
   }
 
   .glass-card {
@@ -162,19 +162,19 @@
   }
 
   .soft-input {
-    @apply w-full min-w-0 rounded-2xl border border-input bg-background/80 px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground transition focus:border-[#E5D3B3]/55 focus:outline-none focus:ring-2 focus:ring-[#E5D3B3]/35;
+    @apply w-full min-w-0 rounded-2xl border border-input bg-white px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground transition focus:border-blue-500/55 focus:outline-none focus:ring-2 focus:ring-blue-500/20;
   }
 
   .soft-button {
-    @apply inline-flex items-center justify-center rounded-2xl border border-border bg-background/75 px-4 py-3 text-sm font-medium text-foreground transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5D3B3]/60 active:scale-[0.99];
+    @apply inline-flex items-center justify-center rounded-2xl border border-border bg-white px-4 py-3 text-sm font-medium text-foreground transition hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 active:scale-[0.99];
   }
 
   .brand-button {
-    @apply inline-flex items-center justify-center rounded-2xl bg-foreground px-5 py-3 text-sm font-semibold text-background transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5D3B3]/60 active:scale-[0.99];
+    @apply inline-flex items-center justify-center rounded-2xl bg-blue-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 active:scale-[0.99];
   }
 
   .brand-outline {
-    @apply inline-flex items-center justify-center rounded-2xl border border-[#E5D3B3]/30 bg-[#E5D3B3]/10 px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-[#E5D3B3]/16 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#E5D3B3]/60;
+    @apply inline-flex items-center justify-center rounded-2xl border border-blue-500/25 bg-blue-500/10 px-4 py-2.5 text-sm font-medium text-foreground transition hover:bg-blue-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30;
   }
 
   .admin-card {

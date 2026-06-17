@@ -11,7 +11,7 @@ import { fetchCrmCamps, fetchCrmGuests, type CrmCamp, type CrmGuest } from "../s
 const guestStatusClasses = {
   Новый: "border-slate-500/20 bg-slate-500/10 text-slate-300",
   Постоянный: "border-sky-500/20 bg-sky-500/10 text-sky-300",
-  VIP: "border-[#E5D3B3]/25 bg-[#E5D3B3]/10 text-[#E5D3B3]",
+  VIP: "border-[#2F80ED]/25 bg-[#2F80ED]/10 text-[#2F80ED]",
 } as const;
 
 const bookingStatusLabels: Record<string, string> = {
@@ -169,7 +169,7 @@ export default function GuestsPage() {
           </select>
 
           <button type="button" className="soft-button w-full gap-2 self-start sm:w-auto" onClick={() => setReloadKey((value) => value + 1)}>
-            <Filter className="h-4 w-4 text-[#E5D3B3]" />
+            <Filter className="h-4 w-4 text-[#2F80ED]" />
             Обновить
           </button>
         </div>
@@ -195,11 +195,11 @@ export default function GuestsPage() {
                     <p className="truncate text-sm font-semibold text-foreground">{guest.name}</p>
                     <div className="mt-2 flex flex-col gap-1 text-xs text-muted-foreground">
                       <span className="inline-flex items-center gap-1.5">
-                        <Phone className="h-3.5 w-3.5 text-[#E5D3B3]" />
+                        <Phone className="h-3.5 w-3.5 text-[#2F80ED]" />
                         {guest.phone || "Телефон не указан"}
                       </span>
                       <span className="inline-flex items-center gap-1.5 break-all">
-                        <Mail className="h-3.5 w-3.5 shrink-0 text-[#E5D3B3]" />
+                        <Mail className="h-3.5 w-3.5 shrink-0 text-[#2F80ED]" />
                         {guest.email || "Эл. почта не указана"}
                       </span>
                     </div>
@@ -262,11 +262,11 @@ export default function GuestsPage() {
                         <div className="text-sm font-medium text-foreground">{guest.name}</div>
                         <div className="flex flex-col gap-1 text-xs text-muted-foreground md:flex-row md:gap-4">
                           <span className="inline-flex items-center gap-1.5">
-                            <Phone className="h-3.5 w-3.5 text-[#E5D3B3]" />
+                            <Phone className="h-3.5 w-3.5 text-[#2F80ED]" />
                             {guest.phone || "Телефон не указан"}
                           </span>
                           <span className="inline-flex items-center gap-1.5">
-                            <Mail className="h-3.5 w-3.5 text-[#E5D3B3]" />
+                            <Mail className="h-3.5 w-3.5 text-[#2F80ED]" />
                             {guest.email || "Эл. почта не указана"}
                           </span>
                         </div>

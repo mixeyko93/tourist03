@@ -12,7 +12,7 @@ export function SectionHeading({ eyebrow, title, description, actions }: Section
     <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
       <div className="space-y-2">
         {eyebrow ? (
-          <span className="inline-flex rounded-full border border-[#E5D3B3]/25 bg-card/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-[#E5D3B3] shadow-sm">
+          <span className="inline-flex rounded-full border border-[#2F80ED]/25 bg-card/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-[#2F80ED] shadow-sm">
             {eyebrow}
           </span>
         ) : null}

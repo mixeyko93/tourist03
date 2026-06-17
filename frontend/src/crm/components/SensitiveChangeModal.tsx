@@ -75,8 +75,8 @@ export function SensitiveChangeModal({
         </label>
 
         {loading ? (
-          <div className="flex items-center gap-3 rounded-2xl border border-[#E5D3B3]/20 bg-[#E5D3B3]/10 px-4 py-3 text-sm text-foreground">
-            <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-[#E5D3B3]" />
+          <div className="flex items-center gap-3 rounded-2xl border border-[#2F80ED]/20 bg-[#2F80ED]/10 px-4 py-3 text-sm text-foreground">
+            <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-[#2F80ED]" />
             <span>{loadingText}</span>
           </div>
         ) : null}
@@ -87,7 +87,7 @@ export function SensitiveChangeModal({
           </button>
           <button
             type="button"
-            className="soft-button justify-center border-[#E5D3B3]/30 bg-[#E5D3B3]/10 px-4 py-2.5 text-sm text-foreground hover:bg-[#E5D3B3]/18"
+            className="soft-button justify-center border-[#2F80ED]/30 bg-[#2F80ED]/10 px-4 py-2.5 text-sm text-foreground hover:bg-[#2F80ED]/18"
             onClick={() => submitWithComment("confirm")}
             disabled={loading}
           >

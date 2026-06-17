@@ -94,7 +94,7 @@ export function MediaEditorSection({
               <img src={photo} alt={`Фото ${index + 1}`} className="h-full w-full object-cover" />
               {index === 0 ? (
                 <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-card/85 px-2 py-1 text-[11px] font-semibold text-foreground">
-                  <Star className="h-3 w-3 text-[#E5D3B3]" />
+                  <Star className="h-3 w-3 text-[#2F80ED]" />
                   Обложка
                 </span>
               ) : null}
@@ -126,14 +126,14 @@ export function MediaEditorSection({
           <div className="flex gap-2">
             <button
               type="button"
-              className={`rounded-2xl border px-3 py-2 text-sm font-medium transition ${videoSourceKind === "upload" ? "border-[#E5D3B3]/40 bg-[#E5D3B3]/12 text-foreground" : "border-border bg-background/70 text-muted-foreground hover:bg-accent hover:text-foreground"}`}
+              className={`rounded-2xl border px-3 py-2 text-sm font-medium transition ${videoSourceKind === "upload" ? "border-[#2F80ED]/40 bg-[#2F80ED]/12 text-foreground" : "border-border bg-background/70 text-muted-foreground hover:bg-accent hover:text-foreground"}`}
               onClick={() => onVideoSourceKindChange("upload")}
             >
               Файл
             </button>
             <button
               type="button"
-              className={`rounded-2xl border px-3 py-2 text-sm font-medium transition ${videoSourceKind === "external" ? "border-[#E5D3B3]/40 bg-[#E5D3B3]/12 text-foreground" : "border-border bg-background/70 text-muted-foreground hover:bg-accent hover:text-foreground"}`}
+              className={`rounded-2xl border px-3 py-2 text-sm font-medium transition ${videoSourceKind === "external" ? "border-[#2F80ED]/40 bg-[#2F80ED]/12 text-foreground" : "border-border bg-background/70 text-muted-foreground hover:bg-accent hover:text-foreground"}`}
               onClick={() => onVideoSourceKindChange("external")}
             >
               Ссылка
@@ -157,7 +157,7 @@ export function MediaEditorSection({
               <video ref={videoPreviewRef} src={videoUrl} poster={videoPosterUrl || undefined} className="max-h-72 w-full rounded-2xl bg-black object-contain" controls preload="metadata" />
             ) : videoSourceKind === "external" && videoUrl ? (
               <div className="flex min-h-48 flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-border bg-background/70 px-5 py-6 text-center">
-                <Clapperboard className="h-8 w-8 text-[#E5D3B3]" />
+                <Clapperboard className="h-8 w-8 text-[#2F80ED]" />
                 <a href={videoUrl} target="_blank" rel="noreferrer" className="text-sm font-medium text-foreground underline underline-offset-4">
                   Открыть источник видео
                 </a>

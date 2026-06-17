@@ -539,7 +539,7 @@ function ShiftDateField({ label, value, min, open, onToggle, onClose, onChange, 
                   disabled={isDisabled}
                   className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold transition mx-auto ${
                     isSelected
-                      ? "bg-[#E5D3B3] text-slate-900"
+                      ? "bg-[#2F80ED] text-slate-900"
                       : isCurrentMonth
                         ? "text-white hover:bg-white/15"
                         : "text-white/25 hover:bg-white/8"
@@ -2012,7 +2012,7 @@ export default function ShiftsPage() {
           <div className="grid gap-4 xl:grid-cols-3 xl:items-stretch">
             <section className="glass-card flex min-h-[172px] flex-col p-4">
               <div className="flex items-start gap-2 text-sm font-medium text-foreground">
-                <UserRoundCheck className="h-4 w-4 text-[#E5D3B3]" />
+                <UserRoundCheck className="h-4 w-4 text-[#2F80ED]" />
                 Кто сейчас на смене
               </div>
               {visibleActiveRules.length ? (
@@ -2038,7 +2038,7 @@ export default function ShiftsPage() {
 
             <section className="glass-card flex min-h-[172px] flex-col p-4">
               <div className="flex items-start gap-2 text-sm font-medium text-foreground">
-                <AlarmClockCheck className="h-4 w-4 text-[#E5D3B3]" />
+                <AlarmClockCheck className="h-4 w-4 text-[#2F80ED]" />
                 Следующая смена
               </div>
               {nextRule ? (
@@ -2069,7 +2069,7 @@ export default function ShiftsPage() {
                 <PencilLine className="h-2.5 w-2.5" />
               </button>
               <div className="flex items-start gap-2 pr-14 text-sm font-medium text-foreground">
-                  <Clock3 className="h-4 w-4 text-[#E5D3B3]" />
+                  <Clock3 className="h-4 w-4 text-[#2F80ED]" />
                   <span className="whitespace-nowrap">Время реакции обработки брони</span>
               </div>
               <div className="mt-3 grid gap-3 rounded-3xl border border-border bg-white/92 p-3 text-sm text-muted-foreground dark:bg-background/65 sm:grid-cols-2">
@@ -2127,7 +2127,7 @@ export default function ShiftsPage() {
                     onClick={() => setViewMode("month")}
                     className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
                       viewMode === "month"
-                        ? "border border-[#D6BE8C] bg-[#FFF5DF] text-[#8E6E2C] dark:border-[#E5D3B3]/25 dark:bg-[#E5D3B3]/10 dark:text-foreground"
+                        ? "border border-[#2F80ED] bg-[#EEF5FF] text-[#226ED1] dark:border-[#2F80ED]/25 dark:bg-[#2F80ED]/10 dark:text-foreground"
                         : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
@@ -2138,7 +2138,7 @@ export default function ShiftsPage() {
                     onClick={() => setViewMode("week")}
                     className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
                       viewMode === "week"
-                        ? "border border-[#D6BE8C] bg-[#FFF5DF] text-[#8E6E2C] dark:border-[#E5D3B3]/25 dark:bg-[#E5D3B3]/10 dark:text-foreground"
+                        ? "border border-[#2F80ED] bg-[#EEF5FF] text-[#226ED1] dark:border-[#2F80ED]/25 dark:bg-[#2F80ED]/10 dark:text-foreground"
                         : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
@@ -2160,7 +2160,7 @@ export default function ShiftsPage() {
                   <span
                     className={`relative h-6 w-11 rounded-full border transition-colors duration-300 ${
                       showShiftTimes
-                        ? "border-[#D6BE8C] bg-[#FFF5DF] dark:border-[#E5D3B3]/30 dark:bg-[#E5D3B3]/10"
+                        ? "border-[#2F80ED] bg-[#EEF5FF] dark:border-[#2F80ED]/30 dark:bg-[#2F80ED]/10"
                         : "border-border bg-background/70"
                     }`}
                   >
@@ -2213,7 +2213,7 @@ export default function ShiftsPage() {
                         getProductionDayTone(date) === "holiday"
                           ? "bg-rose-50/85 dark:bg-rose-500/10"
                           : getProductionDayTone(date) === "weekend"
-                            ? "bg-[#FFF8EE]/85 dark:bg-[#E5D3B3]/6"
+                            ? "bg-[#FFF8EE]/85 dark:bg-[#2F80ED]/6"
                             : ""
                       } ${isToday ? "relative bg-sky-50/85 shadow-[inset_0_0_0_2px_rgba(14,165,233,0.55)] dark:bg-sky-400/10 dark:shadow-[inset_0_0_0_2px_rgba(125,211,252,0.45)]" : ""}`}
                     >
@@ -2248,7 +2248,7 @@ export default function ShiftsPage() {
                               getProductionDayTone(date) === "holiday"
                                 ? "bg-rose-50/65 dark:bg-rose-500/6"
                                 : getProductionDayTone(date) === "weekend"
-                                  ? "bg-[#FFF8EE]/65 dark:bg-[#E5D3B3]/4"
+                                  ? "bg-[#FFF8EE]/65 dark:bg-[#2F80ED]/4"
                                   : ""
                             } ${isToday ? "bg-sky-50/55 shadow-[inset_0_0_0_1px_rgba(14,165,233,0.35)] dark:bg-sky-400/7 dark:shadow-[inset_0_0_0_1px_rgba(125,211,252,0.28)]" : ""}`}
                           >
@@ -2261,7 +2261,7 @@ export default function ShiftsPage() {
                                         type="button"
                                         data-shift-cell="true"
                                         data-shift-interactive="true"
-                                        className={`relative flex h-full w-full items-center justify-center overflow-visible border border-[#D6BE8C]/55 bg-[#FBF3E4] text-center shadow-sm transition-[background-color,border-color,min-height,padding,opacity,transform,border-radius] duration-300 ease-out hover:bg-[#F6ECD8] dark:border-[#E5D3B3]/22 dark:bg-[#E5D3B3]/10 dark:hover:bg-[#E5D3B3]/16 ${shouldShowShiftTimes ? "min-h-[24px] rounded-xl px-2 py-0.5" : "min-h-[16px] rounded-lg px-1 py-0"}`}
+                                        className={`relative flex h-full w-full items-center justify-center overflow-visible border border-[#2F80ED]/55 bg-[#FBF3E4] text-center shadow-sm transition-[background-color,border-color,min-height,padding,opacity,transform,border-radius] duration-300 ease-out hover:bg-[#F6ECD8] dark:border-[#2F80ED]/22 dark:bg-[#2F80ED]/10 dark:hover:bg-[#2F80ED]/16 ${shouldShowShiftTimes ? "min-h-[24px] rounded-xl px-2 py-0.5" : "min-h-[16px] rounded-lg px-1 py-0"}`}
                                         onMouseEnter={(event) => {
                                           if (rule.comment) {
                                             const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
@@ -2294,7 +2294,7 @@ export default function ShiftsPage() {
                                           openCellModal(member, date, rule);
                                         }}
                                       >
-                                        {rule.comment && rule.comment_date === dateKey ? <span className="absolute -left-1 -top-1 z-10 h-3 w-3 rounded-full bg-[#E5D3B3] shadow-[0_0_0_2px_rgba(15,23,42,0.7)]" /> : null}
+                                        {rule.comment && rule.comment_date === dateKey ? <span className="absolute -left-1 -top-1 z-10 h-3 w-3 rounded-full bg-[#2F80ED] shadow-[0_0_0_2px_rgba(15,23,42,0.7)]" /> : null}
                                         {shouldShowShiftTimes ? (
                                           <span className="flex min-w-0 items-center gap-0.5 overflow-hidden text-[0.75rem] font-semibold tracking-[-0.02em] text-foreground transition-opacity duration-200">
                                             <span className="truncate">{getShiftCellLabel(rule, dateKey)}</span>
@@ -2327,7 +2327,7 @@ export default function ShiftsPage() {
                                   type="button"
                                   aria-label="Добавить ещё один период"
                                   data-shift-no-drag="true"
-                                  className="pointer-events-none absolute -bottom-1 -right-1 z-20 flex h-4 w-4 items-center justify-center rounded-full border border-[#D6BE8C]/60 bg-background text-xs font-semibold text-[#C6A163] opacity-0 shadow-md transition group-hover:pointer-events-auto group-hover:opacity-95 hover:bg-[#FFF5E5] dark:bg-[#11151d] dark:text-[#E5D3B3]"
+                                  className="pointer-events-none absolute -bottom-1 -right-1 z-20 flex h-4 w-4 items-center justify-center rounded-full border border-[#2F80ED]/60 bg-background text-xs font-semibold text-[#C6A163] opacity-0 shadow-md transition group-hover:pointer-events-auto group-hover:opacity-95 hover:bg-[#FFF5E5] dark:bg-[#11151d] dark:text-[#2F80ED]"
                                   onPointerDown={(event) => {
                                     event.stopPropagation();
                                   }}
@@ -2346,7 +2346,7 @@ export default function ShiftsPage() {
                                 type="button"
                                 data-shift-cell="true"
                                 data-shift-interactive="true"
-                                className={`flex h-full w-full items-center justify-center border border-dashed border-[#D6BE8C]/75 bg-white/82 text-center text-xs leading-5 text-[#C6A163] shadow-sm transition-[background-color,border-color,min-height,padding,opacity,transform,border-radius] duration-300 ease-out hover:border-[#C7A25A]/80 hover:bg-[#FFF5E5] hover:text-[#8E6E2C] dark:border-border/70 dark:bg-background/35 dark:text-muted-foreground dark:hover:border-[#E5D3B3]/30 dark:hover:bg-background/55 dark:hover:text-foreground ${shouldShowShiftTimes ? "min-h-[24px] rounded-lg px-2" : "min-h-[16px] rounded-md px-1"}`}
+                                className={`flex h-full w-full items-center justify-center border border-dashed border-[#2F80ED]/75 bg-white/82 text-center text-xs leading-5 text-[#C6A163] shadow-sm transition-[background-color,border-color,min-height,padding,opacity,transform,border-radius] duration-300 ease-out hover:border-[#C7A25A]/80 hover:bg-[#FFF5E5] hover:text-[#226ED1] dark:border-border/70 dark:bg-background/35 dark:text-muted-foreground dark:hover:border-[#2F80ED]/30 dark:hover:bg-background/55 dark:hover:text-foreground ${shouldShowShiftTimes ? "min-h-[24px] rounded-lg px-2" : "min-h-[16px] rounded-md px-1"}`}
                                 onClick={() => {
                                   if (Date.now() < suppressGridClickUntilRef.current) {
                                     return;
@@ -2354,7 +2354,7 @@ export default function ShiftsPage() {
                                   void handleQuickAssign(member, date);
                                 }}
                               >
-                                <span className="text-base leading-none text-[#C6A163] dark:text-[#E5D3B3]">+</span>
+                                <span className="text-base leading-none text-[#C6A163] dark:text-[#2F80ED]">+</span>
                               </button>
                             )}
                           </div>
@@ -2387,7 +2387,7 @@ export default function ShiftsPage() {
                 >
                   <div
                     data-thumb="true"
-                    className="absolute top-1/2 h-2 -translate-y-1/2 rounded-full bg-gradient-to-r from-[#C6A163]/70 via-sky-400/40 to-[#C6A163]/70 shadow-[0_0_0_1px_rgba(17,24,39,0.16)] transition-[opacity,box-shadow] duration-200 hover:shadow-[0_0_0_1px_rgba(17,24,39,0.28)] dark:from-[#E5D3B3]/55 dark:via-sky-400/35 dark:to-[#E5D3B3]/55"
+                    className="absolute top-1/2 h-2 -translate-y-1/2 rounded-full bg-gradient-to-r from-[#C6A163]/70 via-sky-400/40 to-[#C6A163]/70 shadow-[0_0_0_1px_rgba(17,24,39,0.16)] transition-[opacity,box-shadow] duration-200 hover:shadow-[0_0_0_1px_rgba(17,24,39,0.28)] dark:from-[#2F80ED]/55 dark:via-sky-400/35 dark:to-[#2F80ED]/55"
                     style={{ width: scrollThumbWidth, left: scrollThumbOffset }}
                   />
                 </div>
@@ -2423,7 +2423,7 @@ export default function ShiftsPage() {
                   getProductionDayTone(date) === "holiday"
                     ? "bg-rose-50/85 dark:bg-rose-500/10"
                     : getProductionDayTone(date) === "weekend"
-                      ? "bg-[#FFF8EE]/85 dark:bg-[#E5D3B3]/6"
+                      ? "bg-[#FFF8EE]/85 dark:bg-[#2F80ED]/6"
                       : ""
                 } ${isToday ? "relative bg-sky-50/85 shadow-[inset_0_0_0_2px_rgba(14,165,233,0.55)] dark:bg-sky-400/10 dark:shadow-[inset_0_0_0_2px_rgba(125,211,252,0.45)]" : ""}`}
               >
@@ -2455,7 +2455,7 @@ export default function ShiftsPage() {
                       getProductionDayTone(date) === "holiday"
                         ? "bg-rose-50/65 dark:bg-rose-500/6"
                         : getProductionDayTone(date) === "weekend"
-                          ? "bg-[#FFF8EE]/65 dark:bg-[#E5D3B3]/4"
+                          ? "bg-[#FFF8EE]/65 dark:bg-[#2F80ED]/4"
                           : ""
                     } ${isToday ? "bg-sky-50/55 shadow-[inset_0_0_0_1px_rgba(14,165,233,0.35)] dark:bg-sky-400/7 dark:shadow-[inset_0_0_0_1px_rgba(125,211,252,0.28)]" : ""}`}
                   >
@@ -2466,7 +2466,7 @@ export default function ShiftsPage() {
                             <button
                               type="button"
                               data-shift-cell="true"
-                              className="relative flex h-full min-h-[26px] w-full items-center justify-center overflow-visible rounded-lg border border-[#D6BE8C]/55 bg-[#FBF3E4] px-1 py-0.5 text-center shadow-sm transition hover:bg-[#F6ECD8] dark:border-[#E5D3B3]/22 dark:bg-[#E5D3B3]/10 dark:hover:bg-[#E5D3B3]/16"
+                              className="relative flex h-full min-h-[26px] w-full items-center justify-center overflow-visible rounded-lg border border-[#2F80ED]/55 bg-[#FBF3E4] px-1 py-0.5 text-center shadow-sm transition hover:bg-[#F6ECD8] dark:border-[#2F80ED]/22 dark:bg-[#2F80ED]/10 dark:hover:bg-[#2F80ED]/16"
                               onClick={() => {
                                 if (Date.now() < suppressGridClickUntilRef.current) {
                                   return;
@@ -2474,7 +2474,7 @@ export default function ShiftsPage() {
                                 openCellModal(member, date, rule);
                               }}
                             >
-                              {rule.comment && rule.comment_date === dateKey ? <span className="absolute -left-1 -top-1 z-10 h-3 w-3 rounded-full bg-[#E5D3B3] shadow-[0_0_0_2px_rgba(15,23,42,0.7)]" /> : null}
+                              {rule.comment && rule.comment_date === dateKey ? <span className="absolute -left-1 -top-1 z-10 h-3 w-3 rounded-full bg-[#2F80ED] shadow-[0_0_0_2px_rgba(15,23,42,0.7)]" /> : null}
                               <span className="text-[12px] font-semibold leading-[1rem] text-foreground">
                                 {formatShiftTime(rule.starts_at).replace(":", "")}
                                 <br />
@@ -2504,7 +2504,7 @@ export default function ShiftsPage() {
                           type="button"
                           aria-label="Добавить ещё один период"
                           data-shift-no-drag="true"
-                          className="pointer-events-none absolute -bottom-1 -right-1 z-20 flex h-4 w-4 items-center justify-center rounded-full border border-[#D6BE8C]/60 bg-background text-xs font-semibold text-[#C6A163] opacity-0 shadow-md transition group-hover:pointer-events-auto group-hover:opacity-95 hover:bg-[#FFF5E5] dark:bg-[#11151d] dark:text-[#E5D3B3]"
+                          className="pointer-events-none absolute -bottom-1 -right-1 z-20 flex h-4 w-4 items-center justify-center rounded-full border border-[#2F80ED]/60 bg-background text-xs font-semibold text-[#C6A163] opacity-0 shadow-md transition group-hover:pointer-events-auto group-hover:opacity-95 hover:bg-[#FFF5E5] dark:bg-[#11151d] dark:text-[#2F80ED]"
                           onPointerDown={(event) => {
                             event.stopPropagation();
                           }}
@@ -2522,7 +2522,7 @@ export default function ShiftsPage() {
                       <button
                         type="button"
                         data-shift-cell="true"
-                        className="flex h-full w-full items-center justify-center rounded-lg border border-dashed border-[#D6BE8C]/75 bg-white/82 px-1 text-center text-xs leading-5 text-[#C6A163] shadow-sm transition hover:border-[#C7A25A]/80 hover:bg-[#FFF5E5] hover:text-[#8E6E2C] dark:border-border/70 dark:bg-background/35 dark:text-muted-foreground dark:hover:border-[#E5D3B3]/30 dark:hover:bg-background/55 dark:hover:text-foreground"
+                        className="flex h-full w-full items-center justify-center rounded-lg border border-dashed border-[#2F80ED]/75 bg-white/82 px-1 text-center text-xs leading-5 text-[#C6A163] shadow-sm transition hover:border-[#C7A25A]/80 hover:bg-[#FFF5E5] hover:text-[#226ED1] dark:border-border/70 dark:bg-background/35 dark:text-muted-foreground dark:hover:border-[#2F80ED]/30 dark:hover:bg-background/55 dark:hover:text-foreground"
                         onClick={() => {
                           if (Date.now() < suppressGridClickUntilRef.current) {
                             return;
@@ -2530,7 +2530,7 @@ export default function ShiftsPage() {
                           void handleQuickAssign(member, date);
                         }}
                       >
-                        <span className="text-sm leading-none text-[#C6A163] dark:text-[#E5D3B3]">+</span>
+                        <span className="text-sm leading-none text-[#C6A163] dark:text-[#2F80ED]">+</span>
                       </button>
                     )}
                   </div>
