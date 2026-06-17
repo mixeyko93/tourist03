@@ -351,11 +351,246 @@ input[type=number]{ -moz-appearance:textfield }
 }
 html[data-theme="dark"] .nav-emoji:hover{ background:#141821; }
 
+/* Nature UI: light superadmin overrides */
+:root,
+html[data-theme="baikal"]{
+  --app-bg:#F6F8F5;
+  --card-bg:#FFFFFF;
+  --text-main:#17211B;
+  --text-muted:#6B746D;
+  --border:#E3E8E1;
+  --blue:#2F80ED;
+  --red:#D94A4A;
+  --success:#2E9D78;
+}
+html[data-theme="forest"]{--app-bg:#F4F7F1;--card-bg:#FFFFFF;--text-main:#152419;--text-muted:#677365;--border:#DFE7DD;--blue:#2E9D78;}
+html[data-theme="sand"]{--app-bg:#F8F6EF;--card-bg:#FFFFFF;--text-main:#241F18;--text-muted:#766E61;--border:#E8E0D2;--blue:#2F80ED;}
+html[data-theme="night"]{--app-bg:#111813;--card-bg:#172019;--text-main:#F3F7F1;--text-muted:#AAB5AD;--border:#2B382F;--blue:#69A7FF;}
+
+html,body{
+  background:var(--app-bg);
+  color:var(--text-main);
+}
+header{
+  background:rgba(255,255,255,.94);
+  border-bottom:1px solid var(--border);
+  box-shadow:0 8px 24px rgba(33,49,40,.08);
+  backdrop-filter:blur(14px);
+  -webkit-backdrop-filter:blur(14px);
+}
+.title{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  color:var(--text-main);
+  line-height:1.2;
+}
+.title-sub{
+  font-size:12px;
+  font-weight:500;
+  color:var(--text-muted);
+}
+.wrap{
+  max-width:1240px;
+  margin:20px auto;
+}
+.card{
+  background:var(--card-bg);
+  border-color:var(--border);
+  border-radius:14px;
+  box-shadow:0 12px 32px rgba(33,49,40,.08);
+}
+h3{color:var(--text-main);}
+.muted,
+.accounts-hint,
+.ca-camp-meta,
+.userhist-kv .k{
+  color:var(--text-muted);
+}
+.tabs{
+  background:#F3F7F2;
+  border:1px solid var(--border);
+  border-radius:999px;
+  padding:4px;
+}
+.tabs button{
+  border:0;
+  border-radius:999px;
+  background:transparent;
+  color:var(--text-muted);
+}
+.tabs button:hover{
+  background:#FFFFFF;
+  color:var(--text-main);
+}
+.tabs button.active{
+  background:var(--blue);
+  color:#FFFFFF;
+  box-shadow:0 8px 18px rgba(47,128,237,.20);
+}
+input,
+button,
+select,
+textarea,
+.cf-input,
+.room-row select{
+  background:#FFFFFF;
+  border-color:var(--border);
+  color:var(--text-main);
+}
+input:focus,
+select:focus,
+textarea:focus,
+.cf-input:focus{
+  outline:none;
+  border-color:rgba(47,128,237,.48);
+  box-shadow:0 0 0 4px rgba(47,128,237,.10);
+}
+button.primary,
+.button.primary{
+  background:var(--blue);
+  border-color:var(--blue);
+  color:#FFFFFF;
+  box-shadow:0 10px 22px rgba(47,128,237,.18);
+}
+button.primary:hover,
+.button.primary:hover{background:#226ED1;}
+.button,
+.btn-soft,
+.photo-ov .btn,
+.photo-ov-row .btn,
+.photo-star .btn,
+.room-photos .ov .btn,
+.room-photos .star .btn,
+.btn-photo,
+.info-btn{
+  background:#FFFFFF;
+  border-color:var(--border);
+  color:var(--text-main);
+  box-shadow:none;
+}
+.button:hover,
+.btn-soft:hover,
+.photo-ov .btn:hover,
+.photo-ov-row .btn:hover,
+.room-photos .ov .btn:hover,
+.btn-photo:hover,
+.info-btn:hover{
+  background:#F3F7F2;
+}
+button.danger,
+.button.danger{
+  background:#FFF7F7;
+  border-color:#F2C6C6;
+  color:var(--red);
+}
+.seg{
+  background:#F3F7F2;
+  border-color:var(--border);
+}
+.seg .seg-btn{
+  color:var(--text-muted);
+}
+.seg .seg-btn.active,
+#cf_status_seg .seg-btn[data-val="active"].active{
+  background:var(--blue);
+  border-color:var(--blue);
+  color:#FFFFFF;
+  box-shadow:none;
+}
+#cf_status_seg .seg-btn[data-val="disabled"].active{
+  background:#FFF4DD;
+  border-color:#F3D39B;
+  color:#7A4B00;
+}
+.emoji-picker .emoji{
+  background:#FFFFFF;
+  border-color:var(--border);
+}
+.emoji-picker .emoji.selected{
+  outline:3px solid rgba(47,128,237,.18);
+}
+.rooms-editor{border-top-color:var(--border);}
+.rooms-title{
+  color:var(--text-main);
+  border-top-color:var(--border);
+}
+.room-card,
+.room-photo-thumb,
+.room-photos .ph,
+.userhist-kv,
+#ca-camps-list,
+#ea-camps-list,
+.accounts-list{
+  background:#FFFFFF;
+  border-color:var(--border);
+}
+.ca-camp-item{
+  background:#F8FBF7;
+}
+.ca-camp-item:hover{border-color:rgba(47,128,237,.24);}
+.ca-camp-item span,
+.ca-camp-name{color:var(--text-main);}
+.accounts-modal{
+  background:rgba(23,33,27,.38);
+}
+.accounts-modal-card,
+.table-filter-pop{
+  background:#FFFFFF;
+  border-color:var(--border);
+  color:var(--text-main);
+  box-shadow:0 24px 70px rgba(33,49,40,.18);
+}
+th,
+html[data-theme="baikal"] th{
+  background:#F3F7F2;
+  color:var(--text-muted);
+}
+td,
+th,
+.accounts-table td,
+.accounts-table th,
+.userhist-table td,
+.userhist-table th{
+  border-bottom-color:var(--border);
+}
+table tbody tr:hover,
+#users_tbl tbody tr:hover,
+.accounts-table tbody tr:hover{
+  background:#F8FBF7;
+}
+.badge{
+  background:#F3F7F2;
+  border-color:var(--border);
+  color:var(--text-main);
+}
+.th-filter{
+  background:#FFFFFF;
+  border-color:var(--border);
+}
+.th-filter:hover{background:#F3F7F2;}
+.th-filter.active{
+  border-color:var(--blue);
+  color:var(--blue);
+}
+.table-filter-pop input{background:#FFFFFF;}
+.text-error{color:var(--red);}
+.nav-emoji:hover{background:#F3F7F2;}
+
+@media (max-width: 900px){
+  header{
+    align-items:flex-start;
+    flex-wrap:wrap;
+  }
+  .tabs{overflow:auto;max-width:100%;}
+  .tabs button{white-space:nowrap;}
+}
+
   </style>
 </head>
 <body>
 <header>
-  <div class="title">Туристика Admin. Управление базами, пользователями и каталогом</div>
+  <div class="title">Панель суперадминистратора<span class="title-sub">Управление базами, пользователями и учётными записями</span></div>
   <div style="margin-left:auto;display:flex;align-items:center;gap:14px;">
     <div class="tabs">
       <button id="tab_camps" class="active">Базы и номера</button>
@@ -364,9 +599,9 @@ html[data-theme="dark"] .nav-emoji:hover{ background:#141821; }
       <button id="tab_archive">Архив</button>
     </div>
 <script>
-  // фиксируем только тёмную тему
-  document.documentElement.setAttribute('data-theme','dark');
-  try { localStorage.setItem('sa_theme','dark'); } catch(_) {}
+  // фиксируем светлую тему Nature UI
+  document.documentElement.setAttribute('data-theme','baikal');
+  try { localStorage.setItem('sa_theme','baikal'); } catch(_) {}
 </script>
     <button id="superadmin-logout-btn" type="button" class="button btn-soft hidden">Выйти</button>
   </div>
