@@ -2788,7 +2788,7 @@ function openEmptyBookingConfirmationModal(opts = {}){
 
   const dateText = `${fmtDateRu(f.from)} → ${fmtDateRu(f.to)}`;
   const hintText = isBookingFilterReady(f)
-    ? 'Теперь выберите базу отдыха на карте и нажмите «Забронировать».'
+    ? 'Выберите базу на карте, затем нажмите «Забронировать».'
     : '';
 
   const shell = document.getElementById('modalCard');
@@ -2797,7 +2797,7 @@ function openEmptyBookingConfirmationModal(opts = {}){
   showModal(`
 	    <div class="alloc-card">
       <div class="accom-head">
-        <div class="accom-title">Лист бронирования</div>
+        <div class="accom-title">Бронирование</div>
       </div>
 
       <button type="button" class="bk-input bk-input-inline confirm-dates-btn" id="confirmEditDates">
@@ -2812,7 +2812,7 @@ function openEmptyBookingConfirmationModal(opts = {}){
       <button class="button alloc-cta alloc-cta--soft alloc-autopick" id="confirmAutoPick">Подбор апартаментов для вас</button>
 
       <div class="alloc-actions is-row">
-        <button class="button ghost alloc-cta alloc-cta--ghost" id="confirmBack">Закрыть корзину</button>
+        <button class="button ghost alloc-cta alloc-cta--ghost" id="confirmBack">Закрыть</button>
         <button class="button alloc-cta alloc-cta--primary is-disabled" id="confirmSubmit" aria-disabled="true">Забронировать</button>
       </div>
     </div>
@@ -6197,7 +6197,7 @@ function setupBookingFilterElements(container, opts, isBooking, titleText) {
       if (kindEl) {
         setTitle(step === 'from'
           ? 'Выберите дату заезда'
-          : (step === 'to' ? 'Выберите дату выезда' : 'Выбранный период проживания'));
+          : (step === 'to' ? 'Выберите дату выезда' : 'Период проживания'));
       }
       updateActions();
 
@@ -7141,7 +7141,7 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
   showModal(`
 	      <div class="alloc-card">
 	      <div class="accom-head accom-head--booking">
-	        <div class="accom-title">Лист бронирования</div>
+	        <div class="accom-title">Бронирование</div>
           ${camp?.name ? `<div class="accom-sub confirm-sheet-camp">${escapeHtml(String(camp.name))}</div>` : ''}
 	      </div>
 
@@ -7168,7 +7168,7 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
       </div>
 
       <div class="alloc-actions is-row">
-        <button class="button ghost alloc-cta alloc-cta--ghost" id="confirmBack">Закрыть корзину</button>
+        <button class="button ghost alloc-cta alloc-cta--ghost" id="confirmBack">Закрыть</button>
         <button class="button alloc-cta alloc-cta--primary" id="confirmSubmit">Забронировать</button>
       </div>
     </div>
