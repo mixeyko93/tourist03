@@ -45,6 +45,29 @@
 }
 
 :root {
+  --font-main: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  --text-main:#17211B;
+  --text-secondary:#46524A;
+  --text-muted:#6B746D;
+  --text-soft:#8A938B;
+  --text-disabled:#B7BFB8;
+  --text-on-primary:#FFFFFF;
+  --font-size-xs:12px;
+  --font-size-sm:13px;
+  --font-size-md:14px;
+  --font-size-base:15px;
+  --font-size-lg:17px;
+  --font-size-xl:20px;
+  --font-size-2xl:24px;
+  --font-size-3xl:32px;
+  --line-height-tight:1.15;
+  --line-height-normal:1.4;
+  --line-height-relaxed:1.55;
+  --font-weight-regular:400;
+  --font-weight-medium:500;
+  --font-weight-semibold:600;
+  --font-weight-bold:700;
+  --font-weight-black:800;
   --background:#F6F8F5;
   --foreground:#17211B;
   --card:rgb(255 255 255 / 0.92);
@@ -71,6 +94,11 @@
 }
 
 .dark {
+  --text-main:#F3F5F1;
+  --text-secondary:#D7DDD5;
+  --text-muted:#A8B0A8;
+  --text-soft:#838C85;
+  --text-disabled:#5E675F;
   --background: oklch(0.16 0.015 264);
   --foreground: oklch(0.97 0.005 95);
   --card: oklch(0.22 0.018 264 / 0.74);
@@ -94,6 +122,14 @@
   --crm-gold-border: oklch(0.72 0.03 84 / 0.46);
   --crm-gold-surface: oklch(0.3 0.02 264 / 0.34);
   --brand-shadow: 0 28px 90px rgba(0, 0, 0, 0.42);
+}
+
+html[data-theme="night"] {
+  --text-main:#F3F5F1;
+  --text-secondary:#D7DDD5;
+  --text-muted:#A8B0A8;
+  --text-soft:#838C85;
+  --text-disabled:#5E675F;
 }
 
 @theme inline {
@@ -138,6 +174,9 @@
     overflow-x: hidden;
     scrollbar-gutter: stable both-edges;
     -webkit-text-size-adjust: 100%;
+    font-family: var(--font-main);
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-normal);
   }
 
   button,
@@ -334,4 +373,116 @@
   .dark .crm-gold-badge {
     text-shadow: none;
   }
+}
+
+/* ===== Readability overrides for React CRM/Admin ===== */
+:where(.glass-card, .admin-card, .modal-card, .crm-ambient, main, header){
+  color:var(--text-main);
+}
+
+:where(h1, h2, h3, .admin-card h1, .admin-card h2, .glass-card h1, .glass-card h2){
+  color:var(--text-main) !important;
+  font-weight:var(--font-weight-black) !important;
+  line-height:var(--line-height-tight) !important;
+  letter-spacing:0 !important;
+}
+
+:where(p, li, dd, td){
+  color:inherit;
+}
+
+.text-muted-foreground,
+:where(.admin-card, .glass-card, .crm-ambient) :where(p.text-muted-foreground, span.text-muted-foreground, div.text-muted-foreground){
+  color:var(--text-muted) !important;
+}
+
+:where(.admin-card, .glass-card, .crm-ambient) p:not([class*="text-"]){
+  color:var(--text-secondary);
+}
+
+:where(label, .admin-field, .admin-card label, .glass-card label) span,
+.admin-table th,
+[class*="uppercase"][class*="tracking-"]{
+  color:#5E6A62 !important;
+  font-size:var(--font-size-xs);
+  font-weight:var(--font-weight-bold);
+  letter-spacing:.04em !important;
+}
+
+:where(input, textarea, select, .admin-input, .soft-input){
+  color:var(--text-main) !important;
+  font-size:var(--font-size-base);
+  font-weight:var(--font-weight-medium);
+}
+
+:where(input, textarea)::placeholder,
+.admin-input::placeholder,
+.soft-input::placeholder{
+  color:var(--text-soft) !important;
+  opacity:1 !important;
+}
+
+:where(button, .admin-button, .admin-primary-button, .brand-button, .brand-outline, .soft-button){
+  font-size:var(--font-size-md);
+  font-weight:var(--font-weight-bold);
+  line-height:1;
+}
+
+:where(.admin-primary-button, .brand-button, button.bg-blue-500){
+  color:var(--text-on-primary) !important;
+}
+
+:where(.admin-button, .soft-button, .brand-outline){
+  color:var(--text-main) !important;
+}
+
+:where(button:disabled, input:disabled, select:disabled, textarea:disabled){
+  opacity:.72 !important;
+}
+
+:where(button:disabled){
+  color:var(--text-muted) !important;
+}
+
+.admin-table th{
+  color:#5E6A62 !important;
+  font-size:var(--font-size-xs);
+  font-weight:var(--font-weight-bold);
+  letter-spacing:.04em !important;
+}
+
+.admin-table td{
+  color:#25322A !important;
+  font-size:var(--font-size-md);
+  font-weight:var(--font-weight-medium);
+}
+
+.admin-table td .text-muted-foreground,
+.admin-table td [class*="text-muted"]{
+  color:var(--text-muted) !important;
+  font-size:var(--font-size-sm);
+}
+
+:where(.text-rose-300, .text-rose-200){
+  color:#9A2D2D !important;
+}
+
+:where(.text-emerald-300, .text-emerald-400){
+  color:#1D6F53 !important;
+}
+
+:where(.text-sky-200, .text-sky-300){
+  color:#1F6FBF !important;
+}
+
+.crm-gold-tone,
+.crm-gold-badge{
+  color:var(--primary) !important;
+  text-shadow:none !important;
+}
+
+.crm-gold-badge{
+  border-color:rgb(47 128 237 / .28) !important;
+  background:rgb(47 128 237 / .10) !important;
+  font-weight:var(--font-weight-bold);
 }

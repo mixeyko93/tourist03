@@ -577,6 +577,120 @@ table tbody tr:hover,
 .text-error{color:var(--red);}
 .nav-emoji:hover{background:#F3F7F2;}
 
+/* Readability typography */
+:root,
+html[data-theme="baikal"]{
+  --font-main:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+  --text-main:#17211B;
+  --text-secondary:#46524A;
+  --text-muted:#6B746D;
+  --text-soft:#8A938B;
+  --text-disabled:#B7BFB8;
+  --text-on-primary:#FFFFFF;
+  --font-size-xs:12px;
+  --font-size-sm:13px;
+  --font-size-md:14px;
+  --font-size-base:15px;
+  --font-size-lg:17px;
+  --font-size-xl:20px;
+  --font-size-2xl:24px;
+  --font-size-3xl:32px;
+  --line-height-tight:1.15;
+  --line-height-normal:1.4;
+  --line-height-relaxed:1.55;
+  --font-weight-medium:500;
+  --font-weight-semibold:600;
+  --font-weight-bold:700;
+  --font-weight-black:800;
+}
+html[data-theme="night"]{
+  --text-main:#F3F5F1;
+  --text-secondary:#D7DDD5;
+  --text-muted:#A8B0A8;
+  --text-soft:#838C85;
+  --text-disabled:#5E675F;
+}
+html,body{
+  font-family:var(--font-main);
+  font-size:var(--font-size-base);
+  line-height:var(--line-height-normal);
+}
+.title,
+h3,
+.accounts-modal-card h2,
+#cf_title,
+.rooms-title{
+  color:var(--text-main);
+  font-weight:var(--font-weight-black);
+  line-height:var(--line-height-tight);
+  letter-spacing:0;
+}
+.title-sub,
+.muted,
+.accounts-hint,
+.ca-camp-meta,
+.userhist-kv .k{
+  color:var(--text-muted) !important;
+  font-size:var(--font-size-sm);
+  font-weight:var(--font-weight-medium);
+  line-height:1.45;
+}
+label,
+.cf-field label{
+  color:#5E6A62;
+  font-size:var(--font-size-sm);
+  font-weight:var(--font-weight-semibold);
+}
+input,
+select,
+textarea,
+.cf-input{
+  color:var(--text-main);
+  font-size:var(--font-size-base);
+  font-weight:var(--font-weight-medium);
+}
+input::placeholder,
+textarea::placeholder{
+  color:var(--text-soft);
+  opacity:1;
+}
+button,
+.button,
+.tabs button{
+  font-size:var(--font-size-md);
+  font-weight:var(--font-weight-bold);
+  line-height:1;
+}
+button.primary,
+.button.primary,
+.tabs button.active{
+  color:var(--text-on-primary) !important;
+}
+button:not(.primary):not(.danger),
+.button:not(.primary):not(.danger){
+  color:var(--text-main);
+}
+th,
+.accounts-table th,
+.userhist-table th{
+  color:#5E6A62 !important;
+  font-size:var(--font-size-xs);
+  font-weight:var(--font-weight-bold);
+  letter-spacing:.04em;
+  text-transform:uppercase;
+}
+td,
+.accounts-table td,
+.userhist-table td{
+  color:#25322A;
+  font-size:var(--font-size-md);
+  font-weight:var(--font-weight-medium);
+}
+.badge{
+  color:var(--text-main);
+  font-weight:var(--font-weight-semibold);
+}
+
 @media (max-width: 900px){
   header{
     align-items:flex-start;
