@@ -87,23 +87,6 @@
     .ca-camp-meta{font-size:12px;color:#8a8f98;margin-top:2px}
     .text-error{color:#f87171;font-size:13px}
 
-    /* Тумблер темы */
-    .switch { position: relative; display: inline-block; width: 48px; height: 26px; }
-    .switch input { display:none; }
-    .slider { position:absolute; cursor:pointer; inset:0; background:#ddd; border-radius:999px; transition:.2s; }
-    .slider:before { content:""; position:absolute; height:20px; width:20px; left:3px; top:3px; background:white; border-radius:50%; transition:.2s; box-shadow:0 2px 6px rgba(0,0,0,.2);}
-    .switch input:checked + .slider { background:#0a84ff; }
-    .switch input:checked + .slider:before { transform: translateX(22px); }
-
-    /* Тёмная тема */
-    html[data-theme="dark"] body{background:#0f1216;color:#f2f4f7;}
-    html[data-theme="dark"] header{background:#111317;box-shadow:0 2px 12px rgba(0,0,0,.5);}
-    html[data-theme="dark"] .card{background:#171a21;border-color:#262a34;}
-    html[data-theme="dark"] th{background:#141821;color:#c9d1d9;}
-    html[data-theme="dark"] input,html[data-theme="dark"] button,html[data-theme="dark"] select{background:#0f1216;color:#f2f4f7;border-color:#2a2f3a;}
-    html[data-theme="dark"] .tabs button{background:#141821;border-color:#2a2f3a;color:#e6eaf0;}
-    html[data-theme="dark"] .tabs button.active{background:var(--blue);border-color:var(--blue);color:#fff;}
-
 /* ----- Форма базы ----- */
 .cf-grid{
   display:grid;
@@ -349,23 +332,26 @@ input[type=number]{ -moz-appearance:textfield }
   display:inline-flex; align-items:center; justify-content:center;
   padding:4px 6px; border-radius:8px;
 }
-html[data-theme="dark"] .nav-emoji:hover{ background:#141821; }
-
 /* Nature UI: light superadmin overrides */
-:root,
-html[data-theme="baikal"]{
-  --app-bg:#F6F8F5;
-  --card-bg:#FFFFFF;
+:root{
+  --app-bg:#F4F7F3;
+  --surface:#FFFFFF;
+  --surface-soft:#F8FAF7;
+  --surface-muted:#EEF3EE;
+  --card-bg:var(--surface);
   --text-main:#17211B;
-  --text-muted:#6B746D;
-  --border:#E3E8E1;
+  --text-secondary:#3F4A43;
+  --text-muted:#657067;
+  --text-soft:#8A938B;
+  --text-disabled:#B8C0B9;
+  --border:#DDE6DD;
+  --border-soft:#EBF0EA;
   --blue:#2F80ED;
-  --red:#D94A4A;
+  --red:#DC2626;
   --success:#2E9D78;
+  --success-hover:#247F62;
+  --shadow-soft:0 10px 28px rgba(23,33,27,.08);
 }
-html[data-theme="forest"]{--app-bg:#F4F7F1;--card-bg:#FFFFFF;--text-main:#152419;--text-muted:#677365;--border:#DFE7DD;--blue:#2E9D78;}
-html[data-theme="sand"]{--app-bg:#F8F6EF;--card-bg:#FFFFFF;--text-main:#241F18;--text-muted:#766E61;--border:#E8E0D2;--blue:#2F80ED;}
-html[data-theme="night"]{--app-bg:#111813;--card-bg:#172019;--text-main:#F3F7F1;--text-muted:#AAB5AD;--border:#2B382F;--blue:#69A7FF;}
 
 html,body{
   background:var(--app-bg);
@@ -541,8 +527,7 @@ button.danger,
   color:var(--text-main);
   box-shadow:0 24px 70px rgba(33,49,40,.18);
 }
-th,
-html[data-theme="baikal"] th{
+th{
   background:#F3F7F2;
   color:var(--text-muted);
 }
@@ -578,14 +563,13 @@ table tbody tr:hover,
 .nav-emoji:hover{background:#F3F7F2;}
 
 /* Readability typography */
-:root,
-html[data-theme="baikal"]{
+:root{
   --font-main:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
   --text-main:#17211B;
-  --text-secondary:#46524A;
-  --text-muted:#6B746D;
+  --text-secondary:#3F4A43;
+  --text-muted:#657067;
   --text-soft:#8A938B;
-  --text-disabled:#B7BFB8;
+  --text-disabled:#B8C0B9;
   --text-on-primary:#FFFFFF;
   --font-size-xs:12px;
   --font-size-sm:13px;
@@ -602,13 +586,6 @@ html[data-theme="baikal"]{
   --font-weight-semibold:600;
   --font-weight-bold:700;
   --font-weight-black:800;
-}
-html[data-theme="night"]{
-  --text-main:#F3F5F1;
-  --text-secondary:#D7DDD5;
-  --text-muted:#A8B0A8;
-  --text-soft:#838C85;
-  --text-disabled:#5E675F;
 }
 html,body{
   font-family:var(--font-main);
@@ -712,11 +689,6 @@ td,
       <button id="tab_accounts">Учётные записи</button>
       <button id="tab_archive">Архив</button>
     </div>
-<script>
-  // фиксируем светлую тему Nature UI
-  document.documentElement.setAttribute('data-theme','baikal');
-  try { localStorage.setItem('sa_theme','baikal'); } catch(_) {}
-</script>
     <button id="superadmin-logout-btn" type="button" class="button btn-soft hidden">Выйти</button>
   </div>
 </header>

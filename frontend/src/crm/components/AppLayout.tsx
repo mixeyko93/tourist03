@@ -1,7 +1,6 @@
-import { BellRing, KeyRound, Loader2, LogOut, Menu, MoonStar, ShieldCheck, SunMedium, UserCircle2, X } from "lucide-react";
+import { BellRing, KeyRound, Loader2, LogOut, Menu, ShieldCheck, UserCircle2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router";
-import { useTheme } from "next-themes";
 import {
   completeCrmProfilePinReset,
   fetchCrmEventCenterSummary,
@@ -43,8 +42,6 @@ function sanitizePin(value: string) {
 export default function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [session, setSession] = useState<CrmSession | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
@@ -73,7 +70,6 @@ export default function AppLayout() {
   useDocumentTitle(activeNavItem ? `${activeNavItem.label} — Туристика CRM` : "Туристика CRM");
 
   useEffect(() => {
-    setMounted(true);
     if (typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches) {
       setSidebarOpen(true);
     }
@@ -750,17 +746,6 @@ export default function AppLayout() {
         </div>
 
         <div className="flex min-w-0 items-center gap-3">
-          {mounted ? (
-            <button
-              type="button"
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-border bg-background/70 text-muted-foreground transition hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2F80ED]/60"
-              aria-label="Переключить тему"
-            >
-              {theme === "dark" ? <SunMedium className="h-5 w-5" /> : <MoonStar className="h-5 w-5" />}
-            </button>
-          ) : null}
-
           <NavLink
             to={crmPath("/events")}
             className={({ isActive }) =>

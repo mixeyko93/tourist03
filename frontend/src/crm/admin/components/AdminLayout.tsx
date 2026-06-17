@@ -1,7 +1,6 @@
-import { Link2, Moon, Sun } from "lucide-react";
+import { Link2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from "react-router";
-import { useTheme } from "next-themes";
 import { crmPath } from "../../paths";
 import { fetchSuperadminSession, issueSuperadminTelegramLink, logoutSuperadminSession, type SuperadminSessionResponse } from "../session";
 import { useDocumentTitle } from "../../components/useDocumentTitle";
@@ -23,8 +22,6 @@ const rootOnlyTabs = [
 export default function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
   const [authState, setAuthState] = useState<"loading" | "authenticated" | "unauthenticated">("loading");
   const [authError, setAuthError] = useState("");
   const [session, setSession] = useState<SuperadminSessionResponse | null>(null);
@@ -37,10 +34,6 @@ export default function AdminLayout() {
   const activeTab = adminTabs.find((item) => location.pathname === crmPath(item.path));
 
   useDocumentTitle(activeTab ? `${activeTab.label} — Туристика Admin` : "Туристика Admin");
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -110,16 +103,6 @@ export default function AdminLayout() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              {mounted ? (
-                <button
-                  type="button"
-                  onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-                  className="admin-icon-button"
-                  aria-label="Переключить тему"
-                >
-                  {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-                </button>
-              ) : null}
               <div className="hidden rounded-xl border border-border bg-background/70 px-3 py-2 md:block">
                 <p className="text-sm font-medium text-foreground">
                   {session?.account?.display_name || session?.account?.login || "Суперадминистратор"}

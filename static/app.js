@@ -745,19 +745,6 @@ updateBotbar();
 if (isTG) Telegram.WebApp.onEvent('viewportChanged', updateBotbar);
 window.addEventListener('resize', updateBotbar);
 
-// ==== Тема ====
-const THEME_KEY = 'ui_theme';
-function applyTheme(theme) {
-  const html = document.documentElement;
-  html.setAttribute('data-theme', theme);
-  localStorage.setItem(THEME_KEY, theme);
-  const chk = document.getElementById('themeToggle');
-  if (chk) chk.checked = (theme === 'dark');
-}
-applyTheme(localStorage.getItem(THEME_KEY) || 'dark');
-const themeToggle = document.getElementById('themeToggle');
-if (themeToggle) themeToggle.addEventListener('change', (e)=> applyTheme(e.target.checked ? 'dark' : 'light'));
-
 // ==== Навигация ====
 function setTab(name){
   // Универсальный переключатель: поддерживает старую схему (.screen + data-tab)
@@ -2826,7 +2813,7 @@ function openEmptyBookingConfirmationModal(opts = {}){
 
       <div class="alloc-actions is-row">
         <button class="button ghost alloc-cta alloc-cta--ghost" id="confirmBack">Закрыть корзину</button>
-        <button class="button alloc-cta alloc-cta--primary is-disabled" id="confirmSubmit" aria-disabled="true">БРОНИРУЮ!</button>
+        <button class="button alloc-cta alloc-cta--primary is-disabled" id="confirmSubmit" aria-disabled="true">Забронировать</button>
       </div>
     </div>
   `);
@@ -5829,7 +5816,7 @@ function setupBookingFilterElements(container, opts, isBooking, titleText) {
     applyBtn.classList.toggle('is-disabled', blocked);
     applyBtn.setAttribute('aria-disabled', blocked ? 'true' : 'false');
     applyBtn.dataset.disabled = blocked ? '1' : '0';
-    applyBtn.textContent = canDirectBookNow() ? 'БРОНИРУЮ!' : baseApplyText;
+    applyBtn.textContent = canDirectBookNow() ? 'Забронировать' : baseApplyText;
   }
 
   function clearBkErrors() {
@@ -6769,7 +6756,7 @@ function openBookingCommentModal({ initialValue = '', onBack, onSubmit } = {}){
 
       <div class="alloc-actions is-row">
         <button class="button ghost alloc-cta alloc-cta--ghost" id="orderCommentBack">Назад</button>
-        <button class="button alloc-cta alloc-cta--primary" id="orderCommentSubmit">БРОНИРУЮ!</button>
+        <button class="button alloc-cta alloc-cta--primary" id="orderCommentSubmit">Забронировать</button>
       </div>
     </div>
   `);
@@ -6800,7 +6787,7 @@ function openBookingCommentModal({ initialValue = '', onBack, onSubmit } = {}){
       } catch (e) {
         showSnackbar({ message: e?.message || 'Не удалось отправить заявку', timeoutMs: 2200 });
         submitBtn.disabled = false;
-        submitBtn.textContent = 'БРОНИРУЮ!';
+        submitBtn.textContent = 'Забронировать';
       }
     };
   }
@@ -7182,7 +7169,7 @@ async function openBookingConfirmationModal({ camp, campId, rooms, filter, onBac
 
       <div class="alloc-actions is-row">
         <button class="button ghost alloc-cta alloc-cta--ghost" id="confirmBack">Закрыть корзину</button>
-        <button class="button alloc-cta alloc-cta--primary" id="confirmSubmit">БРОНИРУЮ!</button>
+        <button class="button alloc-cta alloc-cta--primary" id="confirmSubmit">Забронировать</button>
       </div>
     </div>
   `);

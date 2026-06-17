@@ -3,20 +3,17 @@ import {
   Eye,
   EyeOff,
   LockKeyhole,
-  Moon,
   Mountain,
   RotateCcw,
   Save,
   Settings2,
   ShieldCheck,
   SlidersHorizontal,
-  Sun,
   UserRound,
 } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { motion } from "motion/react";
-import { useTheme } from "next-themes";
 import { crmPath } from "../paths";
 import { useDocumentTitle } from "../components/useDocumentTitle";
 import { fetchCrmSession, fetchPublicUiOverride, loginCrmSession, saveCrmUiOverride } from "../session";
@@ -186,7 +183,6 @@ export default function LoginPage() {
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [isThemeMounted, setIsThemeMounted] = useState(false);
   const [pageConfig, setPageConfig] = useState<LoginPageConfig>(loginPageDefaults);
   const [isLoadingOverrides, setIsLoadingOverrides] = useState(true);
   const [isSavingOverrides, setIsSavingOverrides] = useState(false);
@@ -194,7 +190,6 @@ export default function LoginPage() {
   const [editorError, setEditorError] = useState("");
   const [isEditorOpen, setIsEditorOpen] = useState(isEditMode);
   const [editorSessionLabel, setEditorSessionLabel] = useState("");
-  const { theme, setTheme } = useTheme();
   const homePath = crmPath("/calendar");
 
   useDocumentTitle("Туристика CRM — Вход");
@@ -203,10 +198,6 @@ export default function LoginPage() {
     typeof (location.state as { from?: unknown } | null)?.from === "string"
       ? (location.state as { from: string }).from
       : homePath;
-
-  useEffect(() => {
-    setIsThemeMounted(true);
-  }, []);
 
   useEffect(() => {
     setIsEditorOpen(isEditMode);
@@ -648,18 +639,6 @@ export default function LoginPage() {
       ) : null}
 
       <div className="relative w-full" style={{ maxWidth: pageConfig.shellMaxWidth }}>
-        <div className="absolute right-4 top-4 z-30 sm:right-0 sm:top-0 sm:translate-x-[38%] sm:-translate-y-[38%]">
-          {isThemeMounted ? (
-            <button
-              type="button"
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              className="admin-icon-button"
-              aria-label="Переключить тему"
-            >
-              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </button>
-          ) : null}
-        </div>
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}

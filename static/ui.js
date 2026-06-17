@@ -3,17 +3,12 @@
 (function () {
   const isTG = !!(window.Telegram && window.Telegram.WebApp);
 
-  // --- 1) Инициализация и синхронизация темы с Telegram ---
+  // --- 1) Инициализация Telegram без переключения палитр ---
   try {
     if (isTG) {
       Telegram.WebApp.ready();
-      // цвета шапки/фона берём из текущей темы Telegram
-      Telegram.WebApp.setHeaderColor("bg_color");
-      Telegram.WebApp.setBackgroundColor("secondary_bg_color");
-
-      // Проставим data-theme для CSS, если пользователь сам не выбирал
-      const cs = Telegram.WebApp.colorScheme; // 'light' | 'dark'
-      document.documentElement.setAttribute('data-theme', cs === 'dark' ? 'dark' : 'light');
+      Telegram.WebApp.setHeaderColor("#F4F7F3");
+      Telegram.WebApp.setBackgroundColor("#F4F7F3");
     }
   } catch (_) {}
 
