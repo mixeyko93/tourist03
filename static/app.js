@@ -3756,12 +3756,12 @@ function isRuMobilePhoneComplete(phone){
 function openTerms(draft){
   const d = draft || {};
   showModal(`
-    <div class="auth-card">
+    <div class="auth-card auth-card--terms">
       <div class="auth-head">
         <div class="auth-title">Пользовательское соглашение</div>
       </div>
       <div class="auth-subtitle">Прочитайте условия перед регистрацией.</div>
-      <div id="terms_text" class="auth-scroll-panel"></div>
+      <div id="terms_text" class="auth-scroll-panel" role="document" tabindex="0"></div>
       <div class="auth-actions">
         <button class="button ghost" id="terms_back">Назад</button>
         <button class="button primary" id="terms_ok">Согласен</button>
@@ -3777,7 +3777,7 @@ function openTerms(draft){
 function openRegister(draft){
   const d = draft || {};
   showModal(`
-    <div class="auth-card">
+    <div class="auth-card auth-card--register">
       <div class="auth-head">
         <div class="auth-title">Регистрация</div>
         <div class="auth-step">Шаг 1 из 3</div>
@@ -3799,7 +3799,7 @@ function openRegister(draft){
         <div class="auth-terms">
           <input id="reg_terms" type="checkbox" ${d.accept_terms ? 'checked' : ''}>
           <div class="auth-terms-text">
-            Я согласен(на) с <span class="auth-terms-link" id="reg_terms_link">Пользовательским соглашением</span>
+            Я согласен(на) с <button type="button" class="auth-terms-link" id="reg_terms_link">Пользовательским соглашением</button>
           </div>
         </div>
       </div>

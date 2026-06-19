@@ -260,13 +260,6 @@
     @apply border-b-0;
   }
 
-  .legacy-map-shell {
-    min-height: 100vh;
-    background:
-      radial-gradient(circle at top left, rgba(255, 255, 255, 0.55), transparent 22%),
-      linear-gradient(180deg, #f8f2e7 0%, #efe5d7 100%);
-  }
-
   .crm-copy-safe {
     min-width: 0;
     overflow-wrap: anywhere;
