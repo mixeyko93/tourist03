@@ -8069,6 +8069,53 @@ body:has(.modal.show) .map-ui{
   -webkit-backdrop-filter:none !important;
 }
 
+.account-brand{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  width:100%;
+  margin:0 0 18px;
+  text-align:left;
+}
+
+.account-brand--compact{
+  margin-bottom:4px;
+}
+
+.account-brand__mark{
+  width:54px;
+  height:54px;
+  flex:0 0 auto;
+  border-radius:18px;
+  box-shadow:0 14px 28px rgba(23,33,27,.10);
+}
+
+.account-brand--compact .account-brand__mark{
+  width:46px;
+  height:46px;
+  border-radius:16px;
+}
+
+.account-brand__copy{
+  min-width:0;
+}
+
+.account-brand__name{
+  color:var(--text-main);
+  font-size:20px;
+  line-height:1.05;
+  font-weight:900;
+  letter-spacing:-.04em;
+}
+
+.account-brand__tagline{
+  margin-top:4px;
+  color:var(--text-muted);
+  font-size:12px;
+  line-height:1.25;
+  font-weight:800;
+}
+
 .account-summary-value{
   color:var(--text-main) !important;
 }

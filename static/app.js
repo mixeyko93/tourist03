@@ -1721,6 +1721,13 @@ function renderAccount(){
     const phone = me.phone ? formatPhoneRu(me.phone) : 'Не указан';
     const email = me.email ? String(me.email) : 'Не указан';
     user.innerHTML = `
+      <div class="account-brand account-brand--compact">
+        <img class="account-brand__mark" src="/static/brand/turistika-icon.svg" alt="" aria-hidden="true">
+        <div class="account-brand__copy">
+          <div class="account-brand__name">Туристика</div>
+          <div class="account-brand__tagline">Твоя карта впечатлений</div>
+        </div>
+      </div>
       <div class="account-user-head">
         <div class="account-user-title">${escapeHtml(name)}</div>
         <div class="account-user-subtitle">Профиль и управление бронированиями</div>

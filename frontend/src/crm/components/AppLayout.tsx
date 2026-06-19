@@ -739,6 +739,7 @@ export default function AppLayout() {
           >
             <Menu className="h-5 w-5" />
           </button>
+          <img src="/static/brand/turistika-icon.svg" alt="" aria-hidden="true" className="hidden h-10 w-10 rounded-2xl shadow-sm sm:block" />
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#2F80ED]">Туристика CRM</p>
             <p className="truncate text-sm text-muted-foreground">Управление базой отдыха, бронями и гостями</p>

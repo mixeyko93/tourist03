@@ -96,10 +96,13 @@ export default function AdminLayout() {
       <header className="sticky top-0 z-20 border-b border-border bg-card/88 backdrop-blur-xl">
         <div className="mx-auto flex min-w-0 max-w-[2400px] flex-col gap-4 px-4 py-4 md:px-6 lg:px-8">
           <div className="flex min-w-0 flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            <div className="min-w-0 space-y-1">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">Туристика Admin</p>
-              <h1 className="text-lg font-semibold tracking-[-0.04em] text-foreground">Панель суперадминистратора</h1>
-              <p className="text-sm text-muted-foreground">Управление базами, пользователями и учётными записями.</p>
+            <div className="flex min-w-0 items-center gap-3">
+              <img src="/static/brand/turistika-icon.svg" alt="" aria-hidden="true" className="hidden h-11 w-11 rounded-2xl shadow-sm sm:block" />
+              <div className="min-w-0 space-y-1">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">Туристика Admin</p>
+                <h1 className="text-lg font-semibold tracking-[-0.04em] text-foreground">Панель суперадминистратора</h1>
+                <p className="text-sm text-muted-foreground">Управление базами, пользователями и учётными записями.</p>
+              </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">

@@ -651,9 +651,15 @@ export default function LoginPage() {
               style={{ padding: pageConfig.sectionPadding, gap: pageConfig.leftColumnGap }}
             >
               <div className="flex flex-col" style={{ gap: Math.max(pageConfig.leftColumnGap - 4, 18) }}>
-                <span className="crm-gold-badge inline-flex self-start rounded-full border px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.26em] sm:text-xs">
-                  {pageConfig.badgeText}
-                </span>
+                <div className="flex items-center gap-3">
+                  <img src="/static/brand/turistika-icon.svg" alt="" aria-hidden="true" className="h-12 w-12 rounded-2xl shadow-sm" />
+                  <div className="min-w-0">
+                    <span className="crm-gold-badge inline-flex rounded-full border px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.26em] sm:text-xs">
+                      {pageConfig.badgeText}
+                    </span>
+                    <p className="mt-2 text-sm font-semibold text-muted-foreground">Твоя карта впечатлений</p>
+                  </div>
+                </div>
 
                 <div className="space-y-5">
                   <h1
@@ -694,6 +700,7 @@ export default function LoginPage() {
               <div className="mx-auto w-full" style={{ maxWidth: pageConfig.loginCardWidth }}>
                 <div className="glass-card flex flex-col" style={{ borderRadius: pageConfig.loginCardRadius, padding: pageConfig.loginCardPadding }}>
                   <div className="space-y-2 text-center">
+                    <img src="/static/brand/turistika-icon.svg" alt="" aria-hidden="true" className="mx-auto mb-3 h-14 w-14 rounded-2xl shadow-sm" />
                     <p className="crm-gold-tone text-xs font-semibold uppercase tracking-[0.28em]">{pageConfig.loginEyebrow}</p>
                     <h2 className="text-2xl font-semibold tracking-[-0.05em] text-foreground sm:text-3xl">{pageConfig.loginTitle}</h2>
                     {pageConfig.loginText ? <p className="text-sm leading-6 text-muted-foreground">{pageConfig.loginText}</p> : null}

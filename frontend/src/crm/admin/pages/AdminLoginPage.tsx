@@ -63,9 +63,15 @@ export default function AdminLoginPage() {
         <div className="grid lg:min-h-[700px] lg:grid-cols-[1.05fr_0.95fr]">
           <section className="crm-ambient order-2 flex flex-col justify-between border-t border-border px-5 py-6 sm:px-6 lg:order-1 lg:border-r lg:border-t-0 lg:px-8 lg:py-10">
             <div className="space-y-8">
-              <span className="inline-flex rounded-full border border-[#2F80ED]/30 bg-[#2F80ED]/10 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.26em] text-[#2F80ED] sm:text-xs">
-                Туристика Admin
-              </span>
+              <div className="flex items-center gap-3">
+                <img src="/static/brand/turistika-icon.svg" alt="" aria-hidden="true" className="h-12 w-12 rounded-2xl shadow-sm" />
+                <div className="min-w-0">
+                  <span className="inline-flex rounded-full border border-[#2F80ED]/30 bg-[#2F80ED]/10 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.26em] text-[#2F80ED] sm:text-xs">
+                    Туристика Admin
+                  </span>
+                  <p className="mt-2 text-sm font-semibold text-muted-foreground">Твоя карта впечатлений</p>
+                </div>
+              </div>
 
               <div className="space-y-4">
                 <h1 className="max-w-xl text-3xl font-semibold tracking-[-0.06em] text-foreground sm:text-4xl md:text-5xl">
@@ -108,6 +114,7 @@ export default function AdminLoginPage() {
             <div className="mx-auto w-full max-w-md">
               <div className="glass-card rounded-[2rem] p-5 sm:p-8">
                 <div className="space-y-2 text-center">
+                  <img src="/static/brand/turistika-icon.svg" alt="" aria-hidden="true" className="mx-auto mb-3 h-14 w-14 rounded-2xl shadow-sm" />
                   <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#2F80ED]">Туристика Admin</p>
                   <h2 className="text-2xl font-semibold tracking-[-0.05em] text-foreground sm:text-3xl">Панель суперадминистратора</h2>
                   <p className="text-sm leading-6 text-muted-foreground">
