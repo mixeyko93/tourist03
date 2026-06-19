@@ -9,6 +9,6 @@
   <circle cx="120" cy="66" r="7" fill="#23B7C7"/>
   <circle cx="108" cy="126" r="7" fill="#FF9E44"/>
   <path d="M121 111L137 102L127 118L122 116L121 111Z" fill="#FFFFFF"/>
-  <text x="184" y="104" fill="#17211B" font-family="Manrope, Inter, Arial, sans-serif" font-size="58" font-weight="800" letter-spacing="-1.2">Туристика</text>
-  <text x="188" y="135" fill="#5E6A62" font-family="Manrope, Inter, Arial, sans-serif" font-size="21" font-weight="700" letter-spacing=".2">Твоя карта впечатлений</text>
+  <text x="381" y="104" fill="#17211B" text-anchor="middle" font-family="Manrope, Inter, Arial, sans-serif" font-size="58" font-weight="800" letter-spacing="-1.2">Туристика</text>
+  <text x="381" y="135" fill="#5E6A62" text-anchor="middle" font-family="Manrope, Inter, Arial, sans-serif" font-size="21" font-weight="700" letter-spacing=".2">Твоя карта впечатлений</text>
 </svg>
