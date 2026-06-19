@@ -1988,6 +1988,7 @@ function showModal(html){
   syncAuthShellForMarkup(html);
   modalCard.innerHTML = html;
   modal.style.display = 'flex';
+  try { document.body.classList.add('modal-open'); } catch (_) {}
   try { modal.classList.add('show'); } catch (_) {}
   restartModalOpenAnimation(modal, modalCard);
   // Reset scroll position
@@ -2022,6 +2023,7 @@ function showAuthModal(html){
   modalCard.innerHTML = html; 
   modal.style.display = 'flex'; 
   modal.classList.add('auth-modal');
+  try { document.body.classList.add('modal-open'); } catch (_) {}
   try { modal.classList.add('show'); } catch (_) {}
   restartModalOpenAnimation(modal, modalCard);
   // Reset scroll position
@@ -3587,6 +3589,7 @@ function closeModal(){
     modal.classList.remove('show');
     modal.classList.remove('modal-animate-in');
     modal.classList.remove('is-tall');
+    try { document.body.classList.remove('modal-open'); } catch (_) {}
   }
 	if (card) {
 		  // снимаем ResizeObserver, если он был повешен
@@ -5360,12 +5363,13 @@ window.__openCampBooking = function(campId) {
 function showSheet(html){
   const wrap = document.createElement('div');
   wrap.id = 't03-sheet';
-  wrap.style = 'position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;z-index:9999';
-  wrap.innerHTML = `<div style="width:92%;max-width:520px;background:rgba(17,19,23,.9);backdrop-filter:blur(6px);border-radius:18px;padding:16px;margin:14px;box-shadow:0 20px 40px rgba(0,0,0,.4)">${html}</div>`;
+  wrap.style = 'position:fixed;inset:0;background:rgba(23,33,27,.46);backdrop-filter:blur(3px);display:flex;align-items:flex-end;justify-content:center;z-index:9999';
+  wrap.innerHTML = `<div style="width:92%;max-width:520px;background:#fff;border:1px solid #DDE6DE;border-radius:24px;padding:20px;margin:14px;box-shadow:0 24px 70px rgba(23,33,27,.18);color:#17211B">${html}</div>`;
+  try { document.body.classList.add('modal-open'); } catch (_) {}
   document.body.appendChild(wrap);
   wrap.addEventListener('click', (e)=>{ if(e.target===wrap) closeSheet(); });
 }
-function closeSheet(){ const n = document.getElementById('t03-sheet'); if(n) n.remove(); }
+function closeSheet(){ const n = document.getElementById('t03-sheet'); if(n) n.remove(); try { document.body.classList.remove('modal-open'); } catch (_) {} }
 
 // Фильтр
 function openBooking(campId){
@@ -5376,25 +5380,25 @@ function openBooking(campId){
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div>
-          <div style="color:#9aa3af;font-size:12px;margin:2px 0 4px">Заезд</div>
-          <input id="bk_checkin" type="date" style="width:100%;height:44px;border-radius:12px;border:1px solid #2a2f3a;background:#0f1216;color:#f2f4f7;padding:0 10px">
+          <div style="color:#5E6A62;font-size:12px;font-weight:700;margin:2px 0 4px">Заезд</div>
+          <input id="bk_checkin" type="date" style="width:100%;height:44px;border-radius:12px;border:1px solid #DDE6DE;background:#F8FAF7;color:#17211B;padding:0 10px">
         </div>
         <div>
-          <div style="color:#9aa3af;font-size:12px;margin:2px 0 4px">Выезд</div>
-          <input id="bk_checkout" type="date" style="width:100%;height:44px;border-radius:12px;border:1px solid #2a2f3a;background:#0f1216;color:#f2f4f7;padding:0 10px">
+          <div style="color:#5E6A62;font-size:12px;font-weight:700;margin:2px 0 4px">Выезд</div>
+          <input id="bk_checkout" type="date" style="width:100%;height:44px;border-radius:12px;border:1px solid #DDE6DE;background:#F8FAF7;color:#17211B;padding:0 10px">
         </div>
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div>
-          <div style="color:#9aa3af;font-size:12px;margin:2px 0 4px">Взрослые</div>
-          <select id="bk_adults" style="width:100%;height:44px;border-radius:12px;border:1px solid #2a2f3a;background:#0f1216;color:#f2f4f7;padding:0 10px">
+          <div style="color:#5E6A62;font-size:12px;font-weight:700;margin:2px 0 4px">Взрослые</div>
+          <select id="bk_adults" style="width:100%;height:44px;border-radius:12px;border:1px solid #DDE6DE;background:#F8FAF7;color:#17211B;padding:0 10px">
             ${Array.from({length:6},(_,i)=>`<option value="${i+1}">${i+1}</option>`).join('')}
           </select>
         </div>
         <div>
-          <div style="color:#9aa3af;font-size:12px;margin:2px 0 4px">Дети</div>
-          <select id="bk_children" style="width:100%;height:44px;border-radius:12px;border:1px solid #2a2f3a;background:#0f1216;color:#f2f4f7;padding:0 10px">
+          <div style="color:#5E6A62;font-size:12px;font-weight:700;margin:2px 0 4px">Дети</div>
+          <select id="bk_children" style="width:100%;height:44px;border-radius:12px;border:1px solid #DDE6DE;background:#F8FAF7;color:#17211B;padding:0 10px">
             ${Array.from({length:6},(_,i)=>`<option value="${i}">${i}</option>`).join('')}
           </select>
         </div>

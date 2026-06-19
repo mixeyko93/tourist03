@@ -7699,3 +7699,415 @@ body,
     bottom:114px !important;
   }
 }
+
+/* ===== Public WebApp legacy cleanup ===== */
+body.modal-open .tabbar,
+body.modal-open .map-ui,
+body:has(.modal.show) .tabbar,
+body:has(.modal.show) .map-ui{
+  opacity:0 !important;
+  pointer-events:none !important;
+}
+
+.modal,
+.modal.auth-modal{
+  background:rgba(23,33,27,.46) !important;
+  backdrop-filter:blur(3px) !important;
+  -webkit-backdrop-filter:blur(3px) !important;
+}
+
+.modal-card,
+.modal-card.auth-shell,
+.modal-card.booking-shell,
+#modalCard[data-view="booking-confirmation"],
+#modalCard[data-view="booking-comment"],
+.dp-card{
+  background:var(--surface) !important;
+  border:1px solid var(--border) !important;
+  color:var(--text-main) !important;
+  box-shadow:0 24px 70px rgba(23,33,27,.18) !important;
+  backdrop-filter:none !important;
+  -webkit-backdrop-filter:none !important;
+}
+
+.modal-card.auth-shell{
+  width:min(460px, calc(100vw - 32px)) !important;
+  max-width:min(460px, calc(100vw - 32px)) !important;
+  max-height:calc(100vh - 32px) !important;
+  min-height:0 !important;
+  border-radius:28px !important;
+  overflow:hidden !important;
+}
+
+.auth-card{
+  flex:0 1 auto !important;
+  min-height:0 !important;
+  gap:16px !important;
+  padding:28px !important;
+  color:var(--text-main) !important;
+  background:var(--surface) !important;
+  overflow-x:hidden !important;
+  overflow-y:auto !important;
+}
+
+.auth-card--compact{
+  padding-top:28px !important;
+}
+
+.auth-card--center{
+  text-align:left !important;
+}
+
+.auth-card--center .auth-head{
+  flex-direction:row !important;
+  align-items:flex-start !important;
+  justify-content:space-between !important;
+  text-align:left !important;
+}
+
+.auth-card--center .auth-step{
+  align-self:flex-start !important;
+}
+
+.auth-title{
+  color:var(--text-main) !important;
+  font-size:28px !important;
+  line-height:1.12 !important;
+  font-weight:800 !important;
+  letter-spacing:0 !important;
+}
+
+.auth-step{
+  color:var(--primary) !important;
+  background:#EEF5FF !important;
+  border:1px solid rgba(47,128,237,.14) !important;
+  border-radius:999px !important;
+  padding:7px 11px !important;
+  font-size:12px !important;
+  font-weight:800 !important;
+  letter-spacing:0 !important;
+  white-space:nowrap !important;
+}
+
+.auth-subtitle{
+  color:var(--text-secondary) !important;
+  font-size:16px !important;
+  font-weight:600 !important;
+  line-height:1.45 !important;
+}
+
+.auth-fields{
+  gap:12px !important;
+}
+
+.auth-field{
+  gap:8px !important;
+  padding:13px 15px !important;
+  border:1px solid var(--border) !important;
+  border-radius:18px !important;
+  background:var(--surface-soft) !important;
+  color:var(--text-muted) !important;
+  box-shadow:none !important;
+}
+
+.auth-field > span{
+  color:var(--text-muted) !important;
+  font-size:12px !important;
+  font-weight:800 !important;
+  letter-spacing:0 !important;
+  text-transform:none !important;
+}
+
+.auth-field input,
+.auth-field select,
+.auth-field textarea{
+  min-height:26px !important;
+  color:var(--text-main) !important;
+  caret-color:var(--primary) !important;
+  -webkit-text-fill-color:var(--text-main) !important;
+  font-size:17px !important;
+  font-weight:700 !important;
+  background:transparent !important;
+}
+
+.auth-field input::placeholder,
+.auth-field textarea::placeholder,
+.auth-field input.auth-code::placeholder{
+  color:var(--text-soft) !important;
+  opacity:1 !important;
+}
+
+.auth-field:focus-within{
+  border-color:rgba(47,128,237,.38) !important;
+  box-shadow:0 0 0 4px rgba(47,128,237,.10) !important;
+}
+
+.auth-actions{
+  gap:12px !important;
+}
+
+.auth-actions .button,
+.modal-card.auth-shell .button{
+  min-height:50px !important;
+  border-radius:16px !important;
+  font-size:15px !important;
+  font-weight:800 !important;
+}
+
+.modal-card.auth-shell .button.primary,
+.button.primary{
+  background:var(--primary) !important;
+  border:1px solid var(--primary) !important;
+  color:#FFFFFF !important;
+  box-shadow:0 12px 24px rgba(47,128,237,.22) !important;
+}
+
+.modal-card.auth-shell .button.primary:hover,
+.button.primary:hover{
+  background:var(--primary-hover) !important;
+  border-color:var(--primary-hover) !important;
+}
+
+.modal-card.auth-shell .button.ghost,
+.button.ghost{
+  background:#FFFFFF !important;
+  border:1px solid var(--border) !important;
+  color:var(--text-main) !important;
+  box-shadow:none !important;
+}
+
+.modal-card.auth-shell .button.ghost:hover,
+.button.ghost:hover{
+  background:var(--surface-soft) !important;
+}
+
+.btn{
+  border:1px solid var(--border) !important;
+  border-radius:14px !important;
+  background:#FFFFFF !important;
+  color:var(--text-main) !important;
+  box-shadow:none !important;
+}
+
+.btn-primary,
+.btn-success{
+  background:var(--success) !important;
+  border-color:var(--success) !important;
+  color:#FFFFFF !important;
+  box-shadow:0 12px 24px rgba(46,157,120,.22) !important;
+}
+
+.btn-primary:hover,
+.btn-success:hover{
+  background:var(--success-hover) !important;
+  border-color:var(--success-hover) !important;
+}
+
+.btn-light{
+  background:#FFFFFF !important;
+  color:var(--text-main) !important;
+}
+
+.auth-note{
+  padding:13px 15px !important;
+  border:1px solid var(--border) !important;
+  border-radius:18px !important;
+  background:var(--surface-soft) !important;
+  color:var(--text-secondary) !important;
+  font-size:14px !important;
+  font-weight:600 !important;
+  line-height:1.45 !important;
+}
+
+.auth-error{
+  background:#FFF7F7 !important;
+  border:1px solid #F2C6C6 !important;
+  color:var(--danger) !important;
+}
+
+#modalCard[data-view="booking-confirmation"],
+#modalCard[data-view="booking-comment"]{
+  --alloc-theme-accent:var(--success) !important;
+  --alloc-theme-accent-strong:var(--success-hover) !important;
+  --alloc-theme-accent-bg:#E7F5F1 !important;
+  --alloc-theme-accent-border:rgba(46,157,120,.22) !important;
+  --alloc-theme-accent-shadow:0 14px 28px rgba(46,157,120,.18) !important;
+  --alloc-theme-surface:var(--surface-soft) !important;
+  --alloc-theme-surface-strong:var(--surface-muted) !important;
+  --alloc-theme-panel:var(--surface-soft) !important;
+  --alloc-theme-panel-hover:#FFFFFF !important;
+  --alloc-theme-panel-border:var(--border) !important;
+  border-radius:28px !important;
+}
+
+#modalCard[data-view="booking-confirmation"] .alloc-card,
+#modalCard[data-view="booking-comment"] .alloc-card{
+  color:var(--text-main) !important;
+  background:var(--surface) !important;
+  border:none !important;
+  box-shadow:none !important;
+}
+
+#modalCard[data-view="booking-confirmation"] .confirm-sheet-camp,
+#modalCard[data-view="booking-comment"] .accom-sub,
+#modalCard[data-view="booking-confirmation"] .alloc-hint,
+#modalCard[data-view="booking-comment"] .alloc-hint{
+  color:var(--text-secondary) !important;
+}
+
+#modalCard[data-view="booking-confirmation"] .confirm-dates-btn{
+  background:var(--surface-soft) !important;
+  border:1px solid var(--border) !important;
+  box-shadow:none !important;
+}
+
+#modalCard[data-view="booking-confirmation"] .confirm-dates-btn:hover,
+#modalCard[data-view="booking-confirmation"] .confirm-dates-btn:focus-visible{
+  background:#FFFFFF !important;
+  border-color:rgba(47,128,237,.28) !important;
+  box-shadow:0 0 0 4px rgba(47,128,237,.09) !important;
+}
+
+#modalCard[data-view="booking-confirmation"] .confirm-dates-value,
+#modalCard[data-view="booking-confirmation"] .alloc-name-text,
+#modalCard[data-view="booking-confirmation"] .alloc-guest-btn__value,
+#modalCard[data-view="booking-confirmation"] .alloc-val,
+#modalCard[data-view="booking-comment"] .alloc-comment-input{
+  color:var(--text-main) !important;
+}
+
+#modalCard[data-view="booking-confirmation"] .confirm-dates-btn.is-empty .confirm-dates-value{
+  color:var(--text-soft) !important;
+}
+
+#modalCard[data-view="booking-confirmation"] .confirm-dates-hint{
+  color:var(--text-muted) !important;
+}
+
+#modalCard[data-view="booking-confirmation"] .alloc-hint--panel,
+#modalCard[data-view="booking-confirmation"] .alloc-summary,
+#modalCard[data-view="booking-comment"] .alloc-comment-input,
+#modalCard[data-view="booking-confirmation"] .alloc-item-new,
+#modalCard[data-view="booking-confirmation"] .alloc-guest-btn{
+  background:var(--surface-soft) !important;
+  border-color:var(--border) !important;
+  box-shadow:none !important;
+}
+
+#modalCard[data-view="booking-confirmation"] .alloc-inline-hint,
+#modalCard[data-view="booking-confirmation"] .alloc-action-btn,
+#modalCard[data-view="booking-confirmation"] .alloc-cta--soft,
+#modalCard[data-view="booking-comment"] .alloc-cta--soft,
+.alloc-cta--soft,
+.alloc-autopick,
+#confirmAddRoom{
+  background:#E7F5F1 !important;
+  border:1px solid rgba(46,157,120,.20) !important;
+  color:var(--success) !important;
+  box-shadow:none !important;
+}
+
+#modalCard[data-view="booking-confirmation"] .alloc-cta--primary,
+#modalCard[data-view="booking-comment"] .alloc-cta--primary,
+.alloc-cta--primary,
+.bk-action--primary,
+.dp-action--primary,
+.camp-detail__action--book,
+.camp-popup__action--book,
+.fs-action--book{
+  background:var(--success) !important;
+  border-color:var(--success) !important;
+  color:#FFFFFF !important;
+  box-shadow:0 12px 24px rgba(46,157,120,.22) !important;
+}
+
+#modalCard[data-view="booking-confirmation"] .alloc-cta--primary:hover,
+#modalCard[data-view="booking-comment"] .alloc-cta--primary:hover,
+.alloc-cta--primary:hover,
+.bk-action--primary:hover,
+.dp-action--primary:hover,
+.camp-detail__action--book:hover,
+.camp-popup__action--book:hover,
+.fs-action--book:hover{
+  background:var(--success-hover) !important;
+  border-color:var(--success-hover) !important;
+}
+
+#modalCard[data-view="booking-confirmation"] .alloc-cta.is-disabled,
+#modalCard[data-view="booking-confirmation"] .alloc-cta[aria-disabled="true"],
+#modalCard[data-view="booking-comment"] .alloc-cta.is-disabled,
+.alloc-cta.is-disabled,
+.bk-action--primary.is-disabled,
+.bk-action--primary[aria-disabled="true"],
+.dp-action--primary:disabled{
+  background:#F2F5F1 !important;
+  border-color:var(--border-soft) !important;
+  color:var(--text-muted) !important;
+  opacity:1 !important;
+  box-shadow:none !important;
+  cursor:not-allowed !important;
+}
+
+#modalCard[data-view="booking-confirmation"] .alloc-cta--ghost,
+#modalCard[data-view="booking-comment"] .alloc-cta--ghost,
+.alloc-cta--ghost{
+  background:#FFFFFF !important;
+  border:1px solid var(--border) !important;
+  color:var(--text-main) !important;
+  box-shadow:none !important;
+}
+
+.account-card,
+.account-card--guest,
+.account-card--user,
+.account-card--actions{
+  background:var(--surface) !important;
+  border:1px solid var(--border) !important;
+  color:var(--text-main) !important;
+  box-shadow:0 12px 32px rgba(23,33,27,.08) !important;
+  backdrop-filter:none !important;
+  -webkit-backdrop-filter:none !important;
+}
+
+.account-summary-value{
+  color:var(--text-main) !important;
+}
+
+.camp-detail__dot.is-active{
+  background:var(--primary) !important;
+}
+
+@media (max-width:520px){
+  .auth-card{
+    padding:24px !important;
+  }
+
+  .auth-card--compact{
+    padding-top:24px !important;
+  }
+
+  .auth-head,
+  .auth-card--center .auth-head{
+    flex-direction:column !important;
+    gap:8px !important;
+  }
+
+  .auth-actions{
+    grid-template-columns:1fr !important;
+  }
+}
+
+.auth-card--center{
+  text-align:center !important;
+}
+
+.auth-card--center .auth-head{
+  flex-direction:column !important;
+  align-items:center !important;
+  justify-content:center !important;
+  text-align:center !important;
+}
+
+.auth-card--center .auth-step{
+  align-self:center !important;
+}
