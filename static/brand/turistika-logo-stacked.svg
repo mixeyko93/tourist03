@@ -10,5 +10,5 @@
   <circle cx="205" cy="190" r="10" fill="#FF9E44"/>
   <path d="M224 170L248 156L234 180L226 178L224 170Z" fill="#FFFFFF"/>
   <text x="180" y="295" fill="#17211B" text-anchor="middle" font-family="Manrope, Inter, Arial, sans-serif" font-size="48" font-weight="800" letter-spacing="-1">Туристика</text>
-  <text x="180" y="329" fill="#5E6A62" text-anchor="middle" font-family="Manrope, Inter, Arial, sans-serif" font-size="15" font-weight="700" letter-spacing="1.4">ЦИФРОВОЙ ТУРИСТИЧЕСКИЙ СЕРВИС</text>
+  <text x="180" y="329" fill="#5E6A62" text-anchor="middle" font-family="Manrope, Inter, Arial, sans-serif" font-size="17" font-weight="700" letter-spacing=".1">Твоя карта впечатлений</text>
 </svg>
