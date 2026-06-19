@@ -1,0 +1,15 @@
+<svg width="720" height="180" viewBox="0 0 720 180" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Туристика на тёмном фоне</title>
+  <desc id="desc">Горизонтальный логотип Туристика для тёмных интерфейсов.</desc>
+  <rect width="720" height="180" rx="34" fill="#17211B"/>
+  <rect x="28" y="26" width="128" height="128" rx="38" fill="#FFFFFF"/>
+  <path d="M64 66H120" stroke="#17211B" stroke-width="14" stroke-linecap="round"/>
+  <path d="M92 66V100" stroke="#17211B" stroke-width="14" stroke-linecap="round"/>
+  <path d="M92 100C92 114 108 113 108 126" stroke="#23B7C7" stroke-width="14" stroke-linecap="round"/>
+  <circle cx="64" cy="66" r="7" fill="#2F80ED"/>
+  <circle cx="120" cy="66" r="7" fill="#2F80ED"/>
+  <circle cx="108" cy="126" r="7" fill="#FF9E44"/>
+  <path d="M121 111L137 102L127 118L122 116L121 111Z" fill="#17211B"/>
+  <text x="184" y="104" fill="#FFFFFF" font-family="Manrope, Inter, Arial, sans-serif" font-size="58" font-weight="800" letter-spacing="-1.2">Туристика</text>
+  <text x="188" y="135" fill="#BFD4CD" font-family="Manrope, Inter, Arial, sans-serif" font-size="18" font-weight="600" letter-spacing="1.8">МАРШРУТЫ, МЕСТА, ВПЕЧАТЛЕНИЯ</text>
+</svg>

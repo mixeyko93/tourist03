@@ -52,6 +52,10 @@ def api_version():
     }
 
 
+def brand_page():
+    return FileResponse(os.path.join(STATIC_DIR, "brand", "index.html"))
+
+
 def superadmin_page():
     return RedirectResponse(url="/admin/login", status_code=302)
 

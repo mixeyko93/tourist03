@@ -1,0 +1,13 @@
+<svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Иконка Туристика</title>
+  <desc id="desc">Минималистичная буква Т как туристический маршрут.</desc>
+  <rect x="8" y="8" width="144" height="144" rx="44" fill="#F8FAF7"/>
+  <rect x="8" y="8" width="144" height="144" rx="44" stroke="#DDE8E2" stroke-width="2"/>
+  <path d="M48 48H112" stroke="#17211B" stroke-width="16" stroke-linecap="round"/>
+  <path d="M80 48V88" stroke="#17211B" stroke-width="16" stroke-linecap="round"/>
+  <path d="M80 88C80 104 97 105 97 119" stroke="#23B7C7" stroke-width="16" stroke-linecap="round"/>
+  <circle cx="48" cy="48" r="8" fill="#2F80ED"/>
+  <circle cx="112" cy="48" r="8" fill="#2F80ED"/>
+  <circle cx="97" cy="119" r="8" fill="#FF9E44"/>
+  <path d="M111 106L127 96L117 112L112 111L111 106Z" fill="#17211B"/>
+</svg>

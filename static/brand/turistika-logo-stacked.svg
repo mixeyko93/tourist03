@@ -1,0 +1,14 @@
+<svg width="360" height="420" viewBox="0 0 360 420" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Вертикальный логотип Туристика</title>
+  <desc id="desc">Компактная вертикальная версия логотипа Туристика.</desc>
+  <rect x="88" y="34" width="184" height="184" rx="54" fill="#17211B"/>
+  <path d="M132 96H228" stroke="#FFFFFF" stroke-width="20" stroke-linecap="round"/>
+  <path d="M180 96V148" stroke="#FFFFFF" stroke-width="20" stroke-linecap="round"/>
+  <path d="M180 148C180 171 205 169 205 190" stroke="#23B7C7" stroke-width="20" stroke-linecap="round"/>
+  <circle cx="132" cy="96" r="10" fill="#23B7C7"/>
+  <circle cx="228" cy="96" r="10" fill="#23B7C7"/>
+  <circle cx="205" cy="190" r="10" fill="#FF9E44"/>
+  <path d="M224 170L248 156L234 180L226 178L224 170Z" fill="#FFFFFF"/>
+  <text x="180" y="295" fill="#17211B" text-anchor="middle" font-family="Manrope, Inter, Arial, sans-serif" font-size="48" font-weight="800" letter-spacing="-1">Туристика</text>
+  <text x="180" y="329" fill="#5E6A62" text-anchor="middle" font-family="Manrope, Inter, Arial, sans-serif" font-size="15" font-weight="700" letter-spacing="1.4">ЦИФРОВОЙ ТУРИСТИЧЕСКИЙ СЕРВИС</text>
+</svg>
