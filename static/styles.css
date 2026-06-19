@@ -7629,3 +7629,73 @@ body,
     font-size:11px !important;
   }
 }
+
+/* ===== Map viewport overlay alignment ===== */
+#tab-map{
+  padding:10px !important;
+}
+
+.map-wrap{
+  height:100% !important;
+}
+
+.map-btn,
+.map-btn.text-btn{
+  color:#2F3A35 !important;
+}
+
+.map-btn__glyph svg{
+  stroke-width:1.75 !important;
+}
+
+.map-btn--filter .map-btn__glyph svg,
+.map-btn--geo .map-btn__glyph svg{
+  width:28px !important;
+  height:28px !important;
+}
+
+.map-btn.text-btn .map-btn__glyph svg{
+  width:19px !important;
+  height:19px !important;
+}
+
+.map-btn--filter{
+  bottom:104px !important;
+}
+
+.map-btn--geo{
+  bottom:104px !important;
+}
+
+.map-btn.draft.cart-btn{
+  bottom:106px !important;
+}
+
+.map-btn.draft.cart-btn .map-btn__glyph svg{
+  width:29px !important;
+  height:29px !important;
+  stroke-width:1.8 !important;
+}
+
+.map-btn.draft.cart-btn.draft-toast{
+  bottom:106px !important;
+}
+
+@media (min-width:768px){
+  #tab-map{
+    padding:12px !important;
+  }
+
+  .map-btn--filter{
+    bottom:112px !important;
+  }
+
+  .map-btn--geo{
+    bottom:112px !important;
+  }
+
+  .map-btn.draft.cart-btn,
+  .map-btn.draft.cart-btn.draft-toast{
+    bottom:114px !important;
+  }
+}
