@@ -391,3 +391,23 @@
   background:rgb(47 128 237 / .10) !important;
   font-weight:var(--font-weight-bold);
 }
+
+/* Examples in empty fields must read as hints, not entered data. */
+input::placeholder,
+textarea::placeholder,
+.admin-input::placeholder,
+.soft-input::placeholder{
+  color:rgb(107 116 109 / .42) !important;
+  -webkit-text-fill-color:rgb(107 116 109 / .42) !important;
+  opacity:1 !important;
+  font-weight:var(--font-weight-medium) !important;
+}
+
+input:focus::placeholder,
+textarea:focus::placeholder,
+.admin-input:focus::placeholder,
+.soft-input:focus::placeholder{
+  color:transparent !important;
+  -webkit-text-fill-color:transparent !important;
+  opacity:0 !important;
+}

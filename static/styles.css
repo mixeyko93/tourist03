@@ -8299,3 +8299,27 @@ body:has(.modal.show) .map-ui{
     font-size:15px !important;
   }
 }
+
+/* ===== Muted example placeholders ===== */
+.auth-field input::placeholder,
+.auth-field textarea::placeholder,
+.auth-field input.auth-code::placeholder,
+.bk-input::placeholder,
+.alloc-input::placeholder,
+.alloc-comment-input::placeholder,
+input::placeholder,
+textarea::placeholder{
+  color:rgba(107,116,109,.42) !important;
+  -webkit-text-fill-color:rgba(107,116,109,.42) !important;
+  opacity:1 !important;
+  font-weight:600 !important;
+}
+
+.auth-field input:focus::placeholder,
+.auth-field textarea:focus::placeholder,
+input:focus::placeholder,
+textarea:focus::placeholder{
+  color:transparent !important;
+  -webkit-text-fill-color:transparent !important;
+  opacity:0 !important;
+}
