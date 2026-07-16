@@ -96,4 +96,4 @@ jobs:
         with:
           python-version: "3.11"
       - run: python -m pip install --upgrade pip pip-audit
-      - run: pip-audit -r requirements.txt
+      - run: pip-audit -r requirements.txt --index-url https://pypi.org/simple

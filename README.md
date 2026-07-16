@@ -61,6 +61,8 @@ FEATURE_LEGACY_TOURIST_APP=false
 
 `/api/camps` использует публичный allowlist DTO и server-side filter статуса `active`/`published`; CRM/superadmin остаются на внутренних API. `/health` проверяет процесс, а `/ready` дополнительно проверяет доступ к DB и version `0013_admin_profile_pins`.
 
+Production и CI используют Python 3.11. Dependency audit в CI всегда получает метаданные и пакеты из публичного PyPI (`https://pypi.org/simple`). Если production устанавливает зависимости через внутренний mirror, mirror обязан синхронизировать безопасные версии с PyPI; credentials такого mirror не хранятся в репозитории и не используются security-аудитом.
+
 ## Migrations, backup и deploy
 
 Миграции никогда не выполняются при импорте `app`. Доступные команды:
