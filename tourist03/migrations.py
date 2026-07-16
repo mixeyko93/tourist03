@@ -941,6 +941,356 @@ MIGRATIONS = (
         WHERE profile_pin_pending_token IS NOT NULL;
         """,
     ),
+    MigrationStep(
+        version="0014_place_types",
+        sql="""
+        CREATE TABLE IF NOT EXISTS catalog.place_types (
+            id SERIAL PRIMARY KEY,
+            slug TEXT NOT NULL,
+            name TEXT NOT NULL,
+            plural_name TEXT NOT NULL,
+            marker_key TEXT NOT NULL,
+            icon_key TEXT NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            config JSONB NOT NULL DEFAULT '{}'::jsonb,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            CONSTRAINT place_types_slug_format CHECK (slug ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$')
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_place_types_slug_unique
+        ON catalog.place_types((lower(slug)));
+
+        INSERT INTO catalog.place_types (
+            slug, name, plural_name, marker_key, icon_key, sort_order, config
+        ) VALUES
+            ('recreation-base', 'База отдыха', 'Базы отдыха', 'forest', 'home', 10, '{"accent":"#2d9a71"}'::jsonb),
+            ('hotel', 'Отель', 'Отели', 'city', 'hotel', 20, '{"accent":"#247da8"}'::jsonb),
+            ('guest-house', 'Гостевой дом', 'Гостевые дома', 'guest', 'house', 30, '{"accent":"#7c6cc4"}'::jsonb),
+            ('glamping', 'Глэмпинг', 'Глэмпинги', 'glamping', 'tent', 40, '{"accent":"#d7833f"}'::jsonb),
+            ('camping', 'Кемпинг', 'Кемпинги', 'camping', 'camp', 50, '{"accent":"#438a52"}'::jsonb),
+            ('apartments', 'Апартаменты', 'Апартаменты', 'apartments', 'building', 60, '{"accent":"#a35f93"}'::jsonb),
+            ('cottage-complex', 'Коттеджный комплекс', 'Коттеджные комплексы', 'cottage', 'cottage', 70, '{"accent":"#8a6b3f"}'::jsonb),
+            ('sanatorium', 'Санаторий', 'Санатории', 'health', 'health', 80, '{"accent":"#3d9b92"}'::jsonb),
+            ('country-complex', 'Загородный комплекс', 'Загородные комплексы', 'country', 'trees', 90, '{"accent":"#62884c"}'::jsonb),
+            ('hostel', 'Хостел', 'Хостелы', 'hostel', 'bed', 100, '{"accent":"#4f6fa8"}'::jsonb),
+            ('tourist-base', 'Турбаза', 'Турбазы', 'tourist', 'compass', 110, '{"accent":"#168b9c"}'::jsonb),
+            ('other', 'Другое', 'Другие объекты', 'other', 'pin', 999, '{"accent":"#65716a"}'::jsonb)
+        ON CONFLICT ((lower(slug))) DO UPDATE SET
+            name = EXCLUDED.name,
+            plural_name = EXCLUDED.plural_name,
+            marker_key = EXCLUDED.marker_key,
+            icon_key = EXCLUDED.icon_key,
+            sort_order = EXCLUDED.sort_order,
+            config = catalog.place_types.config || EXCLUDED.config,
+            updated_at = NOW();
+        """,
+    ),
+    MigrationStep(
+        version="0015_universal_camp_fields",
+        sql="""
+        CREATE OR REPLACE FUNCTION catalog.slugify_place_name(value TEXT)
+        RETURNS TEXT
+        LANGUAGE plpgsql
+        IMMUTABLE
+        AS $$
+        DECLARE
+            source TEXT := lower(COALESCE(value, ''));
+            from_chars TEXT[] := ARRAY['щ','ш','ч','ц','ю','я','ё','ж','х','й','ъ','ь','э','а','б','в','г','д','е','з','и','к','л','м','н','о','п','р','с','т','у','ф','ы'];
+            to_chars TEXT[] := ARRAY['sch','sh','ch','ts','yu','ya','yo','zh','kh','y','','','e','a','b','v','g','d','e','z','i','k','l','m','n','o','p','r','s','t','u','f','y'];
+            index INTEGER;
+        BEGIN
+            FOR index IN 1..array_length(from_chars, 1) LOOP
+                source := replace(source, from_chars[index], to_chars[index]);
+            END LOOP;
+            source := regexp_replace(source, '[^a-z0-9]+', '-', 'g');
+            source := trim(BOTH '-' FROM source);
+            RETURN COALESCE(NULLIF(source, ''), 'place');
+        END;
+        $$;
+
+        ALTER TABLE catalog.camps ADD COLUMN IF NOT EXISTS slug TEXT;
+        ALTER TABLE catalog.camps ADD COLUMN IF NOT EXISTS place_type_id INTEGER;
+        ALTER TABLE catalog.camps ADD COLUMN IF NOT EXISTS short_description TEXT;
+        ALTER TABLE catalog.camps ADD COLUMN IF NOT EXISTS region TEXT;
+        ALTER TABLE catalog.camps ADD COLUMN IF NOT EXISTS district TEXT;
+        ALTER TABLE catalog.camps ADD COLUMN IF NOT EXISTS city TEXT;
+        ALTER TABLE catalog.camps ADD COLUMN IF NOT EXISTS locality TEXT;
+        ALTER TABLE catalog.camps ADD COLUMN IF NOT EXISTS seasonality TEXT;
+        ALTER TABLE catalog.camps ADD COLUMN IF NOT EXISTS working_hours JSONB NOT NULL DEFAULT '{}'::jsonb;
+        ALTER TABLE catalog.camps ADD COLUMN IF NOT EXISTS publication_status TEXT;
+        ALTER TABLE catalog.camps ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ;
+        ALTER TABLE catalog.camps ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMPTZ;
+        ALTER TABLE catalog.camps ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+        ALTER TABLE catalog.camps ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+        ALTER TABLE catalog.camps ADD COLUMN IF NOT EXISTS content_version INTEGER NOT NULL DEFAULT 1;
+        ALTER TABLE catalog.camps ADD COLUMN IF NOT EXISTS public_email TEXT;
+        ALTER TABLE catalog.camps ADD COLUMN IF NOT EXISTS public_phone TEXT;
+        ALTER TABLE catalog.camps ADD COLUMN IF NOT EXISTS public_phone_secondary TEXT;
+        ALTER TABLE catalog.camps ADD COLUMN IF NOT EXISTS public_site_url TEXT;
+        ALTER TABLE catalog.camps ADD COLUMN IF NOT EXISTS vk_url TEXT;
+        ALTER TABLE catalog.camps ADD COLUMN IF NOT EXISTS telegram_url TEXT;
+        ALTER TABLE catalog.camps ADD COLUMN IF NOT EXISTS whatsapp_url TEXT;
+        ALTER TABLE catalog.camps ADD COLUMN IF NOT EXISTS max_url TEXT;
+        ALTER TABLE catalog.camps ADD COLUMN IF NOT EXISTS video_urls JSONB NOT NULL DEFAULT '[]'::jsonb;
+        ALTER TABLE catalog.camps ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+        UPDATE catalog.camps
+        SET place_type_id = (
+            SELECT id FROM catalog.place_types WHERE slug = 'recreation-base'
+        )
+        WHERE place_type_id IS NULL;
+
+        UPDATE catalog.camps
+        SET short_description = left(NULLIF(trim(description), ''), 320)
+        WHERE short_description IS NULL;
+
+        UPDATE catalog.camps
+        SET public_phone = NULLIF(trim(phone), '')
+        WHERE public_phone IS NULL AND NULLIF(trim(phone), '') IS NOT NULL;
+
+        UPDATE catalog.camps
+        SET public_site_url = NULLIF(trim(site_url), '')
+        WHERE public_site_url IS NULL AND NULLIF(trim(site_url), '') IS NOT NULL;
+
+        UPDATE catalog.camps
+        SET publication_status = CASE
+            WHEN lower(COALESCE(status, '')) IN ('active', 'published') THEN 'published'
+            WHEN lower(COALESCE(status, '')) = 'archived' THEN 'archived'
+            ELSE 'disabled'
+        END
+        WHERE publication_status IS NULL OR publication_status = '';
+
+        UPDATE catalog.camps
+        SET published_at = COALESCE(published_at, updated_at, NOW())
+        WHERE publication_status = 'published';
+
+        WITH slug_candidates AS (
+            SELECT
+                id,
+                catalog.slugify_place_name(name) AS base_slug,
+                row_number() OVER (
+                    PARTITION BY catalog.slugify_place_name(name)
+                    ORDER BY id
+                ) AS duplicate_number
+            FROM catalog.camps
+            WHERE slug IS NULL OR trim(slug) = ''
+        )
+        UPDATE catalog.camps AS camps
+        SET slug = CASE
+            WHEN candidates.duplicate_number = 1
+                 AND NOT EXISTS (
+                     SELECT 1 FROM catalog.camps existing
+                     WHERE existing.id <> camps.id
+                       AND lower(existing.slug) = lower(candidates.base_slug)
+                 )
+                THEN candidates.base_slug
+            ELSE candidates.base_slug || '-' || camps.id::text
+        END
+        FROM slug_candidates candidates
+        WHERE camps.id = candidates.id;
+
+        ALTER TABLE catalog.camps ALTER COLUMN slug SET NOT NULL;
+        ALTER TABLE catalog.camps ALTER COLUMN place_type_id SET NOT NULL;
+        ALTER TABLE catalog.camps ALTER COLUMN publication_status SET DEFAULT 'draft';
+        ALTER TABLE catalog.camps ALTER COLUMN publication_status SET NOT NULL;
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_camps_slug_unique
+        ON catalog.camps((lower(slug)));
+
+        ALTER TABLE catalog.camps DROP CONSTRAINT IF EXISTS camps_slug_format;
+        ALTER TABLE catalog.camps ADD CONSTRAINT camps_slug_format
+        CHECK (slug ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$') NOT VALID;
+
+        ALTER TABLE catalog.camps DROP CONSTRAINT IF EXISTS camps_publication_status_valid;
+        ALTER TABLE catalog.camps ADD CONSTRAINT camps_publication_status_valid
+        CHECK (publication_status IN ('draft', 'in_review', 'published', 'disabled', 'archived', 'rejected')) NOT VALID;
+
+        ALTER TABLE catalog.camps DROP CONSTRAINT IF EXISTS camps_place_type_fk;
+        ALTER TABLE catalog.camps ADD CONSTRAINT camps_place_type_fk
+        FOREIGN KEY (place_type_id) REFERENCES catalog.place_types(id) NOT VALID;
+
+        CREATE OR REPLACE FUNCTION catalog.touch_camp_content()
+        RETURNS TRIGGER
+        LANGUAGE plpgsql
+        AS $$
+        BEGIN
+            NEW.updated_at := NOW();
+            NEW.content_version := GREATEST(COALESCE(OLD.content_version, 0) + 1, COALESCE(NEW.content_version, 1));
+            IF NEW.publication_status = 'published' AND OLD.publication_status IS DISTINCT FROM 'published' THEN
+                NEW.published_at := COALESCE(NEW.published_at, NOW());
+            END IF;
+            RETURN NEW;
+        END;
+        $$;
+
+        DROP TRIGGER IF EXISTS trg_camps_touch_content ON catalog.camps;
+        CREATE TRIGGER trg_camps_touch_content
+        BEFORE UPDATE ON catalog.camps
+        FOR EACH ROW EXECUTE FUNCTION catalog.touch_camp_content();
+        """,
+    ),
+    MigrationStep(
+        version="0016_public_contacts",
+        sql="""
+        CREATE TABLE IF NOT EXISTS catalog.place_contacts (
+            id BIGSERIAL PRIMARY KEY,
+            camp_id INTEGER NOT NULL,
+            contact_type TEXT NOT NULL,
+            label TEXT,
+            value TEXT NOT NULL,
+            normalized_value TEXT NOT NULL,
+            public_url TEXT,
+            is_public BOOLEAN NOT NULL DEFAULT FALSE,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            CONSTRAINT place_contacts_type_valid CHECK (
+                contact_type IN ('phone', 'email', 'website', 'telegram', 'whatsapp', 'max', 'vk', 'other')
+            )
+        );
+
+        ALTER TABLE catalog.place_contacts DROP CONSTRAINT IF EXISTS place_contacts_camp_fk;
+        ALTER TABLE catalog.place_contacts ADD CONSTRAINT place_contacts_camp_fk
+        FOREIGN KEY (camp_id) REFERENCES catalog.camps(id) ON DELETE CASCADE NOT VALID;
+
+        CREATE INDEX IF NOT EXISTS idx_place_contacts_camp_sort
+        ON catalog.place_contacts(camp_id, sort_order, id);
+
+        CREATE INDEX IF NOT EXISTS idx_place_contacts_public_type
+        ON catalog.place_contacts(camp_id, contact_type, sort_order)
+        WHERE is_public = TRUE;
+
+        INSERT INTO catalog.place_contacts (
+            camp_id, contact_type, label, value, normalized_value, public_url, is_public, sort_order
+        )
+        SELECT
+            camps.id,
+            'phone',
+            'Телефон',
+            camps.public_phone,
+            regexp_replace(camps.public_phone, '[^0-9+]', '', 'g'),
+            'tel:' || regexp_replace(camps.public_phone, '[^0-9+]', '', 'g'),
+            TRUE,
+            10
+        FROM catalog.camps camps
+        WHERE NULLIF(trim(camps.public_phone), '') IS NOT NULL
+          AND NOT EXISTS (
+              SELECT 1 FROM catalog.place_contacts contacts
+              WHERE contacts.camp_id = camps.id AND contacts.contact_type = 'phone'
+          );
+
+        INSERT INTO catalog.place_contacts (
+            camp_id, contact_type, label, value, normalized_value, public_url, is_public, sort_order
+        )
+        SELECT
+            camps.id,
+            'website',
+            'Сайт',
+            camps.public_site_url,
+            lower(trim(camps.public_site_url)),
+            trim(camps.public_site_url),
+            TRUE,
+            20
+        FROM catalog.camps camps
+        WHERE lower(trim(COALESCE(camps.public_site_url, ''))) ~ '^https?://'
+          AND NOT EXISTS (
+              SELECT 1 FROM catalog.place_contacts contacts
+              WHERE contacts.camp_id = camps.id AND contacts.contact_type = 'website'
+          );
+        """,
+    ),
+    MigrationStep(
+        version="0017_catalog_amenities",
+        sql="""
+        CREATE TABLE IF NOT EXISTS catalog.amenities (
+            id SERIAL PRIMARY KEY,
+            slug TEXT NOT NULL,
+            name TEXT NOT NULL,
+            category TEXT NOT NULL DEFAULT 'general',
+            icon_key TEXT NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            CONSTRAINT amenities_slug_format CHECK (slug ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$')
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_amenities_slug_unique
+        ON catalog.amenities((lower(slug)));
+
+        INSERT INTO catalog.amenities (slug, name, category, icon_key, sort_order) VALUES
+            ('wifi', 'Wi-Fi', 'connectivity', 'wifi', 10),
+            ('parking', 'Парковка', 'transport', 'parking', 20),
+            ('restaurant', 'Ресторан', 'food', 'restaurant', 30),
+            ('kitchen', 'Кухня', 'food', 'kitchen', 40),
+            ('pets', 'Можно с животными', 'rules', 'pets', 50),
+            ('children', 'Для детей', 'family', 'children', 60),
+            ('accessibility', 'Доступная среда', 'accessibility', 'accessibility', 70),
+            ('beach', 'Пляж', 'nature', 'beach', 80),
+            ('bbq', 'Мангал', 'leisure', 'bbq', 90),
+            ('bath', 'Баня', 'wellness', 'bath', 100),
+            ('sauna', 'Сауна', 'wellness', 'sauna', 110),
+            ('pool', 'Бассейн', 'wellness', 'pool', 120),
+            ('air-conditioning', 'Кондиционер', 'comfort', 'air-conditioning', 130),
+            ('transfer', 'Трансфер', 'transport', 'transfer', 140),
+            ('fishing', 'Рыбалка', 'leisure', 'fishing', 150),
+            ('playground', 'Детская площадка', 'family', 'playground', 160)
+        ON CONFLICT ((lower(slug))) DO UPDATE SET
+            name = EXCLUDED.name,
+            category = EXCLUDED.category,
+            icon_key = EXCLUDED.icon_key,
+            sort_order = EXCLUDED.sort_order,
+            updated_at = NOW();
+
+        CREATE TABLE IF NOT EXISTS catalog.camp_amenities (
+            camp_id INTEGER NOT NULL,
+            amenity_id INTEGER NOT NULL,
+            value JSONB,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (camp_id, amenity_id)
+        );
+
+        ALTER TABLE catalog.camp_amenities DROP CONSTRAINT IF EXISTS camp_amenities_camp_fk;
+        ALTER TABLE catalog.camp_amenities ADD CONSTRAINT camp_amenities_camp_fk
+        FOREIGN KEY (camp_id) REFERENCES catalog.camps(id) ON DELETE CASCADE NOT VALID;
+
+        ALTER TABLE catalog.camp_amenities DROP CONSTRAINT IF EXISTS camp_amenities_amenity_fk;
+        ALTER TABLE catalog.camp_amenities ADD CONSTRAINT camp_amenities_amenity_fk
+        FOREIGN KEY (amenity_id) REFERENCES catalog.amenities(id) ON DELETE RESTRICT NOT VALID;
+
+        ALTER TABLE catalog.camp_media ADD COLUMN IF NOT EXISTS alt_text TEXT;
+        ALTER TABLE catalog.camp_media ADD COLUMN IF NOT EXISTS caption TEXT;
+        ALTER TABLE catalog.camp_media ADD COLUMN IF NOT EXISTS external_url TEXT;
+        ALTER TABLE catalog.room_media ADD COLUMN IF NOT EXISTS alt_text TEXT;
+        ALTER TABLE catalog.room_media ADD COLUMN IF NOT EXISTS caption TEXT;
+        ALTER TABLE catalog.room_media ADD COLUMN IF NOT EXISTS external_url TEXT;
+
+        CREATE INDEX IF NOT EXISTS idx_camps_publication_status
+        ON catalog.camps(publication_status, id);
+        CREATE INDEX IF NOT EXISTS idx_camps_place_type
+        ON catalog.camps(place_type_id, publication_status, id);
+        CREATE INDEX IF NOT EXISTS idx_camps_region_publication
+        ON catalog.camps((lower(region)), publication_status, id);
+        CREATE INDEX IF NOT EXISTS idx_camps_city_publication
+        ON catalog.camps((lower(city)), publication_status, id);
+        CREATE INDEX IF NOT EXISTS idx_camps_public_coordinates
+        ON catalog.camps(lat, lng)
+        WHERE publication_status = 'published' AND lower(status) IN ('active', 'published');
+        CREATE INDEX IF NOT EXISTS idx_camp_amenities_camp
+        ON catalog.camp_amenities(camp_id, amenity_id);
+        CREATE INDEX IF NOT EXISTS idx_camp_amenities_amenity
+        ON catalog.camp_amenities(amenity_id, camp_id);
+
+        ALTER TABLE catalog.camps VALIDATE CONSTRAINT camps_slug_format;
+        ALTER TABLE catalog.camps VALIDATE CONSTRAINT camps_publication_status_valid;
+        ALTER TABLE catalog.camps VALIDATE CONSTRAINT camps_place_type_fk;
+        ALTER TABLE catalog.place_contacts VALIDATE CONSTRAINT place_contacts_camp_fk;
+        ALTER TABLE catalog.camp_amenities VALIDATE CONSTRAINT camp_amenities_camp_fk;
+        ALTER TABLE catalog.camp_amenities VALIDATE CONSTRAINT camp_amenities_amenity_fk;
+        """,
+    ),
 )
 
 CURRENT_MIGRATION_VERSION = MIGRATIONS[-1].version
