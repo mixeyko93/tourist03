@@ -71,17 +71,11 @@
       <div class="hero__pattern" aria-hidden="true"></div>
       <div class="site-frame hero__content">
         <p class="eyebrow"><span aria-hidden="true">✦</span> Цифровой гид по России</p>
-        <h1 id="hero-title">Откройте лучшие<br>места отдыха России</h1>
+        <h1 id="hero-title">Откройте лучшие <br class="hero__desktop-break">места отдыха России</h1>
         <p class="hero__lead">Находите места для коротких поездок, долгих выходных и больших впечатлений — на одной живой карте.</p>
         <div class="hero__actions">
           <button class="button button--primary" type="button" data-scroll-to="map-section">Открыть карту <span aria-hidden="true">↘</span></button>
-          <a class="button button--quiet" href="#about">Узнать о проекте</a>
         </div>
-        <dl class="hero__facts" aria-label="Возможности сервиса">
-          <div><dt>Одна карта</dt><dd>для путешествий</dd></div>
-          <div><dt>Реальные места</dt><dd>и контакты</dd></div>
-          <div><dt>Вся Россия</dt><dd>в одном маршруте</dd></div>
-        </dl>
       </div>
     </section>
 
@@ -112,7 +106,7 @@
               </button>
             </div>
           </div>
-          <div class="public-map__canvas" id="map" tabindex="0" aria-label="Интерактивная карта мест отдыха России"></div>
+          <div class="public-map__canvas" id="map" role="region" tabindex="0" aria-label="Интерактивная карта мест отдыха России"></div>
           <div class="public-map__loading" data-map-loading aria-live="polite"><span></span> Загружаем карту впечатлений</div>
           <p class="public-map__status" data-map-status role="status" aria-live="polite"></p>
           <div class="public-map__results" data-map-results aria-live="polite"></div>

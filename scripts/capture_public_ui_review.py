@@ -22,7 +22,7 @@ from html import escape
 from pathlib import Path
 from typing import Iterator
 
-from playwright.sync_api import Browser, Page, sync_playwright
+from playwright.sync_api import Browser, Page, TimeoutError as PlaywrightTimeoutError, sync_playwright
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -123,6 +123,15 @@ def wait_for_map(page: Page) -> None:
     page.wait_for_function("() => document.querySelectorAll('.public-map-marker').length > 0", timeout=15_000)
 
 
+def wait_for_first_map_tile(page: Page) -> None:
+    """Prefer a loaded Leaflet tile in screenshots without requiring external tile availability."""
+
+    try:
+        page.wait_for_selector("#map .leaflet-tile-loaded", timeout=5_000)
+    except PlaywrightTimeoutError:
+        pass
+
+
 def click_visible_marker(page: Page) -> None:
     index = page.locator(".public-map-marker").evaluate_all(
         """nodes => nodes.findIndex((node) => {
@@ -211,9 +220,22 @@ def map_metrics(page: Page, *, width: int, height: int) -> dict[str, float | int
         "hero_height": round(hero["height"]),
         "map_section_top": round(map_section["top"]),
         "map_canvas_top": round(map_canvas["top"]),
+        "visible_map_pixels_first_screen": max(0, round(height - map_canvas["top"])),
         "scroll_until_map_visible": max(0, round(map_canvas["top"] - height)),
         "scroll_until_map_below_header": max(0, round(map_canvas["top"] - header["height"])),
     }
+
+
+def assert_map_first_targets(prefix: str, metrics: dict[str, float | int]) -> None:
+    if prefix == "desktop":
+        assert metrics["map_canvas_top"] <= 650, metrics
+        assert metrics["visible_map_pixels_first_screen"] >= 350, metrics
+        return
+    if prefix == "mobile":
+        assert metrics["map_canvas_top"] <= 580, metrics
+        assert metrics["visible_map_pixels_first_screen"] >= 200, metrics
+        return
+    raise ValueError(f"Unknown review viewport: {prefix}")
 
 
 def measure_map_action(page: Page) -> int:
@@ -233,8 +255,10 @@ def measure_map_action(page: Page) -> int:
 def capture_viewport(page: Page, output_dir: Path, *, prefix: str, width: int, height: int) -> dict[str, float | int]:
     assert_public_contract(page, page.url.rsplit("/", 1)[0])
     metrics = map_metrics(page, width=width, height=height)
+    assert_map_first_targets(prefix, metrics)
     metrics["hero_cta_to_visible_map_ms"] = measure_map_action(page)
 
+    wait_for_first_map_tile(page)
     scroll_to_top(page)
     page.screenshot(path=str(output_dir / f"{prefix}-first-screen.png"))
     page.locator(".hero").screenshot(path=str(output_dir / f"{prefix}-hero.png"))
@@ -247,6 +271,7 @@ def capture_viewport(page: Page, output_dir: Path, *, prefix: str, width: int, h
         page.wait_for_function("() => document.querySelector('#mobile-menu')?.hidden === true", timeout=5_000)
 
     wait_for_map(page)
+    wait_for_first_map_tile(page)
     page.locator("[data-map-shell]").screenshot(path=str(output_dir / f"{prefix}-map.png"))
     click_visible_marker(page)
     page.wait_for_selector(".leaflet-popup .public-map-popup", timeout=10_000)

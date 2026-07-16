@@ -97,7 +97,7 @@ if ("IntersectionObserver" in window && mapShell) {
       ensureMap();
       observer.disconnect();
     }
-  }, { rootMargin: "480px 0px" });
+  }, { rootMargin: "0px 0px -300px" });
   observer.observe(mapShell);
 } else {
   ensureMap();
