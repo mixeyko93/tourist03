@@ -1,0 +1,11 @@
+title = "tourist03 temporary secret-scan policy"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Legacy tracked database exports are quarantined until the approved rotation and history-cleanup window."
+paths = [
+  '''archive/db/tourist03\.sql$''',
+  '''archive/db/tourist03\.dump$''',
+]

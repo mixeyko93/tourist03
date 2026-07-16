@@ -19,6 +19,15 @@ INSECURE_SECRET_VALUES = {
 }
 
 
+def _is_placeholder_secret(value: str) -> bool:
+    normalized = (value or "").strip().lower()
+    return (
+        normalized in INSECURE_SECRET_VALUES
+        or normalized.startswith(("replace-", "your-", "example-"))
+        or "placeholder" in normalized
+    )
+
+
 class Settings(BaseSettings):
     """All environment-controlled application settings.
 
@@ -149,9 +158,9 @@ class Settings(BaseSettings):
         if not self.is_production:
             return self
 
-        if len(self.session_secret_key) < 32 or self.session_secret_key.lower() in INSECURE_SECRET_VALUES:
+        if len(self.session_secret_key) < 32 or _is_placeholder_secret(self.session_secret_key):
             raise ValueError("SESSION_SECRET_KEY must be a stable secret of at least 32 characters in production")
-        if self.pg_password.lower() in {"", "postgres", "change-me", "password"}:
+        if _is_placeholder_secret(self.pg_password) or self.pg_password.lower() in {"postgres", "password"}:
             raise ValueError("PG_PASSWORD must be explicitly configured in production")
         if self.pg_host.lower() in {"", "localhost"}:
             raise ValueError("PG_HOST must be explicitly configured in production")

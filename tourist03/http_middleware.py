@@ -2,6 +2,7 @@
 
 import threading
 import time
+import logging
 from collections import defaultdict, deque
 from typing import Deque, Dict, Optional, Tuple
 
@@ -9,6 +10,14 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from tourist03.csrf import csrf_token_matches
+
+try:
+    import redis
+except ImportError:  # pragma: no cover - requirements include redis in normal installs
+    redis = None
+
+
+logger = logging.getLogger("tourist03.rate_limit")
 
 
 UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
@@ -74,10 +83,32 @@ class InMemoryRateLimiter:
             return True, 0
 
 
+class RedisRateLimiter:
+    """Fixed-window Redis limiter for multi-worker production deployments."""
+
+    def __init__(self, url: str):
+        if redis is None:
+            raise RuntimeError("redis dependency is unavailable")
+        self._client = redis.Redis.from_url(url, decode_responses=True, socket_connect_timeout=1, socket_timeout=1)
+
+    def allow(self, key: str, limit: int, window_seconds: int = 60) -> Tuple[bool, int]:
+        now = int(time.time())
+        bucket = now // window_seconds
+        redis_key = f"tourist03:rate-limit:{key}:{bucket}"
+        count = int(self._client.incr(redis_key))
+        if count == 1:
+            self._client.expire(redis_key, window_seconds)
+        if count > max(limit, 1):
+            return False, max(1, window_seconds - (now % window_seconds))
+        return True, 0
+
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, limiter: Optional[InMemoryRateLimiter] = None):
         super().__init__(app)
         self.limiter = limiter or InMemoryRateLimiter()
+        self.redis_limiter = None
+        self.redis_error_logged = False
 
     @staticmethod
     def _rule(request) -> Optional[Tuple[str, int]]:
@@ -99,7 +130,26 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if rule:
             kind, limit = rule
             host = request.client.host if request.client else "unknown"
-            allowed, retry_after = self.limiter.allow(f"{kind}:{host}", limit)
+            limiter = self.limiter
+            settings = request.app.state.settings
+            if settings.rate_limit_storage == "redis":
+                try:
+                    if self.redis_limiter is None:
+                        self.redis_limiter = RedisRateLimiter(settings.redis_url)
+                    limiter = self.redis_limiter
+                except Exception:
+                    if not self.redis_error_logged:
+                        logger.exception("Redis rate limiter unavailable; using process-local fallback")
+                        self.redis_error_logged = True
+            try:
+                allowed, retry_after = limiter.allow(f"{kind}:{host}", limit)
+            except Exception:
+                if limiter is self.limiter:
+                    raise
+                if not self.redis_error_logged:
+                    logger.exception("Redis rate limiter request failed; using process-local fallback")
+                    self.redis_error_logged = True
+                allowed, retry_after = self.limiter.allow(f"{kind}:{host}", limit)
             if not allowed:
                 return JSONResponse(
                     {"detail": "Too Many Requests"},

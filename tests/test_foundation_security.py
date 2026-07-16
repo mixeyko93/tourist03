@@ -17,7 +17,7 @@ class FoundationSecurityTests(unittest.TestCase):
         settings = Settings(
             environment="production",
             pg_host="postgres.internal",
-            pg_password="database-password-that-is-not-a-placeholder",
+            pg_password="database-password-that-is-private-and-unique",
             session_secret_key="stable-session-secret-with-at-least-thirty-two-characters",
             session_cookie_secure=True,
             cors_origins="https://turist03.ru,https://crm.turist03.ru",
