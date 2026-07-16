@@ -1,4 +1,5 @@
 export type AdminBaseStatus = "Активный" | "Отключен" | "В архиве";
+export type AdminPublicationStatus = "draft" | "in_review" | "published" | "disabled" | "archived" | "rejected";
 
 export type AdminBaseApartment = {
   id: string;
@@ -28,6 +29,28 @@ export type AdminBaseDraft = {
   id: string;
   status: AdminBaseStatus;
   name: string;
+  slug: string;
+  placeTypeId: string;
+  publicationStatus: AdminPublicationStatus;
+  shortDescription: string;
+  region: string;
+  district: string;
+  city: string;
+  locality: string;
+  seasonality: string;
+  workingHours: string;
+  confirmedAt: string;
+  publicEmail: string;
+  publicPhone: string;
+  publicPhoneSecondary: string;
+  publicSite: string;
+  telegramUrl: string;
+  whatsappUrl: string;
+  maxUrl: string;
+  vkUrl: string;
+  videoLinks: string;
+  amenitySlugs: string[];
+  coverPlaceholderConfirmed: boolean;
   lake: string;
   coordinates: string;
   address: string;
@@ -88,6 +111,28 @@ export function createEmptyAdminBaseDraft(): AdminBaseDraft {
     id: "new",
     status: "Активный",
     name: "",
+    slug: "",
+    placeTypeId: "",
+    publicationStatus: "draft",
+    shortDescription: "",
+    region: "",
+    district: "",
+    city: "",
+    locality: "",
+    seasonality: "",
+    workingHours: "{}",
+    confirmedAt: "",
+    publicEmail: "",
+    publicPhone: "",
+    publicPhoneSecondary: "",
+    publicSite: "",
+    telegramUrl: "",
+    whatsappUrl: "",
+    maxUrl: "",
+    vkUrl: "",
+    videoLinks: "",
+    amenitySlugs: [],
+    coverPlaceholderConfirmed: false,
     lake: "",
     coordinates: "",
     address: "",

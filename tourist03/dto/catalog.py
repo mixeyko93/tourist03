@@ -143,7 +143,7 @@ class CampRoomsBusyResponseDTO(OkResponseDTO):
 
 
 class CampUpsertResponseDTO(IdResponseDTO):
-    pass
+    publication_warnings: List[str] = Field(default_factory=list)
 
 
 class UploadResponseDTO(UrlResponseDTO):

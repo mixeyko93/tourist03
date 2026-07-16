@@ -340,12 +340,19 @@ def api_camp_rooms_busy(
 
 async def api_camps_upsert_new(req: Request):
     data = await req.json()
-    return catalog_repo.upsert_camp(None, data, _normalize_move)
+    try:
+        return catalog_repo.upsert_camp(None, data, _normalize_move)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 async def api_camps_upsert(camp_id: int, req: Request):
     data = await req.json()
-    return catalog_repo.upsert_camp(camp_id, data, _normalize_move)
+    try:
+        return catalog_repo.upsert_camp(camp_id, data, _normalize_move)
+    except ValueError as exc:
+        status_code = 404 if str(exc) == "Объект не найден" else 400
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
 
 
 def api_camp_status_update(camp_id: int, payload: CampStatusUpdateRequest):

@@ -6,7 +6,14 @@ import { usePageLoadState } from "../../components/usePageLoadState";
 import { crmPath } from "../../paths";
 import { AdminCard } from "../components/AdminCard";
 import { AdminStatusBadge } from "../components/AdminStatusBadge";
-import { fetchSuperadminBases, fetchSuperadminEvents, type SuperadminBaseSummary, type SuperadminSystemEvent } from "../session";
+import {
+  fetchCatalogDictionaries,
+  fetchSuperadminBases,
+  fetchSuperadminEvents,
+  type SuperadminBaseSummary,
+  type SuperadminPlaceType,
+  type SuperadminSystemEvent,
+} from "../session";
 
 const statusLabels: Record<string, string> = {
   active: "Активна",
@@ -24,6 +31,15 @@ const severityTones: Record<string, "info" | "warning" | "danger" | "neutral"> =
   info: "info",
   warning: "warning",
   critical: "danger",
+};
+
+const publicationLabels: Record<string, string> = {
+  draft: "Черновик",
+  in_review: "На проверке",
+  published: "Опубликован",
+  disabled: "Скрыт",
+  archived: "В архиве",
+  rejected: "Отклонён",
 };
 
 function formatCurrency(value: number | null | undefined) {
@@ -49,6 +65,9 @@ export default function AdminBasesPage() {
   const [items, setItems] = useState<SuperadminBaseSummary[]>([]);
   const [events, setEvents] = useState<SuperadminSystemEvent[]>([]);
   const [search, setSearch] = useState("");
+  const [placeType, setPlaceType] = useState("");
+  const [publicationStatus, setPublicationStatus] = useState("");
+  const [placeTypes, setPlaceTypes] = useState<SuperadminPlaceType[]>([]);
   const [quickMode, setQuickMode] = useState<"all" | "active" | "rooms">("all");
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
@@ -60,12 +79,14 @@ export default function AdminBasesPage() {
     setErrorMessage("");
 
     Promise.all([
-      fetchSuperadminBases({ search, signal: controller.signal }),
+      fetchSuperadminBases({ search, placeType, publicationStatus, signal: controller.signal }),
       fetchSuperadminEvents({ limit: 6, signal: controller.signal }),
+      fetchCatalogDictionaries(controller.signal),
     ])
-      .then(([bases, systemEvents]) => {
+      .then(([bases, systemEvents, dictionaries]) => {
         setItems(bases);
         setEvents(systemEvents);
+        setPlaceTypes(dictionaries.placeTypes);
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) {
@@ -82,7 +103,7 @@ export default function AdminBasesPage() {
       });
 
     return () => controller.abort();
-  }, [reloadKey, search]);
+  }, [reloadKey, search, placeType, publicationStatus]);
 
   const summary = useMemo(() => {
     return items.reduce(
@@ -135,7 +156,7 @@ export default function AdminBasesPage() {
             </div>
           </div>
 
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_repeat(3,minmax(180px,220px))]">
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_repeat(2,minmax(180px,220px))]">
             <label className="relative">
               <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
@@ -145,6 +166,20 @@ export default function AdminBasesPage() {
                 onChange={(event) => setSearch(event.target.value)}
               />
             </label>
+
+            <select className="admin-input" value={placeType} onChange={(event) => setPlaceType(event.target.value)} aria-label="Тип объекта">
+              <option value="">Все типы</option>
+              {placeTypes.map((type) => <option key={type.id} value={type.slug}>{type.name}</option>)}
+            </select>
+
+            <select className="admin-input" value={publicationStatus} onChange={(event) => setPublicationStatus(event.target.value)} aria-label="Статус публикации">
+              <option value="">Все публикации</option>
+              {Object.entries(publicationLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
 
             {[
               { label: "Всего баз", value: summary.total, key: "all" as const },
@@ -171,12 +206,15 @@ export default function AdminBasesPage() {
         ) : null}
 
         <div className="admin-table-shell">
-          <table className="admin-table min-w-[1240px]">
+          <table className="admin-table min-w-[1440px]">
             <thead>
               <tr>
                 <th>Статус</th>
                 <th>ID</th>
                 <th>Название</th>
+                <th>Slug</th>
+                <th>Тип</th>
+                <th>Публикация</th>
                 <th>Озеро</th>
                 <th>Координаты</th>
                 <th>Владелец</th>
@@ -189,7 +227,7 @@ export default function AdminBasesPage() {
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={10}>Загружаем базы отдыха…</td>
+                  <td colSpan={13}>Загружаем объекты…</td>
                 </tr>
               ) : visibleItems.length ? (
                 visibleItems.map((base) => {
@@ -202,6 +240,13 @@ export default function AdminBasesPage() {
                       </td>
                       <td className="text-muted-foreground">#{base.id}</td>
                       <td className="crm-copy-safe font-medium text-foreground">{base.name || "Без названия"}</td>
+                      <td className="crm-copy-safe text-muted-foreground">{base.slug || "—"}</td>
+                      <td>{base.place_type_name || "—"}</td>
+                      <td>
+                        <AdminStatusBadge tone={base.publication_status === "published" ? "success" : base.publication_status === "in_review" ? "warning" : "neutral"}>
+                          {publicationLabels[base.publication_status || ""] || "Без статуса"}
+                        </AdminStatusBadge>
+                      </td>
                       <td>{base.lake_name || "—"}</td>
                       <td>
                         <span className="inline-flex items-center gap-2">
@@ -236,7 +281,7 @@ export default function AdminBasesPage() {
                 })
               ) : (
                 <tr>
-                  <td colSpan={10}>По текущим фильтрам базы не найдены.</td>
+                  <td colSpan={13}>По текущим фильтрам объекты не найдены.</td>
                 </tr>
               )}
             </tbody>

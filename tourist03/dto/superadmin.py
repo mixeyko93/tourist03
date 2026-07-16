@@ -40,6 +40,12 @@ class SuperAdminUserHistoryResponseDTO(BaseModel):
 class SuperAdminCampSummaryDTO(BaseModel):
     id: int
     name: Optional[str] = None
+    slug: Optional[str] = None
+    publication_status: Optional[str] = None
+    short_description: Optional[str] = None
+    place_type_id: Optional[int] = None
+    place_type_slug: Optional[str] = None
+    place_type_name: Optional[str] = None
     address: Optional[str] = None
     lake_name: Optional[str] = None
     status: Optional[str] = None
