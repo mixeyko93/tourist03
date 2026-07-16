@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -297,6 +298,11 @@ def capture_detail_page(page: Page, output_dir: Path, *, prefix: str, base_url: 
     page.wait_for_selector(".place-hero h1", timeout=10_000)
     assert page.locator('link[rel="canonical"]').get_attribute("href") == f"{REVIEW_BASE_URL}{href}"
     assert page.locator('script[type="application/ld+json"]').count() == 2
+    updated_time = page.locator(".place-updated time")
+    assert updated_time.count() == 1
+    assert re.fullmatch(r"Актуально на \d{2}\.\d{2}\.\d{4}", updated_time.inner_text())
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", updated_time.get_attribute("datetime") or "")
+    assert "T" not in updated_time.inner_text()
     skip_link = page.locator(".skip-link")
     assert skip_link.bounding_box()["y"] + skip_link.bounding_box()["height"] <= 0
     page.keyboard.press("Tab")

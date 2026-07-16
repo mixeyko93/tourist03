@@ -7,6 +7,7 @@ import httpx
 
 import app as app_module
 from tourist03.public_catalog import normalize_bbox, normalize_contact, safe_video_url, validate_slug
+from tourist03.services.pages import format_public_date
 from tourist03.settings import Settings
 
 
@@ -84,12 +85,26 @@ class PublicCatalogNormalizationTests(unittest.TestCase):
     def test_contacts_and_video_urls_use_context_allowlists(self):
         self.assertEqual(normalize_contact("phone", "+7 (999) 000-00-00")["url"], "tel:+79990000000")
         self.assertEqual(normalize_contact("email", "HELLO@example.org")["url"], "mailto:hello@example.org")
+        self.assertEqual(normalize_contact("telegram", "https://t.me/turistika")["url"], "https://t.me/turistika")
+        self.assertEqual(normalize_contact("whatsapp", "https://wa.me/79990000000")["url"], "https://wa.me/79990000000")
         self.assertEqual(normalize_contact("max", "https://max.ru/turistika")["url"], "https://max.ru/turistika")
         self.assertIsNone(normalize_contact("max", "https://example.org/fake-max"))
         self.assertIsNone(normalize_contact("website", "javascript:alert(1)"))
+        self.assertIsNone(normalize_contact("whatsapp", "javascript:alert(1)"))
         self.assertIsNone(normalize_contact("telegram", "https://evil.example/turistika"))
         self.assertEqual(safe_video_url("https://rutube.ru/video/test"), "https://rutube.ru/video/test")
         self.assertIsNone(safe_video_url("https://example.org/video"))
+
+    def test_public_date_uses_calendar_date_and_safe_fallback(self):
+        self.assertEqual(
+            format_public_date("2026-07-15T23:30:00-10:00"),
+            ("Актуально на 15.07.2026", "2026-07-15"),
+        )
+        self.assertEqual(
+            format_public_date(None, "2026-07-14T09:00:00Z"),
+            ("Актуально на 14.07.2026", "2026-07-14"),
+        )
+        self.assertEqual(format_public_date("not-a-date", ""), (None, None))
 
 
 class PublicCatalogHttpTests(unittest.IsolatedAsyncioTestCase):
@@ -158,7 +173,15 @@ class PublicCatalogHttpTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.client.get("/api/public/places/BAD_slug")).status_code, 404)
 
     async def test_ssr_metadata_escaping_and_sitemap_include_only_repository_rows(self):
-        place = public_place_detail(name='<script>alert("x")</script>')
+        place = public_place_detail(
+            name='<script>alert("x")</script>',
+            contacts=[
+                {"contact_type": "phone", "label": "Телефон", "value": "+79990000000", "url": "tel:+79990000000", "sort_order": 10},
+                {"contact_type": "telegram", "label": "Telegram", "value": "Telegram", "url": "https://t.me/turistika", "sort_order": 20},
+                {"contact_type": "whatsapp", "label": "WhatsApp", "value": "WhatsApp", "url": "https://wa.me/79990000000", "sort_order": 30},
+                {"contact_type": "max", "label": "MAX", "value": "MAX", "url": "https://max.ru/turistika", "sort_order": 40},
+            ],
+        )
         with patch("tourist03.services.pages.catalog_repo.get_public_place", return_value=place):
             response = await self.client.get("/places/sosnovyy-bereg")
         self.assertEqual(response.status_code, 200, response.text)
@@ -168,6 +191,13 @@ class PublicCatalogHttpTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('<script>alert("x")</script>', response.text)
         self.assertIn("&lt;script&gt;", response.text)
         self.assertNotIn("private owner", response.text)
+        self.assertIn('<time datetime="2026-07-01">Актуально на 01.07.2026</time>', response.text)
+        self.assertNotIn("2026-07-15T00:00:00", response.text)
+        self.assertIn('href="tel:+79990000000"', response.text)
+        self.assertIn('href="https://t.me/turistika"', response.text)
+        self.assertIn('href="https://wa.me/79990000000"', response.text)
+        self.assertIn('href="https://max.ru/turistika"', response.text)
+        self.assertIn('href="https://www.openstreetmap.org/?mlat=61.7&amp;mlon=30.7#map=14/61.7/30.7"', response.text)
 
         with patch(
             "tourist03.services.pages.catalog_repo.list_published_place_sitemap",

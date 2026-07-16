@@ -1,6 +1,7 @@
 import os
 import json
 import re
+from datetime import date, datetime
 from html import escape as escape_html
 from pathlib import Path
 from urllib.parse import quote
@@ -51,6 +52,33 @@ def _seo_text(value: str, *, fallback: str, limit: int) -> str:
     if len(text) <= limit:
         return text
     return text[: max(1, limit - 1)].rstrip(" ,.;:-") + "…"
+
+
+def format_public_date(*values: object) -> tuple[str | None, str | None]:
+    """Return a Russian label and HTML date value without shifting its calendar day.
+
+    Catalog rows normally contain ``datetime`` values, while the repeatable public
+    UI fixture contains ISO strings.  The public page deliberately uses the date
+    component as supplied rather than converting it to the browser or server
+    timezone: an update made on 15 July must remain 15 July for visitors.
+    """
+
+    for value in values:
+        calendar_day: date | None = None
+        if isinstance(value, datetime):
+            calendar_day = value.date()
+        elif isinstance(value, date):
+            calendar_day = value
+        elif isinstance(value, str):
+            raw = value.strip()
+            if len(raw) == 10 or (len(raw) > 10 and raw[10] in {"T", " "}):
+                try:
+                    calendar_day = date.fromisoformat(raw[:10])
+                except ValueError:
+                    calendar_day = None
+        if calendar_day is not None:
+            return f"Актуально на {calendar_day:%d.%m.%Y}", calendar_day.isoformat()
+    return None, None
 
 
 def _absolute_public_url(base_url: str, value: str) -> str:
@@ -129,8 +157,7 @@ def public_place_page(request: Request, slug: str):
     route_url = None
     if place.get("lat") is not None and place.get("lng") is not None:
         route_url = f"https://www.openstreetmap.org/?mlat={place['lat']}&mlon={place['lng']}#map=14/{place['lat']}/{place['lng']}"
-    updated_at = place.get("updated_at")
-    updated_label = updated_at.strftime("%d.%m.%Y") if hasattr(updated_at, "strftime") else str(updated_at or "")
+    updated_label, updated_datetime = format_public_date(place.get("confirmed_at"), place.get("updated_at"))
     template = PUBLIC_TEMPLATE_ENV.get_template("place-detail.html")
     return HTMLResponse(
         template.render(
@@ -144,6 +171,7 @@ def public_place_page(request: Request, slug: str):
             breadcrumbs_data=breadcrumbs,
             route_url=route_url,
             updated_label=updated_label,
+            updated_datetime=updated_datetime,
         ),
         headers={"Cache-Control": "public, max-age=120"},
     )
