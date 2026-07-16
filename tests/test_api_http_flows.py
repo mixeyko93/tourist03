@@ -291,11 +291,30 @@ class ApiHttpFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(users_response.status_code, 401)
         self.assertEqual(users_response.json(), {"detail": "Нет доступа"})
 
-    async def test_superadmin_session_requires_login_and_password_when_configured(self):
+    async def test_superadmin_session_requires_valid_database_credentials(self):
         with ExitStack() as stack:
-            stack.enter_context(patch("tourist03.security.SUPERADMIN_API_KEY", "super-key"))
-            stack.enter_context(patch("tourist03.security.SUPERADMIN_LOGIN", "admin"))
-            stack.enter_context(patch("tourist03.security.SUPERADMIN_PASSWORD", "super-pass"))
+            stack.enter_context(patch("tourist03.services.superadmin.is_local_superadmin_bypass", return_value=False))
+            stack.enter_context(
+                patch(
+                    "tourist03.services.superadmin.superadmin_repo.get_superadmin_account_by_login",
+                    return_value={
+                        "id": 3,
+                        "login": "admin",
+                        "password_hash": "hashed-password",
+                        "display_name": "Главный суперадмин",
+                        "is_root": True,
+                        "is_active": True,
+                        "archived_at": None,
+                    },
+                )
+            )
+            stack.enter_context(
+                patch(
+                    "tourist03.services.superadmin.verify_password",
+                    side_effect=lambda password, _password_hash: password == "super-pass",
+                )
+            )
+            stack.enter_context(patch("tourist03.services.superadmin.log_crm_audit_event"))
 
             missing_creds = await self.client.post("/api/superadmin/session", json={"login": "admin"})
             valid_creds = await self.client.post(
