@@ -470,6 +470,21 @@ def get_public_place(slug: str):
     return row
 
 
+def list_published_place_sitemap():
+    with _db_conn("catalog") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT slug, updated_at
+            FROM catalog.camps
+            WHERE publication_status = 'published'
+              AND lower(COALESCE(status, '')) IN ('active', 'published')
+            ORDER BY lower(slug), id
+            """
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+
 def list_camp_photos(camp_id: int):
     with _db_conn("catalog") as conn:
         cur = conn.cursor()
