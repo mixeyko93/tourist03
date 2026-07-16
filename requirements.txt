@@ -1,22 +1,23 @@
-fastapi==0.115.0
-uvicorn[standard]==0.30.6
+fastapi==0.128.8
+uvicorn[standard]==0.39.0
 jinja2==3.1.6
 aiofiles==23.2.1
-python-multipart==0.0.19
+python-multipart==0.0.20
 
 # Telegram bot (aiogram v3)
-aiogram==3.12.0
+aiogram==3.22.0
+aiohttp==3.12.15
 
 # VK bot (Long Poll API)
 vk_api==11.9.9
 
 # Опционально: загрузка переменных из .env (если используешь)
-python-dotenv==1.0.1
+python-dotenv==1.2.1
 pydantic-settings==2.7.1
 psycopg2-binary>=2.9.9
 redis==5.2.1
 passlib[bcrypt]==1.7.4
 itsdangerous==2.2.0
 email-validator==2.3.0
-Pillow>=10.0.0
+Pillow>=11.3.0
 pyzbar>=0.1.9
