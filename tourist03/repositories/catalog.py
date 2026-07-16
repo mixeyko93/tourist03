@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Optional
 
 from tourist03.db import _db_conn, _pg_connect
+from tourist03.public_catalog import normalize_contact, safe_public_asset_url, safe_video_url
 
 
 CAMP_SELECT_ALL = """
@@ -11,8 +12,12 @@ CAMP_SELECT_ALL = """
            rooms_count, beds_count, address, phone, site_url, emoji_size,
            bbq_count, bbq_shared_count, bath_count, sauna_count,
            pools_private_count, pools_shared_count,
-           description,
-           housing_type
+           description, housing_type,
+           slug, place_type_id, short_description, region, district, city, locality,
+           seasonality, working_hours, publication_status, published_at, confirmed_at,
+           created_at, updated_at, content_version,
+           public_email, public_phone, public_phone_secondary, public_site_url,
+           vk_url, telegram_url, whatsapp_url, max_url, video_urls, metadata
     FROM catalog.camps
 """
 
@@ -25,7 +30,7 @@ PUBLIC_CAMP_SELECT = """
            description, housing_type
     FROM catalog.camps
 """
-PUBLIC_CAMP_STATUS_SQL = "lower(status) IN ('active', 'published')"
+PUBLIC_CAMP_STATUS_SQL = "lower(status) IN ('active', 'published') AND publication_status = 'published'"
 
 
 def list_camps():
@@ -63,6 +68,406 @@ def get_public_camp(camp_id: int):
         )
         row = cur.fetchone()
         return dict(row) if row else None
+
+
+def list_place_types(*, include_inactive: bool = False):
+    with _db_conn("catalog") as conn:
+        cur = conn.cursor()
+        where = "" if include_inactive else "WHERE is_active = TRUE"
+        cur.execute(
+            f"""
+            SELECT id, slug, name, plural_name, marker_key, icon_key, sort_order, config
+            FROM catalog.place_types
+            {where}
+            ORDER BY sort_order, id
+            """
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+
+def list_public_amenities():
+    with _db_conn("catalog") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT id, slug, name, category, icon_key, sort_order
+            FROM catalog.amenities
+            WHERE is_active = TRUE
+            ORDER BY sort_order, id
+            """
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+
+def _place_type_from_row(row: dict) -> dict:
+    return {
+        "id": int(row.pop("place_type_id")),
+        "slug": row.pop("place_type_slug"),
+        "name": row.pop("place_type_name"),
+        "plural_name": row.pop("place_type_plural_name"),
+        "marker_key": row.pop("place_type_marker_key"),
+        "icon_key": row.pop("place_type_icon_key"),
+        "sort_order": int(row.pop("place_type_sort_order") or 0),
+        "config": row.pop("place_type_config") or {},
+    }
+
+
+def _list_public_contacts_for_ids(cur, camp_ids: list[int]) -> dict[int, list[dict]]:
+    if not camp_ids:
+        return {}
+    cur.execute(
+        """
+        SELECT camp_id, contact_type, label, value, public_url, sort_order
+        FROM catalog.place_contacts
+        WHERE camp_id = ANY(%s)
+          AND is_public = TRUE
+        ORDER BY camp_id, sort_order, id
+        """,
+        (camp_ids,),
+    )
+    grouped: dict[int, list[dict]] = {}
+    for raw in cur.fetchall():
+        row = dict(raw)
+        normalized = normalize_contact(row["contact_type"], row["value"], row.get("public_url"))
+        if not normalized:
+            continue
+        grouped.setdefault(int(row["camp_id"]), []).append(
+            {
+                "contact_type": row["contact_type"],
+                "label": row.get("label"),
+                "value": normalized["value"],
+                "url": normalized["url"],
+                "sort_order": int(row.get("sort_order") or 0),
+            }
+        )
+    return grouped
+
+
+def _list_public_amenities_for_ids(cur, camp_ids: list[int]) -> dict[int, list[dict]]:
+    if not camp_ids:
+        return {}
+    cur.execute(
+        """
+        SELECT ca.camp_id, a.id, a.slug, a.name, a.category, a.icon_key, a.sort_order, ca.value
+        FROM catalog.camp_amenities ca
+        JOIN catalog.amenities a ON a.id = ca.amenity_id
+        WHERE ca.camp_id = ANY(%s)
+          AND a.is_active = TRUE
+        ORDER BY ca.camp_id, a.sort_order, a.id
+        """,
+        (camp_ids,),
+    )
+    grouped: dict[int, list[dict]] = {}
+    for raw in cur.fetchall():
+        row = dict(raw)
+        camp_id = int(row.pop("camp_id"))
+        row["sort_order"] = int(row.get("sort_order") or 0)
+        grouped.setdefault(camp_id, []).append(row)
+    return grouped
+
+
+def _public_place_select() -> str:
+    return """
+        SELECT
+            c.id,
+            c.slug,
+            COALESCE(NULLIF(c.name, ''), 'Объект Туристики') AS name,
+            c.short_description,
+            c.region,
+            c.city,
+            c.locality,
+            c.lat,
+            c.lng,
+            c.min_price,
+            pt.id AS place_type_id,
+            pt.slug AS place_type_slug,
+            pt.name AS place_type_name,
+            pt.plural_name AS place_type_plural_name,
+            pt.marker_key AS place_type_marker_key,
+            pt.icon_key AS place_type_icon_key,
+            pt.sort_order AS place_type_sort_order,
+            pt.config AS place_type_config,
+            COALESCE(
+                (
+                    SELECT cm.url
+                    FROM catalog.camp_media cm
+                    WHERE cm.camp_id = c.id
+                      AND cm.media_type = 'image'
+                      AND cm.moderation_status = 'approved'
+                    ORDER BY cm.cover DESC, cm.sort, cm.id
+                    LIMIT 1
+                ),
+                (
+                    SELECT cp.url
+                    FROM catalog.camp_photos cp
+                    WHERE cp.camp_id = c.id
+                    ORDER BY cp.cover DESC, cp.sort, cp.id
+                    LIMIT 1
+                ),
+                NULLIF(c.photo_main, '')
+            ) AS cover
+        FROM catalog.camps c
+        JOIN catalog.place_types pt ON pt.id = c.place_type_id
+    """
+
+
+def list_public_places(
+    *,
+    q: Optional[str] = None,
+    place_type: Optional[str] = None,
+    region: Optional[str] = None,
+    city: Optional[str] = None,
+    amenities: Optional[list[str]] = None,
+    bbox: Optional[tuple[float, float, float, float]] = None,
+    limit: int = 50,
+    offset: int = 0,
+):
+    clauses = ["c.publication_status = 'published'", "lower(COALESCE(c.status, '')) IN ('active', 'published')"]
+    params: list = []
+    if q:
+        clauses.append(
+            "(c.name ILIKE %s OR c.short_description ILIKE %s OR c.address ILIKE %s OR c.region ILIKE %s OR c.city ILIKE %s OR c.locality ILIKE %s)"
+        )
+        pattern = f"%{q}%"
+        params.extend([pattern] * 6)
+    if place_type:
+        clauses.append("lower(pt.slug) = %s")
+        params.append(place_type.lower())
+    if region:
+        clauses.append("lower(c.region) = lower(%s)")
+        params.append(region)
+    if city:
+        clauses.append("lower(c.city) = lower(%s)")
+        params.append(city)
+    if amenities:
+        clauses.append(
+            """
+            EXISTS (
+                SELECT 1
+                FROM catalog.camp_amenities filter_ca
+                JOIN catalog.amenities filter_a ON filter_a.id = filter_ca.amenity_id
+                WHERE filter_ca.camp_id = c.id
+                  AND filter_a.is_active = TRUE
+                  AND lower(filter_a.slug) = ANY(%s)
+            )
+            """
+        )
+        params.append([slug.lower() for slug in amenities])
+    if bbox:
+        min_lng, min_lat, max_lng, max_lat = bbox
+        clauses.extend(["c.lng BETWEEN %s AND %s", "c.lat BETWEEN %s AND %s"])
+        params.extend([min_lng, max_lng, min_lat, max_lat])
+
+    where_sql = " AND ".join(clauses)
+    with _db_conn("catalog") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT COUNT(*) AS total
+            FROM catalog.camps c
+            JOIN catalog.place_types pt ON pt.id = c.place_type_id
+            WHERE {where_sql}
+            """,
+            tuple(params),
+        )
+        total = int(cur.fetchone()["total"])
+        cur.execute(
+            _public_place_select()
+            + f" WHERE {where_sql} ORDER BY pt.sort_order, lower(c.name), c.id LIMIT %s OFFSET %s",
+            tuple([*params, limit, offset]),
+        )
+        rows = [dict(row) for row in cur.fetchall()]
+        camp_ids = [int(row["id"]) for row in rows]
+        contacts = _list_public_contacts_for_ids(cur, camp_ids)
+        amenities_by_camp = _list_public_amenities_for_ids(cur, camp_ids)
+
+    items = []
+    for row in rows:
+        camp_id = int(row["id"])
+        row["place_type"] = _place_type_from_row(row)
+        row["cover"] = safe_public_asset_url(row.get("cover") or "")
+        row["primary_contacts"] = contacts.get(camp_id, [])[:2]
+        row["key_amenities"] = amenities_by_camp.get(camp_id, [])[:6]
+        items.append(row)
+    return {"items": items, "total": total, "limit": limit, "offset": offset}
+
+
+def _public_gallery(cur, camp_id: int) -> list[dict]:
+    cur.execute(
+        """
+        SELECT id, media_type, url, poster_url, alt_text, caption, cover, sort
+        FROM catalog.camp_media
+        WHERE camp_id = %s
+          AND moderation_status = 'approved'
+        ORDER BY cover DESC, sort, id
+        """,
+        (camp_id,),
+    )
+    rows = [dict(row) for row in cur.fetchall()]
+    if not rows:
+        cur.execute(
+            """
+            SELECT id, 'image' AS media_type, url, NULL::text AS poster_url,
+                   NULL::text AS alt_text, NULL::text AS caption,
+                   (cover = 1) AS cover, sort
+            FROM catalog.camp_photos
+            WHERE camp_id = %s
+            ORDER BY cover DESC, sort, id
+            """,
+            (camp_id,),
+        )
+        rows = [dict(row) for row in cur.fetchall()]
+    gallery = []
+    for row in rows:
+        media_type = str(row.get("media_type") or "image").lower()
+        url = safe_video_url(row.get("url") or "") if media_type == "video" else safe_public_asset_url(row.get("url") or "")
+        if not url:
+            continue
+        poster = safe_public_asset_url(row.get("poster_url") or "")
+        gallery.append(
+            {
+                "id": row.get("id"),
+                "media_type": media_type,
+                "url": url,
+                "poster_url": poster,
+                "alt_text": row.get("alt_text"),
+                "caption": row.get("caption"),
+                "cover": bool(row.get("cover")),
+                "sort_order": int(row.get("sort") or 0),
+            }
+        )
+    return gallery
+
+
+def _public_rooms(cur, camp_id: int) -> list[dict]:
+    cur.execute(
+        """
+        SELECT id, name, room_type, capacity, price, description, photo_main
+        FROM catalog.rooms
+        WHERE camp_id = %s
+        ORDER BY id
+        """,
+        (camp_id,),
+    )
+    rooms = [dict(row) for row in cur.fetchall()]
+    if not rooms:
+        return []
+    room_ids = [int(room["id"]) for room in rooms]
+    cur.execute(
+        """
+        SELECT id, room_id, media_type, url, poster_url, alt_text, caption, cover, sort
+        FROM catalog.room_media
+        WHERE camp_id = %s
+          AND room_id = ANY(%s)
+          AND moderation_status = 'approved'
+        ORDER BY room_id, cover DESC, sort, id
+        """,
+        (camp_id, room_ids),
+    )
+    media_by_room: dict[int, list[dict]] = {}
+    for raw in cur.fetchall():
+        row = dict(raw)
+        room_id = int(row.pop("room_id"))
+        media_type = str(row.get("media_type") or "image").lower()
+        url = safe_video_url(row.get("url") or "") if media_type == "video" else safe_public_asset_url(row.get("url") or "")
+        if not url:
+            continue
+        media_by_room.setdefault(room_id, []).append(
+            {
+                "id": row.get("id"),
+                "media_type": media_type,
+                "url": url,
+                "poster_url": safe_public_asset_url(row.get("poster_url") or ""),
+                "alt_text": row.get("alt_text"),
+                "caption": row.get("caption"),
+                "cover": bool(row.get("cover")),
+                "sort_order": int(row.get("sort") or 0),
+            }
+        )
+    missing_room_ids = [room_id for room_id in room_ids if room_id not in media_by_room]
+    if missing_room_ids:
+        cur.execute(
+            """
+            SELECT id, room_id, url, cover, sort
+            FROM catalog.room_photos
+            WHERE camp_id = %s AND room_id = ANY(%s)
+            ORDER BY room_id, cover DESC, sort, id
+            """,
+            (camp_id, missing_room_ids),
+        )
+        for raw in cur.fetchall():
+            row = dict(raw)
+            url = safe_public_asset_url(row.get("url") or "")
+            if not url:
+                continue
+            media_by_room.setdefault(int(row["room_id"]), []).append(
+                {
+                    "id": row.get("id"),
+                    "media_type": "image",
+                    "url": url,
+                    "poster_url": None,
+                    "alt_text": None,
+                    "caption": None,
+                    "cover": bool(row.get("cover")),
+                    "sort_order": int(row.get("sort") or 0),
+                }
+            )
+    output = []
+    for room in rooms:
+        room_id = int(room["id"])
+        media = media_by_room.get(room_id, [])
+        cover = next((item["url"] for item in media if item["cover"]), None)
+        room["cover"] = cover or safe_public_asset_url(room.pop("photo_main") or "")
+        room["media"] = media
+        output.append(room)
+    return output
+
+
+def get_public_place(slug: str):
+    with _db_conn("catalog") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            _public_place_select()
+            + """
+              WHERE lower(c.slug) = lower(%s)
+                AND c.publication_status = 'published'
+                AND lower(COALESCE(c.status, '')) IN ('active', 'published')
+            """,
+            (slug,),
+        )
+        raw = cur.fetchone()
+        if not raw:
+            return None
+        row = dict(raw)
+        camp_id = int(row["id"])
+        cur.execute(
+            """
+            SELECT description, district, address, seasonality, working_hours,
+                   confirmed_at, updated_at, video_urls
+            FROM catalog.camps
+            WHERE id = %s
+            """,
+            (camp_id,),
+        )
+        details = dict(cur.fetchone())
+        contacts = _list_public_contacts_for_ids(cur, [camp_id]).get(camp_id, [])
+        amenities = _list_public_amenities_for_ids(cur, [camp_id]).get(camp_id, [])
+        gallery = _public_gallery(cur, camp_id)
+        rooms = _public_rooms(cur, camp_id)
+
+    row["place_type"] = _place_type_from_row(row)
+    row["cover"] = safe_public_asset_url(row.get("cover") or "")
+    row["primary_contacts"] = contacts[:2]
+    row["key_amenities"] = amenities[:6]
+    row.update({key: value for key, value in details.items() if key != "video_urls"})
+    row["contacts"] = contacts
+    row["amenities"] = amenities
+    row["gallery"] = gallery
+    row["rooms"] = rooms
+    video_values = details.get("video_urls") if isinstance(details.get("video_urls"), list) else []
+    media_videos = [item["url"] for item in gallery if item["media_type"] == "video"]
+    row["videos"] = list(dict.fromkeys(filter(None, [*(safe_video_url(str(value)) for value in video_values), *media_videos])))
+    return row
 
 
 def list_camp_photos(camp_id: int):
