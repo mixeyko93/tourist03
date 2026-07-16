@@ -6,6 +6,7 @@ from contextlib import closing
 import httpx
 import psycopg2
 from psycopg2.extras import RealDictCursor
+from tourist03.settings import Settings, clear_settings_override
 
 try:
     from tests.postgres_harness import TemporaryPostgres
@@ -32,13 +33,37 @@ class PostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
             cls.pg.start()
 
             os.environ.update(cls.pg.as_environ())
-            os.environ["DB_INIT"] = "1"
+            os.environ["ENVIRONMENT"] = "test"
+            os.environ["DB_INIT"] = "0"
             os.environ["SESSION_SECRET_KEY"] = "integration-session-secret"
             os.environ["SUPERADMIN_API_KEY"] = "integration-superadmin-key"
 
             cls.app_module = importlib.import_module("app")
+            clear_settings_override()
+            cls.app = cls.app_module.create_app(
+                Settings(
+                    environment="test",
+                    pg_host=os.environ["PG_HOST"],
+                    pg_port=int(os.environ["PG_PORT"]),
+                    pg_db=os.environ["PG_DB"],
+                    pg_user=os.environ["PG_USER"],
+                    pg_password=os.environ["PG_PASSWORD"],
+                    session_secret_key=os.environ["SESSION_SECRET_KEY"],
+                    superadmin_api_key=os.environ["SUPERADMIN_API_KEY"],
+                    feature_public_user_auth=True,
+                    feature_public_booking=True,
+                    rate_limit_auth_per_minute=1_000,
+                    rate_limit_login_per_minute=1_000,
+                    rate_limit_upload_per_minute=1_000,
+                    rate_limit_public_post_per_minute=1_000,
+                )
+            )
             cls.security = importlib.import_module("tourist03.security")
             cls.migrations_module = importlib.import_module("tourist03.migrations")
+            cls._security_key_backup = cls.security.SUPERADMIN_API_KEY
+            cls.security.SUPERADMIN_API_KEY = os.environ["SUPERADMIN_API_KEY"]
+            cls.initial_migration_status = cls.migrations_module.migration_status()
+            cls.migrations_module.run_migrations()
         except Exception:
             cls.pg.stop()
             for key, value in cls._env_backup.items():
@@ -53,6 +78,9 @@ class PostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         try:
             cls.pg.stop()
         finally:
+            if hasattr(cls, "security"):
+                cls.security.SUPERADMIN_API_KEY = cls._security_key_backup
+            clear_settings_override()
             for key, value in cls._env_backup.items():
                 if value is None:
                     os.environ.pop(key, None)
@@ -68,6 +96,7 @@ class PostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
             "PG_DB",
             "PG_USER",
             "PG_PASSWORD",
+            "ENVIRONMENT",
             "DB_INIT",
             "SESSION_SECRET_KEY",
             "SUPERADMIN_API_KEY",
@@ -128,20 +157,20 @@ class PostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):
         self.client = httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=self.app_module.app),
+            transport=httpx.ASGITransport(app=self.app),
             base_url="http://testserver",
         )
 
     async def asyncTearDown(self):
         await self.client.aclose()
 
-    def _seed_camp(self, *, name="Blue Lake", housing_type="apartments") -> int:
+    def _seed_camp(self, *, name="Blue Lake", housing_type="apartments", status="active") -> int:
         self._execute(
             """
             INSERT INTO catalog.camps (name, housing_type, address, status)
             VALUES (%s, %s, %s, %s)
             """,
-            (name, housing_type, "Test address", "active"),
+            (name, housing_type, "Test address", status),
         )
         row = self._fetch_one("SELECT id FROM catalog.camps ORDER BY id DESC LIMIT 1")
         return int(row["id"])
@@ -214,7 +243,18 @@ class PostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(body["ok"])
         return body["token"]
 
-    async def test_bootstrap_creates_required_tables(self):
+    async def _csrf_headers(self):
+        response = await self.client.get("/api/security/csrf")
+        self.assertEqual(response.status_code, 200, response.text)
+        return {"x-csrf-token": response.json()["token"]}
+
+    async def test_migrations_apply_from_empty_database(self):
+        self.assertFalse(self.initial_migration_status["current"])
+        self.assertEqual(
+            self.initial_migration_status["missing_versions"],
+            [step.version for step in self.migrations_module.MIGRATIONS],
+        )
+
         rows = self._fetch_all(
             """
             SELECT table_schema, table_name
@@ -257,7 +297,7 @@ class PostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(
             [row["version"] for row in migration_rows],
-            ["0001_base_schema", "0002_booking_rules"],
+            [step.version for step in self.migrations_module.MIGRATIONS],
         )
 
     async def test_migrations_are_idempotent(self):
@@ -268,11 +308,50 @@ class PostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(
             rows,
-            [
-                {"version": "0001_base_schema", "cnt": 1},
-                {"version": "0002_booking_rules", "cnt": 1},
-            ],
+            [{"version": step.version, "cnt": 1} for step in self.migrations_module.MIGRATIONS],
         )
+
+    async def test_ready_requires_current_migration_version(self):
+        ready_response = await self.client.get("/ready")
+        self.assertEqual(ready_response.status_code, 200, ready_response.text)
+        self.assertEqual(ready_response.json()["checks"]["migrations"], "current")
+
+        self._execute(
+            "DELETE FROM public.schema_migrations WHERE version = %s",
+            (self.migrations_module.CURRENT_MIGRATION_VERSION,),
+        )
+        try:
+            stale_response = await self.client.get("/ready")
+            self.assertEqual(stale_response.status_code, 503, stale_response.text)
+            self.assertEqual(stale_response.json()["checks"]["migrations"], "outdated")
+        finally:
+            self.migrations_module.run_migrations()
+
+    async def test_public_catalog_excludes_non_public_statuses(self):
+        active_id = self._seed_camp(name="Active", status="active")
+        published_id = self._seed_camp(name="Published", status="published")
+        disabled_id = self._seed_camp(name="Disabled", status="disabled")
+        archived_id = self._seed_camp(name="Archived", status="archived")
+        draft_id = self._seed_camp(name="Draft", status="draft")
+        self._execute(
+            "INSERT INTO catalog.camps (name, housing_type, address, status) VALUES (%s, %s, %s, NULL)",
+            ("Null status", "apartments", "Test address"),
+        )
+        null_id = int(self._fetch_one("SELECT id FROM catalog.camps WHERE name = %s", ("Null status",))["id"])
+        self._execute(
+            "INSERT INTO catalog.camp_photos (camp_id, url, sort, cover) VALUES (%s, %s, %s, %s)",
+            (disabled_id, "/static/uploads/hidden.jpg", 0, 1),
+        )
+
+        list_response = await self.client.get("/api/camps", params={"status": "active"})
+        self.assertEqual(list_response.status_code, 200, list_response.text)
+        self.assertEqual({item["id"] for item in list_response.json()}, {active_id, published_id})
+
+        for camp_id in (disabled_id, archived_id, draft_id, null_id):
+            detail_response = await self.client.get(f"/api/camps/{camp_id}")
+            self.assertEqual(detail_response.status_code, 404, detail_response.text)
+        photos_response = await self.client.get(f"/api/camps/{disabled_id}/photos")
+        self.assertEqual(photos_response.status_code, 404, photos_response.text)
 
     async def test_booking_constraints_reject_invalid_rows(self):
         camp_id = self._seed_camp()
@@ -512,8 +591,11 @@ class PostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(login_response.status_code, 200, login_response.text)
 
+        csrf_headers = await self._csrf_headers()
+
         create_response = await self.client.post(
             "/api/admin/bookings",
+            headers=csrf_headers,
             json={
                 "camp_id": camp_id,
                 "room_id": room_id,
@@ -546,9 +628,14 @@ class PostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body["status"], "ok")
         self.assertTrue(body["admin_id"] > 0)
 
+        csrf_headers = await self._csrf_headers()
+
         duplicate_response = await self.client.post(
             "/api/superadmin/accounts",
-            headers={"x-superadmin-key": os.environ["SUPERADMIN_API_KEY"]},
+            headers={
+                "x-superadmin-key": os.environ["SUPERADMIN_API_KEY"],
+                **csrf_headers,
+            },
             json={
                 "login": "new.admin",
                 "password": "strong-password",
