@@ -229,7 +229,15 @@ export function initialisePublicMap({
     markers.clear();
     places.filter((place) => isCoordinate(place.lat) && isCoordinate(place.lng)).forEach((place) => {
       const marker = window.L.marker([place.lat, place.lng], { icon: markerIcon(place), title: place.name || "Место отдыха" });
-      marker.bindPopup(popupContent(place), { closeButton: true, maxWidth: 310, minWidth: 240, offset: [0, -2] });
+      const compactPopup = window.matchMedia("(max-width: 360px)").matches;
+      marker.bindPopup(popupContent(place), {
+        closeButton: true,
+        maxWidth: compactPopup ? 252 : 310,
+        minWidth: compactPopup ? 210 : 240,
+        offset: [0, -2],
+        autoPanPaddingTopLeft: [12, 82],
+        autoPanPaddingBottomRight: [12, 12],
+      });
       marker.on("click", () => { status.textContent = place.name ? `Выбрано: ${place.name}` : "Выбран объект"; });
       markers.set(place.id, marker);
       markerLayer.addLayer(marker);
@@ -247,10 +255,12 @@ export function initialisePublicMap({
     types.filter((type) => used.has(type.slug)).forEach((type) => {
       const item = document.createElement("span");
       item.style.setProperty("--legend-accent", accentColor(type));
-      const dot = document.createElement("i");
+      const icon = document.createElement("i");
+      icon.setAttribute("aria-hidden", "true");
+      icon.innerHTML = markerGlyph(type.icon_key);
       const label = document.createElement("b");
       label.textContent = type.name;
-      item.append(dot, label);
+      item.append(icon, label);
       legend.append(item);
     });
   }

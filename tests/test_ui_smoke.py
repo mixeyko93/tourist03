@@ -201,6 +201,48 @@ class UiSmokeTests(unittest.TestCase):
         page.on("response", on_response)
         return errors, responses
 
+    def _open_first_public_map_popup(self, page):
+        page.locator("#map").scroll_into_view_if_needed()
+        page.wait_for_selector("#map.leaflet-container", timeout=15000)
+        page.wait_for_function(
+            "() => Boolean(document.querySelector('[data-map-loading]')?.hidden)",
+            timeout=15000,
+        )
+        page.evaluate(
+            """() => {
+              const header = document.querySelector('.site-header')?.getBoundingClientRect().height || 0;
+              const map = document.querySelector('#map');
+              window.scrollTo(0, map.getBoundingClientRect().top + window.scrollY - header - 4);
+            }"""
+        )
+        page.wait_for_timeout(350)
+        marker_index = -1
+        for _ in range(10):
+            marker_index = page.locator(".public-map-marker").evaluate_all(
+                """nodes => nodes.findIndex(node => {
+                  const rect = node.getBoundingClientRect();
+                  const map = document.querySelector('[data-map-shell]').getBoundingClientRect();
+                  return rect.width > 0 && rect.height > 0
+                    && rect.right > map.left && rect.left < map.right
+                    && rect.bottom > map.top && rect.top < map.bottom;
+                })"""
+            )
+            if marker_index >= 0:
+                break
+            cluster = page.locator(".public-map-cluster").first
+            if not cluster.count():
+                break
+            cluster.click(force=True)
+            page.wait_for_timeout(500)
+        self.assertGreaterEqual(
+            marker_index,
+            0,
+            f"markers={page.locator('.public-map-marker').count()} clusters={page.locator('.public-map-cluster').count()} status={page.locator('[data-map-status]').inner_text()}",
+        )
+        page.locator(".public-map-marker").nth(marker_index).locator("..").click(force=True)
+        page.wait_for_selector(".leaflet-popup .public-map-popup", timeout=10000)
+        page.wait_for_timeout(450)
+
     def test_superadmin_page_smoke(self):
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True)
@@ -347,6 +389,26 @@ class UiSmokeTests(unittest.TestCase):
                 detail_page.wait_for_selector(".place-hero h1", timeout=10000)
                 self.assertEqual(detail_page.get_by_role("button", name="Забронировать").count(), 0)
                 self.assertEqual(detail_page.locator('script[type="application/ld+json"]').count(), 2)
+                skip_link = detail_page.locator(".skip-link")
+                skip_bounds = skip_link.bounding_box()
+                self.assertLessEqual(skip_bounds["y"] + skip_bounds["height"], 0)
+                detail_page.keyboard.press("Tab")
+                detail_page.wait_for_timeout(180)
+                self.assertTrue(skip_link.evaluate("node => node === document.activeElement"))
+                self.assertGreaterEqual(skip_link.bounding_box()["y"], 0)
+                detail_page.keyboard.press("Tab")
+                detail_page.wait_for_timeout(180)
+                hidden_bounds = skip_link.bounding_box()
+                self.assertLessEqual(hidden_bounds["y"] + hidden_bounds["height"], 0)
+                mobile_order = detail_page.evaluate(
+                    """() => ({
+                      primary: document.querySelector('.place-main--primary').getBoundingClientRect().top + scrollY,
+                      sidebar: document.querySelector('.place-sidebar').getBoundingClientRect().top + scrollY,
+                      secondary: document.querySelector('.place-main--secondary').getBoundingClientRect().top + scrollY,
+                    })"""
+                )
+                self.assertLess(mobile_order["primary"], mobile_order["sidebar"])
+                self.assertLess(mobile_order["sidebar"], mobile_order["secondary"])
                 detail_page.close()
 
             page.get_by_role("button", name="Открыть поиск по карте").click()
@@ -357,6 +419,68 @@ class UiSmokeTests(unittest.TestCase):
         local_errors = [(status, url) for status, url in responses if status >= 400 and url.startswith(self.base_url)]
         self.assertEqual(local_errors, [], f"Unexpected public frontend responses: {local_errors}")
         self.assertEqual(errors, [], f"Unexpected public frontend errors: {errors}")
+
+    def test_public_map_popup_fits_compact_viewports(self):
+        fixture = json.loads((PROJECT_ROOT / "tests" / "fixtures" / "public-catalog.json").read_text(encoding="utf-8"))
+        list_payload = {
+            "items": fixture["places"],
+            "total": len(fixture["places"]),
+            "limit": 100,
+            "offset": 0,
+        }
+
+        def fulfil_json(route, payload):
+            route.fulfill(
+                status=200,
+                content_type="application/json; charset=utf-8",
+                body=json.dumps(payload, ensure_ascii=False),
+            )
+
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            for width, height in ((320, 568), (390, 844)):
+                with self.subTest(viewport=f"{width}x{height}"):
+                    page = browser.new_page(viewport={"width": width, "height": height})
+                    errors, responses = self._collect_client_issues(page)
+                    page.route("**/api/public/place-types", lambda route: fulfil_json(route, fixture["place_types"]))
+                    page.route("**/api/public/amenities", lambda route: fulfil_json(route, fixture["amenities"]))
+                    page.route("**/api/public/places?*", lambda route: fulfil_json(route, list_payload))
+                    page.goto(f"{self.base_url}/", wait_until="domcontentloaded", timeout=20000)
+                    self._open_first_public_map_popup(page)
+
+                    popup_bounds = page.locator(".leaflet-popup").evaluate(
+                        """node => { const r=node.getBoundingClientRect(); return {left:r.left,top:r.top,right:r.right,bottom:r.bottom}; }"""
+                    )
+                    self.assertGreaterEqual(popup_bounds["left"], -1)
+                    self.assertGreaterEqual(popup_bounds["top"], -1)
+                    self.assertLessEqual(popup_bounds["right"], width + 1)
+                    self.assertLessEqual(popup_bounds["bottom"], height + 1)
+
+                    close_bounds = page.locator(".leaflet-popup-close-button").bounding_box()
+                    self.assertGreaterEqual(close_bounds["width"], 34)
+                    self.assertGreaterEqual(close_bounds["height"], 34)
+                    self.assertGreaterEqual(close_bounds["x"], 0)
+                    self.assertLessEqual(close_bounds["x"] + close_bounds["width"], width)
+                    self.assertEqual(
+                        page.locator(".public-map-popup__actions").evaluate("node => node.scrollWidth <= node.clientWidth + 1"),
+                        True,
+                    )
+                    self.assertEqual(
+                        page.locator(".public-map-popup").evaluate("node => node.scrollWidth <= node.clientWidth + 1"),
+                        True,
+                    )
+                    legend_icons = page.locator(".map-legend i svg")
+                    self.assertGreater(legend_icons.count(), 0)
+                    if legend_icons.count() > 1:
+                        self.assertGreater(len(set(legend_icons.evaluate_all("nodes => nodes.map(node => node.innerHTML)"))), 1)
+                    page.locator(".leaflet-popup-close-button").click()
+                    page.wait_for_selector(".leaflet-popup", state="detached", timeout=5000)
+
+                    local_errors = [(status, url) for status, url in responses if status >= 400 and url.startswith(self.base_url)]
+                    self.assertEqual(local_errors, [], f"Unexpected compact popup responses: {local_errors}")
+                    self.assertEqual(errors, [], f"Unexpected compact popup errors: {errors}")
+                    page.close()
+            browser.close()
 
     def test_public_mobile_navigation_smoke(self):
         with sync_playwright() as playwright:

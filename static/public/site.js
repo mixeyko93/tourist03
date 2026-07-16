@@ -1,5 +1,5 @@
 import { publicFeatures } from "./feature-flags.js";
-import { initialisePublicMap } from "./map.js";
+import { initialisePublicMap } from "./map.js?v=2026-07-16-03";
 import { initialiseTelegramWebApp } from "./telegram.js";
 
 const features = publicFeatures();

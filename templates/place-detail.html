@@ -19,7 +19,8 @@
   <link rel="icon" href="/static/brand/turistika-favicon.svg" type="image/svg+xml">
   <link rel="preload" href="/static/fonts/manrope/manrope-regular.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/static/fonts/manrope/manrope-extrabold.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="/static/public/place.css?v=2026-07-16-01">
+  <link rel="stylesheet" href="/static/public/place.css?v=2026-07-16-02">
+  <script defer src="/static/public/place.js?v=2026-07-16-02"></script>
   <script type="application/ld+json">{{ structured_data | tojson }}</script>
   <script type="application/ld+json">{{ breadcrumbs_data | tojson }}</script>
 </head>
@@ -27,7 +28,7 @@
   <a class="skip-link" href="#place-content">Перейти к объекту</a>
   <header class="place-header">
     <div class="place-frame place-header__inner">
-      <a class="place-brand" href="/" aria-label="Туристика — на главную">
+      <a class="place-brand" href="/">
         <img src="/static/brand/turistika-icon.svg" width="44" height="44" alt="">
         <span><strong>Туристика</strong><small>Твоя карта впечатлений.</small></span>
       </a>
@@ -63,8 +64,9 @@
       </div>
     </section>
 
+    {% set gallery_images = place.gallery | selectattr("media_type", "equalto", "image") | list %}
     <div class="place-frame place-layout">
-      <div class="place-main">
+      <div class="place-main place-main--primary">
         <section class="place-section" aria-labelledby="about-title">
           <p class="place-eyebrow">Об объекте</p>
           <h2 id="about-title">Что важно знать</h2>
@@ -75,19 +77,62 @@
             {% if place.working_hours %}<div><dt>Режим работы</dt><dd>{{ place.working_hours.get("text") or "Уточняйте у объекта" }}</dd></div>{% endif %}
           </dl>
         </section>
+      </div>
 
-        {% if place.gallery %}
-        <section class="place-section" aria-labelledby="gallery-title">
-          <p class="place-eyebrow">Галерея</p>
-          <h2 id="gallery-title">Место в деталях</h2>
-          <div class="place-gallery">
-            {% for media in place.gallery if media.media_type == "image" %}
-              <figure>
+      <aside class="place-sidebar" aria-label="Контакты и маршрут">
+        <section class="contact-card" id="contacts">
+          <p class="place-eyebrow">Связаться</p>
+          <h2>Контакты</h2>
+          {% if place.contacts %}
+            <ul role="list">
+              {% for contact in place.contacts %}
+                <li><small>{{ contact.label or contact.contact_type }}</small><a href="{{ contact.url }}"{% if contact.contact_type not in ["phone", "email"] %} target="_blank" rel="noopener noreferrer"{% endif %}>{{ contact.value }}</a></li>
+              {% endfor %}
+            </ul>
+          {% else %}<p class="contact-card__empty">Публичные контакты уточняются.</p>{% endif %}
+        </section>
+        {% if route_url %}<a class="route-card" href="{{ route_url }}" target="_blank" rel="noopener noreferrer"><span>Показать маршрут</span><strong>{{ place.lat }}, {{ place.lng }}</strong></a>{% endif %}
+        <p class="place-updated">Информация актуализирована {{ updated_label }}{% if place.confirmed_at %} · объект подтверждён{% endif %}</p>
+      </aside>
+
+      <div class="place-main place-main--secondary">
+
+        {% if gallery_images %}
+        <section class="place-section place-gallery-section" aria-labelledby="gallery-title" data-place-gallery>
+          <div class="place-section__heading">
+            <div>
+              <p class="place-eyebrow">{% if gallery_images | length > 1 %}Галерея{% else %}Фото{% endif %}</p>
+              <h2 id="gallery-title">{% if gallery_images | length > 1 %}Место в деталях{% else %}Фото{% endif %}</h2>
+            </div>
+            {% if gallery_images | length > 1 %}<span class="place-gallery__counter" aria-live="polite" data-gallery-counter>1 / {{ gallery_images | length }}</span>{% endif %}
+          </div>
+          <div class="place-gallery{% if gallery_images | length == 1 %} place-gallery--single{% endif %}"{% if gallery_images | length > 1 %} tabindex="0" aria-label="Галерея: используйте стрелки влево и вправо" data-gallery-track{% endif %}>
+            {% for media in gallery_images %}
+              <figure data-gallery-slide>
+                {% if gallery_images | length > 1 %}<button class="place-gallery__image" type="button" data-gallery-open="{{ loop.index0 }}" aria-label="Открыть фото {{ loop.index }} из {{ gallery_images | length }} на весь экран">{% endif %}
                 <img src="{{ media.url }}" alt="{{ media.alt_text or place.name }}" loading="lazy" width="720" height="480">
+                {% if gallery_images | length > 1 %}</button>{% endif %}
                 {% if media.caption %}<figcaption>{{ media.caption }}</figcaption>{% endif %}
               </figure>
             {% endfor %}
           </div>
+          {% if gallery_images | length > 1 %}
+          <div class="place-gallery__controls" aria-label="Управление галереей">
+            <button type="button" data-gallery-previous aria-label="Предыдущее фото">←</button>
+            <div class="place-gallery__thumbnails" role="list">
+              {% for media in gallery_images %}<button type="button" role="listitem" data-gallery-thumbnail="{{ loop.index0 }}" aria-label="Показать фото {{ loop.index }}"{% if loop.first %} aria-current="true"{% endif %}><img src="{{ media.url }}" alt="" loading="lazy" width="96" height="64"></button>{% endfor %}
+            </div>
+            <button type="button" data-gallery-next aria-label="Следующее фото">→</button>
+          </div>
+          <dialog class="place-lightbox" data-gallery-dialog aria-label="Полноэкранный просмотр фото">
+            <div class="place-lightbox__inner">
+              <button class="place-lightbox__close" type="button" data-gallery-close aria-label="Закрыть полноэкранное фото">Закрыть</button>
+              <button class="place-lightbox__previous" type="button" data-gallery-dialog-previous aria-label="Предыдущее фото">←</button>
+              <figure><img data-gallery-dialog-image src="{{ gallery_images[0].url }}" alt="{{ gallery_images[0].alt_text or place.name }}"><figcaption data-gallery-dialog-caption>{{ gallery_images[0].caption or "" }}</figcaption></figure>
+              <button class="place-lightbox__next" type="button" data-gallery-dialog-next aria-label="Следующее фото">→</button>
+            </div>
+          </dialog>
+          {% endif %}
         </section>
         {% endif %}
 
@@ -127,22 +172,6 @@
         </section>
         {% endif %}
       </div>
-
-      <aside class="place-sidebar" aria-label="Контакты и маршрут">
-        <section class="contact-card" id="contacts">
-          <p class="place-eyebrow">Связаться</p>
-          <h2>Контакты</h2>
-          {% if place.contacts %}
-            <ul role="list">
-              {% for contact in place.contacts %}
-                <li><small>{{ contact.label or contact.contact_type }}</small><a href="{{ contact.url }}"{% if contact.contact_type not in ["phone", "email"] %} target="_blank" rel="noopener noreferrer"{% endif %}>{{ contact.value }}</a></li>
-              {% endfor %}
-            </ul>
-          {% else %}<p class="contact-card__empty">Публичные контакты уточняются.</p>{% endif %}
-        </section>
-        {% if route_url %}<a class="route-card" href="{{ route_url }}" target="_blank" rel="noopener noreferrer"><span>Показать маршрут</span><strong>{{ place.lat }}, {{ place.lng }}</strong></a>{% endif %}
-        <p class="place-updated">Информация актуализирована {{ updated_label }}{% if place.confirmed_at %} · объект подтверждён{% endif %}</p>
-      </aside>
     </div>
   </main>
 

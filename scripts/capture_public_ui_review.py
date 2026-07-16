@@ -22,6 +22,7 @@ from playwright.sync_api import Browser, Page, TimeoutError as PlaywrightTimeout
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "artifacts" / "public-catalog-review"
 REVIEW_BASE_URL = "https://review.turistika.example"
+REVIEW_DETAIL_PATH = "/places/sosnovyy-bereg"
 
 
 def allocate_port() -> int:
@@ -171,6 +172,45 @@ def scroll_to_top(page: Page) -> None:
     page.wait_for_function("() => window.scrollY === 0", timeout=5_000)
 
 
+def prepare_detail_full_page_capture(page: Page) -> None:
+    """Keep fixed/sticky accessibility UI at its real document position in stitched screenshots."""
+
+    page.evaluate("() => document.activeElement instanceof HTMLElement && document.activeElement.blur()")
+    scroll_to_top(page)
+    page.wait_for_timeout(220)
+    skip_box = page.locator(".skip-link").bounding_box()
+    header_box = page.locator(".place-header").bounding_box()
+    assert skip_box and skip_box["y"] + skip_box["height"] <= 0, skip_box
+    assert header_box and abs(header_box["y"]) <= 1, header_box
+
+
+def assert_popup_fits_viewport(page: Page, *, width: int, height: int) -> dict[str, int]:
+    popup = page.locator(".leaflet-popup")
+    close_button = page.locator(".leaflet-popup-close-button")
+    actions = page.locator(".public-map-popup__actions")
+    page.wait_for_timeout(350)
+    bounds = popup.evaluate(
+        """node => { const r=node.getBoundingClientRect(); return {left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:r.width,height:r.height}; }"""
+    )
+    close_bounds = close_button.evaluate(
+        """node => { const r=node.getBoundingClientRect(); return {left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:r.width,height:r.height}; }"""
+    )
+    overflow = actions.evaluate("node => ({scrollWidth:node.scrollWidth,clientWidth:node.clientWidth})")
+    assert bounds["left"] >= -1 and bounds["right"] <= width + 1, bounds
+    assert bounds["top"] >= -1 and bounds["bottom"] <= height + 1, bounds
+    assert close_bounds["left"] >= 0 and close_bounds["right"] <= width, close_bounds
+    assert close_bounds["top"] >= 0 and close_bounds["bottom"] <= height, close_bounds
+    assert close_bounds["width"] >= 34 and close_bounds["height"] >= 34, close_bounds
+    assert overflow["scrollWidth"] <= overflow["clientWidth"] + 1, overflow
+    return {
+        "viewport_width": width,
+        "viewport_height": height,
+        "popup_width": round(bounds["width"]),
+        "popup_height": round(bounds["height"]),
+        "close_target": round(min(close_bounds["width"], close_bounds["height"])),
+    }
+
+
 def capture_information_blocks(page: Page, output_path: Path, *, width: int) -> None:
     del width  # The viewport width is already part of the page context.
     page.locator("#about").scroll_into_view_if_needed()
@@ -257,11 +297,47 @@ def capture_detail_page(page: Page, output_dir: Path, *, prefix: str, base_url: 
     page.wait_for_selector(".place-hero h1", timeout=10_000)
     assert page.locator('link[rel="canonical"]').get_attribute("href") == f"{REVIEW_BASE_URL}{href}"
     assert page.locator('script[type="application/ld+json"]').count() == 2
+    skip_link = page.locator(".skip-link")
+    assert skip_link.bounding_box()["y"] + skip_link.bounding_box()["height"] <= 0
+    page.keyboard.press("Tab")
+    assert skip_link.evaluate("node => node === document.activeElement")
+    page.wait_for_timeout(180)
+    assert skip_link.bounding_box()["y"] >= 0
+    page.keyboard.press("Tab")
+    page.wait_for_timeout(180)
+    assert skip_link.bounding_box()["y"] + skip_link.bounding_box()["height"] <= 0
+
+    mobile_order = page.evaluate(
+        """() => ({
+          header: document.querySelector('.place-header').getBoundingClientRect().top + scrollY,
+          hero: document.querySelector('.place-hero').getBoundingClientRect().top + scrollY,
+          primary: document.querySelector('.place-main--primary').getBoundingClientRect().top + scrollY,
+          sidebar: document.querySelector('.place-sidebar').getBoundingClientRect().top + scrollY,
+          gallery: document.querySelector('.place-gallery-section').getBoundingClientRect().top + scrollY,
+        })"""
+    )
+    if prefix == "mobile":
+        assert mobile_order["header"] <= mobile_order["hero"] < mobile_order["primary"] < mobile_order["sidebar"] < mobile_order["gallery"], mobile_order
+
     page.screenshot(path=str(output_dir / f"{prefix}-detail-top.png"))
     page.locator("#gallery-title").scroll_into_view_if_needed()
-    page.locator("#gallery-title").locator("..").screenshot(path=str(output_dir / f"{prefix}-detail-gallery.png"))
+    if page.locator("[data-gallery-counter]").count():
+        track = page.locator("[data-gallery-track]")
+        track.focus()
+        page.keyboard.press("ArrowRight")
+        page.wait_for_function("() => document.querySelector('[data-gallery-counter]')?.textContent?.startsWith('2 /')")
+        page.keyboard.press("ArrowLeft")
+        page.wait_for_function("() => document.querySelector('[data-gallery-counter]')?.textContent?.startsWith('1 /')")
+        page.locator("[data-gallery-open='0']").click()
+        page.wait_for_selector("[data-gallery-dialog][open]")
+        page.keyboard.press("ArrowRight")
+        assert page.locator("[data-gallery-dialog-image]").evaluate("node => new URL(node.src).pathname") == page.locator("[data-gallery-slide]").nth(1).locator("img").evaluate("node => new URL(node.src).pathname")
+        page.keyboard.press("ArrowLeft")
+        page.locator("[data-gallery-close]").click()
+    page.locator(".place-gallery-section").screenshot(path=str(output_dir / f"{prefix}-detail-gallery.png"))
     page.locator("#contacts").scroll_into_view_if_needed()
-    page.locator("#contacts").screenshot(path=str(output_dir / f"{prefix}-detail-contacts.png"))
+    page.locator(".place-sidebar").screenshot(path=str(output_dir / f"{prefix}-detail-contacts.png"))
+    prepare_detail_full_page_capture(page)
     page.screenshot(path=str(output_dir / f"{prefix}-detail-full-page.png"), full_page=True)
 
 
@@ -289,11 +365,17 @@ def capture_viewport(page: Page, output_dir: Path, *, prefix: str, width: int, h
     page.locator("[data-map-shell]").screenshot(path=str(output_dir / f"{prefix}-map-filters.png"))
     page.locator("[data-map-filter-toggle]").click()
     page.wait_for_function("() => document.querySelector('[data-map-filters]')?.hidden === true", timeout=5_000)
+    legend_icons = page.locator(".map-legend i svg")
+    assert legend_icons.count() >= 3
+    assert len(set(legend_icons.evaluate_all("nodes => nodes.map(node => node.innerHTML)"))) >= 3
     page.locator("[data-map-shell]").screenshot(path=str(output_dir / f"{prefix}-map.png"))
+    if prefix == "desktop":
+        page.locator(".map-legend").screenshot(path=str(output_dir / "desktop-marker-legend.png"))
     click_visible_marker(page)
     page.wait_for_selector(".leaflet-popup .public-map-popup", timeout=10_000)
     page.wait_for_timeout(800)
     wait_for_first_map_tile(page)
+    metrics["popup"] = assert_popup_fits_viewport(page, width=width, height=height)
     page.locator("[data-map-shell]").screenshot(path=str(output_dir / f"{prefix}-map-popup.png"))
     detail_href = page.locator(".public-map-popup__detail").get_attribute("href")
     if not detail_href:
@@ -302,8 +384,42 @@ def capture_viewport(page: Page, output_dir: Path, *, prefix: str, width: int, h
     capture_information_blocks(page, output_dir / f"{prefix}-information.png", width=width)
     page.locator(".site-footer").screenshot(path=str(output_dir / f"{prefix}-footer.png"))
     page.screenshot(path=str(output_dir / f"{prefix}-full-page.png"), full_page=True)
-    capture_detail_page(page, output_dir, prefix=prefix, base_url=base_url, href=detail_href)
+    capture_detail_page(page, output_dir, prefix=prefix, base_url=base_url, href=REVIEW_DETAIL_PATH)
     return metrics
+
+
+def capture_compact_popup(browser: Browser, base_url: str, output_dir: Path) -> dict[str, int]:
+    width, height = 320, 568
+    page = open_public_page(browser, base_url, width=width, height=height)
+    try:
+        wait_for_map(page)
+        page.evaluate(
+            """() => {
+              const header = document.querySelector('.site-header')?.getBoundingClientRect().height || 0;
+              const map = document.querySelector('#map');
+              window.scrollTo(0, map.getBoundingClientRect().top + window.scrollY - header - 4);
+            }"""
+        )
+        click_visible_marker(page)
+        page.wait_for_selector(".leaflet-popup .public-map-popup", timeout=10_000)
+        metrics = assert_popup_fits_viewport(page, width=width, height=height)
+        page.screenshot(path=str(output_dir / "mobile-320-map-popup.png"))
+        return metrics
+    finally:
+        page.context.close()
+
+
+def verify_single_photo_gallery(browser: Browser, base_url: str) -> None:
+    context = browser.new_context(viewport={"width": 390, "height": 844}, locale="ru-RU")
+    page = context.new_page()
+    try:
+        page.goto(f"{base_url}/places/taezhnaya-pristan", wait_until="domcontentloaded", timeout=30_000)
+        page.wait_for_selector("#gallery-title", timeout=10_000)
+        assert page.locator("#gallery-title").inner_text() == "Фото"
+        assert page.locator("[data-gallery-slide]").count() == 1
+        assert page.locator("[data-gallery-counter], .place-gallery__controls, [data-gallery-dialog]").count() == 0
+    finally:
+        context.close()
 
 
 def verify_empty_and_error_states(browser: Browser, base_url: str) -> dict[str, str]:
@@ -370,11 +486,13 @@ def main() -> int:
             mobile_metrics = capture_viewport(mobile, output_dir, prefix="mobile", width=390, height=844, base_url=base_url)
             mobile.context.close()
 
+            compact_popup_metrics = capture_compact_popup(browser, base_url, output_dir)
+            verify_single_photo_gallery(browser, base_url)
             states = verify_empty_and_error_states(browser, base_url)
         finally:
             browser.close()
 
-    metrics = {"desktop": desktop_metrics, "mobile": mobile_metrics}
+    metrics = {"desktop": desktop_metrics, "mobile": mobile_metrics, "mobile_320_popup": compact_popup_metrics}
     (output_dir / "review-metrics.json").write_text(
         json.dumps({"layouts": metrics, "states": states}, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
