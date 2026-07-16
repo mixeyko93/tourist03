@@ -38,3 +38,5 @@ router.add_api_route("/admin/{path:path}", pages_service.react_map_page, methods
 router.add_api_route("/react-map", pages_service.react_map_page, methods=["GET"], response_class=HTMLResponse)
 router.add_api_route("/react-map/{path:path}", pages_service.react_map_page, methods=["GET"], response_class=HTMLResponse)
 router.add_api_route("/favicon.ico", pages_service.favicon, methods=["GET"])
+router.add_api_route("/robots.txt", pages_service.robots, methods=["GET"])
+router.add_api_route("/sitemap.xml", pages_service.sitemap, methods=["GET"])

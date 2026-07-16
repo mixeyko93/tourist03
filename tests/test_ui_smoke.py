@@ -38,6 +38,7 @@ class UiSmokeTests(unittest.TestCase):
     superadmin_password = "SmokeSuperAdmin123!"
     superadmin_key = "smoke-superadmin-key"
     session_secret = "smoke-session-secret"
+    public_base_url = "https://public-smoke.turistika.test"
     smoke_login = "smoke.ui.admin"
     smoke_password = "SmokePass123!"
     smoke_display_name = "Smoke UI"
@@ -71,6 +72,7 @@ class UiSmokeTests(unittest.TestCase):
         env["SUPERADMIN_PASSWORD"] = cls.superadmin_password
         env["SUPERADMIN_API_KEY"] = cls.superadmin_key
         env["SESSION_SECRET_KEY"] = cls.session_secret
+        env["PUBLIC_BASE_URL"] = cls.public_base_url
         env.setdefault("PYTHONUNBUFFERED", "1")
         cls.server_process = subprocess.Popen(
             [sys.executable, "-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", str(port)],
@@ -294,141 +296,61 @@ class UiSmokeTests(unittest.TestCase):
         ]
         self.assertEqual(unexpected_errors, [], f"Unexpected CRM browser errors: {unexpected_errors}")
 
-    def test_map_popup_layout_contract(self):
-        measure_js = """
-            () => {
-              const shell = document.querySelector('.leaflet-popup .map-popup-widget__dialog');
-              const media = document.querySelector('.leaflet-popup .map-popup-widget__media');
-              const actions = [...document.querySelectorAll('.leaflet-popup .map-popup-widget__button')];
-              const popup = document.querySelector('.leaflet-popup');
-              const title = document.querySelector('.leaflet-popup .map-popup-widget__title');
-              const mapUi = document.querySelector('.map-ui');
-              const mapWrap = document.querySelector('.map-wrap');
-              const hiddenMarker = document.querySelector('.camp-marker-icon.is-popup-hidden');
-              const hiddenMarkers = document.querySelectorAll('.camp-marker-icon.is-popup-hidden').length;
-              if (!shell || !media || actions.length < 2 || !popup || !title) return null;
-              const shellBox = shell.getBoundingClientRect();
-              const mediaBox = media.getBoundingClientRect();
-              const actionBoxes = actions.map((node) => node.getBoundingClientRect());
-              const popupBox = popup.getBoundingClientRect();
-              const hiddenMarkerBox = hiddenMarker ? hiddenMarker.getBoundingClientRect() : null;
-              const hiddenMarkerPointer = hiddenMarker && hiddenMarker.querySelector
-                ? hiddenMarker.querySelector('.camp-marker__pointer')
-                : null;
-              const hiddenMarkerPointerBox = hiddenMarkerPointer ? hiddenMarkerPointer.getBoundingClientRect() : null;
-              return {
-                shellWidth: shellBox.width,
-                shellTop: shellBox.top,
-                shellLeft: shellBox.left,
-                shellBottom: shellBox.bottom,
-                mediaHeight: mediaBox.height,
-                actionHeights: actionBoxes.map((box) => box.height),
-                actionWidths: actionBoxes.map((box) => box.width),
-                popupAnchorX: popupBox.left + popupBox.width / 2,
-                popupAnchorY: popupBox.top + popupBox.height,
-                hiddenMarkers,
-                hiddenMarkerOpacity: hiddenMarker
-                  ? Number.parseFloat(getComputedStyle(hiddenMarker.querySelector('.camp-marker')).opacity || "1")
-                  : null,
-                hiddenMarkerTop: hiddenMarkerBox ? hiddenMarkerBox.top : null,
-                hiddenMarkerCenterX: hiddenMarkerBox ? hiddenMarkerBox.left + hiddenMarkerBox.width / 2 : null,
-                hiddenMarkerBottom: hiddenMarkerBox ? hiddenMarkerBox.bottom : null,
-                hiddenMarkerPointX: hiddenMarkerPointerBox ? hiddenMarkerPointerBox.left + hiddenMarkerPointerBox.width / 2 : null,
-                hiddenMarkerPointY: hiddenMarkerPointerBox ? hiddenMarkerPointerBox.top + hiddenMarkerPointerBox.height : null,
-                mapUiOpacity: mapUi ? Number.parseFloat(getComputedStyle(mapUi).opacity || "1") : 1,
-                popupOpenClass: mapWrap ? mapWrap.classList.contains('popup-open') : false,
-                titleFamily: getComputedStyle(title).fontFamily,
-                titleAlign: getComputedStyle(title).textAlign,
-                titleText: title.textContent,
-              };
-            }
-        """
+    def test_public_browser_frontend_smoke(self):
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=True)
-            page = browser.new_page(viewport={"width": 430, "height": 932})
+            page = browser.new_page(viewport={"width": 1440, "height": 980})
             errors, responses = self._collect_client_issues(page)
 
             page.goto(f"{self.base_url}/", wait_until="domcontentloaded", timeout=20000)
-            page.wait_for_selector(".camp-marker-icon", timeout=15000)
-            page.wait_for_timeout(1200)
-            clicked_box = page.evaluate(
-                """
-                () => {
-                  const viewportWidth = window.innerWidth;
-                  const viewportHeight = window.innerHeight;
-                  const markers = [...document.querySelectorAll('.camp-marker-icon')];
-                  const visible = markers
-                    .map((node) => node.getBoundingClientRect())
-                    .find((box) =>
-                      box.width > 0 &&
-                      box.height > 0 &&
-                      box.right > 12 &&
-                      box.bottom > 12 &&
-                      box.left < viewportWidth - 12 &&
-                      box.top < viewportHeight - 12
-                    );
-                  if (!visible) return null;
-                  return {
-                    x: visible.left,
-                    y: visible.top,
-                    width: visible.width,
-                    height: visible.height,
-                  };
-                }
-                """
-            )
-            self.assertIsNotNone(clicked_box)
-            click_x = min(max(clicked_box["x"] + (clicked_box["width"] / 2), 24), 406)
-            click_y = min(max(clicked_box["y"] + (clicked_box["height"] / 2), 24), 908)
-            page.mouse.click(
-                click_x,
-                click_y,
-            )
-            page.wait_for_selector(".leaflet-popup .map-popup-widget__dialog", timeout=10000)
-            page.wait_for_timeout(1200)
+            page.wait_for_selector("h1", timeout=10000)
+            self.assertIn("Откройте лучшие места отдыха России", page.locator("h1").inner_text().replace("\n", " "))
+            self.assertEqual(page.locator('link[rel="canonical"]').get_attribute("href"), f"{self.public_base_url}/")
+            self.assertEqual(page.evaluate("() => typeof window.Telegram"), "undefined")
 
-            geometry = page.evaluate(measure_js)
-            page.evaluate("() => { map.panBy([60, -42], { animate: false }); }")
-            page.wait_for_timeout(250)
-            moved_geometry = page.evaluate(measure_js)
+            page.locator("#map-section").scroll_into_view_if_needed()
+            page.wait_for_selector("#map.leaflet-container", timeout=15000)
+            page.wait_for_function(
+                "() => Boolean(document.querySelector('[data-map-loading]')?.hidden)",
+                timeout=15000,
+            )
+            status_text = page.locator("[data-map-status]").inner_text()
+            self.assertTrue(
+                status_text.startswith("На карте") or status_text.startswith("Каталог пока наполняется"),
+                status_text,
+            )
 
+            page.get_by_role("button", name="Открыть поиск по карте").click()
+            page.locator("#map-search").fill("место")
+            page.wait_for_selector(".public-map__result-summary", timeout=10000)
+            if page.locator(".public-map-marker").count():
+                page.locator(".public-map-marker").first.click(force=True)
+                page.wait_for_selector(".leaflet-popup .public-map-popup", timeout=10000)
             browser.close()
 
-        self.assertIsNotNone(geometry)
-        self.assertGreaterEqual(geometry["shellWidth"], 320)
-        self.assertLessEqual(geometry["shellWidth"], 392)
-        self.assertGreaterEqual(geometry["mediaHeight"], 216)
-        self.assertLessEqual(geometry["mediaHeight"], 224)
-        self.assertTrue(all(36 <= height <= 44 for height in geometry["actionHeights"]))
-        self.assertTrue(all(width >= 132 for width in geometry["actionWidths"]))
-        self.assertGreaterEqual(geometry["hiddenMarkers"], 1)
-        self.assertIsNotNone(geometry["hiddenMarkerOpacity"])
-        self.assertLessEqual(geometry["hiddenMarkerOpacity"], 0.05)
-        self.assertIsNotNone(geometry["hiddenMarkerTop"])
-        self.assertIsNotNone(geometry["hiddenMarkerCenterX"])
-        self.assertIsNotNone(geometry["hiddenMarkerBottom"])
-        self.assertIsNotNone(geometry["hiddenMarkerPointX"])
-        self.assertIsNotNone(geometry["hiddenMarkerPointY"])
-        self.assertGreaterEqual(geometry["mapUiOpacity"], 0.95)
-        self.assertTrue(geometry["popupOpenClass"])
-        self.assertLess(abs(geometry["shellBottom"] - geometry["hiddenMarkerBottom"]), 24)
-        self.assertIn("system-ui", geometry["titleFamily"])
-        self.assertEqual(geometry["titleAlign"], "center")
-        self.assertTrue(geometry["titleText"])
-        self.assertIsNotNone(moved_geometry)
-        self.assertTrue(
-            abs(moved_geometry["shellTop"] - geometry["shellTop"]) >= 8
-            or abs(moved_geometry["shellLeft"] - geometry["shellLeft"]) >= 8
-        )
+        local_errors = [(status, url) for status, url in responses if status >= 400 and url.startswith(self.base_url)]
+        self.assertEqual(local_errors, [], f"Unexpected public frontend responses: {local_errors}")
+        self.assertEqual(errors, [], f"Unexpected public frontend errors: {errors}")
 
-        unexpected_responses = [(status, url) for status, url in responses if status >= 400]
-        unexpected_errors = []
-        for error in errors:
-            if "CloudStorage is not supported in version 6.0" in error:
-                continue
-            unexpected_errors.append(error)
-        self.assertEqual(unexpected_responses, [], f"Unexpected map responses: {unexpected_responses}")
-        self.assertEqual(unexpected_errors, [], f"Unexpected map browser errors: {unexpected_errors}")
+    def test_public_mobile_navigation_smoke(self):
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 390, "height": 844})
+            errors, responses = self._collect_client_issues(page)
+
+            page.goto(f"{self.base_url}/", wait_until="domcontentloaded", timeout=20000)
+            menu_button = page.get_by_role("button", name="Открыть меню")
+            menu_button.click()
+            page.wait_for_selector("#mobile-menu:not([hidden])", timeout=5000)
+            self.assertGreater(page.locator("#mobile-menu a").count(), 2)
+            page.locator("#mobile-menu").get_by_role("link", name="Карта").click()
+            page.wait_for_timeout(250)
+            self.assertTrue(page.locator("#mobile-menu").evaluate("node => node.hidden"))
+            browser.close()
+
+        local_errors = [(status, url) for status, url in responses if status >= 400 and url.startswith(self.base_url)]
+        self.assertEqual(local_errors, [], f"Unexpected mobile frontend responses: {local_errors}")
+        self.assertEqual(errors, [], f"Unexpected mobile frontend errors: {errors}")
 
 
 if __name__ == "__main__":

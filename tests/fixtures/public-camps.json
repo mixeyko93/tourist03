@@ -1,0 +1,38 @@
+[
+  {
+    "id": 101,
+    "name": "Эко-парк «Сосновый берег»",
+    "lat": 61.7842,
+    "lng": 30.6547,
+    "min_price": 7500,
+    "lake_name": "Ладожское озеро",
+    "address": "Республика Карелия, Ладожское озеро",
+    "phone": "+7 921 555-01-01",
+    "site_url": "https://example.org/sosnovyy-bereg",
+    "housing_type": "Глэмпинг"
+  },
+  {
+    "id": 102,
+    "name": "База «Таёжная пристань»",
+    "lat": 52.2869,
+    "lng": 104.3050,
+    "min_price": 5200,
+    "lake_name": "Озеро Байкал",
+    "address": "Иркутская область, побережье Байкала",
+    "phone": "+7 3952 555-202",
+    "site_url": "https://example.org/taiga-pier",
+    "housing_type": "База отдыха"
+  },
+  {
+    "id": 103,
+    "name": "Домики «Тихая бухта»",
+    "lat": 43.1155,
+    "lng": 131.8855,
+    "min_price": 6800,
+    "lake_name": "Японское море",
+    "address": "Приморский край, Владивосток",
+    "phone": "+7 423 555-0303",
+    "site_url": "https://example.org/quiet-bay",
+    "housing_type": "Апартаменты"
+  }
+]
