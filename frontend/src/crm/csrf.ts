@@ -4,14 +4,14 @@ const LOGIN_EXEMPTIONS = new Set(["POST /api/admin/login", "POST /api/superadmin
 let csrfToken: string | null = null;
 let csrfRequest: Promise<string> | null = null;
 
-function requestPath(input: RequestInfo | URL): string {
+function requestUrl(input: RequestInfo | URL): URL {
   if (typeof input === "string") {
-    return new URL(input, window.location.origin).pathname;
+    return new URL(input, window.location.origin);
   }
   if (input instanceof URL) {
-    return input.pathname;
+    return input;
   }
-  return new URL(input.url, window.location.origin).pathname;
+  return new URL(input.url, window.location.origin);
 }
 
 function requestMethod(input: RequestInfo | URL, init?: RequestInit): string {
@@ -64,7 +64,11 @@ async function loadCsrfToken(nativeFetch: typeof window.fetch): Promise<string> 
 export function installCsrfFetch() {
   const nativeFetch = window.fetch.bind(window);
   window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const path = requestPath(input);
+    const url = requestUrl(input);
+    if (url.origin !== window.location.origin) {
+      return nativeFetch(input, init);
+    }
+    const path = url.pathname;
     const method = requestMethod(input, init);
     if (!needsCsrf(path, method)) {
       return nativeFetch(input, init);

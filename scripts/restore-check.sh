@@ -1,8 +1,8 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # Restore one backup into an explicit test database and compare row counts.
-set -eu
+set -Eeuo pipefail
 
-PROJECT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+PROJECT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
 PYTHON_BIN=${PYTHON_BIN:-python3}
 BACKUP_DIR=${1:?Usage: scripts/restore-check.sh /path/to/backup}
 : "${RESTORE_TEST_DB:?RESTORE_TEST_DB must name an existing test database}"
@@ -23,7 +23,7 @@ case "$RESTORE_TEST_DB" in
     exit 1
     ;;
 esac
-for command in pg_restore psql tar; do
+for command in pg_restore psql; do
   command -v "$command" >/dev/null 2>&1 || {
     echo "Required command is unavailable: $command" >&2
     exit 1
@@ -44,6 +44,7 @@ fi
 
 export PGPASSWORD=$PG_PASSWORD
 export PGHOST=$PG_HOST PGPORT=$PG_PORT PGDATABASE=$RESTORE_TEST_DB PGUSER=$PG_USER
+trap 'unset PGPASSWORD' EXIT
 
 # The target database must already exist and have an unmistakably test-only name.
 pg_restore --clean --if-exists --no-owner --no-acl --dbname="$RESTORE_TEST_DB" "$BACKUP_DIR/database.dump"
@@ -63,14 +64,64 @@ done < "$BACKUP_DIR/row_counts.tsv"
 )
 
 if [ -n "${RESTORE_UPLOAD_DIR:-}" ]; then
+  mkdir -p "$RESTORE_UPLOAD_DIR"
+  RESTORE_UPLOAD_DIR=$(CDPATH= cd -- "$RESTORE_UPLOAD_DIR" && pwd -P)
+  LIVE_UPLOAD_DIR=$(CDPATH= cd -- "$PROJECT_DIR/static/uploads" && pwd -P)
   case "$RESTORE_UPLOAD_DIR" in
-    "$PROJECT_DIR/static/uploads"|"$PROJECT_DIR/static/uploads"/*)
+    "$LIVE_UPLOAD_DIR"|"$LIVE_UPLOAD_DIR"/*)
       echo "Refusing to extract uploads into the live uploads directory." >&2
       exit 1
       ;;
   esac
-  mkdir -p "$RESTORE_UPLOAD_DIR"
-  tar -xzf "$BACKUP_DIR/uploads.tar.gz" -C "$RESTORE_UPLOAD_DIR"
+  "$PYTHON_BIN" - "$BACKUP_DIR/uploads.tar.gz" "$RESTORE_UPLOAD_DIR" <<'PY'
+import shutil
+import sys
+import tarfile
+from pathlib import Path, PurePosixPath
+
+archive_path = Path(sys.argv[1])
+destination = Path(sys.argv[2]).resolve()
+
+
+def is_within(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root)
+    except ValueError:
+        return False
+    return True
+
+
+with tarfile.open(archive_path, "r:gz") as archive:
+    members = archive.getmembers()
+    for member in members:
+        name = PurePosixPath(member.name)
+        target = destination.joinpath(*name.parts)
+        if (
+            name.is_absolute()
+            or ".." in name.parts
+            or not name.parts
+            or name.parts[0] != "uploads"
+            or member.issym()
+            or member.islnk()
+            or member.isdev()
+            or not is_within(target, destination)
+        ):
+            raise SystemExit(f"Unsafe uploads archive member: {member.name!r}")
+
+    for member in members:
+        target = destination.joinpath(*PurePosixPath(member.name).parts)
+        if member.isdir():
+            target.mkdir(parents=True, exist_ok=True)
+            continue
+        if not member.isfile():
+            raise SystemExit(f"Unsupported uploads archive member: {member.name!r}")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        source = archive.extractfile(member)
+        if source is None:
+            raise SystemExit(f"Unable to read uploads archive member: {member.name!r}")
+        with source, target.open("xb") as output:
+            shutil.copyfileobj(source, output)
+PY
 fi
 
 echo "Restore check passed for test database: $RESTORE_TEST_DB"

@@ -1,4 +1,3 @@
-from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI
@@ -34,7 +33,10 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     # Middleware executes in reverse registration order. Session must therefore
     # be registered last so CSRF can safely access ``request.session``.
     application.add_middleware(FeatureGateMiddleware)
-    application.add_middleware(RateLimitMiddleware)
+    application.add_middleware(
+        RateLimitMiddleware,
+        memory_max_keys=resolved_settings.rate_limit_memory_max_keys,
+    )
     application.add_middleware(CsrfMiddleware)
     application.add_middleware(
         CORSMiddleware,
@@ -53,7 +55,6 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         domain=resolved_settings.session_cookie_domain,
     )
 
-    Path(STATIC_DIR).mkdir(parents=True, exist_ok=True)
     application.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
     application.include_router(pages.router)

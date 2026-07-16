@@ -25,7 +25,7 @@ PUBLIC_CAMP_SELECT = """
            description, housing_type
     FROM catalog.camps
 """
-PUBLIC_CAMP_STATUS_SQL = "lower(coalesce(status, 'active')) IN ('active', 'published')"
+PUBLIC_CAMP_STATUS_SQL = "lower(status) IN ('active', 'published')"
 
 
 def list_camps():
@@ -623,12 +623,12 @@ def list_room_busy_rows(room_id: int, date_from, date_to, blocked_statuses: tupl
         cur = conn.cursor()
         cur.execute(
             """
-            SELECT check_in, check_out, status
+            SELECT b.check_in, b.check_out, b.status
             FROM crm.bookings b
             JOIN catalog.rooms r ON r.id = b.room_id
             JOIN catalog.camps c ON c.id = r.camp_id
             WHERE b.room_id=%s
-              AND lower(coalesce(c.status, 'active')) IN ('active', 'published')
+              AND lower(c.status) IN ('active', 'published')
               AND (b.status IS NULL OR lower(b.status) NOT IN %s)
               AND b.check_in < %s
               AND b.check_out > %s

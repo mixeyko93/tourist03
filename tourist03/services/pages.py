@@ -50,7 +50,7 @@ def health():
 
 def ready():
     try:
-        status = migration_status()
+        status = migration_status(timeout_seconds=3)
     except Exception:
         return JSONResponse(
             {"ok": False, "status": "not_ready", "checks": {"database": False, "migrations": "unavailable"}},

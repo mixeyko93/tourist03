@@ -1,5 +1,6 @@
 import json
 import secrets
+import warnings
 from datetime import date, datetime
 from io import BytesIO
 from pathlib import Path
@@ -330,12 +331,14 @@ def api_camps_delete(camp_id: int):
 
 def _validate_uploaded_image(payload: bytes, suffix: str, content_type: str) -> None:
     try:
-        with Image.open(BytesIO(payload)) as image:
-            image.verify()
-        with Image.open(BytesIO(payload)) as image:
-            image.load()
-            image_format = (image.format or "").upper()
-    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(BytesIO(payload)) as image:
+                image.verify()
+            with Image.open(BytesIO(payload)) as image:
+                image.load()
+                image_format = (image.format or "").upper()
+    except (Image.DecompressionBombError, UnidentifiedImageError, OSError, ValueError) as exc:
         raise HTTPException(status_code=400, detail="Файл не является корректным изображением") from exc
 
     accepted_suffixes = IMAGE_FORMAT_EXTENSIONS.get(image_format)
@@ -396,8 +399,15 @@ async def api_upload(request: Request):
 
     filename = secrets.token_hex(16) + suffix
     path = save_dir / filename
-    with path.open("wb") as out:
-        out.write(payload)
+    temporary_path = save_dir / f".{filename}.{secrets.token_hex(8)}.tmp"
+    try:
+        with temporary_path.open("xb") as out:
+            out.write(payload)
+        temporary_path.replace(path)
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail="Не удалось сохранить файл") from exc
+    finally:
+        temporary_path.unlink(missing_ok=True)
 
     url = f"/static/uploads/{sub.as_posix()}/{filename}"
     return {"url": url}

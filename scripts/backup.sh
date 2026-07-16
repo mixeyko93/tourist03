@@ -1,13 +1,26 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # Create a self-contained, untracked PostgreSQL + uploads backup.
-set -eu
+set -Eeuo pipefail
 umask 077
 
-PROJECT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+PROJECT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)
 PYTHON_BIN=${PYTHON_BIN:-python3}
-BACKUP_ROOT=${BACKUP_ROOT:-"$PROJECT_DIR/backups"}
+BACKUP_ROOT=${BACKUP_ROOT:-/var/backups/tourist03}
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
-BACKUP_DIR="$BACKUP_ROOT/$STAMP"
+
+case "$BACKUP_ROOT" in
+  /*) ;;
+  *)
+    echo "BACKUP_ROOT must be an absolute path outside the repository." >&2
+    exit 1
+    ;;
+esac
+case "$BACKUP_ROOT" in
+  "$PROJECT_DIR"|"$PROJECT_DIR"/*)
+    echo "Refusing to create a backup inside the repository." >&2
+    exit 1
+    ;;
+esac
 
 : "${PG_HOST:?PG_HOST is required}"
 : "${PG_PORT:?PG_PORT is required}"
@@ -22,21 +35,32 @@ for command in pg_dump psql tar; do
   }
 done
 
-if [ -e "$BACKUP_DIR" ]; then
-  echo "Backup destination already exists: $BACKUP_DIR" >&2
-  exit 1
-fi
 if [ ! -d "$PROJECT_DIR/static/uploads" ]; then
   echo "Uploads directory is missing: $PROJECT_DIR/static/uploads" >&2
   exit 1
 fi
 
+mkdir -p "$BACKUP_ROOT"
+BACKUP_ROOT=$(CDPATH= cd -- "$BACKUP_ROOT" && pwd -P)
+case "$BACKUP_ROOT" in
+  "$PROJECT_DIR"|"$PROJECT_DIR"/*)
+    echo "Refusing to create a backup inside the repository." >&2
+    exit 1
+    ;;
+esac
+BACKUP_DIR="$BACKUP_ROOT/$STAMP"
+if [ -e "$BACKUP_DIR" ]; then
+  echo "Backup destination already exists: $BACKUP_DIR" >&2
+  exit 1
+fi
 mkdir -p "$BACKUP_DIR"
 export PGPASSWORD=$PG_PASSWORD
 export PGHOST=$PG_HOST PGPORT=$PG_PORT PGDATABASE=$PG_DB PGUSER=$PG_USER
+trap 'unset PGPASSWORD' EXIT
 
 pg_dump -Fc --no-owner --no-acl --file="$BACKUP_DIR/database.dump"
-tar -czf "$BACKUP_DIR/uploads.tar.gz" -C "$PROJECT_DIR/static" uploads
+# Avoid macOS AppleDouble sidecars; regular upload paths are validated again on restore.
+COPYFILE_DISABLE=1 tar -czf "$BACKUP_DIR/uploads.tar.gz" -C "$PROJECT_DIR/static" uploads
 printf '%s\n' "$STAMP" > "$BACKUP_DIR/timestamp.txt"
 
 (

@@ -66,14 +66,34 @@ class FeatureGateMiddleware(BaseHTTPMiddleware):
 class InMemoryRateLimiter:
     """Fixed-window limiter for development and a single-process deployment."""
 
-    def __init__(self):
+    def __init__(self, max_keys: int = 10_000):
         self._lock = threading.Lock()
         self._hits: Dict[str, Deque[float]] = defaultdict(deque)
+        self._max_keys = max(int(max_keys), 1)
+
+    def _evict_expired_or_oldest(self, now: float, window_seconds: int) -> None:
+        expired_keys = [
+            key
+            for key, timestamps in self._hits.items()
+            if not timestamps or timestamps[-1] <= now - window_seconds
+        ]
+        for key in expired_keys:
+            self._hits.pop(key, None)
+        if len(self._hits) >= self._max_keys:
+            oldest_key = min(
+                self._hits,
+                key=lambda candidate: self._hits[candidate][-1] if self._hits[candidate] else float("-inf"),
+            )
+            self._hits.pop(oldest_key, None)
 
     def allow(self, key: str, limit: int, window_seconds: int = 60) -> Tuple[bool, int]:
         now = time.monotonic()
         with self._lock:
-            timestamps = self._hits[key]
+            timestamps = self._hits.get(key)
+            if timestamps is None:
+                self._evict_expired_or_oldest(now, window_seconds)
+                timestamps = deque()
+                self._hits[key] = timestamps
             while timestamps and timestamps[0] <= now - window_seconds:
                 timestamps.popleft()
             if len(timestamps) >= max(limit, 1):
@@ -104,9 +124,9 @@ class RedisRateLimiter:
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, limiter: Optional[InMemoryRateLimiter] = None):
+    def __init__(self, app, limiter: Optional[InMemoryRateLimiter] = None, memory_max_keys: int = 10_000):
         super().__init__(app)
-        self.limiter = limiter or InMemoryRateLimiter()
+        self.limiter = limiter or InMemoryRateLimiter(max_keys=memory_max_keys)
         self.redis_limiter = None
         self.redis_error_logged = False
 
@@ -139,7 +159,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     limiter = self.redis_limiter
                 except Exception:
                     if not self.redis_error_logged:
-                        logger.exception("Redis rate limiter unavailable; using process-local fallback")
+                        logger.warning("Redis rate limiter unavailable; using process-local fallback")
                         self.redis_error_logged = True
             try:
                 allowed, retry_after = limiter.allow(f"{kind}:{host}", limit)
@@ -147,7 +167,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 if limiter is self.limiter:
                     raise
                 if not self.redis_error_logged:
-                    logger.exception("Redis rate limiter request failed; using process-local fallback")
+                    logger.warning("Redis rate limiter request failed; using process-local fallback")
                     self.redis_error_logged = True
                 allowed, retry_after = self.limiter.allow(f"{kind}:{host}", limit)
             if not allowed:

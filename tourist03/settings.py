@@ -99,6 +99,7 @@ class Settings(BaseSettings):
 
     rate_limit_storage: Literal["memory", "redis"] = "memory"
     redis_url: str = ""
+    rate_limit_memory_max_keys: int = Field(default=10_000, ge=1)
     rate_limit_auth_per_minute: int = 10
     rate_limit_login_per_minute: int = 10
     rate_limit_upload_per_minute: int = 20

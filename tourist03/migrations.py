@@ -1,7 +1,7 @@
 import argparse
 import json
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Iterable, Optional
 
 from tourist03.config import logger
 from tourist03.db import _pg_connect
@@ -950,9 +950,14 @@ def _migration_versions_from_rows(rows: Iterable[dict]) -> set[str]:
     return {str(row["version"]) for row in rows}
 
 
-def migration_status() -> dict:
+def migration_status(timeout_seconds: Optional[int] = None) -> dict:
     """Read migration state without creating tables or applying SQL."""
-    conn = _pg_connect("public")
+    timeout = max(int(timeout_seconds), 1) if timeout_seconds is not None else None
+    conn = _pg_connect(
+        "public",
+        connect_timeout=timeout,
+        statement_timeout_ms=(timeout * 1000) if timeout is not None else None,
+    )
     try:
         cur = conn.cursor()
         cur.execute("SELECT to_regclass('public.schema_migrations') AS table_name")

@@ -14,7 +14,6 @@ from tourist03.settings import get_settings
 
 
 settings = get_settings()
-logging.basicConfig(level=settings.log_level)
 logger = logging.getLogger("tourist03.superadmin")
 
 BASE_DIR = str(Path(__file__).resolve().parent.parent)
