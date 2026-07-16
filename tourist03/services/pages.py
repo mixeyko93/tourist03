@@ -109,3 +109,11 @@ def favicon():
     if os.path.exists(icon_path):
         return FileResponse(icon_path)
     return JSONResponse({"ok": True})
+
+
+def robots():
+    return FileResponse(os.path.join(STATIC_DIR, "public", "robots.txt"), media_type="text/plain")
+
+
+def sitemap():
+    return FileResponse(os.path.join(STATIC_DIR, "public", "sitemap.xml"), media_type="application/xml")

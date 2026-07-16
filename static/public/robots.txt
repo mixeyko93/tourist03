@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://turist03.ru/sitemap.xml
