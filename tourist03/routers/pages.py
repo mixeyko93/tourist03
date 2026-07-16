@@ -8,6 +8,7 @@ router = APIRouter()
 
 router.add_api_route("/", pages_service.index, methods=["GET"], response_class=HTMLResponse)
 router.add_api_route("/index.html", pages_service.index_html, methods=["GET"], response_class=HTMLResponse)
+router.add_api_route("/places/{slug}", pages_service.public_place_page, methods=["GET"], response_class=HTMLResponse)
 router.add_api_route("/api/version", pages_service.api_version, methods=["GET"])
 router.add_api_route("/api/public/config", pages_service.api_public_config, methods=["GET"])
 router.add_api_route("/api/security/csrf", pages_service.api_csrf_token, methods=["GET"])

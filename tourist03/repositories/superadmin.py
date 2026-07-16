@@ -79,7 +79,14 @@ def get_user_bookings(user_id: int):
         return [dict(row) for row in cur.fetchall()]
 
 
-def list_camps(*, archived_only: bool = False, search: Optional[str] = None, status: Optional[str] = None):
+def list_camps(
+    *,
+    archived_only: bool = False,
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+    place_type: Optional[str] = None,
+    publication_status: Optional[str] = None,
+):
     conditions = []
     params: list = []
 
@@ -92,6 +99,16 @@ def list_camps(*, archived_only: bool = False, search: Optional[str] = None, sta
     if normalized_status:
         conditions.append("COALESCE(c.status, 'active') = %s")
         params.append(normalized_status)
+
+    normalized_place_type = (place_type or "").strip().lower()
+    if normalized_place_type:
+        conditions.append("lower(pt.slug) = %s")
+        params.append(normalized_place_type)
+
+    normalized_publication_status = (publication_status or "").strip().lower()
+    if normalized_publication_status:
+        conditions.append("c.publication_status = %s")
+        params.append(normalized_publication_status)
 
     normalized_search = (search or "").strip()
     if normalized_search:
@@ -118,6 +135,9 @@ def list_camps(*, archived_only: bool = False, search: Optional[str] = None, sta
             SELECT
                 c.id,
                 c.name,
+                c.slug,
+                c.publication_status,
+                c.short_description,
                 c.address,
                 c.lake_name,
                 c.status,
@@ -129,6 +149,9 @@ def list_camps(*, archived_only: bool = False, search: Optional[str] = None, sta
                 c.lat,
                 c.lng,
                 c.archived_at,
+                pt.id AS place_type_id,
+                pt.slug AS place_type_slug,
+                pt.name AS place_type_name,
                 COALESCE(
                     json_agg(
                         json_build_object(
@@ -142,6 +165,7 @@ def list_camps(*, archived_only: bool = False, search: Optional[str] = None, sta
                     '[]'::json
                 ) AS linked_admins
             FROM catalog.camps c
+            JOIN catalog.place_types pt ON pt.id = c.place_type_id
             LEFT JOIN (
                 SELECT
                     camp_id,
@@ -153,7 +177,7 @@ def list_camps(*, archived_only: bool = False, search: Optional[str] = None, sta
             LEFT JOIN crm.camp_admin_links l ON l.camp_id = c.id
             LEFT JOIN auth.camp_admin_accounts a ON a.id = l.admin_id
             {where_sql}
-            GROUP BY c.id, room_stats.rooms_count, room_stats.beds_count
+            GROUP BY c.id, pt.id, room_stats.rooms_count, room_stats.beds_count
             ORDER BY c.archived_at DESC NULLS LAST, c.id DESC
             """,
             tuple(params),
@@ -180,6 +204,10 @@ def get_camp_editor_context(camp_id: int):
     photos = catalog_repo.list_camp_photos(camp_id)
     media = catalog_repo.list_camp_media(camp_id)
     room_context = catalog_repo.get_camp_room_listing_context(camp_id)
+    place_types = catalog_repo.list_place_types(include_inactive=True)
+    amenities = catalog_repo.list_amenities(include_inactive=True)
+    contacts = catalog_repo.list_place_contacts(camp_id)
+    selected_amenities = catalog_repo.list_camp_amenities(camp_id)
 
     with _db_conn("crm") as conn:
         cur = conn.cursor()
@@ -209,6 +237,10 @@ def get_camp_editor_context(camp_id: int):
         "media": media,
         "rooms": rooms,
         "linked_accounts": linked_accounts,
+        "place_types": place_types,
+        "amenities": amenities,
+        "contacts": contacts,
+        "selected_amenities": selected_amenities,
     }
 
 

@@ -22,10 +22,10 @@
   <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="/static/vendor/leaflet-markercluster/MarkerCluster.css">
   <!-- TOURISTIKA_RUNTIME_CONFIG -->
-  <link rel="stylesheet" href="/static/public/site.css?v=2026-07-16-01">
+  <link rel="stylesheet" href="/static/public/site.css?v=2026-07-16-03">
   <script defer src="/static/vendor/leaflet/leaflet.js"></script>
   <script defer src="/static/vendor/leaflet-markercluster/leaflet.markercluster.js"></script>
-  <script type="module" src="/static/public/site.js?v=2026-07-16-01"></script>
+  <script type="module" src="/static/public/site.js?v=2026-07-16-03"></script>
 </head>
 <body>
   <a class="skip-link" href="#main-content">Перейти к содержанию</a>
@@ -98,6 +98,9 @@
               <button type="button" class="map-search__clear" data-search-clear aria-label="Очистить поиск" hidden>×</button>
             </label>
             <div class="map-tools" aria-label="Управление картой">
+              <button type="button" data-map-filter-toggle aria-label="Открыть фильтры каталога" aria-expanded="true" aria-controls="map-filters" title="Фильтры">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"></path></svg>
+              </button>
               <button type="button" data-map-locate aria-label="Показать моё местоположение" title="Моё местоположение">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 6.6 18-6.6-3.7L5.4 21 12 3Z"></path></svg>
               </button>
@@ -106,6 +109,20 @@
               </button>
             </div>
           </div>
+          <aside class="map-filters" id="map-filters" data-map-filters aria-label="Фильтры каталога">
+            <div class="map-filters__heading">
+              <div>
+                <span>Фильтры</span>
+                <strong data-map-count>0 объектов</strong>
+              </div>
+              <button type="button" data-filter-reset>Сбросить</button>
+            </div>
+            <label>Тип объекта<select data-filter-type><option value="">Все типы</option></select></label>
+            <label>Регион<select data-filter-region><option value="">Все регионы</option></select></label>
+            <label>Город<select data-filter-city><option value="">Все города</option></select></label>
+            <label>Удобство<select data-filter-amenity><option value="">Все удобства</option></select></label>
+          </aside>
+          <div class="map-legend" data-map-legend role="group" aria-label="Легенда типов объектов"></div>
           <div class="public-map__canvas" id="map" role="region" tabindex="0" aria-label="Интерактивная карта мест отдыха России"></div>
           <div class="public-map__loading" data-map-loading aria-live="polite"><span></span> Загружаем карту впечатлений</div>
           <p class="public-map__status" data-map-status role="status" aria-live="polite"></p>

@@ -32,6 +32,12 @@ export type SuperadminLinkedAdmin = {
 export type SuperadminBaseSummary = {
   id: number;
   name?: string | null;
+  slug?: string | null;
+  publication_status?: string | null;
+  short_description?: string | null;
+  place_type_id?: number | null;
+  place_type_slug?: string | null;
+  place_type_name?: string | null;
   address?: string | null;
   lake_name?: string | null;
   status?: string | null;
@@ -44,6 +50,39 @@ export type SuperadminBaseSummary = {
   lng?: number | null;
   archived_at?: string | null;
   linked_admins?: SuperadminLinkedAdmin[];
+};
+
+export type SuperadminPlaceType = {
+  id: number;
+  slug: string;
+  name: string;
+  plural_name: string;
+  marker_key: string;
+  icon_key: string;
+  sort_order: number;
+  is_active?: boolean;
+  config?: Record<string, unknown>;
+};
+
+export type SuperadminAmenity = {
+  id: number;
+  slug: string;
+  name: string;
+  category: string;
+  icon_key: string;
+  sort_order: number;
+  is_active?: boolean;
+  value?: unknown;
+};
+
+export type SuperadminPlaceContact = {
+  id?: number;
+  contact_type: "phone" | "email" | "website" | "telegram" | "whatsapp" | "max" | "vk" | "other";
+  label?: string | null;
+  value: string;
+  public_url?: string | null;
+  is_public?: boolean;
+  sort_order?: number;
 };
 
 export type SuperadminCampPhoto = {
@@ -99,6 +138,19 @@ export type SuperadminBaseEditor = {
   camp: {
     id: number;
     name?: string | null;
+    slug?: string | null;
+    place_type_id?: number | null;
+    short_description?: string | null;
+    region?: string | null;
+    district?: string | null;
+    city?: string | null;
+    locality?: string | null;
+    seasonality?: string | null;
+    working_hours?: Record<string, unknown> | null;
+    publication_status?: string | null;
+    confirmed_at?: string | null;
+    video_urls?: string[] | null;
+    metadata?: Record<string, unknown> | null;
     lake_name?: string | null;
     address?: string | null;
     lat?: number | null;
@@ -130,6 +182,10 @@ export type SuperadminBaseEditor = {
     display_name?: string | null;
     is_active?: boolean | null;
   }>;
+  place_types: SuperadminPlaceType[];
+  amenities: SuperadminAmenity[];
+  selected_amenities: SuperadminAmenity[];
+  contacts: SuperadminPlaceContact[];
 };
 
 export type SuperadminAccount = {
@@ -358,13 +414,15 @@ export async function issueSuperadminTelegramLink() {
 }
 
 export async function fetchSuperadminBases(
-  params: { archivedOnly?: boolean; status?: string; search?: string; signal?: AbortSignal } = {},
+  params: { archivedOnly?: boolean; status?: string; search?: string; placeType?: string; publicationStatus?: string; signal?: AbortSignal } = {},
 ): Promise<SuperadminBaseSummary[]> {
   const response = await fetch(
     `/api/superadmin/camps${buildQuery({
       archived_only: params.archivedOnly ? true : undefined,
       status: params.status,
       search: params.search,
+      place_type: params.placeType,
+      publication_status: params.publicationStatus,
     })}`,
     {
       credentials: "same-origin",
@@ -373,6 +431,18 @@ export async function fetchSuperadminBases(
   );
   await assertOk(response);
   return (await response.json()) as SuperadminBaseSummary[];
+}
+
+export async function fetchCatalogDictionaries(signal?: AbortSignal) {
+  const [typesResponse, amenitiesResponse] = await Promise.all([
+    fetch("/api/public/place-types", { credentials: "same-origin", signal }),
+    fetch("/api/public/amenities", { credentials: "same-origin", signal }),
+  ]);
+  await Promise.all([assertOk(typesResponse), assertOk(amenitiesResponse)]);
+  return {
+    placeTypes: (await typesResponse.json()) as SuperadminPlaceType[],
+    amenities: (await amenitiesResponse.json()) as SuperadminAmenity[],
+  };
 }
 
 export async function fetchSuperadminBaseEditor(campId: number, signal?: AbortSignal): Promise<SuperadminBaseEditor> {
@@ -394,7 +464,7 @@ export async function createSuperadminCamp(payload: Record<string, unknown>) {
     body: JSON.stringify(payload),
   });
   await assertOk(response);
-  return (await response.json()) as { ok: boolean; id: number };
+  return (await response.json()) as { ok: boolean; id: number; publication_warnings?: string[] };
 }
 
 export async function updateSuperadminCamp(campId: number, payload: Record<string, unknown>) {
@@ -407,7 +477,7 @@ export async function updateSuperadminCamp(campId: number, payload: Record<strin
     body: JSON.stringify(payload),
   });
   await assertOk(response);
-  return (await response.json()) as { ok: boolean; id: number };
+  return (await response.json()) as { ok: boolean; id: number; publication_warnings?: string[] };
 }
 
 export async function updateSuperadminCampStatus(campId: number, status: SuperadminBaseStatus) {

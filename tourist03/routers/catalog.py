@@ -9,6 +9,10 @@ from tourist03.dto.catalog import (
     CampUpsertResponseDTO,
     CatalogRoomDTO,
     PublicCampDTO,
+    PublicAmenityDTO,
+    PublicPlaceDetailDTO,
+    PublicPlaceListResponseDTO,
+    PublicPlaceTypeDTO,
     RoomBusyRangesResponseDTO,
     UploadResponseDTO,
 )
@@ -21,12 +25,44 @@ router = APIRouter()
 superadmin_guard = [Depends(get_superadmin)]
 
 router.add_api_route(
+    "/api/public/place-types",
+    catalog_service.api_public_place_types,
+    methods=["GET"],
+    response_model=list[PublicPlaceTypeDTO],
+    responses=error_responses(500),
+)
+router.add_api_route(
+    "/api/public/amenities",
+    catalog_service.api_public_amenities,
+    methods=["GET"],
+    response_model=list[PublicAmenityDTO],
+    responses=error_responses(500),
+)
+router.add_api_route(
+    "/api/public/places",
+    catalog_service.api_public_places,
+    methods=["GET"],
+    response_model=PublicPlaceListResponseDTO,
+    response_model_exclude_none=True,
+    responses=error_responses(400, 422, 500),
+)
+router.add_api_route(
+    "/api/public/places/{slug}",
+    catalog_service.api_public_place_detail,
+    methods=["GET"],
+    response_model=PublicPlaceDetailDTO,
+    response_model_exclude_none=True,
+    responses=error_responses(404, 422, 500),
+)
+
+router.add_api_route(
     "/api/camps",
     catalog_service.api_camps_list,
     methods=["GET"],
     response_model=list[PublicCampDTO],
     response_model_exclude_none=True,
     responses=error_responses(500),
+    deprecated=True,
 )
 router.add_api_route(
     "/api/camps/{camp_id}",
@@ -35,6 +71,7 @@ router.add_api_route(
     response_model=PublicCampDTO,
     response_model_exclude_none=True,
     responses=error_responses(404, 422, 500),
+    deprecated=True,
 )
 router.add_api_route(
     "/api/camps/{camp_id}/photos",

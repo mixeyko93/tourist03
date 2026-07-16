@@ -28,12 +28,16 @@ import { AdminStatusBadge } from "../components/AdminStatusBadge";
 import {
   createSuperadminCamp,
   deleteSuperadminCamp,
+  fetchCatalogDictionaries,
   fetchSuperadminBaseEditor,
   updateSuperadminCamp,
   updateSuperadminCampStatus,
   uploadSuperadminMedia,
   type SuperadminBaseEditor,
+  type SuperadminAmenity,
   type SuperadminMediaItem,
+  type SuperadminPlaceContact,
+  type SuperadminPlaceType,
 } from "../session";
 import { type AdminBaseApartment, type AdminBaseDraft, createEmptyAdminBaseDraft, createEmptyApartment } from "../baseDraft";
 
@@ -129,6 +133,18 @@ function normalizePhones(value?: string | null) {
     items.push("");
   }
   return items.slice(0, 3);
+}
+
+function contactValue(contacts: SuperadminPlaceContact[], type: SuperadminPlaceContact["contact_type"], index = 0) {
+  return contacts.filter((contact) => contact.contact_type === type && contact.is_public !== false)[index]?.value || "";
+}
+
+function toDateTimeLocal(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 }
 
 function statusToLabel(value?: string | null): AdminBaseDraft["status"] {
@@ -267,6 +283,28 @@ function campEditorToDraft(payload: SuperadminBaseEditor): AdminBaseDraft {
     id: String(camp.id),
     status: statusToLabel(camp.status),
     name: camp.name || "",
+    slug: camp.slug || "",
+    placeTypeId: String(camp.place_type_id || ""),
+    publicationStatus: (camp.publication_status || "draft") as AdminBaseDraft["publicationStatus"],
+    shortDescription: camp.short_description || "",
+    region: camp.region || "",
+    district: camp.district || "",
+    city: camp.city || "",
+    locality: camp.locality || "",
+    seasonality: camp.seasonality || "",
+    workingHours: JSON.stringify(camp.working_hours || {}, null, 2),
+    confirmedAt: toDateTimeLocal(camp.confirmed_at),
+    publicEmail: contactValue(payload.contacts || [], "email"),
+    publicPhone: contactValue(payload.contacts || [], "phone"),
+    publicPhoneSecondary: contactValue(payload.contacts || [], "phone", 1),
+    publicSite: contactValue(payload.contacts || [], "website"),
+    telegramUrl: contactValue(payload.contacts || [], "telegram"),
+    whatsappUrl: contactValue(payload.contacts || [], "whatsapp"),
+    maxUrl: contactValue(payload.contacts || [], "max"),
+    vkUrl: contactValue(payload.contacts || [], "vk"),
+    videoLinks: (camp.video_urls || []).join("\n"),
+    amenitySlugs: (payload.selected_amenities || []).map((amenity) => amenity.slug),
+    coverPlaceholderConfirmed: Boolean(camp.metadata?.cover_placeholder_confirmed),
     lake: camp.lake_name || "",
     coordinates: camp.lat != null && camp.lng != null ? `${camp.lat}, ${camp.lng}` : "",
     address: camp.address || "",
@@ -343,8 +381,43 @@ function buildCampPayload(draft: AdminBaseDraft) {
           Number(room.price_child || 0) > 0,
       );
     });
+  let workingHours: Record<string, unknown>;
+  try {
+    workingHours = JSON.parse(draft.workingHours || "{}") as Record<string, unknown>;
+  } catch {
+    throw new Error("Режим работы должен быть корректным JSON-объектом");
+  }
+  if (!workingHours || Array.isArray(workingHours) || typeof workingHours !== "object") {
+    throw new Error("Режим работы должен быть JSON-объектом");
+  }
+  const rawContacts: SuperadminPlaceContact[] = [
+    { contact_type: "phone", label: "Телефон", value: draft.publicPhone, is_public: true, sort_order: 10 },
+    { contact_type: "phone", label: "Дополнительный телефон", value: draft.publicPhoneSecondary, is_public: true, sort_order: 20 },
+    { contact_type: "email", label: "Email", value: draft.publicEmail, is_public: true, sort_order: 30 },
+    { contact_type: "website", label: "Сайт", value: draft.publicSite, is_public: true, sort_order: 40 },
+    { contact_type: "telegram", label: "Telegram", value: draft.telegramUrl, is_public: true, sort_order: 50 },
+    { contact_type: "whatsapp", label: "WhatsApp", value: draft.whatsappUrl, is_public: true, sort_order: 60 },
+    { contact_type: "max", label: "MAX", value: draft.maxUrl, is_public: true, sort_order: 70 },
+    { contact_type: "vk", label: "ВКонтакте", value: draft.vkUrl, is_public: true, sort_order: 80 },
+  ];
+  const contacts = rawContacts.filter((contact) => contact.value.trim());
   return {
     name: draft.name.trim(),
+    slug: draft.slug.trim() || undefined,
+    place_type_id: draft.placeTypeId ? Number(draft.placeTypeId) : undefined,
+    publication_status: draft.publicationStatus,
+    short_description: draft.shortDescription.trim(),
+    region: draft.region.trim(),
+    district: draft.district.trim(),
+    city: draft.city.trim(),
+    locality: draft.locality.trim(),
+    seasonality: draft.seasonality.trim(),
+    working_hours: workingHours,
+    confirmed_at: draft.confirmedAt || null,
+    contacts,
+    amenities: draft.amenitySlugs,
+    video_urls: draft.videoLinks.split(/\n+/).map((value) => value.trim()).filter(Boolean),
+    metadata: { cover_placeholder_confirmed: draft.coverPlaceholderConfirmed },
     lake_name: draft.lake.trim(),
     address: draft.address.trim(),
     lat: coordinates.lat,
@@ -692,6 +765,9 @@ export default function AdminBaseEditPage() {
   const galleryInputRef = useRef<HTMLInputElement | null>(null);
   const [draft, setDraft] = useState<AdminBaseDraft>(() => createEmptyAdminBaseDraft());
   const [linkedAccounts, setLinkedAccounts] = useState<SuperadminBaseEditor["linked_accounts"]>([]);
+  const [placeTypes, setPlaceTypes] = useState<SuperadminPlaceType[]>([]);
+  const [amenities, setAmenities] = useState<SuperadminAmenity[]>([]);
+  const [originalPublicationStatus, setOriginalPublicationStatus] = useState<AdminBaseDraft["publicationStatus"]>("draft");
   const [isLoading, setIsLoading] = useState(!isNew);
   const [isSaving, setIsSaving] = useState(false);
   const [uploadingTarget, setUploadingTarget] = useState<string | null>(null);
@@ -704,7 +780,10 @@ export default function AdminBaseEditPage() {
     return fetchSuperadminBaseEditor(campId, signal)
       .then((payload) => {
         setDraft(campEditorToDraft(payload));
+        setOriginalPublicationStatus((payload.camp.publication_status || "draft") as AdminBaseDraft["publicationStatus"]);
         setLinkedAccounts(payload.linked_accounts);
+        setPlaceTypes(payload.place_types || []);
+        setAmenities(payload.amenities || []);
       })
       .catch((error: unknown) => {
         if (signal?.aborted) {
@@ -722,9 +801,22 @@ export default function AdminBaseEditPage() {
   useEffect(() => {
     if (isNew) {
       setDraft(createEmptyAdminBaseDraft());
+      setOriginalPublicationStatus("draft");
       setLinkedAccounts([]);
       setIsLoading(false);
-      return;
+      const controller = new AbortController();
+      fetchCatalogDictionaries(controller.signal)
+        .then(({ placeTypes: nextTypes, amenities: nextAmenities }) => {
+          setPlaceTypes(nextTypes);
+          setAmenities(nextAmenities);
+          setDraft((current) => ({ ...current, placeTypeId: current.placeTypeId || String(nextTypes[0]?.id || "") }));
+        })
+        .catch((error: unknown) => {
+          if (!controller.signal.aborted) {
+            setErrorMessage(error instanceof Error ? error.message : "Не удалось загрузить справочники каталога");
+          }
+        });
+      return () => controller.abort();
     }
 
     const controller = new AbortController();
@@ -732,6 +824,18 @@ export default function AdminBaseEditPage() {
 
     return () => controller.abort();
   }, [id, isNew]);
+
+  const publicationWarnings = [
+    !draft.name.trim() ? "Название" : "",
+    !draft.slug.trim() && !isNew ? "Slug" : "",
+    !draft.placeTypeId ? "Тип объекта" : "",
+    parseCoordinates(draft.coordinates).lat == null || parseCoordinates(draft.coordinates).lng == null ? "Координаты" : "",
+    !draft.shortDescription.trim() ? "Краткое описание" : "",
+    !draft.gallery.length && !draft.coverPlaceholderConfirmed ? "Обложка или подтверждённый placeholder" : "",
+    ![draft.publicPhone, draft.publicEmail, draft.publicSite, draft.telegramUrl, draft.whatsappUrl, draft.maxUrl, draft.vkUrl].some((value) => value.trim())
+      ? "Публичный контакт"
+      : "",
+  ].filter(Boolean);
 
   const updateField = <K extends keyof AdminBaseDraft>(field: K, value: AdminBaseDraft[K]) => {
     setDraft((current) => ({ ...current, [field]: value }));
@@ -778,6 +882,9 @@ export default function AdminBaseEditPage() {
       if (!draft.name.trim()) {
         throw new Error("Укажите название базы");
       }
+      if (draft.publicationStatus === "published" && publicationWarnings.length && (isNew || originalPublicationStatus !== "published")) {
+        throw new Error(`Для публикации заполните: ${publicationWarnings.join(", ")}`);
+      }
 
       const payload = buildCampPayload(draft);
       if (isNew) {
@@ -787,9 +894,13 @@ export default function AdminBaseEditPage() {
         return;
       }
 
-      await updateSuperadminCamp(Number(draft.id), payload);
+      const response = await updateSuperadminCamp(Number(draft.id), payload);
       await loadExistingBase(Number(draft.id));
-      setSuccessMessage("Карточка базы сохранена.");
+      setSuccessMessage(
+        response.publication_warnings?.length
+          ? `Карточка сохранена. Предупреждения публикации: ${response.publication_warnings.join(", ")}.`
+          : "Карточка базы сохранена.",
+      );
     } catch (error: unknown) {
       setErrorMessage(error instanceof Error ? error.message : "Не удалось сохранить базу");
     } finally {
@@ -1052,6 +1163,141 @@ export default function AdminBaseEditPage() {
                   ))}
                 </div>
               ) : null}
+            </div>
+
+            <div className="space-y-5 rounded-3xl border border-blue-500/25 bg-blue-500/5 p-5 sm:p-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-400">Публичный каталог</p>
+                  <h3 className="mt-2 text-lg font-semibold text-foreground">Публикация, SEO и универсальные поля</h3>
+                  <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                    В публичной карте и карточке используются только эти контакты. Владелец, управляющий и служебные телефоны остаются внутренними.
+                  </p>
+                </div>
+                {!isNew && draft.slug ? (
+                  <a className="admin-button" href={`/places/${encodeURIComponent(draft.slug)}`} target="_blank" rel="noreferrer">
+                    Открыть публичную страницу
+                  </a>
+                ) : null}
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-3">
+                <AdminField label="Тип объекта">
+                  <select className="admin-input" value={draft.placeTypeId} onChange={(event) => updateField("placeTypeId", event.target.value)}>
+                    <option value="">Выберите тип</option>
+                    {placeTypes.map((type) => (
+                      <option key={type.id} value={type.id} disabled={type.is_active === false && String(type.id) !== draft.placeTypeId}>
+                        {type.name}{type.is_active === false ? " (неактивен)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </AdminField>
+                <AdminField label="Slug">
+                  <input
+                    className="admin-input"
+                    value={draft.slug}
+                    placeholder={isNew ? "Создастся из названия" : "slug-obekta"}
+                    onChange={(event) => updateField("slug", event.target.value.toLowerCase())}
+                  />
+                </AdminField>
+                <AdminField label="Статус публикации">
+                  <select
+                    className="admin-input"
+                    value={draft.publicationStatus}
+                    onChange={(event) => updateField("publicationStatus", event.target.value as AdminBaseDraft["publicationStatus"])}
+                  >
+                    <option value="draft">Черновик</option>
+                    <option value="in_review">На проверке</option>
+                    <option value="published">Опубликован</option>
+                    <option value="disabled">Скрыт</option>
+                    <option value="archived">В архиве</option>
+                    <option value="rejected">Отклонён</option>
+                  </select>
+                </AdminField>
+              </div>
+
+              {draft.publicationStatus === "published" && publicationWarnings.length ? (
+                <div className="rounded-2xl border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm leading-6 text-amber-200">
+                  Публичная карточка неполная: {publicationWarnings.join(", ")}. Для уже опубликованных legacy-объектов это предупреждение; новая публикация будет отклонена backend.
+                </div>
+              ) : null}
+
+              <AdminField label="Краткое описание">
+                <textarea
+                  className="admin-input min-h-24 resize-y"
+                  maxLength={320}
+                  value={draft.shortDescription}
+                  onChange={(event) => updateField("shortDescription", event.target.value)}
+                />
+              </AdminField>
+
+              <div className="grid gap-4 lg:grid-cols-4">
+                <AdminField label="Регион"><input className="admin-input" value={draft.region} onChange={(event) => updateField("region", event.target.value)} /></AdminField>
+                <AdminField label="Район"><input className="admin-input" value={draft.district} onChange={(event) => updateField("district", event.target.value)} /></AdminField>
+                <AdminField label="Город"><input className="admin-input" value={draft.city} onChange={(event) => updateField("city", event.target.value)} /></AdminField>
+                <AdminField label="Населённый пункт"><input className="admin-input" value={draft.locality} onChange={(event) => updateField("locality", event.target.value)} /></AdminField>
+                <AdminField label="Сезонность"><input className="admin-input" value={draft.seasonality} onChange={(event) => updateField("seasonality", event.target.value)} /></AdminField>
+                <AdminField label="Подтверждено"><input className="admin-input" type="datetime-local" value={draft.confirmedAt} onChange={(event) => updateField("confirmedAt", event.target.value)} /></AdminField>
+                <AdminField label="Режим работы (JSON)" className="lg:col-span-2">
+                  <input className="admin-input font-mono text-xs" value={draft.workingHours} onChange={(event) => updateField("workingHours", event.target.value)} />
+                </AdminField>
+              </div>
+
+              <div>
+                <p className="mb-3 text-sm font-medium text-foreground">Удобства</p>
+                <div className="flex flex-wrap gap-2">
+                  {amenities.map((amenity) => {
+                    const selected = draft.amenitySlugs.includes(amenity.slug);
+                    return (
+                      <button
+                        key={amenity.id}
+                        type="button"
+                        disabled={amenity.is_active === false && !selected}
+                        className={`rounded-full border px-3 py-2 text-xs font-semibold transition ${
+                          selected ? "border-blue-500 bg-blue-500/15 text-blue-200" : "border-border bg-background/70 text-muted-foreground hover:bg-accent"
+                        }`}
+                        onClick={() => updateField("amenitySlugs", selected ? draft.amenitySlugs.filter((slug) => slug !== amenity.slug) : [...draft.amenitySlugs, amenity.slug])}
+                      >
+                        {amenity.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-4">
+                <AdminField label="Публичный телефон"><input className="admin-input" value={draft.publicPhone} onChange={(event) => updateField("publicPhone", event.target.value)} /></AdminField>
+                <AdminField label="Дополнительный телефон"><input className="admin-input" value={draft.publicPhoneSecondary} onChange={(event) => updateField("publicPhoneSecondary", event.target.value)} /></AdminField>
+                <AdminField label="Публичный email"><input className="admin-input" type="email" value={draft.publicEmail} onChange={(event) => updateField("publicEmail", event.target.value)} /></AdminField>
+                <AdminField label="Публичный сайт"><input className="admin-input" type="url" value={draft.publicSite} onChange={(event) => updateField("publicSite", event.target.value)} /></AdminField>
+                <AdminField label="Telegram URL"><input className="admin-input" type="url" value={draft.telegramUrl} onChange={(event) => updateField("telegramUrl", event.target.value)} /></AdminField>
+                <AdminField label="WhatsApp URL"><input className="admin-input" type="url" value={draft.whatsappUrl} onChange={(event) => updateField("whatsappUrl", event.target.value)} /></AdminField>
+                <AdminField label="MAX URL"><input className="admin-input" type="url" value={draft.maxUrl} onChange={(event) => updateField("maxUrl", event.target.value)} /></AdminField>
+                <AdminField label="VK URL"><input className="admin-input" type="url" value={draft.vkUrl} onChange={(event) => updateField("vkUrl", event.target.value)} /></AdminField>
+              </div>
+
+              <AdminField label="Видео YouTube, Rutube или VK — по одной ссылке в строке">
+                <textarea className="admin-input min-h-24 resize-y" value={draft.videoLinks} onChange={(event) => updateField("videoLinks", event.target.value)} />
+              </AdminField>
+
+              <label className="flex items-start gap-3 rounded-2xl border border-border bg-background/60 p-4 text-sm text-muted-foreground">
+                <input
+                  type="checkbox"
+                  className="mt-1 h-4 w-4"
+                  checked={draft.coverPlaceholderConfirmed}
+                  onChange={(event) => updateField("coverPlaceholderConfirmed", event.target.checked)}
+                />
+                <span>Явно разрешить брендовый placeholder, если одобренной обложки пока нет.</span>
+              </label>
+
+              <div className="rounded-2xl border border-border bg-card/75 p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">SEO preview</p>
+                <p className="mt-3 text-base font-semibold text-blue-300">
+                  {draft.name || "Название объекта"} — {placeTypes.find((type) => String(type.id) === draft.placeTypeId)?.name || "Тип объекта"}{draft.region ? `, ${draft.region}` : ""} | Туристика
+                </p>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">{draft.shortDescription || "Добавьте краткое описание публичной карточки."}</p>
+                <p className="mt-2 text-xs text-emerald-400">/places/{draft.slug || "slug-obekta"}</p>
+              </div>
             </div>
 
             <div className="grid gap-4 xl:grid-cols-4">

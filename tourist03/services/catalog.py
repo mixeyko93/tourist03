@@ -13,6 +13,7 @@ from PIL import Image, UnidentifiedImageError
 
 from tourist03.config import UPLOAD_DIR
 from tourist03.domain import bookings as booking_domain
+from tourist03.public_catalog import normalize_bbox, validate_slug
 from tourist03.repositories import catalog as catalog_repo
 from tourist03.schemas import CampStatusUpdateRequest
 from tourist03.settings import get_settings
@@ -97,6 +98,52 @@ def _build_room_photos(data: dict, camp_id: int, camp_name: Optional[str]):
 
 def api_camps_list():
     return catalog_repo.list_public_camps()
+
+
+def api_public_place_types():
+    return catalog_repo.list_place_types()
+
+
+def api_public_amenities():
+    return catalog_repo.list_public_amenities()
+
+
+def api_public_places(
+    q: Optional[str] = Query(None, max_length=120),
+    place_type: Optional[str] = Query(None, max_length=80),
+    region: Optional[str] = Query(None, max_length=120),
+    city: Optional[str] = Query(None, max_length=120),
+    amenity: Optional[str] = Query(None, max_length=240),
+    bbox: Optional[str] = Query(None, max_length=160),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0, le=10_000),
+):
+    try:
+        parsed_bbox = normalize_bbox(bbox)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    amenity_slugs = [value.strip().lower() for value in (amenity or "").split(",") if value.strip()]
+    return catalog_repo.list_public_places(
+        q=(q or "").strip() or None,
+        place_type=(place_type or "").strip().lower() or None,
+        region=(region or "").strip() or None,
+        city=(city or "").strip() or None,
+        amenities=list(dict.fromkeys(amenity_slugs)) or None,
+        bbox=parsed_bbox,
+        limit=limit,
+        offset=offset,
+    )
+
+
+def api_public_place_detail(slug: str):
+    try:
+        normalized_slug = validate_slug(slug)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="not found")
+    place = catalog_repo.get_public_place(normalized_slug)
+    if not place:
+        raise HTTPException(status_code=404, detail="not found")
+    return place
 
 
 def api_camp_one(camp_id: int):
@@ -293,12 +340,19 @@ def api_camp_rooms_busy(
 
 async def api_camps_upsert_new(req: Request):
     data = await req.json()
-    return catalog_repo.upsert_camp(None, data, _normalize_move)
+    try:
+        return catalog_repo.upsert_camp(None, data, _normalize_move)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 async def api_camps_upsert(camp_id: int, req: Request):
     data = await req.json()
-    return catalog_repo.upsert_camp(camp_id, data, _normalize_move)
+    try:
+        return catalog_repo.upsert_camp(camp_id, data, _normalize_move)
+    except ValueError as exc:
+        status_code = 404 if str(exc) == "Объект не найден" else 400
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
 
 
 def api_camp_status_update(camp_id: int, payload: CampStatusUpdateRequest):

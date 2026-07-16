@@ -1,14 +1,26 @@
 import os
 import json
+import re
+from datetime import date, datetime
 from html import escape as escape_html
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from tourist03.config import STATIC_DIR, TEMPLATES
 from tourist03.csrf import issue_csrf_token
 from tourist03.migrations import migration_status
+from tourist03.public_catalog import validate_slug
+from tourist03.repositories import catalog as catalog_repo
+
+
+PUBLIC_TEMPLATE_ENV = Environment(
+    loader=FileSystemLoader(TEMPLATES),
+    autoescape=select_autoescape(("html", "xml")),
+)
 
 
 def _public_index_response(request: Request):
@@ -33,6 +45,136 @@ def index(request: Request):
 
 def index_html(request: Request):
     return _public_index_response(request)
+
+
+def _seo_text(value: str, *, fallback: str, limit: int) -> str:
+    text = re.sub(r"\s+", " ", (value or "")).strip() or fallback
+    if len(text) <= limit:
+        return text
+    return text[: max(1, limit - 1)].rstrip(" ,.;:-") + "…"
+
+
+def format_public_date(*values: object) -> tuple[str | None, str | None]:
+    """Return a Russian label and HTML date value without shifting its calendar day.
+
+    Catalog rows normally contain ``datetime`` values, while the repeatable public
+    UI fixture contains ISO strings.  The public page deliberately uses the date
+    component as supplied rather than converting it to the browser or server
+    timezone: an update made on 15 July must remain 15 July for visitors.
+    """
+
+    for value in values:
+        calendar_day: date | None = None
+        if isinstance(value, datetime):
+            calendar_day = value.date()
+        elif isinstance(value, date):
+            calendar_day = value
+        elif isinstance(value, str):
+            raw = value.strip()
+            if len(raw) == 10 or (len(raw) > 10 and raw[10] in {"T", " "}):
+                try:
+                    calendar_day = date.fromisoformat(raw[:10])
+                except ValueError:
+                    calendar_day = None
+        if calendar_day is not None:
+            return f"Актуально на {calendar_day:%d.%m.%Y}", calendar_day.isoformat()
+    return None, None
+
+
+def _absolute_public_url(base_url: str, value: str) -> str:
+    raw = (value or "").strip()
+    if raw.startswith("http://") or raw.startswith("https://"):
+        return raw
+    if raw.startswith("/"):
+        return base_url + raw
+    return f"{base_url}/{raw.lstrip('/')}"
+
+
+def public_place_page(request: Request, slug: str):
+    try:
+        normalized_slug = validate_slug(slug)
+    except ValueError:
+        normalized_slug = ""
+    place = catalog_repo.get_public_place(normalized_slug) if normalized_slug else None
+    if not place:
+        template = PUBLIC_TEMPLATE_ENV.get_template("place-404.html")
+        return HTMLResponse(template.render(public_base_url=request.app.state.settings.public_base_url.rstrip("/")), status_code=404)
+
+    public_base_url = request.app.state.settings.public_base_url.rstrip("/")
+    location = place.get("region") or place.get("city") or place.get("locality") or "Россия"
+    place_type_name = place["place_type"]["name"]
+    title = _seo_text(
+        f"{place['name']} — {place_type_name}, {location} | Туристика",
+        fallback="Объект Туристики",
+        limit=120,
+    )
+    description = _seo_text(
+        place.get("short_description") or place.get("description") or "",
+        fallback=f"{place_type_name} «{place['name']}» в регионе {location}. Контакты, фотографии и детали на Туристике.",
+        limit=160,
+    )
+    canonical = f"{public_base_url}/places/{quote(place['slug'])}"
+    og_image = _absolute_public_url(
+        public_base_url,
+        place.get("cover") or "/static/brand/turistika-logo-stacked.svg",
+    )
+    schema = {
+        "@context": "https://schema.org",
+        "@type": "LodgingBusiness",
+        "name": place["name"],
+        "description": description,
+        "url": canonical,
+        "image": [_absolute_public_url(public_base_url, item["url"]) for item in place.get("gallery", []) if item.get("media_type") == "image"][:12] or [og_image],
+        "address": {
+            "@type": "PostalAddress",
+            "streetAddress": place.get("address") or "",
+            "addressLocality": place.get("city") or place.get("locality") or "",
+            "addressRegion": place.get("region") or "",
+            "addressCountry": "RU",
+        },
+    }
+    if place.get("lat") is not None and place.get("lng") is not None:
+        schema["geo"] = {
+            "@type": "GeoCoordinates",
+            "latitude": place["lat"],
+            "longitude": place["lng"],
+        }
+    phone = next((item["value"] for item in place.get("contacts", []) if item["contact_type"] == "phone"), None)
+    email = next((item["value"] for item in place.get("contacts", []) if item["contact_type"] == "email"), None)
+    if phone:
+        schema["telephone"] = phone
+    if email:
+        schema["email"] = email
+    breadcrumbs = {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+            {"@type": "ListItem", "position": 1, "name": "Туристика", "item": f"{public_base_url}/"},
+            {"@type": "ListItem", "position": 2, "name": "Карта", "item": f"{public_base_url}/#map-section"},
+            {"@type": "ListItem", "position": 3, "name": place["name"], "item": canonical},
+        ],
+    }
+    route_url = None
+    if place.get("lat") is not None and place.get("lng") is not None:
+        route_url = f"https://www.openstreetmap.org/?mlat={place['lat']}&mlon={place['lng']}#map=14/{place['lat']}/{place['lng']}"
+    updated_label, updated_datetime = format_public_date(place.get("confirmed_at"), place.get("updated_at"))
+    template = PUBLIC_TEMPLATE_ENV.get_template("place-detail.html")
+    return HTMLResponse(
+        template.render(
+            place=place,
+            title=title,
+            description=description,
+            canonical=canonical,
+            og_image=og_image,
+            public_base_url=public_base_url,
+            structured_data=schema,
+            breadcrumbs_data=breadcrumbs,
+            route_url=route_url,
+            updated_label=updated_label,
+            updated_datetime=updated_datetime,
+        ),
+        headers={"Cache-Control": "public, max-age=120"},
+    )
 
 
 def api_version(request: Request):
@@ -122,13 +264,21 @@ def robots(request: Request):
 
 def sitemap(request: Request):
     public_base_url = request.app.state.settings.public_base_url.rstrip("/")
-    location = escape_html(f"{public_base_url}/")
+    entries = [
+        "  <url>\n"
+        f"    <loc>{escape_html(f'{public_base_url}/')}</loc>\n"
+        "  </url>\n"
+    ]
+    for place in catalog_repo.list_published_place_sitemap():
+        location = escape_html(f"{public_base_url}/places/{quote(place['slug'])}")
+        updated_at = place.get("updated_at")
+        lastmod = updated_at.date().isoformat() if hasattr(updated_at, "date") else ""
+        lastmod_line = f"    <lastmod>{lastmod}</lastmod>\n" if lastmod else ""
+        entries.append("  <url>\n" f"    <loc>{location}</loc>\n" + lastmod_line + "  </url>\n")
     content = (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-        "  <url>\n"
-        f"    <loc>{location}</loc>\n"
-        "  </url>\n"
-        "</urlset>\n"
+        + "".join(entries)
+        + "</urlset>\n"
     )
     return Response(content=content, media_type="application/xml")

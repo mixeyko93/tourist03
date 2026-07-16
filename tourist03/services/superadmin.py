@@ -187,8 +187,20 @@ def superadmin_user_history(user_id: int):
     return {"user": user, "bookings": bookings, "events": events, "payments": []}
 
 
-def superadmin_list_camps(status: Optional[str] = None, archived_only: bool = False, search: Optional[str] = None):
-    return superadmin_repo.list_camps(status=status, archived_only=archived_only, search=search)
+def superadmin_list_camps(
+    status: Optional[str] = None,
+    archived_only: bool = False,
+    search: Optional[str] = None,
+    place_type: Optional[str] = None,
+    publication_status: Optional[str] = None,
+):
+    return superadmin_repo.list_camps(
+        status=status,
+        archived_only=archived_only,
+        search=search,
+        place_type=place_type,
+        publication_status=publication_status,
+    )
 
 
 def superadmin_camp_editor(camp_id: int):

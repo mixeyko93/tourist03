@@ -1,4 +1,5 @@
-from typing import List, Optional
+from datetime import datetime
+from typing import Any, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -142,8 +143,98 @@ class CampRoomsBusyResponseDTO(OkResponseDTO):
 
 
 class CampUpsertResponseDTO(IdResponseDTO):
-    pass
+    publication_warnings: List[str] = Field(default_factory=list)
 
 
 class UploadResponseDTO(UrlResponseDTO):
     pass
+
+
+class PublicPlaceTypeDTO(BaseModel):
+    id: int
+    slug: str
+    name: str
+    plural_name: str
+    marker_key: str
+    icon_key: str
+    sort_order: int
+    config: dict[str, Any] = Field(default_factory=dict)
+
+
+class PublicAmenityDTO(BaseModel):
+    id: int
+    slug: str
+    name: str
+    category: str
+    icon_key: str
+    sort_order: int
+    value: Optional[dict[str, Any]] = None
+
+
+class PublicPlaceContactDTO(BaseModel):
+    contact_type: str
+    label: Optional[str] = None
+    value: str
+    url: str
+    sort_order: int = 0
+
+
+class PublicMediaDTO(BaseModel):
+    id: Optional[int] = None
+    media_type: str
+    url: str
+    poster_url: Optional[str] = None
+    alt_text: Optional[str] = None
+    caption: Optional[str] = None
+    cover: bool = False
+    sort_order: int = 0
+
+
+class PublicRoomDTO(BaseModel):
+    id: int
+    name: Optional[str] = None
+    room_type: Optional[str] = None
+    capacity: Optional[int] = None
+    price: Optional[int] = None
+    description: Optional[str] = None
+    cover: Optional[str] = None
+    media: List[PublicMediaDTO] = Field(default_factory=list)
+
+
+class PublicPlaceListDTO(BaseModel):
+    id: int
+    slug: str
+    name: str
+    place_type: PublicPlaceTypeDTO
+    short_description: Optional[str] = None
+    region: Optional[str] = None
+    city: Optional[str] = None
+    locality: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    cover: Optional[str] = None
+    min_price: Optional[int] = None
+    primary_contacts: List[PublicPlaceContactDTO] = Field(default_factory=list)
+    key_amenities: List[PublicAmenityDTO] = Field(default_factory=list)
+
+
+class PublicPlaceListResponseDTO(BaseModel):
+    items: List[PublicPlaceListDTO]
+    total: int
+    limit: int
+    offset: int
+
+
+class PublicPlaceDetailDTO(PublicPlaceListDTO):
+    description: Optional[str] = None
+    district: Optional[str] = None
+    address: Optional[str] = None
+    seasonality: Optional[str] = None
+    working_hours: dict[str, Any] = Field(default_factory=dict)
+    confirmed_at: Optional[datetime] = None
+    updated_at: datetime
+    contacts: List[PublicPlaceContactDTO] = Field(default_factory=list)
+    gallery: List[PublicMediaDTO] = Field(default_factory=list)
+    rooms: List[PublicRoomDTO] = Field(default_factory=list)
+    amenities: List[PublicAmenityDTO] = Field(default_factory=list)
+    videos: List[str] = Field(default_factory=list)

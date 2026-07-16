@@ -1,5 +1,5 @@
 import { publicFeatures } from "./feature-flags.js";
-import { initialisePublicMap } from "./map.js";
+import { initialisePublicMap } from "./map.js?v=2026-07-16-03";
 import { initialiseTelegramWebApp } from "./telegram.js";
 
 const features = publicFeatures();
@@ -14,6 +14,15 @@ const mapCanvas = document.querySelector("#map");
 const mapLoading = document.querySelector("[data-map-loading]");
 const mapStatus = document.querySelector("[data-map-status]");
 const mapResults = document.querySelector("[data-map-results]");
+const mapFilterPanel = document.querySelector("[data-map-filters]");
+const mapFilterToggle = document.querySelector("[data-map-filter-toggle]");
+const mapFilterType = document.querySelector("[data-filter-type]");
+const mapFilterRegion = document.querySelector("[data-filter-region]");
+const mapFilterCity = document.querySelector("[data-filter-city]");
+const mapFilterAmenity = document.querySelector("[data-filter-amenity]");
+const mapFilterReset = document.querySelector("[data-filter-reset]");
+const mapCount = document.querySelector("[data-map-count]");
+const mapLegend = document.querySelector("[data-map-legend]");
 let mapController;
 let mapInitialisationScheduled = false;
 const pendingMapController = Object.freeze({ search() {}, reset() {}, locate() {} });
@@ -45,6 +54,15 @@ function ensureMap() {
     loading: mapLoading,
     status: mapStatus,
     results: mapResults,
+    filterPanel: mapFilterPanel,
+    filterToggle: mapFilterToggle,
+    filterType: mapFilterType,
+    filterRegion: mapFilterRegion,
+    filterCity: mapFilterCity,
+    filterAmenity: mapFilterAmenity,
+    filterReset: mapFilterReset,
+    count: mapCount,
+    legend: mapLegend,
   });
   return mapController;
 }
@@ -77,10 +95,14 @@ searchClear?.addEventListener("click", () => {
   if (!searchInput) return;
   searchInput.value = "";
   searchClear.hidden = true;
-  ensureMap().reset();
+  ensureMap().search("");
   searchInput.focus();
 });
 document.querySelector("[data-map-locate]")?.addEventListener("click", () => ensureMap().locate());
+mapFilterReset?.addEventListener("click", () => {
+  if (searchInput) searchInput.value = "";
+  if (searchClear) searchClear.hidden = true;
+});
 document.querySelector("[data-map-reset]")?.addEventListener("click", () => {
   if (searchInput) searchInput.value = "";
   if (searchClear) searchClear.hidden = true;

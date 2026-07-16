@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f5f7f2">
+  <title>{{ title }}</title>
+  <meta name="description" content="{{ description }}">
+  <meta name="robots" content="index,follow">
+  <link rel="canonical" href="{{ canonical }}">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="ru_RU">
+  <meta property="og:site_name" content="Туристика">
+  <meta property="og:title" content="{{ title }}">
+  <meta property="og:description" content="{{ description }}">
+  <meta property="og:url" content="{{ canonical }}">
+  <meta property="og:image" content="{{ og_image }}">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" href="/static/brand/turistika-favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/static/fonts/manrope/manrope-regular.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/static/fonts/manrope/manrope-extrabold.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/static/public/place.css?v=2026-07-16-02">
+  <script defer src="/static/public/place.js?v=2026-07-16-02"></script>
+  <script type="application/ld+json">{{ structured_data | tojson }}</script>
+  <script type="application/ld+json">{{ breadcrumbs_data | tojson }}</script>
+</head>
+<body>
+  <a class="skip-link" href="#place-content">Перейти к объекту</a>
+  <header class="place-header">
+    <div class="place-frame place-header__inner">
+      <a class="place-brand" href="/">
+        <img src="/static/brand/turistika-icon.svg" width="44" height="44" alt="">
+        <span><strong>Туристика</strong><small>Твоя карта впечатлений.</small></span>
+      </a>
+      <a class="place-header__map" href="/#map-section">← Вернуться к карте</a>
+    </div>
+  </header>
+
+  <main id="place-content">
+    <nav class="place-frame breadcrumbs" aria-label="Хлебные крошки">
+      <a href="/">Главная</a><span aria-hidden="true">/</span>
+      <a href="/#map-section">Карта</a><span aria-hidden="true">/</span>
+      <span aria-current="page">{{ place.name }}</span>
+    </nav>
+
+    <section class="place-hero">
+      <div class="place-frame place-hero__grid">
+        <div class="place-hero__copy">
+          <p class="place-eyebrow">{{ place.place_type.name }}{% if place.region %} · {{ place.region }}{% endif %}</p>
+          <h1>{{ place.name }}</h1>
+          {% if place.short_description %}<p class="place-hero__lead">{{ place.short_description }}</p>{% endif %}
+          <div class="place-hero__meta">
+            {% if place.city or place.locality %}<span>{{ place.city or place.locality }}</span>{% endif %}
+            {% if place.min_price %}<strong>от {{ "{:,}".format(place.min_price).replace(",", " ") }} ₽</strong>{% endif %}
+          </div>
+        </div>
+        <div class="place-hero__visual">
+          {% if place.cover %}
+            <img src="{{ place.cover }}" alt="{{ place.name }}" width="760" height="520" fetchpriority="high">
+          {% else %}
+            <div class="place-cover-placeholder"><img src="/static/brand/turistika-mark.svg" alt="" width="150" height="150"><span>Фото скоро появится</span></div>
+          {% endif %}
+        </div>
+      </div>
+    </section>
+
+    {% set gallery_images = place.gallery | selectattr("media_type", "equalto", "image") | list %}
+    <div class="place-frame place-layout">
+      <div class="place-main place-main--primary">
+        <section class="place-section" aria-labelledby="about-title">
+          <p class="place-eyebrow">Об объекте</p>
+          <h2 id="about-title">Что важно знать</h2>
+          <p class="place-description">{{ place.description or place.short_description or "Описание объекта уточняется." }}</p>
+          <dl class="place-facts">
+            {% if place.address %}<div><dt>Адрес</dt><dd>{{ place.address }}</dd></div>{% endif %}
+            {% if place.seasonality %}<div><dt>Сезонность</dt><dd>{{ place.seasonality }}</dd></div>{% endif %}
+            {% if place.working_hours %}<div><dt>Режим работы</dt><dd>{{ place.working_hours.get("text") or "Уточняйте у объекта" }}</dd></div>{% endif %}
+          </dl>
+        </section>
+      </div>
+
+      <aside class="place-sidebar" aria-label="Контакты и маршрут">
+        <section class="contact-card" id="contacts">
+          <p class="place-eyebrow">Связаться</p>
+          <h2>Контакты</h2>
+          {% if place.contacts %}
+            <ul role="list">
+              {% for contact in place.contacts %}
+                <li><small>{{ contact.label or contact.contact_type }}</small><a href="{{ contact.url }}"{% if contact.contact_type not in ["phone", "email"] %} target="_blank" rel="noopener noreferrer"{% endif %}>{{ contact.value }}</a></li>
+              {% endfor %}
+            </ul>
+          {% else %}<p class="contact-card__empty">Публичные контакты уточняются.</p>{% endif %}
+        </section>
+        {% if route_url %}<a class="route-card" href="{{ route_url }}" target="_blank" rel="noopener noreferrer"><span>Показать маршрут</span><strong>{{ place.lat }}, {{ place.lng }}</strong></a>{% endif %}
+        {% if updated_label %}<p class="place-updated"><time datetime="{{ updated_datetime }}">{{ updated_label }}</time>{% if place.confirmed_at %} · объект подтверждён{% endif %}</p>{% endif %}
+      </aside>
+
+      <div class="place-main place-main--secondary">
+
+        {% if gallery_images %}
+        <section class="place-section place-gallery-section" aria-labelledby="gallery-title" data-place-gallery>
+          <div class="place-section__heading">
+            <div>
+              <p class="place-eyebrow">{% if gallery_images | length > 1 %}Галерея{% else %}Фото{% endif %}</p>
+              <h2 id="gallery-title">{% if gallery_images | length > 1 %}Место в деталях{% else %}Фото{% endif %}</h2>
+            </div>
+            {% if gallery_images | length > 1 %}<span class="place-gallery__counter" aria-live="polite" data-gallery-counter>1 / {{ gallery_images | length }}</span>{% endif %}
+          </div>
+          <div class="place-gallery{% if gallery_images | length == 1 %} place-gallery--single{% endif %}"{% if gallery_images | length > 1 %} tabindex="0" aria-label="Галерея: используйте стрелки влево и вправо" data-gallery-track{% endif %}>
+            {% for media in gallery_images %}
+              <figure data-gallery-slide>
+                {% if gallery_images | length > 1 %}<button class="place-gallery__image" type="button" data-gallery-open="{{ loop.index0 }}" aria-label="Открыть фото {{ loop.index }} из {{ gallery_images | length }} на весь экран">{% endif %}
+                <img src="{{ media.url }}" alt="{{ media.alt_text or place.name }}" loading="lazy" width="720" height="480">
+                {% if gallery_images | length > 1 %}</button>{% endif %}
+                {% if media.caption %}<figcaption>{{ media.caption }}</figcaption>{% endif %}
+              </figure>
+            {% endfor %}
+          </div>
+          {% if gallery_images | length > 1 %}
+          <div class="place-gallery__controls" aria-label="Управление галереей">
+            <button type="button" data-gallery-previous aria-label="Предыдущее фото">←</button>
+            <div class="place-gallery__thumbnails" role="list">
+              {% for media in gallery_images %}<button type="button" role="listitem" data-gallery-thumbnail="{{ loop.index0 }}" aria-label="Показать фото {{ loop.index }}"{% if loop.first %} aria-current="true"{% endif %}><img src="{{ media.url }}" alt="" loading="lazy" width="96" height="64"></button>{% endfor %}
+            </div>
+            <button type="button" data-gallery-next aria-label="Следующее фото">→</button>
+          </div>
+          <dialog class="place-lightbox" data-gallery-dialog aria-label="Полноэкранный просмотр фото">
+            <div class="place-lightbox__inner">
+              <button class="place-lightbox__close" type="button" data-gallery-close aria-label="Закрыть полноэкранное фото">Закрыть</button>
+              <button class="place-lightbox__previous" type="button" data-gallery-dialog-previous aria-label="Предыдущее фото">←</button>
+              <figure><img data-gallery-dialog-image src="{{ gallery_images[0].url }}" alt="{{ gallery_images[0].alt_text or place.name }}"><figcaption data-gallery-dialog-caption>{{ gallery_images[0].caption or "" }}</figcaption></figure>
+              <button class="place-lightbox__next" type="button" data-gallery-dialog-next aria-label="Следующее фото">→</button>
+            </div>
+          </dialog>
+          {% endif %}
+        </section>
+        {% endif %}
+
+        {% if place.amenities %}
+        <section class="place-section" aria-labelledby="amenities-title">
+          <p class="place-eyebrow">Удобства</p>
+          <h2 id="amenities-title">Всё для поездки</h2>
+          <ul class="amenity-list" role="list">
+            {% for amenity in place.amenities %}<li><span aria-hidden="true">✓</span>{{ amenity.name }}</li>{% endfor %}
+          </ul>
+        </section>
+        {% endif %}
+
+        {% if place.rooms %}
+        <section class="place-section" aria-labelledby="rooms-title">
+          <p class="place-eyebrow">Размещение</p>
+          <h2 id="rooms-title">Варианты проживания</h2>
+          <div class="room-list">
+            {% for room in place.rooms %}
+              <article class="room-card">
+                {% if room.cover %}<img src="{{ room.cover }}" alt="{{ room.name or 'Вариант размещения' }}" loading="lazy" width="420" height="280">{% endif %}
+                <div><span>{{ room.room_type or "Размещение" }}</span><h3>{{ room.name or "Вариант размещения" }}</h3>
+                  {% if room.description %}<p>{{ room.description }}</p>{% endif %}
+                  <footer>{% if room.capacity %}<small>До {{ room.capacity }} гостей</small>{% endif %}{% if room.price %}<strong>от {{ "{:,}".format(room.price).replace(",", " ") }} ₽</strong>{% endif %}</footer>
+                </div>
+              </article>
+            {% endfor %}
+          </div>
+        </section>
+        {% endif %}
+
+        {% if place.videos %}
+        <section class="place-section" aria-labelledby="videos-title">
+          <p class="place-eyebrow">Видео</p>
+          <h2 id="videos-title">Посмотреть перед поездкой</h2>
+          <div class="video-links">{% for video in place.videos %}<a href="{{ video }}" target="_blank" rel="noopener noreferrer">Открыть видео <span aria-hidden="true">↗</span></a>{% endfor %}</div>
+        </section>
+        {% endif %}
+      </div>
+    </div>
+  </main>
+
+  <footer class="place-footer">
+    <div class="place-frame"><a class="place-brand place-brand--footer" href="/"><img src="/static/brand/turistika-icon.svg" width="44" height="44" alt=""><span><strong>Туристика</strong><small>Твоя карта впечатлений.</small></span></a><p>Публичный каталог туристических объектов России.</p></div>
+  </footer>
+</body>
+</html>

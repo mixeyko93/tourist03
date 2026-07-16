@@ -1,4 +1,4 @@
-name: Public UI review
+name: Public catalog review
 
 "on":
   pull_request:
@@ -8,9 +8,9 @@ permissions:
   contents: read
 
 jobs:
-  public-ui-review:
-    if: github.event.pull_request.number == 4
-    name: Capture public UI review
+  public-catalog-review:
+    if: github.head_ref == 'feature/universal-public-catalog'
+    name: Capture public catalog review
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,10 +20,10 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r requirements-dev.txt
       - run: python -m playwright install --with-deps chromium
-      - run: PUBLIC_UI_REVIEW_DIR=artifacts/public-ui-review python scripts/capture_public_ui_review.py
+      - run: PUBLIC_UI_REVIEW_DIR=artifacts/public-catalog-review python scripts/capture_public_ui_review.py
       - uses: actions/upload-artifact@v4
         with:
-          name: public-ui-review
-          path: artifacts/public-ui-review
+          name: public-catalog-review
+          path: artifacts/public-catalog-review
           if-no-files-found: error
           retention-days: 14
