@@ -12,6 +12,7 @@ vk_api==11.9.9
 
 # Опционально: загрузка переменных из .env (если используешь)
 python-dotenv==1.0.1
+pydantic-settings==2.7.1
 psycopg2-binary>=2.9.9
 passlib[bcrypt]==1.7.4
 itsdangerous==2.2.0

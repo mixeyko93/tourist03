@@ -4,7 +4,7 @@ import psycopg2
 from psycopg2 import errors
 from psycopg2.extras import RealDictCursor
 
-from tourist03.config import PG_DB, PG_HOST, PG_PASSWORD, PG_PORT, PG_USER
+from tourist03.settings import get_settings
 
 
 def _pg_connect(schema: str):
@@ -19,12 +19,13 @@ def _pg_connect(schema: str):
             return None
         return str(val)
 
+    settings = get_settings()
     kwargs = dict(
-        host=_safe_str(PG_HOST),
-        port=PG_PORT,
-        dbname=_safe_str(PG_DB),
-        user=_safe_str(PG_USER),
-        password=_safe_str(PG_PASSWORD),
+        host=_safe_str(settings.pg_host),
+        port=settings.pg_port,
+        dbname=_safe_str(settings.pg_db),
+        user=_safe_str(settings.pg_user),
+        password=_safe_str(settings.pg_password),
         options="-c client_encoding=UTF8",
         cursor_factory=RealDictCursor,
     )
