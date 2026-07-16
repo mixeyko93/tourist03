@@ -6,7 +6,6 @@ from typing import Optional
 from fastapi import HTTPException, Request, status
 
 from tourist03.config import SUPERADMIN_LOGIN, logger
-from tourist03.csrf import clear_csrf_token
 from tourist03.repositories import catalog as catalog_repo
 from tourist03.repositories import superadmin as superadmin_repo
 from tourist03.schemas import (
@@ -57,10 +56,7 @@ def _set_superadmin_session(request: Request, principal: Optional[dict]):
 
 
 def _clear_superadmin_session(request: Request):
-    request.session.pop("superadmin", None)
-    request.session.pop("superadmin_account_id", None)
-    request.session.pop("superadmin_principal", None)
-    clear_csrf_token(request)
+    request.session.clear()
 
 
 def _bootstrap_root_superadmin(login: str, password: str) -> Optional[dict]:
