@@ -1,0 +1,153 @@
+{
+  "place_types": [
+    {"id": 1, "slug": "recreation-base", "name": "База отдыха", "plural_name": "Базы отдыха", "marker_key": "forest", "icon_key": "home", "sort_order": 10, "config": {"accent": "#2d9a71"}},
+    {"id": 2, "slug": "hotel", "name": "Отель", "plural_name": "Отели", "marker_key": "city", "icon_key": "hotel", "sort_order": 20, "config": {"accent": "#247da8"}},
+    {"id": 3, "slug": "glamping", "name": "Глэмпинг", "plural_name": "Глэмпинги", "marker_key": "glamping", "icon_key": "tent", "sort_order": 40, "config": {"accent": "#d7833f"}},
+    {"id": 4, "slug": "apartments", "name": "Апартаменты", "plural_name": "Апартаменты", "marker_key": "apartments", "icon_key": "building", "sort_order": 60, "config": {"accent": "#a35f93"}}
+  ],
+  "amenities": [
+    {"id": 1, "slug": "wifi", "name": "Wi-Fi", "category": "connectivity", "icon_key": "wifi", "sort_order": 10},
+    {"id": 2, "slug": "parking", "name": "Парковка", "category": "transport", "icon_key": "parking", "sort_order": 20},
+    {"id": 3, "slug": "restaurant", "name": "Ресторан", "category": "food", "icon_key": "restaurant", "sort_order": 30},
+    {"id": 4, "slug": "pets", "name": "Можно с животными", "category": "rules", "icon_key": "pets", "sort_order": 50},
+    {"id": 5, "slug": "beach", "name": "Пляж", "category": "nature", "icon_key": "beach", "sort_order": 80},
+    {"id": 6, "slug": "fishing", "name": "Рыбалка", "category": "leisure", "icon_key": "fishing", "sort_order": 150}
+  ],
+  "places": [
+    {
+      "id": 101,
+      "slug": "sosnovyy-bereg",
+      "name": "Эко-парк «Сосновый берег»",
+      "place_type": {"id": 3, "slug": "glamping", "name": "Глэмпинг", "plural_name": "Глэмпинги", "marker_key": "glamping", "icon_key": "tent", "sort_order": 40, "config": {"accent": "#d7833f"}},
+      "short_description": "Светлые шатры среди сосен и тихие вечера на берегу Ладоги.",
+      "description": "Эко-парк для спокойных выходных на природе. Пространство объединяет приватные шатры, прогулочные тропы и открытую террасу с видом на воду.",
+      "region": "Республика Карелия",
+      "district": "Сортавальский район",
+      "city": "Сортавала",
+      "locality": "Хелюля",
+      "address": "Берег Ладожского озера",
+      "lat": 61.7842,
+      "lng": 30.6547,
+      "cover": "/static/uploads/1_angir/20260104-205653363172.jpg",
+      "min_price": 7500,
+      "seasonality": "Май — октябрь",
+      "working_hours": {"daily": "09:00–21:00"},
+      "confirmed_at": "2026-07-10T12:00:00Z",
+      "updated_at": "2026-07-15T09:00:00Z",
+      "primary_contacts": [
+        {"contact_type": "phone", "label": "Позвонить", "value": "+7 921 555-01-01", "url": "tel:+79215550101", "sort_order": 10},
+        {"contact_type": "max", "label": "MAX", "value": "MAX", "url": "https://max.ru/turistika", "sort_order": 20}
+      ],
+      "contacts": [
+        {"contact_type": "phone", "label": "Телефон", "value": "+7 921 555-01-01", "url": "tel:+79215550101", "sort_order": 10},
+        {"contact_type": "telegram", "label": "Telegram", "value": "Telegram", "url": "https://t.me/tourist_03_bot", "sort_order": 20},
+        {"contact_type": "max", "label": "MAX", "value": "MAX", "url": "https://max.ru/turistika", "sort_order": 30}
+      ],
+      "key_amenities": [
+        {"id": 1, "slug": "wifi", "name": "Wi-Fi", "category": "connectivity", "icon_key": "wifi", "sort_order": 10},
+        {"id": 2, "slug": "parking", "name": "Парковка", "category": "transport", "icon_key": "parking", "sort_order": 20},
+        {"id": 5, "slug": "beach", "name": "Пляж", "category": "nature", "icon_key": "beach", "sort_order": 80}
+      ],
+      "amenities": [
+        {"id": 1, "slug": "wifi", "name": "Wi-Fi", "category": "connectivity", "icon_key": "wifi", "sort_order": 10},
+        {"id": 2, "slug": "parking", "name": "Парковка", "category": "transport", "icon_key": "parking", "sort_order": 20},
+        {"id": 4, "slug": "pets", "name": "Можно с животными", "category": "rules", "icon_key": "pets", "sort_order": 50},
+        {"id": 5, "slug": "beach", "name": "Пляж", "category": "nature", "icon_key": "beach", "sort_order": 80}
+      ],
+      "gallery": [
+        {"id": 1, "media_type": "image", "url": "/static/uploads/1_angir/20260104-205653363172.jpg", "alt_text": "Сосновый берег", "caption": "Вид на территорию", "cover": true, "sort_order": 0},
+        {"id": 2, "media_type": "image", "url": "/static/uploads/1_angir/20251101-010251370896.jpg", "alt_text": "Домики среди сосен", "caption": "Размещение", "cover": false, "sort_order": 1},
+        {"id": 3, "media_type": "image", "url": "/static/uploads/1_angir/20251101-010251378895.jpg", "alt_text": "Территория эко-парка", "caption": "Прогулочная зона", "cover": false, "sort_order": 2}
+      ],
+      "rooms": [
+        {"id": 1001, "name": "Шатёр у воды", "room_type": "Глэмпинг", "capacity": 2, "price": 7500, "description": "Приватный шатёр с террасой.", "cover": "/static/uploads/1_angir/1-120_standart/20251101-010318486811.jpg", "media": []},
+        {"id": 1002, "name": "Семейный шатёр", "room_type": "Глэмпинг", "capacity": 4, "price": 11000, "description": "Просторный вариант для семьи.", "cover": "/static/uploads/1_angir/1-121_standart/20251101-010327243626.jpg", "media": []}
+      ],
+      "videos": ["https://www.youtube.com/watch?v=touristika"]
+    },
+    {
+      "id": 102,
+      "slug": "taezhnaya-pristan",
+      "name": "База «Таёжная пристань»",
+      "place_type": {"id": 1, "slug": "recreation-base", "name": "База отдыха", "plural_name": "Базы отдыха", "marker_key": "forest", "icon_key": "home", "sort_order": 10, "config": {"accent": "#2d9a71"}},
+      "short_description": "Домики у Байкала, баня и маршруты вдоль побережья.",
+      "description": "Тёплая база отдыха для поездок с друзьями и семьёй.",
+      "region": "Иркутская область",
+      "district": "Иркутский район",
+      "city": "Иркутск",
+      "locality": "Листвянка",
+      "address": "Побережье Байкала",
+      "lat": 52.2869,
+      "lng": 104.305,
+      "cover": "/static/uploads/3_gostinyy-dvor/20251101-010719668768.jpg",
+      "min_price": 5200,
+      "seasonality": "Круглый год",
+      "working_hours": {"daily": "круглосуточно"},
+      "confirmed_at": "2026-07-08T12:00:00Z",
+      "updated_at": "2026-07-14T09:00:00Z",
+      "primary_contacts": [{"contact_type": "phone", "label": "Позвонить", "value": "+7 3952 555-202", "url": "tel:+73952555202", "sort_order": 10}],
+      "contacts": [{"contact_type": "phone", "label": "Телефон", "value": "+7 3952 555-202", "url": "tel:+73952555202", "sort_order": 10}],
+      "key_amenities": [{"id": 2, "slug": "parking", "name": "Парковка", "category": "transport", "icon_key": "parking", "sort_order": 20}, {"id": 6, "slug": "fishing", "name": "Рыбалка", "category": "leisure", "icon_key": "fishing", "sort_order": 150}],
+      "amenities": [{"id": 2, "slug": "parking", "name": "Парковка", "category": "transport", "icon_key": "parking", "sort_order": 20}, {"id": 6, "slug": "fishing", "name": "Рыбалка", "category": "leisure", "icon_key": "fishing", "sort_order": 150}],
+      "gallery": [{"id": 4, "media_type": "image", "url": "/static/uploads/3_gostinyy-dvor/20251101-010719668768.jpg", "alt_text": "Таёжная пристань", "cover": true, "sort_order": 0}],
+      "rooms": [],
+      "videos": []
+    },
+    {
+      "id": 103,
+      "slug": "tikhaya-bukhta",
+      "name": "Апартаменты «Тихая бухта»",
+      "place_type": {"id": 4, "slug": "apartments", "name": "Апартаменты", "plural_name": "Апартаменты", "marker_key": "apartments", "icon_key": "building", "sort_order": 60, "config": {"accent": "#a35f93"}},
+      "short_description": "Апартаменты для самостоятельного отдыха у моря.",
+      "description": "Современные апартаменты рядом с набережной.",
+      "region": "Приморский край",
+      "district": "Владивостокский округ",
+      "city": "Владивосток",
+      "locality": "Владивосток",
+      "address": "Улица Набережная, 7",
+      "lat": 43.1155,
+      "lng": 131.8855,
+      "cover": "/static/uploads/2_hayany/2-100_standart/20251101-010636401002.jpg",
+      "min_price": 6800,
+      "seasonality": "Круглый год",
+      "working_hours": {},
+      "confirmed_at": "2026-07-07T12:00:00Z",
+      "updated_at": "2026-07-13T09:00:00Z",
+      "primary_contacts": [{"contact_type": "website", "label": "Сайт", "value": "Сайт", "url": "https://example.org/quiet-bay", "sort_order": 10}],
+      "contacts": [{"contact_type": "website", "label": "Сайт", "value": "Сайт", "url": "https://example.org/quiet-bay", "sort_order": 10}],
+      "key_amenities": [{"id": 1, "slug": "wifi", "name": "Wi-Fi", "category": "connectivity", "icon_key": "wifi", "sort_order": 10}],
+      "amenities": [{"id": 1, "slug": "wifi", "name": "Wi-Fi", "category": "connectivity", "icon_key": "wifi", "sort_order": 10}],
+      "gallery": [{"id": 5, "media_type": "image", "url": "/static/uploads/2_hayany/2-100_standart/20251101-010636401002.jpg", "alt_text": "Тихая бухта", "cover": true, "sort_order": 0}],
+      "rooms": [],
+      "videos": []
+    },
+    {
+      "id": 104,
+      "slug": "severnyy-svet",
+      "name": "Отель «Северный свет»",
+      "place_type": {"id": 2, "slug": "hotel", "name": "Отель", "plural_name": "Отели", "marker_key": "city", "icon_key": "hotel", "sort_order": 20, "config": {"accent": "#247da8"}},
+      "short_description": "Небольшой городской отель рядом с главным маршрутом.",
+      "description": "Комфортная остановка для путешествия по северу России.",
+      "region": "Мурманская область",
+      "district": "Городской округ",
+      "city": "Мурманск",
+      "locality": "Мурманск",
+      "address": "Проспект Ленина, 15",
+      "lat": 68.9707,
+      "lng": 33.0749,
+      "cover": null,
+      "min_price": 5900,
+      "seasonality": "Круглый год",
+      "working_hours": {"reception": "круглосуточно"},
+      "confirmed_at": "2026-07-06T12:00:00Z",
+      "updated_at": "2026-07-12T09:00:00Z",
+      "primary_contacts": [{"contact_type": "email", "label": "Email", "value": "hello@example.org", "url": "mailto:hello@example.org", "sort_order": 10}],
+      "contacts": [{"contact_type": "email", "label": "Email", "value": "hello@example.org", "url": "mailto:hello@example.org", "sort_order": 10}],
+      "key_amenities": [{"id": 1, "slug": "wifi", "name": "Wi-Fi", "category": "connectivity", "icon_key": "wifi", "sort_order": 10}, {"id": 3, "slug": "restaurant", "name": "Ресторан", "category": "food", "icon_key": "restaurant", "sort_order": 30}],
+      "amenities": [{"id": 1, "slug": "wifi", "name": "Wi-Fi", "category": "connectivity", "icon_key": "wifi", "sort_order": 10}, {"id": 3, "slug": "restaurant", "name": "Ресторан", "category": "food", "icon_key": "restaurant", "sort_order": 30}],
+      "gallery": [],
+      "rooms": [],
+      "videos": []
+    }
+  ]
+}

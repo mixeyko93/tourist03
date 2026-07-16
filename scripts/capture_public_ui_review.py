@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""Create reproducible visual-review screenshots for the public browser UI.
-
-The script starts an isolated local ASGI server and fulfils only ``/api/camps``
-with the repository's public-catalog fixture.  The page, public assets, brand
-files and Leaflet integration are otherwise served by the application itself.
-It is intentionally suitable for both a developer machine and GitHub Actions.
-"""
+"""Create reproducible map and place-page screenshots for catalog review."""
 
 from __future__ import annotations
 
@@ -26,8 +20,7 @@ from playwright.sync_api import Browser, Page, TimeoutError as PlaywrightTimeout
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-FIXTURE_PATH = PROJECT_ROOT / "tests" / "fixtures" / "public-camps.json"
-DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "artifacts" / "public-ui-review"
+DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "artifacts" / "public-catalog-review"
 REVIEW_BASE_URL = "https://review.turistika.example"
 
 
@@ -39,7 +32,7 @@ def allocate_port() -> int:
 
 @contextmanager
 def local_server() -> Iterator[str]:
-    """Run the app without a database; Playwright fulfils the public API call."""
+    """Run the review-only fixture app without connecting to a database."""
 
     port = allocate_port()
     base_url = f"http://127.0.0.1:{port}"
@@ -55,7 +48,7 @@ def local_server() -> Iterator[str]:
         }
     )
     process = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", str(port)],
+        [sys.executable, "-m", "uvicorn", "scripts.public_catalog_review_app:app", "--host", "127.0.0.1", "--port", str(port)],
         cwd=PROJECT_ROOT,
         env=env,
         stdout=subprocess.PIPE,
@@ -90,27 +83,19 @@ def local_server() -> Iterator[str]:
             process.stdout.close()
 
 
-def fixture_camps() -> list[dict]:
-    payload = json.loads(FIXTURE_PATH.read_text(encoding="utf-8"))
-    if not isinstance(payload, list) or not payload:
-        raise RuntimeError("Public UI fixture must contain at least one camp")
-    return payload
-
-
-def route_catalog(page: Page, payload: list[dict] | None = None, status: int = 200) -> None:
-    body = json.dumps(payload if payload is not None else fixture_camps(), ensure_ascii=False)
+def route_catalog_state(page: Page, payload: dict, status: int = 200) -> None:
+    body = json.dumps(payload, ensure_ascii=False)
 
     def fulfil(route):
         route.fulfill(status=status, content_type="application/json; charset=utf-8", body=body)
 
-    page.route("**/api/camps", fulfil)
+    page.route("**/api/public/places?*", fulfil)
 
 
 def open_public_page(browser: Browser, base_url: str, *, width: int, height: int) -> Page:
     context = browser.new_context(viewport={"width": width, "height": height}, locale="ru-RU", timezone_id="Europe/Moscow")
     page = context.new_page()
     page.add_init_script("delete window.Telegram;")
-    route_catalog(page)
     page.goto(f"{base_url}/", wait_until="domcontentloaded", timeout=30_000)
     page.wait_for_selector("h1", timeout=15_000)
     return page
@@ -120,7 +105,7 @@ def wait_for_map(page: Page) -> None:
     page.locator("#map-section").scroll_into_view_if_needed()
     page.wait_for_selector("#map.leaflet-container", timeout=15_000)
     page.wait_for_function("() => document.querySelector('[data-map-loading]')?.hidden === true", timeout=15_000)
-    page.wait_for_function("() => document.querySelectorAll('.public-map-marker').length > 0", timeout=15_000)
+    page.wait_for_function("() => document.querySelectorAll('.public-map-marker, .public-map-cluster').length > 0", timeout=15_000)
 
 
 def wait_for_first_map_tile(page: Page) -> None:
@@ -133,6 +118,14 @@ def wait_for_first_map_tile(page: Page) -> None:
 
 
 def click_visible_marker(page: Page) -> None:
+    for _ in range(4):
+        if page.locator(".public-map-marker").count():
+            break
+        cluster = page.locator(".public-map-cluster").first
+        if not cluster.count():
+            break
+        cluster.click(force=True)
+        page.wait_for_timeout(300)
     index = page.locator(".public-map-marker").evaluate_all(
         """nodes => nodes.findIndex((node) => {
             const rect = node.getBoundingClientRect();
@@ -252,7 +245,27 @@ def measure_map_action(page: Page) -> int:
     return round((time.monotonic() - started) * 1000)
 
 
-def capture_viewport(page: Page, output_dir: Path, *, prefix: str, width: int, height: int) -> dict[str, float | int]:
+def ensure_filters_open(page: Page) -> None:
+    panel = page.locator("[data-map-filters]")
+    if panel.evaluate("node => node.hidden"):
+        page.locator("[data-map-filter-toggle]").click()
+    page.wait_for_selector("[data-map-filters]:not([hidden])", timeout=5_000)
+
+
+def capture_detail_page(page: Page, output_dir: Path, *, prefix: str, base_url: str, href: str) -> None:
+    page.goto(f"{base_url}{href}", wait_until="domcontentloaded", timeout=30_000)
+    page.wait_for_selector(".place-hero h1", timeout=10_000)
+    assert page.locator('link[rel="canonical"]').get_attribute("href") == f"{REVIEW_BASE_URL}{href}"
+    assert page.locator('script[type="application/ld+json"]').count() == 2
+    page.screenshot(path=str(output_dir / f"{prefix}-detail-top.png"))
+    page.locator("#gallery-title").scroll_into_view_if_needed()
+    page.locator("#gallery-title").locator("..").screenshot(path=str(output_dir / f"{prefix}-detail-gallery.png"))
+    page.locator("#contacts").scroll_into_view_if_needed()
+    page.locator("#contacts").screenshot(path=str(output_dir / f"{prefix}-detail-contacts.png"))
+    page.screenshot(path=str(output_dir / f"{prefix}-detail-full-page.png"), full_page=True)
+
+
+def capture_viewport(page: Page, output_dir: Path, *, prefix: str, width: int, height: int, base_url: str) -> dict[str, float | int]:
     assert_public_contract(page, page.url.rsplit("/", 1)[0])
     metrics = map_metrics(page, width=width, height=height)
     assert_map_first_targets(prefix, metrics)
@@ -272,14 +285,24 @@ def capture_viewport(page: Page, output_dir: Path, *, prefix: str, width: int, h
 
     wait_for_map(page)
     wait_for_first_map_tile(page)
+    ensure_filters_open(page)
+    page.locator("[data-map-shell]").screenshot(path=str(output_dir / f"{prefix}-map-filters.png"))
+    page.locator("[data-map-filter-toggle]").click()
+    page.wait_for_function("() => document.querySelector('[data-map-filters]')?.hidden === true", timeout=5_000)
     page.locator("[data-map-shell]").screenshot(path=str(output_dir / f"{prefix}-map.png"))
     click_visible_marker(page)
     page.wait_for_selector(".leaflet-popup .public-map-popup", timeout=10_000)
+    page.wait_for_timeout(800)
+    wait_for_first_map_tile(page)
     page.locator("[data-map-shell]").screenshot(path=str(output_dir / f"{prefix}-map-popup.png"))
+    detail_href = page.locator(".public-map-popup__detail").get_attribute("href")
+    if not detail_href:
+        raise RuntimeError("Popup does not contain a public detail link")
 
     capture_information_blocks(page, output_dir / f"{prefix}-information.png", width=width)
     page.locator(".site-footer").screenshot(path=str(output_dir / f"{prefix}-footer.png"))
     page.screenshot(path=str(output_dir / f"{prefix}-full-page.png"), full_page=True)
+    capture_detail_page(page, output_dir, prefix=prefix, base_url=base_url, href=detail_href)
     return metrics
 
 
@@ -289,13 +312,14 @@ def verify_empty_and_error_states(browser: Browser, base_url: str) -> dict[str, 
         context = browser.new_context(viewport={"width": 1440, "height": 1000}, locale="ru-RU")
         page = context.new_page()
         page.add_init_script("delete window.Telegram;")
-        route_catalog(page, payload if isinstance(payload, list) else None, status=status)
+        response_payload = {"items": payload if isinstance(payload, list) else [], "total": len(payload) if isinstance(payload, list) else 0, "limit": 100, "offset": 0}
+        route_catalog_state(page, response_payload, status=status)
         page.goto(f"{base_url}/", wait_until="domcontentloaded", timeout=30_000)
         page.locator("#map-section").scroll_into_view_if_needed()
         page.wait_for_function("() => document.querySelector('[data-map-loading]')?.hidden === true", timeout=15_000)
         text = page.locator("[data-map-status]").inner_text()
         if state_name == "empty":
-            assert text == "Каталог пока наполняется — скоро здесь появятся новые места."
+            assert text == "По выбранным фильтрам объектов на карте нет."
         else:
             assert text == "Не удалось загрузить каталог. Попробуйте обновить страницу."
         states[state_name] = text
@@ -311,9 +335,9 @@ def write_index(output_dir: Path, metrics: dict[str, dict], states: dict[str, st
     )
     metrics_html = escape(json.dumps({"layouts": metrics, "states": states}, ensure_ascii=False, indent=2))
     content = f"""<!doctype html>
-<html lang="ru"><meta charset="utf-8"><title>Туристика — public UI review</title>
+<html lang="ru"><meta charset="utf-8"><title>Туристика — public catalog review</title>
 <style>body{{margin:0;padding:32px;background:#f5f7f2;color:#17211b;font:16px/1.5 Arial,sans-serif}}main{{max-width:1440px;margin:auto}}h1{{margin-top:0}}.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:24px}}figure{{margin:0;border:1px solid #d3ddd4;background:#fff;padding:12px;border-radius:12px}}img{{display:block;width:100%;height:auto;border-radius:7px}}figcaption{{margin-top:8px;font-weight:700;font-size:13px}}pre{{overflow:auto;padding:16px;background:#101712;color:#fff;border-radius:10px}}</style>
-<main><h1>Туристика — визуальное ревью public UI</h1><p>Скриншоты созданы Playwright из текущего коммита с brand-файлами приложения и fixture публичного каталога.</p><pre>{metrics_html}</pre><section class="grid">{cards}</section></main></html>\n"""
+<main><h1>Туристика — визуальное ревью публичного каталога</h1><p>Скриншоты созданы Playwright из текущего коммита с brand-файлами приложения и воспроизводимым fixture универсального каталога.</p><pre>{metrics_html}</pre><section class="grid">{cards}</section></main></html>\n"""
     (output_dir / "index.html").write_text(content, encoding="utf-8")
 
 
@@ -339,11 +363,11 @@ def main() -> int:
         browser = playwright.chromium.launch(headless=True)
         try:
             desktop = open_public_page(browser, base_url, width=1440, height=1000)
-            desktop_metrics = capture_viewport(desktop, output_dir, prefix="desktop", width=1440, height=1000)
+            desktop_metrics = capture_viewport(desktop, output_dir, prefix="desktop", width=1440, height=1000, base_url=base_url)
             desktop.context.close()
 
             mobile = open_public_page(browser, base_url, width=390, height=844)
-            mobile_metrics = capture_viewport(mobile, output_dir, prefix="mobile", width=390, height=844)
+            mobile_metrics = capture_viewport(mobile, output_dir, prefix="mobile", width=390, height=844, base_url=base_url)
             mobile.context.close()
 
             states = verify_empty_and_error_states(browser, base_url)

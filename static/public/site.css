@@ -143,8 +143,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .public-map-marker-wrap { background: transparent; border: 0; }
 .public-map-marker { position: relative; display: grid; width: 44px; height: 44px; place-items: center; border: 3px solid #fff; border-radius: 50% 50% 50% 0; background: var(--marker-accent); box-shadow: 0 6px 15px rgba(23, 33, 27, .35); color: #fff; transform: rotate(-45deg); }
 .public-map-marker svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; transform: rotate(45deg); }
-.public-map-marker b { position: absolute; top: -32px; left: 50%; max-width: 140px; overflow: hidden; padding: 4px 7px; border-radius: 6px; background: rgba(23, 33, 27, .88); color: #fff; font-size: 9px; font-weight: 800; opacity: 0; text-overflow: ellipsis; transform: translateX(-50%) rotate(45deg); transition: opacity .16s ease; white-space: nowrap; }
-.public-map-marker:hover b { opacity: 1; }
 .public-map-cluster-wrap { background: transparent; border: 0; }
 .public-map-cluster { display: grid; width: 46px; height: 46px; place-items: center; border: 3px solid #fff; border-radius: 50%; background: var(--aqua); box-shadow: 0 7px 16px rgba(10, 126, 145, .35); color: #fff; font-size: 13px; font-weight: 800; }
 .public-map-popup { display: grid; gap: 5px; padding: 3px 2px; color: var(--ink); font-family: Manrope, Arial, sans-serif; }

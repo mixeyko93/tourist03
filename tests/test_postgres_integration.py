@@ -165,12 +165,28 @@ class PostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         await self.client.aclose()
 
     def _seed_camp(self, *, name="Blue Lake", housing_type="apartments", status="active") -> int:
+        reserved_id = int(
+            self._fetch_one("SELECT nextval(pg_get_serial_sequence('catalog.camps', 'id')) AS id")["id"]
+        )
+        publication_status = {
+            "active": "published",
+            "published": "published",
+            "archived": "archived",
+            "disabled": "disabled",
+        }.get((status or "").lower(), "draft")
         self._execute(
             """
-            INSERT INTO catalog.camps (name, housing_type, address, status)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO catalog.camps (
+                id, slug, place_type_id, publication_status,
+                name, housing_type, address, status, short_description
+            )
+            VALUES (
+                %s, %s,
+                (SELECT id FROM catalog.place_types WHERE slug = 'recreation-base'),
+                %s, %s, %s, %s, %s, %s
+            )
             """,
-            (name, housing_type, "Test address", status),
+            (reserved_id, f"test-place-{reserved_id}", publication_status, name, housing_type, "Test address", status, "Test short description"),
         )
         row = self._fetch_one("SELECT id FROM catalog.camps ORDER BY id DESC LIMIT 1")
         return int(row["id"])
@@ -333,11 +349,8 @@ class PostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         disabled_id = self._seed_camp(name="Disabled", status="disabled")
         archived_id = self._seed_camp(name="Archived", status="archived")
         draft_id = self._seed_camp(name="Draft", status="draft")
-        self._execute(
-            "INSERT INTO catalog.camps (name, housing_type, address, status) VALUES (%s, %s, %s, NULL)",
-            ("Null status", "apartments", "Test address"),
-        )
-        null_id = int(self._fetch_one("SELECT id FROM catalog.camps WHERE name = %s", ("Null status",))["id"])
+        null_id = self._seed_camp(name="Null status", status="draft")
+        self._execute("UPDATE catalog.camps SET status = NULL WHERE id = %s", (null_id,))
         self._execute(
             "INSERT INTO catalog.camp_photos (camp_id, url, sort, cover) VALUES (%s, %s, %s, %s)",
             (disabled_id, "/static/uploads/hidden.jpg", 0, 1),
@@ -352,6 +365,111 @@ class PostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(detail_response.status_code, 404, detail_response.text)
         photos_response = await self.client.get(f"/api/camps/{disabled_id}/photos")
         self.assertEqual(photos_response.status_code, 404, photos_response.text)
+
+    async def test_universal_catalog_filters_contacts_seo_and_superadmin_editor(self):
+        published_id = self._seed_camp(name="Universal Glamping", status="active")
+        draft_id = self._seed_camp(name="Hidden Draft", status="draft")
+        self._execute(
+            """
+            UPDATE catalog.camps SET
+                slug = 'universal-glamping',
+                place_type_id = (SELECT id FROM catalog.place_types WHERE slug = 'glamping'),
+                region = 'Республика Карелия',
+                city = 'Сортавала',
+                locality = 'Хелюля',
+                lat = 61.7,
+                lng = 30.7,
+                min_price = 7500,
+                metadata = '{"cover_placeholder_confirmed": true}'::jsonb
+            WHERE id = %s
+            """,
+            (published_id,),
+        )
+        self._execute(
+            "UPDATE catalog.camps SET slug = 'hidden-draft', lat = 61.8, lng = 30.8 WHERE id = %s",
+            (draft_id,),
+        )
+        self._execute(
+            """
+            INSERT INTO catalog.place_contacts (
+                camp_id, contact_type, label, value, normalized_value, public_url, is_public, sort_order
+            ) VALUES
+                (%s, 'max', 'MAX', 'MAX', 'max', 'https://max.ru/turistika', TRUE, 10),
+                (%s, 'phone', 'Служебный', '+70000000000', '+70000000000', 'tel:+70000000000', FALSE, 20)
+            """,
+            (published_id, published_id),
+        )
+        self._execute(
+            """
+            INSERT INTO catalog.camp_amenities(camp_id, amenity_id)
+            SELECT %s, id FROM catalog.amenities WHERE slug IN ('wifi', 'parking')
+            """,
+            (published_id,),
+        )
+
+        response = await self.client.get(
+            "/api/public/places",
+            params={
+                "place_type": "glamping",
+                "region": "Республика Карелия",
+                "city": "Сортавала",
+                "amenity": "wifi",
+                "bbox": "30,60,31,62",
+                "limit": 1,
+                "offset": 0,
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertEqual(payload["total"], 1)
+        self.assertEqual(payload["items"][0]["id"], published_id)
+        serialized = response.text
+        self.assertIn("https://max.ru/turistika", serialized)
+        self.assertNotIn("+70000000000", serialized)
+        self.assertNotIn("owner", serialized)
+        self.assertNotIn("manager", serialized)
+
+        detail = await self.client.get("/api/public/places/universal-glamping")
+        self.assertEqual(detail.status_code, 200, detail.text)
+        self.assertEqual([item["contact_type"] for item in detail.json()["contacts"]], ["max"])
+        self.assertEqual((await self.client.get("/api/public/places/hidden-draft")).status_code, 404)
+
+        page = await self.client.get("/places/universal-glamping")
+        self.assertEqual(page.status_code, 200, page.text)
+        self.assertIn("Universal Glamping — Глэмпинг", page.text)
+        self.assertEqual((await self.client.get("/places/hidden-draft")).status_code, 404)
+
+        sitemap = await self.client.get("/sitemap.xml")
+        self.assertIn("/places/universal-glamping", sitemap.text)
+        self.assertNotIn("/places/hidden-draft", sitemap.text)
+
+        legacy = await self.client.get("/api/camps")
+        self.assertEqual(legacy.status_code, 200, legacy.text)
+        self.assertIn(published_id, {item["id"] for item in legacy.json()})
+
+        editor = await self.client.get(
+            f"/api/superadmin/camps/{published_id}",
+            headers={"x-superadmin-key": os.environ["SUPERADMIN_API_KEY"]},
+        )
+        self.assertEqual(editor.status_code, 200, editor.text)
+        self.assertEqual(editor.json()["camp"]["slug"], "universal-glamping")
+        self.assertEqual(editor.json()["contacts"][0]["contact_type"], "max")
+        self.assertEqual({item["slug"] for item in editor.json()["selected_amenities"]}, {"wifi", "parking"})
+        self.assertEqual(len(editor.json()["place_types"]), 12)
+
+        explain = self._fetch_one(
+            """
+            EXPLAIN (FORMAT JSON)
+            SELECT camps.id
+            FROM catalog.camps camps
+            JOIN catalog.place_types types ON types.id = camps.place_type_id
+            WHERE camps.publication_status = 'published'
+              AND lower(camps.status) IN ('active', 'published')
+              AND types.slug = 'glamping'
+              AND lower(camps.region) = lower('Республика Карелия')
+            """
+        )
+        self.assertIn("Plan", explain["QUERY PLAN"][0])
 
     async def test_booking_constraints_reject_invalid_rows(self):
         camp_id = self._seed_camp()

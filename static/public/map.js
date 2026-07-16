@@ -68,12 +68,11 @@ function markerGlyph(iconKey) {
 }
 
 function markerIcon(place) {
-  const label = escapeHtml((place.name || "Место отдыха").slice(0, 48));
   const type = place.place_type || {};
   const accent = accentColor(type);
   return window.L.divIcon({
     className: "public-map-marker-wrap",
-    html: `<span class="public-map-marker" style="--marker-accent:${accent}" aria-hidden="true">${markerGlyph(type.icon_key)}<b>${label}</b></span>`,
+    html: `<span class="public-map-marker" style="--marker-accent:${accent}" aria-hidden="true">${markerGlyph(type.icon_key)}</span>`,
     iconSize: [44, 44],
     iconAnchor: [22, 44],
     popupAnchor: [0, -40],

@@ -301,12 +301,17 @@ class UiSmokeTests(unittest.TestCase):
             browser = playwright.chromium.launch(headless=True)
             page = browser.new_page(viewport={"width": 1440, "height": 980})
             errors, responses = self._collect_client_issues(page)
+            public_api_requests = []
+            page.on("request", lambda request: public_api_requests.append(request.url) if "/api/public/places" in request.url else None)
 
             page.goto(f"{self.base_url}/", wait_until="domcontentloaded", timeout=20000)
             page.wait_for_selector("h1", timeout=10000)
             self.assertIn("Откройте лучшие места отдыха России", page.locator("h1").inner_text().replace("\n", " "))
             self.assertEqual(page.locator('link[rel="canonical"]').get_attribute("href"), f"{self.public_base_url}/")
             self.assertEqual(page.evaluate("() => typeof window.Telegram"), "undefined")
+            self.assertEqual(page.get_by_role("button", name="Забронировать").count(), 0)
+            self.assertEqual(page.get_by_role("link", name="Войти").count(), 0)
+            self.assertEqual(page.get_by_role("link", name="Регистрация").count(), 0)
 
             page.locator("#map-section").scroll_into_view_if_needed()
             page.wait_for_selector("#map.leaflet-container", timeout=15000)
@@ -316,16 +321,37 @@ class UiSmokeTests(unittest.TestCase):
             )
             status_text = page.locator("[data-map-status]").inner_text()
             self.assertTrue(
-                status_text.startswith("На карте") or status_text.startswith("Каталог пока наполняется"),
+                status_text.startswith("На карте") or status_text.startswith("По выбранным фильтрам"),
                 status_text,
             )
+
+            self.assertGreater(page.locator("[data-filter-type] option").count(), 1)
+            self.assertGreater(page.locator("[data-filter-amenity] option").count(), 1)
+            self.assertGreaterEqual(page.locator("[data-map-count]").count(), 1)
+
+            if not page.locator(".public-map-marker").count() and page.locator(".public-map-cluster").count():
+                page.locator(".public-map-cluster").first.click(force=True)
+                page.wait_for_selector(".public-map-marker", timeout=10000)
+            if page.locator(".public-map-marker").count():
+                page.locator(".public-map-marker").first.click(force=True)
+                page.wait_for_selector(".leaflet-popup .public-map-popup", timeout=10000)
+                detail_href = page.locator(".public-map-popup__detail").get_attribute("href")
+                self.assertTrue(detail_href and detail_href.startswith("/places/"))
+                self.assertEqual(
+                    [url for url in public_api_requests if "/api/public/places/" in url],
+                    [],
+                    "Map must not prefetch detail payloads for every marker",
+                )
+                detail_page = browser.new_page(viewport={"width": 390, "height": 844})
+                detail_page.goto(f"{self.base_url}{detail_href}", wait_until="domcontentloaded", timeout=20000)
+                detail_page.wait_for_selector(".place-hero h1", timeout=10000)
+                self.assertEqual(detail_page.get_by_role("button", name="Забронировать").count(), 0)
+                self.assertEqual(detail_page.locator('script[type="application/ld+json"]').count(), 2)
+                detail_page.close()
 
             page.get_by_role("button", name="Открыть поиск по карте").click()
             page.locator("#map-search").fill("место")
             page.wait_for_selector(".public-map__result-summary", timeout=10000)
-            if page.locator(".public-map-marker").count():
-                page.locator(".public-map-marker").first.click(force=True)
-                page.wait_for_selector(".leaflet-popup .public-map-popup", timeout=10000)
             browser.close()
 
         local_errors = [(status, url) for status, url in responses if status >= 400 and url.startswith(self.base_url)]
