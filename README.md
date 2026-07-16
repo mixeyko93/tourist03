@@ -1,6 +1,6 @@
 # Туристика
 
-Туристика — сервис для поиска баз отдыха, домиков и бронирования рядом, а также CRM для владельцев и администраторов баз отдыха.
+Туристика — browser-first карта и универсальный публичный каталог туристических объектов, а также CRM для управляющих и администраторов объектов.
 
 ## Состав системы
 
@@ -59,7 +59,19 @@ FEATURE_PAID_PLACEMENT=false
 FEATURE_LEGACY_TOURIST_APP=false
 ```
 
-`/api/camps` использует публичный allowlist DTO и server-side filter статуса `active`/`published`; CRM/superadmin остаются на внутренних API. `/health` проверяет процесс, а `/ready` дополнительно проверяет доступ к DB и version `0013_admin_profile_pins`.
+Новый публичный каталог использует отдельные DTO и маршруты:
+
+```text
+GET /api/public/place-types
+GET /api/public/amenities
+GET /api/public/places?q=&place_type=&region=&city=&amenity=&bbox=&limit=&offset=
+GET /api/public/places/{slug}
+GET /places/{slug}
+```
+
+List endpoint отдаёт только лёгкие данные карты и только записи с `publication_status=published` плюс legacy `status=active|published`. Detail содержит публичные contacts/media/rooms. Owner, manager, admin phones, moderation и audit data в public DTO не входят. `/api/camps` сохранён как deprecated compatibility API; CRM/superadmin остаются на защищённых internal routes.
+
+`/health` проверяет процесс, а `/ready` дополнительно проверяет доступ к DB и version `0017_catalog_amenities`. Публичный каталог не зависит от Telegram SDK. Booking, public auth, owner portal, services и paid placement продолжают управляться отдельными feature flags и в Этапе 2.2 не включаются.
 
 Production и CI используют Python 3.11. Dependency audit в CI всегда получает метаданные и пакеты из публичного PyPI (`https://pypi.org/simple`). Если production устанавливает зависимости через внутренний mirror, mirror обязан синхронизировать безопасные версии с PyPI; credentials такого mirror не хранятся в репозитории и не используются security-аудитом.
 
@@ -73,6 +85,6 @@ Production и CI используют Python 3.11. Dependency audit в CI все
 ./.venv/bin/python -m tourist03.migrations upgrade
 ```
 
-Операционные инструкции находятся в [backup-restore.md](docs/backup-restore.md) и [deployment.md](docs/deployment.md). Канонический production path — systemd `./deploy.sh`; Docker Compose оставлен для локального/альтернативного использования. Эти инструкции не являются разрешением на deploy.
+Операционные инструкции находятся в [backup-restore.md](docs/backup-restore.md), [deployment.md](docs/deployment.md) и [migrations.md](docs/migrations.md). Архитектура и acceptance Этапа 2.2 описаны в [stage-2.2-universal-catalog.md](docs/stage-2.2-universal-catalog.md). Канонический production path — systemd `./deploy.sh`; Docker Compose оставлен для локального/альтернативного использования. Эти инструкции не являются разрешением на deploy.
 
 Tracked legacy dumps и existing uploads в Этапе 1.1 намеренно не удаляются. Порядок ротации, проверки backup/restore и отдельного согласования history cleanup описан в [security-incident-response.md](docs/security-incident-response.md).

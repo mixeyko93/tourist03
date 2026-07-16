@@ -1,5 +1,7 @@
 # Этап 2.2 — универсальный публичный каталог
 
+Статус: реализовано локально в `feature/universal-public-catalog`; production migrations, deploy и merge не выполнялись.
+
 ## Исходное состояние
 
 - Базовая ветка: `main` на `5c924b59ae12f61fd5953bacb4eff971fcfb5909`.
@@ -95,3 +97,28 @@ Slug создаётся один раз из транслитерации име
 - Unit, PostgreSQL integration, browser smoke, frontend build, Lighthouse и
   screenshot artifact `public-catalog-review` проходят.
 - Итог — draft PR в `main`; merge и deploy выполняются только отдельным заданием.
+
+## Реализованный результат
+
+- Миграции `0014`–`0017` применены только к локальной development-БД и одноразовым test-БД. Upgrade с пустой БД, ровно с `0013` и повторный upgrade зелёные.
+- 12 типов и 16 удобств seeded; 6 существующих локальных camps и 12 rooms сохранены, orphan/duplicate slug checks — 0.
+- Public API, SSR detail, dynamic sitemap и superadmin editor используют отдельные public/internal контракты.
+- Карта загружает `/api/public/places?limit=100`, отправляет type/region/city/amenity/q filters на backend и не префетчит detail payload для маркеров.
+- Compatibility `/api/camps`, CRM, booking, legacy photos и canonical approved media fallback сохранены.
+
+Пример:
+
+```bash
+curl 'http://localhost:8000/api/public/places?place_type=glamping&amenity=wifi&limit=20'
+curl 'http://localhost:8000/api/public/places/sosnovyy-bereg'
+```
+
+## Acceptance-метрики
+
+- Unit: 88 tests зелёные; PostgreSQL: 14 tests зелёные; browser smoke: 4 tests зелёные.
+- Frontend TypeScript + production build: зелёный.
+- Lighthouse: Performance 94, Accessibility 100, Best Practices 100, SEO 100, CLS 0.
+- Local list: 2690 bytes для 6 items, p50 6,11 ms, p95 10,69 ms; detail: 3782 bytes.
+- `EXPLAIN ANALYZE`: `idx_camps_region_publication`, execution 0,216 ms на acceptance query.
+- Map-first: desktop canvas top 640 px / visible 360 px; mobile 557 px / visible 287 px.
+- Artifact `public-catalog-review`: desktop/mobile map, filters, popup, detail top/gallery/contacts/full page, `index.html`, `review-metrics.json`.
