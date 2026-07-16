@@ -3,27 +3,44 @@ import tempfile
 import unittest
 from contextlib import ExitStack
 from datetime import date
+from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
 
 import httpx
+from PIL import Image
 
 os.environ["DB_INIT"] = "0"
 
 import app as app_module
 from tourist03 import security
 from tourist03.services import auth as auth_service
+from tourist03.settings import Settings
+
+
+def _png_bytes() -> bytes:
+    stream = BytesIO()
+    Image.new("RGB", (1, 1), color=(1, 2, 3)).save(stream, format="PNG")
+    return stream.getvalue()
 
 
 class ApiHttpFlowTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
+        self.app = app_module.create_app(
+            Settings(
+                environment="test",
+                feature_public_user_auth=True,
+                feature_public_booking=True,
+                allow_server_video_upload=True,
+            )
+        )
         self.client = httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=app_module.app),
+            transport=httpx.ASGITransport(app=self.app),
             base_url="http://testserver",
         )
 
     async def asyncTearDown(self):
-        app_module.app.dependency_overrides.clear()
+        self.app.dependency_overrides.clear()
         await self.client.aclose()
 
     def _override_current_user(self, user=None):
@@ -37,7 +54,7 @@ class ApiHttpFlowTests(unittest.IsolatedAsyncioTestCase):
             "email_verified": True,
             "created_at": None,
         }
-        app_module.app.dependency_overrides[security.get_current_user] = lambda: payload
+        self.app.dependency_overrides[security.get_current_user] = lambda: payload
 
     def _override_current_admin(self, admin=None):
         payload = admin or {
@@ -45,10 +62,41 @@ class ApiHttpFlowTests(unittest.IsolatedAsyncioTestCase):
             "email": "admin@example.com",
             "display_name": "Camp Admin",
         }
-        app_module.app.dependency_overrides[security.get_current_admin] = lambda: payload
+        self.app.dependency_overrides[security.get_current_admin] = lambda: payload
 
     def _override_superadmin(self):
-        app_module.app.dependency_overrides[security.get_superadmin] = lambda: True
+        self.app.dependency_overrides[security.get_superadmin] = lambda: True
+
+    async def test_disabled_public_features_are_not_routable(self):
+        disabled_app = app_module.create_app(Settings(environment="test"))
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=disabled_app), base_url="http://testserver") as client:
+            auth_response = await client.get("/api/auth/me")
+            booking_response = await client.get("/api/camps/1/available-rooms")
+            legacy_response = await client.get("/legacy-tourist-app")
+
+        self.assertEqual(auth_response.status_code, 404)
+        self.assertEqual(booking_response.status_code, 404)
+        self.assertEqual(legacy_response.status_code, 404)
+
+    async def test_public_camps_allowlist_strips_internal_contacts(self):
+        with patch(
+            "tourist03.services.catalog.catalog_repo.list_public_camps",
+            return_value=[
+                {
+                    "id": 5,
+                    "name": "Blue Lake",
+                    "status": "active",
+                    "owner": "Private owner",
+                    "manager": "Private manager",
+                    "admin_phones": "+79990000000",
+                    "address": "Public address",
+                }
+            ],
+        ):
+            response = await self.client.get("/api/camps")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [{"id": 5, "name": "Blue Lake", "address": "Public address"}])
 
     async def test_auth_me_requires_authentication(self):
         response = await self.client.get("/api/auth/me")
@@ -227,10 +275,16 @@ class ApiHttpFlowTests(unittest.IsolatedAsyncioTestCase):
     async def test_superadmin_session_logout_revokes_session(self):
         with patch("tourist03.security.SUPERADMIN_API_KEY", "super-key"):
             login_response = await self.client.post("/api/superadmin/session", json={"key": "super-key"})
-            logout_response = await self.client.delete("/api/superadmin/session")
+            missing_csrf_response = await self.client.delete("/api/superadmin/session")
+            csrf_response = await self.client.get("/api/security/csrf")
+            logout_response = await self.client.delete(
+                "/api/superadmin/session",
+                headers={"X-CSRF-Token": csrf_response.json()["token"]},
+            )
             users_response = await self.client.get("/api/users")
 
         self.assertEqual(login_response.status_code, 200)
+        self.assertEqual(missing_csrf_response.status_code, 403)
         self.assertEqual(logout_response.status_code, 200)
         self.assertEqual(logout_response.json()["ok"], True)
         self.assertEqual(logout_response.json()["authenticated"], False)
@@ -415,7 +469,7 @@ class ApiHttpFlowTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(
             response.json(),
-            {"detail": "Разрешена загрузка только изображений JPG, PNG, GIF, WEBP, AVIF или видео MP4, MOV, WEBM"},
+            {"detail": "Разрешена загрузка только поддерживаемых изображений"},
         )
 
     async def test_upload_saves_image_for_superadmin(self):
@@ -424,7 +478,7 @@ class ApiHttpFlowTests(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as temp_dir, patch("tourist03.services.catalog.UPLOAD_DIR", temp_dir):
             response = await self.client.post(
                 "/api/upload",
-                files={"file": ("cover.png", b"\x89PNG\r\n\x1a\n", "image/png")},
+                files={"file": ("cover.png", _png_bytes(), "image/png")},
                 data={"camp_id": "4", "room_idx": "2"},
             )
 

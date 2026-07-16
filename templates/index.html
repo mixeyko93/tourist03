@@ -20,8 +20,8 @@
 <link rel="stylesheet" href="/static/vendor/leaflet-markercluster/MarkerCluster.Default.css">
 <script src="/static/vendor/leaflet-markercluster/leaflet.markercluster.js"></script>
 
-<!-- Telegram WebApp -->
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<!-- Runtime flags and Telegram SDK are injected by the server. -->
+<!-- TOURISTIKA_RUNTIME_CONFIG -->
 
 <!-- Scroll helpers (iOS/Android) -->
 <script defer src="/static/scroll.js?v=2026-01-10-31"></script>
@@ -42,7 +42,7 @@
 <div class="map-ui">
   <!-- Телеграм-emoji (локальные SVG), статично на всех ОС -->
 <!-- Календарь -->
-<button class="map-btn map-btn--filter" id="openBookingFilter" title="Выбрать даты" aria-label="Выбрать даты">
+<button class="map-btn map-btn--filter" id="openBookingFilter" data-touristika-feature="public-booking" title="Выбрать даты" aria-label="Выбрать даты">
   <span class="map-btn__glyph" aria-hidden="true">
     <svg viewBox="0 0 24 24" fill="none">
       <path d="M8 2v4"/>
@@ -54,7 +54,7 @@
 </button>
 
 <!-- Черновик бронирования (корзина) -->
-<button class="map-btn draft cart-btn map-btn--cart" id="openBookingDraft" title="Корзина бронирования" aria-label="Корзина бронирования">
+<button class="map-btn draft cart-btn map-btn--cart" id="openBookingDraft" data-touristika-feature="public-booking" title="Корзина бронирования" aria-label="Корзина бронирования">
   <span class="map-btn__glyph" aria-hidden="true">
     <svg viewBox="0 0 24 24" fill="none">
       <circle cx="9" cy="20" r="1"/>
@@ -91,7 +91,7 @@
 </section>
 
     <!-- Вкладка: Личный кабинет -->
-    <section id="tab-account" class="tab-content" style="display:none;">
+    <section id="tab-account" class="tab-content" data-touristika-feature="public-user-auth" style="display:none;">
       <h1 class="page-title" id="accountTitle" style="display:none;">Профиль</h1>
 
       <div class="account-shell">
@@ -126,7 +126,7 @@
     </section>
 
     <!-- Вкладка: Услуги -->
-    <section id="tab-services" class="tab-content" style="display:none;">
+    <section id="tab-services" class="tab-content" data-touristika-feature="services" style="display:none;">
       <h1 class="page-title">Услуги</h1>
       <div class="card"><p class="muted">Раздел находится в разработке.</p></div>
     </section>
@@ -151,7 +151,7 @@
     <div class="label">Карта</div>
   </div>
 
-  <div class="tab" data-target="tab-account">
+  <div class="tab" data-target="tab-account" data-touristika-feature="public-user-auth">
     <div class="icon" aria-hidden="true">
       <!-- user.svg inline -->
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -162,7 +162,7 @@
     <div class="label">Кабинет</div>
   </div>
 
-  <div class="tab" data-target="tab-services">
+  <div class="tab" data-target="tab-services" data-touristika-feature="services">
     <div class="icon" aria-hidden="true">
       <!-- bell.svg inline -->
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">

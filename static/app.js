@@ -39,6 +39,24 @@
 
 
 // ==== Telegram WebApp — полноэкранный режим ====
+const touristikaFeatures = window.__TOURISTIKA_FEATURES__ || {};
+const publicBookingEnabled = touristikaFeatures.public_booking === true;
+const publicUserAuthEnabled = touristikaFeatures.public_user_auth === true;
+const publicServicesEnabled = touristikaFeatures.services === true;
+
+function applyPublicFeatureVisibility() {
+  const enabled = {
+    'public-booking': publicBookingEnabled,
+    'public-user-auth': publicUserAuthEnabled,
+    services: publicServicesEnabled,
+  };
+  document.querySelectorAll('[data-touristika-feature]').forEach((element) => {
+    if (enabled[element.dataset.turistikaFeature] !== true) element.hidden = true;
+  });
+}
+
+applyPublicFeatureVisibility();
+
 const isTG = !!(window.Telegram && window.Telegram.WebApp);
 if (isTG) {
   Telegram.WebApp.ready();
@@ -469,7 +487,7 @@ function buildCampPopup(camp){
 
           <div class="camp-popup__actions">
             <button type="button" class="camp-popup__action camp-popup__action--details" onclick="openDetails(${camp.id})">Подробнее</button>
-            <button type="button" class="camp-popup__action camp-popup__action--book" onclick="openBookingFilterWithAuth(${camp.id})">Забронировать</button>
+            ${publicBookingEnabled ? `<button type="button" class="camp-popup__action camp-popup__action--book" onclick="openBookingFilterWithAuth(${camp.id})">Забронировать</button>` : ''}
           </div>
 
           <div class="camp-popup__pattern" aria-hidden="true"></div>
@@ -602,10 +620,11 @@ async function openCampDetails(campId) {
 
 
 // для старых вызовов, если где-то остался openBookingFilter:
-function openBookingFilter(){ openBookingFilterModal(); }
+function openBookingFilter(){ if (publicBookingEnabled) openBookingFilterModal(); }
 
 // Функция для кнопки "Забронировать" — проверяет авторизацию
 async function openBookingFilterWithAuth(campId) {
+  if (!publicBookingEnabled || !publicUserAuthEnabled) return;
   const resolvedCampId = (campId != null) ? Number(campId) : Number(window.__currentCampId);
   if (Number.isFinite(resolvedCampId)) window.__currentCampId = resolvedCampId;
 
@@ -5551,6 +5570,7 @@ function formatBookingFieldDate(value) {
 }
 
 function openBookingFilterModal(opts = {}) {
+  if (!publicBookingEnabled) return;
   const dontCloseBackground = opts.dontCloseBackground || false;
   const restoreFilterOnClose = opts.restoreFilterOnClose || false;
   

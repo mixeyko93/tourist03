@@ -24,6 +24,7 @@ from tourist03.dto.catalog import (
     CampRoomsBusyResponseDTO,
     CampUpsertResponseDTO,
     CatalogRoomDTO,
+    PublicCampDTO,
     RoomBusyRangesResponseDTO,
     UploadResponseDTO,
 )
@@ -118,8 +119,8 @@ class RouterResponseModelTests(unittest.TestCase):
 
         camps_get = routes[("/api/camps", ("GET",))].response_model
         self.assertEqual(get_origin(camps_get), list)
-        self.assertEqual(get_args(camps_get), (CampDTO,))
-        self.assertIs(routes[("/api/camps/{camp_id}", ("GET",))].response_model, CampDTO)
+        self.assertEqual(get_args(camps_get), (PublicCampDTO,))
+        self.assertIs(routes[("/api/camps/{camp_id}", ("GET",))].response_model, PublicCampDTO)
 
         camp_photos_get = routes[("/api/camps/{camp_id}/photos", ("GET",))].response_model
         self.assertEqual(get_origin(camp_photos_get), list)

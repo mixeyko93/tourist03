@@ -10,6 +10,7 @@ from fastapi import Depends, HTTPException, Request, status
 
 from tourist03.booking_db_errors import BookingConflictError, BookingValidationError
 from tourist03.config import STAFF_BOT_USERNAME
+from tourist03.csrf import clear_csrf_token
 from tourist03.repositories import auth as auth_repo
 from tourist03.domain import bookings as booking_domain
 from tourist03.domain import crm as crm_domain
@@ -386,6 +387,7 @@ def admin_login(req: AdminLoginRequest, request: Request):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Эта учётная запись отключена, обратитесь в тех.поддержку")
     if not verify_password(req.password, row["password_hash"]):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неверный логин или пароль")
+    request.session.clear()
     request.session["admin_id"] = row["id"]
     request.session["crm_root_admin_id"] = row["id"]
     return {"status": "ok"}
@@ -394,6 +396,7 @@ def admin_login(req: AdminLoginRequest, request: Request):
 def admin_logout(request: Request):
     request.session.pop("admin_id", None)
     request.session.pop("crm_root_admin_id", None)
+    clear_csrf_token(request)
     return {"status": "ok"}
 
 

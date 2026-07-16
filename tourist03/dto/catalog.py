@@ -36,6 +36,33 @@ class CampDTO(BaseModel):
     housing_type: Optional[str] = None
 
 
+class PublicCampDTO(BaseModel):
+    """Allowlisted catalog projection safe for anonymous visitors."""
+
+    id: int
+    name: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    min_price: Optional[int] = None
+    emoji: Optional[str] = None
+    lake_name: Optional[str] = None
+    photo_main: Optional[str] = None
+    rooms_count: Optional[int] = None
+    beds_count: Optional[int] = None
+    address: Optional[str] = None
+    phone: Optional[str] = None
+    site_url: Optional[str] = None
+    emoji_size: Optional[str] = None
+    bbq_count: Optional[int] = None
+    bbq_shared_count: Optional[int] = None
+    bath_count: Optional[int] = None
+    sauna_count: Optional[int] = None
+    pools_private_count: Optional[int] = None
+    pools_shared_count: Optional[int] = None
+    description: Optional[str] = None
+    housing_type: Optional[str] = None
+
+
 class CampPhotoDTO(BaseModel):
     id: int
     url: Optional[str] = None

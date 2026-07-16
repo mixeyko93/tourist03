@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from tourist03.config import STATIC_DIR, logger
+from tourist03.http_middleware import CsrfMiddleware, FeatureGateMiddleware, RateLimitMiddleware
 from tourist03.routers import admin, auth, bookings, bot_webhook, catalog, pages, superadmin
 from tourist03.settings import Settings, configure_settings, get_settings
 
@@ -30,6 +31,11 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         logger.exception("Unhandled application error on %s", request.url.path)
         return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
 
+    # Middleware executes in reverse registration order. Session must therefore
+    # be registered last so CSRF can safely access ``request.session``.
+    application.add_middleware(FeatureGateMiddleware)
+    application.add_middleware(RateLimitMiddleware)
+    application.add_middleware(CsrfMiddleware)
     application.add_middleware(
         CORSMiddleware,
         allow_origins=resolved_settings.cors_origin_list,
