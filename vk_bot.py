@@ -2,19 +2,16 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import time
 from dataclasses import dataclass
 from typing import Any
 
-from dotenv import load_dotenv
 from vk_api import VkApi
 from vk_api.bot_longpoll import VkBotEventType, VkBotLongPoll
 from vk_api.exceptions import ApiError, VkApiError
 from vk_api.utils import get_random_id
+from tourist03.settings import get_settings
 
-
-load_dotenv()
 
 logging.basicConfig(
     format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
@@ -48,13 +45,10 @@ class VkBotSettings:
 
 
 def _read_settings() -> VkBotSettings:
-    token = os.getenv("VK_TOKEN", "").strip()
-    group_id_raw = os.getenv("VK_GROUP_ID", "").strip()
-    webapp_url = (
-        os.getenv("TOURIST_WEBAPP_URL", "").strip()
-        or os.getenv("WEBAPP_URL", "").strip()
-        or "https://turist03.ru"
-    )
+    settings = get_settings()
+    token = settings.vk_token.strip()
+    group_id_raw = settings.vk_group_id.strip()
+    webapp_url = settings.tourist_webapp_url.strip() or settings.telegram_webapp_url.strip() or "https://turist03.ru"
 
     if not token:
         raise RuntimeError("Укажите VK_TOKEN в .env для запуска VK-бота.")

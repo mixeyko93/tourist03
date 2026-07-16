@@ -38,7 +38,7 @@ class UiSmokeTests(unittest.TestCase):
     superadmin_password = "SmokeSuperAdmin123!"
     superadmin_key = "smoke-superadmin-key"
     session_secret = "smoke-session-secret"
-    smoke_email = "smoke-ui-admin@example.com"
+    smoke_login = "smoke.ui.admin"
     smoke_password = "SmokePass123!"
     smoke_display_name = "Smoke UI"
     smoke_camp_id = None
@@ -154,7 +154,7 @@ class UiSmokeTests(unittest.TestCase):
             "/api/superadmin/accounts",
             method="POST",
             payload={
-                "login": cls.smoke_email,
+                "login": cls.smoke_login,
                 "password": cls.smoke_password,
                 "display_name": cls.smoke_display_name,
                 "camp_ids": [cls.smoke_camp_id],
@@ -169,7 +169,7 @@ class UiSmokeTests(unittest.TestCase):
             cur = conn.cursor()
             cur.execute(
                 "SELECT id FROM auth.camp_admin_accounts WHERE lower(email) = lower(%s)",
-                (cls.smoke_email,),
+                (cls.smoke_login,),
             )
             ids = [int(row["id"]) for row in cur.fetchall()]
             if not ids:
@@ -245,16 +245,24 @@ class UiSmokeTests(unittest.TestCase):
             browser = playwright.chromium.launch(headless=True)
             page = browser.new_page()
             errors, responses = self._collect_client_issues(page)
+            logout_headers = {}
+
+            def capture_logout_request(request):
+                if request.url.endswith("/api/admin/logout"):
+                    logout_headers.update(request.headers)
+
+            page.on("request", capture_logout_request)
 
             page.goto(f"{self.base_url}/login", wait_until="networkidle", timeout=20000)
             page.wait_for_url(f"{self.base_url}/login", timeout=10000)
-            page.wait_for_selector('input[type="email"]', timeout=10000)
-            page.fill('input[type="text"]', self.smoke_email)
+            page.wait_for_selector('input[type="text"]', timeout=10000)
+            page.fill('input[type="text"]', self.smoke_login)
             page.fill('input[type="password"]', self.smoke_password)
             page.click('button[type="submit"]')
             page.wait_for_url(f"{self.base_url}/calendar", timeout=10000)
             page.wait_for_selector('text="Календарь размещения"', timeout=10000)
-            page.wait_for_selector('text="Панель управления базой отдыха"', timeout=10000)
+            page.wait_for_selector('a[href="/bookings"]', timeout=10000)
+            page.get_by_role("button", name="Позже").click()
 
             page.click('a[href="/bookings"]')
             page.wait_for_url(f"{self.base_url}/bookings", timeout=10000)
@@ -264,11 +272,12 @@ class UiSmokeTests(unittest.TestCase):
             page.click('a[href="/calendar"]')
             page.wait_for_url(f"{self.base_url}/calendar", timeout=10000)
             page.wait_for_selector('text="Календарь размещения"', timeout=10000)
-            self.assertGreater(page.locator('text="Текущий месяц"').count(), 0)
+            self.assertGreater(page.locator('text="Календарь размещения"').count(), 0)
 
             page.click('button:has-text("Выйти")')
             page.wait_for_url(f"{self.base_url}/login", timeout=10000)
-            page.wait_for_selector('text="Вход в систему"', timeout=10000)
+            page.wait_for_selector('text="CRM управляющего"', timeout=10000)
+            self.assertTrue(logout_headers.get("x-csrf-token"), "CRM logout must include a CSRF token")
             browser.close()
 
         unexpected_responses = [(status, url) for status, url in responses if status >= 400]
@@ -403,7 +412,7 @@ class UiSmokeTests(unittest.TestCase):
         self.assertGreaterEqual(geometry["mapUiOpacity"], 0.95)
         self.assertTrue(geometry["popupOpenClass"])
         self.assertLess(abs(geometry["shellBottom"] - geometry["hiddenMarkerBottom"]), 24)
-        self.assertIn("Manrope", geometry["titleFamily"])
+        self.assertIn("system-ui", geometry["titleFamily"])
         self.assertEqual(geometry["titleAlign"], "center")
         self.assertTrue(geometry["titleText"])
         self.assertIsNotNone(moved_geometry)

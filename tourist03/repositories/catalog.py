@@ -16,6 +16,17 @@ CAMP_SELECT_ALL = """
     FROM catalog.camps
 """
 
+PUBLIC_CAMP_SELECT = """
+    SELECT id, name, lat, lng, min_price, emoji,
+           lake_name, photo_main,
+           rooms_count, beds_count, address, phone, site_url, emoji_size,
+           bbq_count, bbq_shared_count, bath_count, sauna_count,
+           pools_private_count, pools_shared_count,
+           description, housing_type
+    FROM catalog.camps
+"""
+PUBLIC_CAMP_STATUS_SQL = "lower(status) IN ('active', 'published')"
+
 
 def list_camps():
     with _db_conn("catalog") as conn:
@@ -24,10 +35,32 @@ def list_camps():
         return [dict(row) for row in cur.fetchall()]
 
 
+def list_public_camps():
+    with _db_conn("catalog") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            PUBLIC_CAMP_SELECT
+            + f" WHERE {PUBLIC_CAMP_STATUS_SQL} ORDER BY id"
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+
 def get_camp(camp_id: int):
     with _db_conn("catalog") as conn:
         cur = conn.cursor()
         cur.execute(CAMP_SELECT_ALL + " WHERE id=%s", (camp_id,))
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+
+def get_public_camp(camp_id: int):
+    with _db_conn("catalog") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            PUBLIC_CAMP_SELECT
+            + f" WHERE id=%s AND {PUBLIC_CAMP_STATUS_SQL}",
+            (camp_id,),
+        )
         row = cur.fetchone()
         return dict(row) if row else None
 
@@ -519,7 +552,10 @@ def _list_room_rows(cur, camp_clause: str = "", params: tuple = ()):
 def get_camp_available_room_context(camp_id: int):
     with _db_conn("catalog") as conn:
         cur = conn.cursor()
-        cur.execute("SELECT id, name, housing_type FROM catalog.camps WHERE id=%s", (camp_id,))
+        cur.execute(
+            f"SELECT id, name, housing_type FROM catalog.camps WHERE id=%s AND {PUBLIC_CAMP_STATUS_SQL}",
+            (camp_id,),
+        )
         camp = cur.fetchone()
         if not camp:
             return None
@@ -558,9 +594,14 @@ def list_booked_room_ids(camp_id: int, check_in, check_out, blocked_statuses: tu
 def get_camp_room_listing_context(camp_id: int):
     with _db_conn("catalog") as conn:
         cur = conn.cursor()
-        rows = _list_room_rows(cur, "WHERE r.camp_id = %s", (camp_id,))
-        cur.execute("SELECT name FROM catalog.camps WHERE id=%s", (camp_id,))
+        cur.execute(
+            f"SELECT name FROM catalog.camps WHERE id=%s AND {PUBLIC_CAMP_STATUS_SQL}",
+            (camp_id,),
+        )
         camp_row = cur.fetchone()
+        if not camp_row:
+            return {"camp_name": None, "rooms": []}
+        rows = _list_room_rows(cur, "WHERE r.camp_id = %s", (camp_id,))
         camp_name = (camp_row or {}).get("name") if camp_row else None
     return {"camp_name": camp_name, "rooms": rows}
 
@@ -568,8 +609,11 @@ def get_camp_room_listing_context(camp_id: int):
 def get_all_room_listing_context():
     with _db_conn("catalog") as conn:
         cur = conn.cursor()
-        rows = _list_room_rows(cur)
-        cur.execute("SELECT id, name FROM catalog.camps")
+        rows = _list_room_rows(
+            cur,
+            "WHERE r.camp_id IN (SELECT id FROM catalog.camps WHERE " + PUBLIC_CAMP_STATUS_SQL + ")",
+        )
+        cur.execute(f"SELECT id, name FROM catalog.camps WHERE {PUBLIC_CAMP_STATUS_SQL}")
         camp_names = {row["id"]: row.get("name") for row in cur.fetchall()}
     return {"camp_names": camp_names, "rooms": rows}
 
@@ -579,13 +623,16 @@ def list_room_busy_rows(room_id: int, date_from, date_to, blocked_statuses: tupl
         cur = conn.cursor()
         cur.execute(
             """
-            SELECT check_in, check_out, status
-            FROM crm.bookings
-            WHERE room_id=%s
-              AND (status IS NULL OR lower(status) NOT IN %s)
-              AND check_in < %s
-              AND check_out > %s
-            ORDER BY check_in ASC
+            SELECT b.check_in, b.check_out, b.status
+            FROM crm.bookings b
+            JOIN catalog.rooms r ON r.id = b.room_id
+            JOIN catalog.camps c ON c.id = r.camp_id
+            WHERE b.room_id=%s
+              AND lower(c.status) IN ('active', 'published')
+              AND (b.status IS NULL OR lower(b.status) NOT IN %s)
+              AND b.check_in < %s
+              AND b.check_out > %s
+            ORDER BY b.check_in ASC
             """,
             (room_id, blocked_statuses, date_to, date_from),
         )
@@ -595,7 +642,7 @@ def list_room_busy_rows(room_id: int, date_from, date_to, blocked_statuses: tupl
 def get_camp_busy_context(camp_id: int):
     with _db_conn("catalog") as conn:
         cur = conn.cursor()
-        cur.execute("SELECT id FROM catalog.camps WHERE id=%s", (camp_id,))
+        cur.execute(f"SELECT id FROM catalog.camps WHERE id=%s AND {PUBLIC_CAMP_STATUS_SQL}", (camp_id,))
         if not cur.fetchone():
             return None
         cur.execute(

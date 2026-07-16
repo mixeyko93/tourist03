@@ -44,6 +44,7 @@ def _normalize_manager_login_or_400(value: str) -> str:
 
 
 def _set_superadmin_session(request: Request, principal: Optional[dict]):
+    request.session.clear()
     if principal and principal.get("id") is not None:
         request.session["superadmin"] = True
         request.session["superadmin_account_id"] = int(principal["id"])
@@ -55,9 +56,7 @@ def _set_superadmin_session(request: Request, principal: Optional[dict]):
 
 
 def _clear_superadmin_session(request: Request):
-    request.session.pop("superadmin", None)
-    request.session.pop("superadmin_account_id", None)
-    request.session.pop("superadmin_principal", None)
+    request.session.clear()
 
 
 def _bootstrap_root_superadmin(login: str, password: str) -> Optional[dict]:

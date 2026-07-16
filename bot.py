@@ -2,10 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 from contextlib import suppress
-
-from dotenv import load_dotenv
 
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.client.default import DefaultBotProperties
@@ -31,12 +28,12 @@ from tourist03.services.staff_bot import (
     link_superadmin_account_by_code,
     format_superadmin_events_digest,
 )
+from tourist03.settings import get_settings
 
 
-load_dotenv()
-
-BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
-WEBAPP_URL = os.getenv("WEBAPP_URL", "").strip()
+settings = get_settings()
+BOT_TOKEN = settings.telegram_bot_token.strip()
+WEBAPP_URL = settings.telegram_webapp_url.strip()
 
 if not BOT_TOKEN and not STAFF_BOT_TOKEN:
     raise RuntimeError("Укажите токен клиентского бота или бота уведомлений CRM в переменных окружения.")

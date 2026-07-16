@@ -76,4 +76,20 @@ cache/
 !static/**
 !templates/**
 !*.html
+
+# === Security: never add new exports, backups, secrets or user uploads ===
+# Existing tracked legacy dumps/uploads intentionally remain until the incident
+# response plan is completed; ignore rules do not remove or alter them.
+*.sql
+*.dump
+*.backup
+*.sql.gz
+*.dump.gz
+*.tar.gz
+backups/
+restore-check/
+.env.*
+!.env.example
+secrets/
+static/uploads/**
 Figma import/Redesign dark-mode login screen.zip

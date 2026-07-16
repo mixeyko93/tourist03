@@ -1,34 +1,41 @@
 import json
+import secrets
+import warnings
 from datetime import date, datetime
+from io import BytesIO
 from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 
 from fastapi import HTTPException, Query, Request
 from fastapi.responses import JSONResponse
+from PIL import Image, UnidentifiedImageError
 
 from tourist03.config import UPLOAD_DIR
 from tourist03.domain import bookings as booking_domain
 from tourist03.repositories import catalog as catalog_repo
 from tourist03.schemas import CampStatusUpdateRequest
+from tourist03.settings import get_settings
 from tourist03.storage import _normalize_move, _room_photos_from_fs
 
 
 IMAGE_UPLOAD_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"}
 VIDEO_UPLOAD_EXTENSIONS = {".mp4", ".mov", ".webm", ".m4v"}
-ALLOWED_UPLOAD_EXTENSIONS = IMAGE_UPLOAD_EXTENSIONS | VIDEO_UPLOAD_EXTENSIONS
-ALLOWED_UPLOAD_CONTENT_TYPES = {
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-    "image/gif",
-    "image/avif",
-    "video/mp4",
-    "video/quicktime",
-    "video/webm",
+IMAGE_FORMAT_EXTENSIONS = {
+    "JPEG": {".jpg", ".jpeg"},
+    "PNG": {".png"},
+    "WEBP": {".webp"},
+    "GIF": {".gif"},
+    "AVIF": {".avif"},
 }
-IMAGE_MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024
-VIDEO_MAX_UPLOAD_SIZE_BYTES = 100 * 1024 * 1024
+IMAGE_FORMAT_MIME_TYPES = {
+    "JPEG": "image/jpeg",
+    "PNG": "image/png",
+    "WEBP": "image/webp",
+    "GIF": "image/gif",
+    "AVIF": "image/avif",
+}
+VIDEO_CONTENT_TYPES = {"video/mp4", "video/quicktime", "video/webm"}
 
 
 def _looks_like_external_video_url(value: str) -> bool:
@@ -89,17 +96,19 @@ def _build_room_photos(data: dict, camp_id: int, camp_name: Optional[str]):
 
 
 def api_camps_list():
-    return catalog_repo.list_camps()
+    return catalog_repo.list_public_camps()
 
 
 def api_camp_one(camp_id: int):
-    row = catalog_repo.get_camp(camp_id)
+    row = catalog_repo.get_public_camp(camp_id)
     if not row:
         return JSONResponse({"detail": "not found"}, status_code=404)
     return row
 
 
 def api_camp_photos(camp_id: int):
+    if not catalog_repo.get_public_camp(camp_id):
+        raise HTTPException(status_code=404, detail="not found")
     return catalog_repo.list_camp_photos(camp_id)
 
 
@@ -320,6 +329,26 @@ def api_camps_delete(camp_id: int):
     return {"ok": True}
 
 
+def _validate_uploaded_image(payload: bytes, suffix: str, content_type: str) -> None:
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(BytesIO(payload)) as image:
+                image.verify()
+            with Image.open(BytesIO(payload)) as image:
+                image.load()
+                image_format = (image.format or "").upper()
+    except (Image.DecompressionBombError, UnidentifiedImageError, OSError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="Файл не является корректным изображением") from exc
+
+    accepted_suffixes = IMAGE_FORMAT_EXTENSIONS.get(image_format)
+    expected_mime = IMAGE_FORMAT_MIME_TYPES.get(image_format)
+    if not accepted_suffixes or suffix not in accepted_suffixes:
+        raise HTTPException(status_code=400, detail="Расширение файла не соответствует содержимому изображения")
+    if content_type and content_type != expected_mime:
+        raise HTTPException(status_code=400, detail="MIME-тип файла не соответствует содержимому изображения")
+
+
 async def api_upload(request: Request):
     form = await request.form()
     file = form.get("file")
@@ -329,6 +358,9 @@ async def api_upload(request: Request):
     camp_id = form.get("camp_id")
     room_idx = form.get("room_idx")
 
+    settings = get_settings()
+    # Keep UPLOAD_DIR as a compatibility seam for existing local tooling/tests;
+    # its value is sourced from typed settings in production.
     base_dir = Path(UPLOAD_DIR)
     base_dir.mkdir(parents=True, exist_ok=True)
 
@@ -343,22 +375,39 @@ async def api_upload(request: Request):
 
     suffix = (Path(file.filename or "").suffix or "").lower()
     content_type = (getattr(file, "content_type", "") or "").strip().lower()
-    if suffix not in ALLOWED_UPLOAD_EXTENSIONS:
-        raise HTTPException(status_code=400, detail="Разрешена загрузка только изображений JPG, PNG, GIF, WEBP, AVIF или видео MP4, MOV, WEBM")
-    if content_type and content_type not in ALLOWED_UPLOAD_CONTENT_TYPES:
-        raise HTTPException(status_code=400, detail="Разрешена загрузка только изображений и видео")
+    is_video = suffix in VIDEO_UPLOAD_EXTENSIONS
+    if suffix not in IMAGE_UPLOAD_EXTENSIONS | VIDEO_UPLOAD_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="Разрешена загрузка только поддерживаемых изображений")
+    if is_video and not settings.allow_server_video_upload:
+        raise HTTPException(status_code=400, detail="Серверная загрузка видео отключена")
+    if is_video and content_type not in VIDEO_CONTENT_TYPES:
+        raise HTTPException(status_code=400, detail="Разрешён только поддерживаемый MIME-тип видео")
 
-    max_size = VIDEO_MAX_UPLOAD_SIZE_BYTES if suffix in VIDEO_UPLOAD_EXTENSIONS else IMAGE_MAX_UPLOAD_SIZE_BYTES
+    max_size = settings.upload_video_max_bytes if is_video else settings.upload_image_max_bytes
     payload = await file.read(max_size + 1)
     if len(payload) > max_size:
-        if suffix in VIDEO_UPLOAD_EXTENSIONS:
-            raise HTTPException(status_code=400, detail="Видео слишком большое. Максимум 100 МБ")
+        if is_video:
+            raise HTTPException(status_code=400, detail="Видео превышает допустимый размер")
         raise HTTPException(status_code=400, detail="Файл слишком большой")
 
-    filename = datetime.now().strftime("%Y%m%d-%H%M%S%f") + suffix
+    if is_video:
+        # Public endpoints never accept video. This protected panel-only escape
+        # hatch remains opt-in until object storage is introduced.
+        pass
+    else:
+        _validate_uploaded_image(payload, suffix, content_type)
+
+    filename = secrets.token_hex(16) + suffix
     path = save_dir / filename
-    with path.open("wb") as out:
-        out.write(payload)
+    temporary_path = save_dir / f".{filename}.{secrets.token_hex(8)}.tmp"
+    try:
+        with temporary_path.open("xb") as out:
+            out.write(payload)
+        temporary_path.replace(path)
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail="Не удалось сохранить файл") from exc
+    finally:
+        temporary_path.unlink(missing_ok=True)
 
     url = f"/static/uploads/{sub.as_posix()}/{filename}"
     return {"url": url}

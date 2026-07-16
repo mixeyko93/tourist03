@@ -41,8 +41,10 @@ class SuperAdminServiceTests(unittest.TestCase):
             login="mikhail.stasenko",
             display_name="New Name",
             password_hash="hashed-pass",
+            phone=None,
             is_active=False,
             camp_ids=None,
+            default_role_key="chief_manager",
         )
 
     @patch("tourist03.services.superadmin.log_crm_audit_event")

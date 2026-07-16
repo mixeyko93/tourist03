@@ -1,55 +1,67 @@
 import os
-import socket
-import subprocess
-from datetime import datetime
+import json
 from pathlib import Path
-from typing import Optional
 
 from fastapi import Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 
-from tourist03.config import BASE_DIR, STATIC_DIR, TEMPLATES, templates
+from tourist03.config import STATIC_DIR, TEMPLATES
+from tourist03.csrf import issue_csrf_token
+from tourist03.migrations import migration_status
 
 
-def index():
-    return FileResponse(os.path.join(TEMPLATES, "index.html"))
+def _public_index_response(request: Request):
+    html = Path(os.path.join(TEMPLATES, "index.html")).read_text(encoding="utf-8")
+    settings = request.app.state.settings
+    runtime_config = (
+        "<script>window.__TOURISTIKA_FEATURES__="
+        + json.dumps(settings.public_features, separators=(",", ":"))
+        + ";</script>"
+    )
+    if settings.feature_telegram_webapp:
+        runtime_config += '<script src="https://telegram.org/js/telegram-web-app.js"></script>'
+    html = html.replace("<!-- TOURISTIKA_RUNTIME_CONFIG -->", runtime_config, 1)
+    return HTMLResponse(content=html, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
 
-def index_html():
-    return FileResponse(os.path.join(TEMPLATES, "index.html"))
+def index(request: Request):
+    return _public_index_response(request)
 
 
-def api_version():
-    version_env = (os.getenv("APP_VERSION") or "").strip() or None
-    git_rev = None
+def index_html(request: Request):
+    return _public_index_response(request)
+
+
+def api_version(request: Request):
+    return {"ok": True, "app_version": request.app.state.settings.app_version or None}
+
+
+def api_public_config(request: Request):
+    return {"ok": True, "features": request.app.state.settings.public_features}
+
+
+def api_csrf_token(request: Request):
+    return {"ok": True, "token": issue_csrf_token(request)}
+
+
+def health():
+    return {"ok": True, "status": "healthy"}
+
+
+def ready():
     try:
-        git_rev = (
-            subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=BASE_DIR, stderr=subprocess.DEVNULL)
-            .decode("utf-8", errors="ignore")
-            .strip()
-        ) or None
+        status = migration_status(timeout_seconds=3)
     except Exception:
-        git_rev = None
-
-    def _mtime(path: str) -> Optional[str]:
-        try:
-            ts = os.path.getmtime(path)
-        except Exception:
-            return None
-        return datetime.utcfromtimestamp(ts).isoformat() + "Z"
-
-    return {
-        "ok": True,
-        "server_time": datetime.utcnow().isoformat() + "Z",
-        "hostname": socket.gethostname(),
-        "pid": os.getpid(),
-        "app_version": version_env,
-        "git_rev": git_rev,
-        "app_py_mtime": _mtime(os.path.join(BASE_DIR, "app.py")),
-        "index_html_mtime": _mtime(os.path.join(TEMPLATES, "index.html")),
-        "static_app_js_mtime": _mtime(os.path.join(STATIC_DIR, "app.js")),
-        "static_css_mtime": _mtime(os.path.join(STATIC_DIR, "styles.css")),
-    }
+        return JSONResponse(
+            {"ok": False, "status": "not_ready", "checks": {"database": False, "migrations": "unavailable"}},
+            status_code=503,
+        )
+    if not status["current"]:
+        return JSONResponse(
+            {"ok": False, "status": "not_ready", "checks": {"database": True, "migrations": "outdated"}},
+            status_code=503,
+        )
+    return {"ok": True, "status": "ready", "checks": {"database": True, "migrations": "current"}}
 
 
 def brand_page():

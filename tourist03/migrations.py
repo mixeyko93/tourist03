@@ -1,4 +1,7 @@
+import argparse
+import json
 from dataclasses import dataclass
+from typing import Iterable, Optional
 
 from tourist03.config import logger
 from tourist03.db import _pg_connect
@@ -940,6 +943,47 @@ MIGRATIONS = (
     ),
 )
 
+CURRENT_MIGRATION_VERSION = MIGRATIONS[-1].version
+
+
+def _migration_versions_from_rows(rows: Iterable[dict]) -> set[str]:
+    return {str(row["version"]) for row in rows}
+
+
+def migration_status(timeout_seconds: Optional[int] = None) -> dict:
+    """Read migration state without creating tables or applying SQL."""
+    timeout = max(int(timeout_seconds), 1) if timeout_seconds is not None else None
+    conn = _pg_connect(
+        "public",
+        connect_timeout=timeout,
+        statement_timeout_ms=(timeout * 1000) if timeout is not None else None,
+    )
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT to_regclass('public.schema_migrations') AS table_name")
+        table_name = cur.fetchone()["table_name"]
+        if not table_name:
+            applied: set[str] = set()
+        else:
+            cur.execute("SELECT version FROM public.schema_migrations ORDER BY version")
+            applied = _migration_versions_from_rows(cur.fetchall())
+        known = [step.version for step in MIGRATIONS]
+        missing = [version for version in known if version not in applied]
+        unknown = sorted(applied.difference(known))
+        return {
+            "current": not missing and not unknown,
+            "required_version": CURRENT_MIGRATION_VERSION,
+            "applied_versions": sorted(applied),
+            "missing_versions": missing,
+            "unknown_versions": unknown,
+        }
+    finally:
+        conn.close()
+
+
+def check_migrations() -> bool:
+    return bool(migration_status()["current"])
+
 
 def run_migrations() -> None:
     conn = _pg_connect("public")
@@ -975,3 +1019,20 @@ def run_migrations() -> None:
                 raise
     finally:
         conn.close()
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description="Touristika explicit migration runner")
+    parser.add_argument("command", choices=("status", "check", "upgrade"))
+    args = parser.parse_args(argv)
+
+    if args.command == "upgrade":
+        run_migrations()
+
+    status = migration_status()
+    print(json.dumps(status, ensure_ascii=False, sort_keys=True))
+    return 0 if status["current"] else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

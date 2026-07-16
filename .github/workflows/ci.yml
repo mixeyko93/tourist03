@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  push:
+    branches: [main, feature/touristika-foundation]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python compile and unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -r requirements-dev.txt
+      - run: PYTHONDONTWRITEBYTECODE=1 python -m compileall -q app.py tourist03 tests
+      - run: PYTHONDONTWRITEBYTECODE=1 python -m unittest discover -s tests -v
+
+  frontend:
+    name: TypeScript and production build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm audit --omit=dev --audit-level=high
+
+  migrations:
+    name: PostgreSQL migration check
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: turistika_ci
+          POSTGRES_USER: turistika_ci
+          POSTGRES_PASSWORD: turistika-ci-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U turistika_ci -d turistika_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      ENVIRONMENT: test
+      PG_HOST: 127.0.0.1
+      PG_PORT: "5432"
+      PG_DB: turistika_ci
+      PG_USER: turistika_ci
+      PG_PASSWORD: turistika-ci-password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -r requirements.txt
+      - run: python -m tourist03.migrations upgrade
+      - run: python -m tourist03.migrations check
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+        with:
+          args: detect --source . --redact --no-banner
+
+  dependencies:
+    name: Python dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --upgrade pip pip-audit
+      - run: pip-audit -r requirements.txt --index-url https://pypi.org/simple

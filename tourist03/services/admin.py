@@ -386,14 +386,14 @@ def admin_login(req: AdminLoginRequest, request: Request):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Эта учётная запись отключена, обратитесь в тех.поддержку")
     if not verify_password(req.password, row["password_hash"]):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неверный логин или пароль")
+    request.session.clear()
     request.session["admin_id"] = row["id"]
     request.session["crm_root_admin_id"] = row["id"]
     return {"status": "ok"}
 
 
 def admin_logout(request: Request):
-    request.session.pop("admin_id", None)
-    request.session.pop("crm_root_admin_id", None)
+    request.session.clear()
     return {"status": "ok"}
 
 

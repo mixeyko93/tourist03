@@ -8,6 +8,7 @@ from tourist03.dto.catalog import (
     CampRoomsBusyResponseDTO,
     CampUpsertResponseDTO,
     CatalogRoomDTO,
+    PublicCampDTO,
     RoomBusyRangesResponseDTO,
     UploadResponseDTO,
 )
@@ -23,14 +24,16 @@ router.add_api_route(
     "/api/camps",
     catalog_service.api_camps_list,
     methods=["GET"],
-    response_model=list[CampDTO],
+    response_model=list[PublicCampDTO],
+    response_model_exclude_none=True,
     responses=error_responses(500),
 )
 router.add_api_route(
     "/api/camps/{camp_id}",
     catalog_service.api_camp_one,
     methods=["GET"],
-    response_model=CampDTO,
+    response_model=PublicCampDTO,
+    response_model_exclude_none=True,
     responses=error_responses(404, 422, 500),
 )
 router.add_api_route(
