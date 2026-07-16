@@ -1,0 +1,29 @@
+name: Public UI review
+
+"on":
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  public-ui-review:
+    if: github.event.pull_request.number == 4
+    name: Capture public UI review
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python -m playwright install --with-deps chromium
+      - run: PUBLIC_UI_REVIEW_DIR=artifacts/public-ui-review python scripts/capture_public_ui_review.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: public-ui-review
+          path: artifacts/public-ui-review
+          if-no-files-found: error
+          retention-days: 14

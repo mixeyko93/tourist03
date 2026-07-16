@@ -38,6 +38,7 @@ class UiSmokeTests(unittest.TestCase):
     superadmin_password = "SmokeSuperAdmin123!"
     superadmin_key = "smoke-superadmin-key"
     session_secret = "smoke-session-secret"
+    public_base_url = "https://public-smoke.turistika.test"
     smoke_login = "smoke.ui.admin"
     smoke_password = "SmokePass123!"
     smoke_display_name = "Smoke UI"
@@ -71,6 +72,7 @@ class UiSmokeTests(unittest.TestCase):
         env["SUPERADMIN_PASSWORD"] = cls.superadmin_password
         env["SUPERADMIN_API_KEY"] = cls.superadmin_key
         env["SESSION_SECRET_KEY"] = cls.session_secret
+        env["PUBLIC_BASE_URL"] = cls.public_base_url
         env.setdefault("PYTHONUNBUFFERED", "1")
         cls.server_process = subprocess.Popen(
             [sys.executable, "-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", str(port)],
@@ -303,7 +305,7 @@ class UiSmokeTests(unittest.TestCase):
             page.goto(f"{self.base_url}/", wait_until="domcontentloaded", timeout=20000)
             page.wait_for_selector("h1", timeout=10000)
             self.assertIn("Откройте лучшие места отдыха России", page.locator("h1").inner_text().replace("\n", " "))
-            self.assertEqual(page.locator('link[rel="canonical"]').get_attribute("href"), "https://turist03.ru/")
+            self.assertEqual(page.locator('link[rel="canonical"]').get_attribute("href"), f"{self.public_base_url}/")
             self.assertEqual(page.evaluate("() => typeof window.Telegram"), "undefined")
 
             page.locator("#map-section").scroll_into_view_if_needed()

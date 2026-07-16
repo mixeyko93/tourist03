@@ -3,6 +3,7 @@
 from functools import lru_cache
 from pathlib import Path
 from typing import List, Literal, Optional
+from urllib.parse import urlsplit
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -129,6 +130,15 @@ class Settings(BaseSettings):
             if normalized in {"debug", "development", "on", "yes"}:
                 return True
         return value
+
+    @field_validator("public_base_url")
+    @classmethod
+    def validate_public_base_url(cls, value: str) -> str:
+        normalized = (value or "").strip().rstrip("/")
+        parsed = urlsplit(normalized)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("PUBLIC_BASE_URL must be an absolute http(s) URL")
+        return normalized
 
     @property
     def is_production(self) -> bool:
