@@ -189,6 +189,9 @@ def _standalone_public_page(request: Request, template_name: str) -> HTMLRespons
             if settings.environment in {"development", "test"}
             and settings.submission_captcha_provider == "test"
             else "",
+            captcha_provider=settings.submission_captcha_provider,
+            captcha_client_script_url=settings.submission_captcha_client_script_url,
+            captcha_site_key=settings.submission_captcha_site_key,
         ),
         headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
     )

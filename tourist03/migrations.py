@@ -1658,6 +1658,22 @@ MIGRATIONS = (
         ON moderation.submission_media(expires_at, id)
         WHERE deleted_at IS NULL AND status = 'staged';
 
+        CREATE OR REPLACE FUNCTION crm.reject_audit_mutation()
+        RETURNS TRIGGER
+        LANGUAGE plpgsql
+        AS $$
+        BEGIN
+            RAISE EXCEPTION 'audit log is immutable'
+                USING ERRCODE = '55000';
+        END;
+        $$;
+
+        DROP TRIGGER IF EXISTS trg_crm_audit_log_immutable
+        ON crm.audit_log;
+        CREATE TRIGGER trg_crm_audit_log_immutable
+        BEFORE UPDATE OR DELETE ON crm.audit_log
+        FOR EACH ROW EXECUTE FUNCTION crm.reject_audit_mutation();
+
         ALTER TABLE moderation.placement_submissions
         VALIDATE CONSTRAINT placement_submissions_applicant_role_valid;
         ALTER TABLE moderation.placement_submissions

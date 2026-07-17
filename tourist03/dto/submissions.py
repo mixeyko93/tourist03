@@ -105,7 +105,7 @@ class SubmissionStatusRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     status: str = Field(min_length=2, max_length=40)
-    content_version: Optional[int] = Field(default=None, ge=1)
+    content_version: int = Field(ge=1)
     public_comment: Optional[str] = Field(default=None, max_length=2000)
     internal_comment: Optional[str] = Field(default=None, max_length=5000)
 

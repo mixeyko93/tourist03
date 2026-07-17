@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from psycopg2 import errors
@@ -555,6 +555,8 @@ def list_submissions(
     assigned_admin_id: int | None = None,
     has_photos: bool | None = None,
     spam_risk: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
     query: str | None = None,
     limit: int = 50,
     offset: int = 0,
@@ -592,6 +594,12 @@ def list_submissions(
         clauses.append("submissions.spam_score >= 60")
     elif spam_risk == "normal":
         clauses.append("submissions.spam_score < 60")
+    if date_from:
+        clauses.append("submissions.created_at >= %s")
+        params.append(date_from)
+    if date_to:
+        clauses.append("submissions.created_at < %s")
+        params.append(date_to + timedelta(days=1))
     if query:
         clauses.append(
             """
@@ -735,6 +743,27 @@ def get_submission_detail(submission_id: int) -> dict | None:
             (int(submission_id),),
         )
         result["notes"] = [dict(item) for item in cur.fetchall()]
+        cur.execute(
+            """
+            SELECT
+                id,
+                actor_type,
+                actor_id,
+                actor_display,
+                action_type,
+                action_label,
+                comment,
+                metadata,
+                created_at
+            FROM crm.audit_log
+            WHERE target_type = 'placement_submission'
+              AND target_id IN (%s, %s)
+            ORDER BY created_at DESC, id DESC
+            LIMIT 100
+            """,
+            (str(result["id"]), result["public_number"]),
+        )
+        result["audit"] = [dict(item) for item in cur.fetchall()]
         return result
 
 

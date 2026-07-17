@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi import HTTPException, Query, Request
 
 from tourist03.domain.submissions import SubmissionValidationError, validate_submission_payload
@@ -51,6 +53,8 @@ def list_admin_submissions(
     assigned_admin_id: int | None = Query(None, ge=1),
     has_photos: bool | None = Query(None),
     spam_risk: str | None = Query(None, max_length=20),
+    date_from: date | None = Query(None),
+    date_to: date | None = Query(None),
     q: str | None = Query(None, max_length=120),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0, le=100_000),
@@ -64,6 +68,8 @@ def list_admin_submissions(
         assigned_admin_id=assigned_admin_id,
         has_photos=has_photos,
         spam_risk=(spam_risk or "").strip().lower() or None,
+        date_from=date_from,
+        date_to=date_to,
         query=(q or "").strip() or None,
         limit=limit,
         offset=offset,
@@ -266,6 +272,36 @@ def create_submission_object_draft(
         )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception:
+        try:
+            _audit(
+                actor,
+                action_type="submission_object_draft_failed",
+                action_label="Ошибка создания черновика объекта",
+                submission_id=submission_id,
+            )
+        except Exception:
+            pass
+        try:
+            detail = submission_repo.get_submission_detail(submission_id)
+            number = detail.get("public_number") if detail else f"заявка {submission_id}"
+            submission_repo.enqueue_submission_notifications(
+                submission_id,
+                event_type="placement_submission_object_draft_failed",
+                title=f"Ошибка создания объекта: {number}",
+                body=(
+                    "Транзакция создания catalog draft отменена. "
+                    "Проверьте заявку и журнал приложения."
+                ),
+                admin_action_url=(
+                    f"{request.app.state.settings.superadmin_base_url.rstrip('/')}"
+                    f"/admin/submissions?submission={submission_id}"
+                ),
+                severity="warning",
+            )
+        except Exception:
+            pass
+        raise
     if not result:
         raise HTTPException(status_code=404, detail="Заявка не найдена")
     if created:

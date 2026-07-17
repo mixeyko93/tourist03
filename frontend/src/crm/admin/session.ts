@@ -383,6 +383,7 @@ export type PlacementSubmissionDetail = PlacementSubmissionSummary & {
   media?: Array<Record<string, unknown>>;
   history?: Array<Record<string, unknown>>;
   notes?: Array<Record<string, unknown>>;
+  audit?: Array<Record<string, unknown>>;
 };
 
 function buildQuery(params: Record<string, string | number | boolean | null | undefined>) {
@@ -424,14 +425,36 @@ async function submissionRequest(path: string, init?: RequestInit) {
 }
 
 export async function fetchPlacementSubmissions(
-  params: { status?: string; search?: string; spamRisk?: string; signal?: AbortSignal } = {},
+  params: {
+    status?: string;
+    search?: string;
+    spamRisk?: string;
+    placeTypeId?: string;
+    region?: string;
+    applicantRole?: string;
+    assignedAdminId?: string;
+    hasPhotos?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    limit?: number;
+    offset?: number;
+    signal?: AbortSignal;
+  } = {},
 ) {
   const response = await fetch(
     `/api/superadmin/submissions${buildQuery({
       status: params.status,
       q: params.search,
       spam_risk: params.spamRisk,
-      limit: 100,
+      place_type_id: params.placeTypeId,
+      region: params.region,
+      applicant_role: params.applicantRole,
+      assigned_admin_id: params.assignedAdminId,
+      has_photos: params.hasPhotos,
+      date_from: params.dateFrom,
+      date_to: params.dateTo,
+      limit: params.limit ?? 25,
+      offset: params.offset ?? 0,
     })}`,
     { credentials: "same-origin", signal: params.signal },
   );
@@ -463,7 +486,7 @@ export async function updatePlacementSubmission(
 export async function changePlacementSubmissionStatus(
   submissionId: number,
   status: string,
-  payload: { contentVersion?: number; publicComment?: string; internalComment?: string } = {},
+  payload: { contentVersion: number; publicComment?: string; internalComment?: string },
 ) {
   return submissionRequest(`/api/superadmin/submissions/${submissionId}/status`, {
     method: "POST",
@@ -480,7 +503,7 @@ export async function runPlacementSubmissionAction(
   submissionId: number,
   action: "request-clarification" | "approve" | "reject" | "archive",
   status: string,
-  payload: { contentVersion?: number; publicComment?: string; internalComment?: string } = {},
+  payload: { contentVersion: number; publicComment?: string; internalComment?: string },
 ) {
   return submissionRequest(`/api/superadmin/submissions/${submissionId}/${action}`, {
     method: "POST",

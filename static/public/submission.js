@@ -276,7 +276,8 @@ function renderProgress() {
     button.dataset.current = String(currentStep === index + 1);
     button.dataset.complete = String(currentStep > index + 1);
     button.addEventListener("click", () => {
-      if (index + 1 <= currentStep || validateStep(currentStep)) showStep(index + 1);
+      if (index + 1 <= currentStep) showStep(index + 1);
+      else if (index + 1 === currentStep + 1 && validateStep(currentStep)) showStep(index + 1);
     });
     progress.append(button);
   });

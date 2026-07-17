@@ -54,6 +54,32 @@ def deliver_pending_email_notifications(
             _send_email(event, resolved)
         except Exception as exc:
             notification_repo.mark_notification_failed(int(event["id"]), str(exc))
+            submission_id = event.get("submission_id")
+            if submission_id:
+                try:
+                    submission = submission_repo.get_submission_detail(int(submission_id))
+                    public_number = (
+                        submission.get("public_number")
+                        if submission
+                        else "неизвестная заявка"
+                    )
+                    submission_repo.enqueue_submission_notifications(
+                        int(submission_id),
+                        event_type=f"placement_submission_email_failed_{int(event['id'])}",
+                        title=f"Ошибка email: {public_number}",
+                        body=(
+                            f"Письмо заявителю не доставлено. "
+                            f"Причина сохранена в outbox после попытки {int(event.get('attempts') or 0) + 1}."
+                        ),
+                        admin_action_url=(
+                            f"{resolved.superadmin_base_url.rstrip('/')}"
+                            f"/admin/submissions?submission={int(submission_id)}"
+                        ),
+                        severity="warning",
+                    )
+                except Exception:
+                    # Ошибка резервного Telegram-события не меняет retry email.
+                    pass
             continue
         if notification_repo.mark_email_notification_sent(int(event["id"])):
             sent += 1

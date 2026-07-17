@@ -129,6 +129,8 @@ class Settings(BaseSettings):
     submission_captcha_provider: Literal["test", "http"] = "test"
     submission_captcha_verify_url: str = ""
     submission_captcha_secret: str = ""
+    submission_captcha_client_script_url: str = ""
+    submission_captcha_site_key: str = ""
     submission_captcha_test_token: str = "test-pass"
     submission_retention_rejected_days: int = Field(default=365, ge=1, le=3650)
     submission_retention_abandoned_days: int = Field(default=30, ge=1, le=365)
@@ -217,6 +219,12 @@ class Settings(BaseSettings):
                 raise ValueError("SUBMISSION_CAPTCHA_VERIFY_URL must be an absolute HTTPS URL in production")
             if _is_placeholder_secret(self.submission_captcha_secret):
                 raise ValueError("SUBMISSION_CAPTCHA_SECRET must be configured in production")
+            if not self.submission_captcha_client_script_url.startswith("https://"):
+                raise ValueError(
+                    "SUBMISSION_CAPTCHA_CLIENT_SCRIPT_URL must be an absolute HTTPS URL in production"
+                )
+            if _is_placeholder_secret(self.submission_captcha_site_key):
+                raise ValueError("SUBMISSION_CAPTCHA_SITE_KEY must be configured in production")
             if not self.smtp_host or not self.smtp_from:
                 raise ValueError("SMTP_HOST and SMTP_FROM are required for placement submissions in production")
         return self

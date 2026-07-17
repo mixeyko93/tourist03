@@ -10,13 +10,16 @@
   <link rel="canonical" href="{{ public_base_url }}/add-place">
   <link rel="icon" href="/static/brand/turistika-favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
-  <link rel="stylesheet" href="/static/public/submission.css?v=2026-07-17-01">
+  <link rel="stylesheet" href="/static/public/submission.css?v=2026-07-17-02">
   <script>
     window.__TOURISTIKA_SUBMISSION__ = {
       testCaptcha: {{ "true" if test_captcha else "false" }},
-      captchaToken: {{ captcha_test_token | tojson }}
+      captchaToken: {{ captcha_test_token | tojson }},
+      captchaProvider: {{ captcha_provider | tojson }},
+      captchaSiteKey: {{ captcha_site_key | tojson }}
     };
   </script>
+  {% if captcha_client_script_url %}<script defer src="{{ captcha_client_script_url | e }}"></script>{% endif %}
   <script defer src="/static/vendor/leaflet/leaflet.js"></script>
   <script type="module" src="/static/public/submission.js?v=2026-07-17-01"></script>
 </head>
@@ -24,7 +27,7 @@
   <a class="submission-skip" href="#submission-form">Перейти к форме</a>
   <header class="submission-header">
     <div class="submission-frame submission-header__inner">
-      <a class="submission-brand" href="/" aria-label="Туристика — на главную">
+      <a class="submission-brand" href="/">
         <img src="/static/brand/turistika-icon.svg" width="44" height="44" alt="">
         <span><strong>Туристика</strong><small>Твоя карта впечатлений.</small></span>
       </a>
