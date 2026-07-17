@@ -253,6 +253,17 @@ class SubmissionMigrationUpgradeTests(unittest.TestCase):
                 (submission_id,),
             )
             history_id = int(cur.fetchone()["id"])
+            cur.execute(
+                """
+                INSERT INTO crm.audit_log (
+                    actor_type, target_type, target_id, action_type, action_label
+                )
+                VALUES ('system', 'placement_submission', %s, 'submission_tested', 'Проверена заявка')
+                RETURNING id
+                """,
+                (str(submission_id),),
+            )
+            audit_id = int(cur.fetchone()["id"])
             conn.commit()
 
         with closing(self._connect()) as conn, conn.cursor() as cur:
@@ -260,6 +271,14 @@ class SubmissionMigrationUpgradeTests(unittest.TestCase):
                 cur.execute(
                     "UPDATE moderation.submission_status_history SET new_status = 'new' WHERE id = %s",
                     (history_id,),
+                )
+            conn.rollback()
+
+        with closing(self._connect()) as conn, conn.cursor() as cur:
+            with self.assertRaises(psycopg2.errors.ObjectNotInPrerequisiteState):
+                cur.execute(
+                    "DELETE FROM crm.audit_log WHERE id = %s",
+                    (audit_id,),
                 )
             conn.rollback()
 

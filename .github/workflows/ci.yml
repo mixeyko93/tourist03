@@ -72,6 +72,7 @@ jobs:
       - run: python -m pip install -r requirements.txt
       - run: python -m tourist03.migrations upgrade
       - run: python -m tourist03.migrations check
+      - run: RUN_PG_INTEGRATION=1 PG_INTEGRATION_USE_EXISTING=1 python -m unittest tests.test_submission_postgres -v
 
   secrets:
     name: Secret scan
