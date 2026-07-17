@@ -43,6 +43,14 @@ PostgreSQL integration tests запускаются только с `RUN_PG_INTE
 
 CRM/superadmin frontend проверяется командой `cd frontend && npm run build`.
 
+Профиль Этапа 3.1:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 ./.venv/bin/python -m unittest tests.test_submissions -v
+RUN_PG_INTEGRATION=1 ./.venv/bin/python -m unittest tests.test_catalog_migrations tests.test_submission_postgres -v
+RUN_UI_SMOKE=1 ./.venv/bin/python -m unittest tests.test_submission_browser -v
+```
+
 ## Configuration и безопасность
 
 Переменные приложения типизированы в `tourist03.settings.Settings`. В production обязательно задать стабильный `SESSION_SECRET_KEY` (не короче 32 символов), не-placeholder `PG_PASSWORD`, `SESSION_COOKIE_SECURE=true` и список `CORS_ORIGINS` без `*`. Production не запустится с `SIM_VERIFY_CODE`, `ALLOW_SIMULATED_AUTH=true`, `SUPERADMIN_LOCAL_BYPASS=true` или compatibility CSRF bypass.
@@ -57,7 +65,22 @@ FEATURE_SERVICES=false
 FEATURE_TELEGRAM_WEBAPP=false
 FEATURE_PAID_PLACEMENT=false
 FEATURE_LEGACY_TOURIST_APP=false
+FEATURE_PLACEMENT_SUBMISSIONS=false
 ```
+
+`FEATURE_PLACEMENT_SUBMISSIONS` включает публичные `/add-place`,
+`/submission-status` и `/api/public/submissions*`. При выключенном флаге они
+возвращают 404, но суперадмин продолжает видеть уже полученные заявки. В
+production включение требует реального HTTPS CAPTCHA verifier и доверенного
+client adapter, site key, SMTP и стабильного `SESSION_SECRET_KEY`; test CAPTCHA
+в production запрещена.
+
+Заявка создаёт только модерационную запись. После одобрения отдельное действие
+суперадмина создаёт `catalog.camps` с `publication_status=draft`,
+`status=disabled`, без карты и бронирований. Публикация выполняется только
+существующим editor workflow. Applicant contacts не копируются в публичную
+карточку. Подробности: [stage-3.1-placement-submissions.md](docs/stage-3.1-placement-submissions.md)
+и [privacy-and-retention.md](docs/privacy-and-retention.md).
 
 Новый публичный каталог использует отдельные DTO и маршруты:
 
@@ -71,7 +94,7 @@ GET /places/{slug}
 
 List endpoint отдаёт только лёгкие данные карты и только записи с `publication_status=published` плюс legacy `status=active|published`. Detail содержит публичные contacts/media/rooms. Owner, manager, admin phones, moderation и audit data в public DTO не входят. `/api/camps` сохранён как deprecated compatibility API; CRM/superadmin остаются на защищённых internal routes.
 
-`/health` проверяет процесс, а `/ready` дополнительно проверяет доступ к DB и version `0017_catalog_amenities`. Публичный каталог не зависит от Telegram SDK. Booking, public auth, owner portal, services и paid placement продолжают управляться отдельными feature flags и в Этапе 2.2 не включаются.
+`/health` проверяет процесс, а `/ready` дополнительно проверяет доступ к DB и version `0022_submission_indexes`. Публичный каталог и форма заявки не зависят от Telegram SDK. Booking, public auth, owner portal, services и paid placement продолжают управляться отдельными feature flags.
 
 Production и CI используют Python 3.11. Dependency audit в CI всегда получает метаданные и пакеты из публичного PyPI (`https://pypi.org/simple`). Если production устанавливает зависимости через внутренний mirror, mirror обязан синхронизировать безопасные версии с PyPI; credentials такого mirror не хранятся в репозитории и не используются security-аудитом.
 
@@ -85,6 +108,6 @@ Production и CI используют Python 3.11. Dependency audit в CI все
 ./.venv/bin/python -m tourist03.migrations upgrade
 ```
 
-Операционные инструкции находятся в [backup-restore.md](docs/backup-restore.md), [deployment.md](docs/deployment.md) и [migrations.md](docs/migrations.md). Архитектура и acceptance Этапа 2.2 описаны в [stage-2.2-universal-catalog.md](docs/stage-2.2-universal-catalog.md). Канонический production path — systemd `./deploy.sh`; Docker Compose оставлен для локального/альтернативного использования. Эти инструкции не являются разрешением на deploy.
+Операционные инструкции находятся в [backup-restore.md](docs/backup-restore.md), [deployment.md](docs/deployment.md) и [migrations.md](docs/migrations.md). Архитектура Этапа 3.1 описана в [stage-3.1-placement-submissions.md](docs/stage-3.1-placement-submissions.md). Канонический production path — systemd `./deploy.sh`; Docker Compose оставлен для локального/альтернативного использования. Эти инструкции не являются разрешением на deploy.
 
 Tracked legacy dumps и existing uploads в Этапе 1.1 намеренно не удаляются. Порядок ротации, проверки backup/restore и отдельного согласования history cleanup описан в [security-incident-response.md](docs/security-incident-response.md).

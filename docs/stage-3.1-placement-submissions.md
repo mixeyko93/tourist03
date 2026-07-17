@@ -1,6 +1,6 @@
 # Этап 3.1 — заявки на размещение и модерация
 
-Статус: технический план до реализации. Базовая версия `main`:
+Статус: реализовано локально в feature-ветке, ожидает review. Базовая версия `main`:
 `975c3e2b2dc4f33a98a60e2933ef5214145a191b`, обязательная migration
 version: `0017_catalog_amenities`.
 
@@ -78,6 +78,8 @@ SUBMISSION_RATE_PER_HOUR=5
 SUBMISSION_CAPTCHA_PROVIDER=test
 SUBMISSION_CAPTCHA_VERIFY_URL=
 SUBMISSION_CAPTCHA_SECRET=
+SUBMISSION_CAPTCHA_CLIENT_SCRIPT_URL=
+SUBMISSION_CAPTCHA_SITE_KEY=
 SUBMISSION_CAPTCHA_TEST_TOKEN=test-pass
 SUBMISSION_RETENTION_REJECTED_DAYS=365
 SUBMISSION_RETENTION_ABANDONED_DAYS=30
@@ -86,7 +88,9 @@ SUBMISSION_RETENTION_TECHNICAL_DAYS=90
 
 В production при включённом feature flag запрещены test/disabled CAPTCHA
 provider, пустой CAPTCHA secret и process-local rate limiter для multi-worker
-deployment. Реальные credentials в репозиторий не попадают.
+deployment. Production также требует HTTPS client adapter, который определяет
+`window.touristikaCaptcha.execute()`, и public site key. Реальные credentials в
+репозиторий не попадают.
 
 ## Миграции
 
@@ -232,8 +236,8 @@ Applicant contacts, internal notes, hashes, spam score, internal IDs и audit н
 
 ## Public форма
 
-Маршрут `/add-place` использует отдельные `submission.css` и
-`submission-form.js`, загружаемые только на этой странице.
+Маршрут `/add-place` использует отдельные `submission.css` и `submission.js`,
+загружаемые только на этой странице.
 
 Восемь шагов:
 
@@ -443,3 +447,25 @@ count для admin list.
 - Migrations, unit, PostgreSQL, browser, frontend build, screenshots и Lighthouse
   зелёные.
 - Итоговый PR остаётся draft; merge/deploy/production migrations отсутствуют.
+
+## Фактическая локальная проверка
+
+Проверено на Python 3.11 и PostgreSQL 16 перед открытием draft PR:
+
+- `pip check` и public-PyPI `pip-audit`: ошибок и известных уязвимостей нет;
+- compileall: успешно;
+- unit profile: 111 tests, 19 ожидаемо skipped integration/browser tests;
+- полный PostgreSQL profile: 111 tests, 2 ожидаемо skipped browser classes;
+- existing browser smoke: 5/5;
+- submission browser/screenshot regression: 1/1, 25 PNG;
+- TypeScript + Vite production build: успешно;
+- npm production audit: 0 vulnerabilities;
+- Lighthouse landing: Performance 92, Accessibility 100, CLS 0;
+- Lighthouse `/add-place`: Performance 93, Accessibility 100, CLS 0.045;
+- review upload fixture: 46.9 ms в локальном mocked browser flow.
+
+Форма загружает отдельные 31 463 B JS (8 624 B gzip) и 13 915 B CSS
+(3 350 B gzip) только на `/add-place`; landing regression подтверждает отсутствие
+этих ресурсов в initial load. Репрезентативные JSON payload fixtures:
+config 1 151 B, admin list с одной строкой 649 B, detail 2 830 B. Admin list
+пагинирован и получает media count одной SQL-командой без N+1.
