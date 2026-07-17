@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f5f7f2">
+  <title>Статус заявки — Туристика</title>
+  <meta name="robots" content="noindex,nofollow">
+  <link rel="icon" href="/static/brand/turistika-favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/public/submission.css?v=2026-07-17-01">
+  <script type="module" src="/static/public/submission-status.js?v=2026-07-17-01"></script>
+</head>
+<body>
+  <header class="submission-header">
+    <div class="submission-frame submission-header__inner">
+      <a class="submission-brand" href="/"><img src="/static/brand/turistika-icon.svg" width="44" height="44" alt=""><span><strong>Туристика</strong><small>Твоя карта впечатлений.</small></span></a>
+      <a class="submission-back" href="/">Вернуться к карте</a>
+    </div>
+  </header>
+  <main class="submission-frame submission-status-page">
+    <section class="submission-status-card">
+      <p class="submission-eyebrow">Моя заявка</p>
+      <h1>Проверить статус</h1>
+      <p>Tracking-токен остаётся только в вашем браузере и не отправляется в адресной строке.</p>
+      <form data-status-form>
+        <label class="submission-field">Номер заявки<input name="public_number" required placeholder="TUR-2026-XXXXXXXX" autocomplete="off"></label>
+        <label class="submission-field">Код доступа<input name="tracking_token" required autocomplete="off"></label>
+        <button class="submission-primary" type="submit">Проверить</button>
+      </form>
+      <div class="submission-error" data-status-error role="alert" hidden></div>
+      <div class="submission-status-result" data-status-result hidden tabindex="-1">
+        <span data-status-label></span><h2 data-status-number></h2><p data-status-comment></p>
+        <time data-status-time></time><a data-place-link hidden>Открыть объект</a>
+        <form data-clarification-form hidden>
+          <label class="submission-field">Ответ модератору<textarea name="message" required minlength="2" maxlength="5000" rows="5"></textarea></label>
+          <button class="submission-primary" type="submit">Отправить ответ</button>
+        </form>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

@@ -114,6 +114,26 @@ class Settings(BaseSettings):
     feature_telegram_webapp: bool = False
     feature_paid_placement: bool = False
     feature_legacy_tourist_app: bool = False
+    feature_placement_submissions: bool = False
+
+    submission_max_place_photos: int = Field(default=20, ge=1, le=100)
+    submission_max_room_photos: int = Field(default=5, ge=1, le=20)
+    submission_max_image_bytes: int = Field(default=10 * 1024 * 1024, ge=1024, le=50 * 1024 * 1024)
+    submission_max_image_pixels: int = Field(default=40_000_000, ge=1_000_000, le=100_000_000)
+    submission_max_json_bytes: int = Field(default=1024 * 1024, ge=16 * 1024, le=10 * 1024 * 1024)
+    submission_draft_ttl_hours: int = Field(default=24 * 7, ge=1, le=24 * 90)
+    submission_upload_ttl_hours: int = Field(default=48, ge=1, le=24 * 30)
+    submission_min_fill_seconds: int = Field(default=20, ge=0, le=3600)
+    submission_max_links: int = Field(default=12, ge=0, le=100)
+    submission_rate_per_hour: int = Field(default=5, ge=1, le=1000)
+    submission_captcha_provider: Literal["test", "http"] = "test"
+    submission_captcha_verify_url: str = ""
+    submission_captcha_secret: str = ""
+    submission_captcha_test_token: str = "test-pass"
+    submission_retention_rejected_days: int = Field(default=365, ge=1, le=3650)
+    submission_retention_abandoned_days: int = Field(default=30, ge=1, le=365)
+    submission_retention_technical_days: int = Field(default=90, ge=1, le=730)
+    submission_cleanup_enabled: bool = False
 
     test_admin_email: Optional[str] = None
     test_admin_password: Optional[str] = None
@@ -162,6 +182,7 @@ class Settings(BaseSettings):
             "telegram_webapp": self.feature_telegram_webapp,
             "paid_placement": self.feature_paid_placement,
             "legacy_tourist_app": self.feature_legacy_tourist_app,
+            "placement_submissions": self.feature_placement_submissions,
         }
 
     @model_validator(mode="after")
@@ -189,6 +210,15 @@ class Settings(BaseSettings):
             raise ValueError("CSRF_LEGACY_COMPATIBILITY cannot be enabled in production")
         if self.rate_limit_storage == "redis" and not self.redis_url:
             raise ValueError("REDIS_URL is required when RATE_LIMIT_STORAGE=redis")
+        if self.feature_placement_submissions:
+            if self.submission_captcha_provider == "test":
+                raise ValueError("test CAPTCHA provider cannot be used for placement submissions in production")
+            if not self.submission_captcha_verify_url.startswith("https://"):
+                raise ValueError("SUBMISSION_CAPTCHA_VERIFY_URL must be an absolute HTTPS URL in production")
+            if _is_placeholder_secret(self.submission_captcha_secret):
+                raise ValueError("SUBMISSION_CAPTCHA_SECRET must be configured in production")
+            if not self.smtp_host or not self.smtp_from:
+                raise ValueError("SMTP_HOST and SMTP_FROM are required for placement submissions in production")
         return self
 
 

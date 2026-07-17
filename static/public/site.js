@@ -4,6 +4,9 @@ import { initialiseTelegramWebApp } from "./telegram.js";
 
 const features = publicFeatures();
 initialiseTelegramWebApp(features);
+document.querySelectorAll("[data-placement-submissions]").forEach((node) => {
+  node.hidden = !features.placement_submissions;
+});
 
 const menuToggle = document.querySelector("[data-menu-toggle]");
 const menu = document.querySelector("[data-menu]");

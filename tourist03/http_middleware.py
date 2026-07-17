@@ -1,5 +1,7 @@
 """Small, dependency-free HTTP safeguards used by the app factory."""
 
+import hashlib
+import hmac
 import threading
 import time
 import logging
@@ -37,6 +39,14 @@ CSRF_LOGIN_EXEMPTIONS = {
     ("POST", "/api/admin/login"),
     ("POST", "/api/superadmin/session"),
 }
+PLACEMENT_SUBMISSION_PUBLIC_PREFIXES = (
+    "/api/public/submissions",
+    "/api/public/submission-media",
+)
+PLACEMENT_SUBMISSION_PUBLIC_PAGES = {
+    "/add-place",
+    "/submission-status",
+}
 
 
 class FeatureGateMiddleware(BaseHTTPMiddleware):
@@ -58,6 +68,19 @@ class FeatureGateMiddleware(BaseHTTPMiddleware):
             path == "/legacy-tourist-app" or path.startswith("/legacy-tourist-app/")
         ):
             blocked = True
+        elif not settings.feature_placement_submissions and (
+            path in PLACEMENT_SUBMISSION_PUBLIC_PAGES
+            or path.startswith(PLACEMENT_SUBMISSION_PUBLIC_PREFIXES)
+        ):
+            is_authenticated_preview = (
+                path.startswith("/api/public/submission-media/")
+                and bool(
+                    request.session.get("superadmin")
+                    or request.session.get("superadmin_account_id")
+                    or request.session.get("superadmin_principal")
+                )
+            )
+            blocked = not is_authenticated_preview
         if blocked:
             return JSONResponse({"detail": "Not Found"}, status_code=404)
         return await call_next(request)
@@ -147,9 +170,23 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request, call_next):
         rule = self._rule(request)
+        if request.url.path.startswith(PLACEMENT_SUBMISSION_PUBLIC_PREFIXES):
+            raw_length = request.headers.get("content-length", "")
+            if raw_length.isdigit():
+                settings = request.app.state.settings
+                max_bytes = settings.submission_max_json_bytes
+                if request.url.path.endswith("/media"):
+                    max_bytes = settings.submission_max_image_bytes + settings.submission_max_json_bytes
+                if int(raw_length) > max_bytes:
+                    return JSONResponse({"detail": "Payload Too Large"}, status_code=413)
         if rule:
             kind, limit = rule
             host = request.client.host if request.client else "unknown"
+            host = hmac.new(
+                str(request.app.state.settings.session_secret_key).encode("utf-8"),
+                host.encode("utf-8", errors="ignore"),
+                hashlib.sha256,
+            ).hexdigest()
             limiter = self.limiter
             settings = request.app.state.settings
             if settings.rate_limit_storage == "redis":

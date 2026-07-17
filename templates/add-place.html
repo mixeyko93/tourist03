@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f5f7f2">
+  <title>Добавить объект — Туристика</title>
+  <meta name="description" content="Предложите новый туристический объект для карты Туристики.">
+  <meta name="robots" content="noindex,follow">
+  <link rel="canonical" href="{{ public_base_url }}/add-place">
+  <link rel="icon" href="/static/brand/turistika-favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="/static/public/submission.css?v=2026-07-17-01">
+  <script>
+    window.__TOURISTIKA_SUBMISSION__ = {
+      testCaptcha: {{ "true" if test_captcha else "false" }},
+      captchaToken: {{ captcha_test_token | tojson }}
+    };
+  </script>
+  <script defer src="/static/vendor/leaflet/leaflet.js"></script>
+  <script type="module" src="/static/public/submission.js?v=2026-07-17-01"></script>
+</head>
+<body>
+  <a class="submission-skip" href="#submission-form">Перейти к форме</a>
+  <header class="submission-header">
+    <div class="submission-frame submission-header__inner">
+      <a class="submission-brand" href="/" aria-label="Туристика — на главную">
+        <img src="/static/brand/turistika-icon.svg" width="44" height="44" alt="">
+        <span><strong>Туристика</strong><small>Твоя карта впечатлений.</small></span>
+      </a>
+      <a class="submission-back" href="/">Вернуться к карте</a>
+    </div>
+  </header>
+
+  <main class="submission-frame submission-main">
+    <section class="submission-intro">
+      <p class="submission-eyebrow">Заявка на размещение</p>
+      <h1>Добавьте место<br>на карту впечатлений</h1>
+      <p>Расскажите об объекте — мы проверим информацию и подготовим карточку. Отправка заявки не публикует объект автоматически.</p>
+    </section>
+
+    <div class="submission-save" role="status" aria-live="polite" data-save-status>Подготавливаем защищённый черновик…</div>
+    <nav class="submission-progress" aria-label="Шаги формы" data-progress></nav>
+
+    <form id="submission-form" class="submission-form" novalidate>
+      <section class="submission-step" data-step="1" aria-labelledby="step-1-title">
+        <div class="submission-step__heading"><span>01</span><div><h2 id="step-1-title">Заявитель</h2><p>Контакты нужны только модератору и не станут публичными.</p></div></div>
+        <div class="submission-grid">
+          <label class="submission-field submission-field--wide">Кто вы?
+            <select name="applicant_role" required>
+              <option value="">Выберите роль</option>
+              <option value="owner">Собственник</option>
+              <option value="representative">Представитель</option>
+              <option value="tourist">Турист, предлагающий место</option>
+            </select>
+          </label>
+          <label class="submission-field">ФИО<input name="applicant_name" autocomplete="name" required maxlength="160"></label>
+          <label class="submission-field">Организация<input name="applicant_organization" maxlength="240"></label>
+          <label class="submission-field">Должность<input name="applicant_position" maxlength="160"></label>
+          <label class="submission-field">Телефон<input name="applicant_phone" type="tel" autocomplete="tel" maxlength="64"></label>
+          <label class="submission-field">Email<input name="applicant_email" type="email" autocomplete="email" maxlength="320"></label>
+          <label class="submission-field">Telegram<input name="applicant_telegram" maxlength="300" placeholder="@username"></label>
+          <label class="submission-field">WhatsApp<input name="applicant_whatsapp" maxlength="300"></label>
+          <label class="submission-field">MAX<input name="applicant_max" maxlength="300"></label>
+          <label class="submission-field">Предпочтительная связь
+            <select name="preferred_contact_type">
+              <option value="">Выберите</option><option value="phone">Телефон</option><option value="email">Email</option>
+              <option value="telegram">Telegram</option><option value="whatsapp">WhatsApp</option><option value="max">MAX</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
+      <section class="submission-step" data-step="2" aria-labelledby="step-2-title" hidden>
+        <div class="submission-step__heading"><span>02</span><div><h2 id="step-2-title">Основные данные</h2><p>Название, география и короткое представление места.</p></div></div>
+        <div class="submission-grid">
+          <label class="submission-field">Название объекта<input name="place_name" required maxlength="240"></label>
+          <label class="submission-field">Тип объекта<select name="place_type_id" required data-place-types><option value="">Загрузка…</option></select></label>
+          <label class="submission-field">Регион<input name="region" required maxlength="160"></label>
+          <label class="submission-field">Район<input name="district" maxlength="160"></label>
+          <label class="submission-field">Город<input name="city" maxlength="160"></label>
+          <label class="submission-field">Населённый пункт<input name="locality" maxlength="160"></label>
+          <label class="submission-field submission-field--wide">Адрес<input name="address" maxlength="500"></label>
+          <label class="submission-field submission-field--wide">Короткое описание<textarea name="short_description" required maxlength="320" rows="3"></textarea></label>
+          <label class="submission-field submission-field--wide">Полное описание<textarea name="description" maxlength="10000" rows="7"></textarea></label>
+          <label class="submission-field">Сезонность<input name="seasonality" maxlength="500"></label>
+          <label class="submission-field">Режим работы<input name="working_hours_text" maxlength="500" placeholder="Например, ежедневно 09:00–21:00"></label>
+        </div>
+        <div class="coordinate-picker">
+          <div><h3>Точка на карте</h3><p>Нажмите на карту или введите координаты.</p></div>
+          <div class="coordinate-picker__inputs">
+            <label class="submission-field">Широта<input name="lat" type="number" min="-90" max="90" step="any"></label>
+            <label class="submission-field">Долгота<input name="lng" type="number" min="-180" max="180" step="any"></label>
+          </div>
+          <div class="coordinate-picker__map" data-coordinate-map role="region" aria-label="Выбор координат объекта"></div>
+        </div>
+      </section>
+
+      <section class="submission-step" data-step="3" aria-labelledby="step-3-title" hidden>
+        <div class="submission-step__heading"><span>03</span><div><h2 id="step-3-title">Контакты для туристов</h2><p>Только эти контакты могут попасть в публичную карточку.</p></div></div>
+        <div class="submission-grid" data-public-contacts>
+          <label class="submission-field">Телефон<input data-contact="phone" type="tel"></label>
+          <label class="submission-field">Дополнительный телефон<input data-contact="phone" type="tel"></label>
+          <label class="submission-field">Email<input data-contact="email" type="email"></label>
+          <label class="submission-field">Сайт<input data-contact="website" type="url" placeholder="https://"></label>
+          <label class="submission-field">Telegram<input data-contact="telegram"></label>
+          <label class="submission-field">WhatsApp<input data-contact="whatsapp"></label>
+          <label class="submission-field">MAX<input data-contact="max"></label>
+          <label class="submission-field">VK<input data-contact="vk"></label>
+        </div>
+      </section>
+
+      <section class="submission-step" data-step="4" aria-labelledby="step-4-title" hidden>
+        <div class="submission-step__heading"><span>04</span><div><h2 id="step-4-title">Характеристики</h2><p>Отметьте только то, что действительно доступно гостям.</p></div></div>
+        <div class="amenity-groups" data-amenities><p>Загружаем список удобств…</p></div>
+        <label class="submission-field">Минимальная цена, ₽<input name="min_price" type="number" min="0" max="1000000000"></label>
+      </section>
+
+      <section class="submission-step" data-step="5" aria-labelledby="step-5-title" hidden>
+        <div class="submission-step__heading"><span>05</span><div><h2 id="step-5-title">Варианты размещения</h2><p>Если у объекта есть номера, домики или апартаменты, добавьте их здесь.</p></div></div>
+        <div data-rooms></div>
+        <button class="submission-secondary" type="button" data-add-room>Добавить вариант</button>
+      </section>
+
+      <section class="submission-step" data-step="6" aria-labelledby="step-6-title" hidden>
+        <div class="submission-step__heading"><span>06</span><div><h2 id="step-6-title">Фото и видео</h2><p>До 20 фотографий объекта. Метаданные изображения будут удалены.</p></div></div>
+        <label class="upload-zone" data-upload-zone>
+          <input type="file" accept="image/jpeg,image/png,image/webp" multiple data-photo-input>
+          <strong>Перетащите фото сюда</strong><span>или выберите файлы · JPEG, PNG, WebP</span>
+        </label>
+        <div class="upload-list" data-upload-list aria-live="polite"></div>
+        <label class="submission-field submission-field--wide">Ссылки на видео
+          <textarea name="video_urls_text" rows="4" placeholder="По одной ссылке YouTube, Rutube или VK Video на строку"></textarea>
+        </label>
+      </section>
+
+      <section class="submission-step" data-step="7" aria-labelledby="step-7-title" hidden>
+        <div class="submission-step__heading"><span>07</span><div><h2 id="step-7-title">Подтверждение</h2><p>Проверьте согласия перед отправкой.</p></div></div>
+        <div class="consent-list">
+          <label><input type="checkbox" name="consent_publication" required> Разрешаю использовать сведения для подготовки публичной карточки.</label>
+          <label><input type="checkbox" name="consent_privacy" required> Согласен на обработку персональных данных для рассмотрения заявки.</label>
+          <label><input type="checkbox" name="consent_photos" required> Подтверждаю право использовать загруженные фотографии.</label>
+          <label><input type="checkbox" name="consent_accuracy" required> Подтверждаю достоверность известных мне данных.</label>
+          <label data-representation-consent><input type="checkbox" name="consent_representation"> Подтверждаю право представлять объект.</label>
+        </div>
+        <label class="submission-honeypot" aria-hidden="true">Ваш сайт<input name="website_confirm" tabindex="-1" autocomplete="off"></label>
+      </section>
+
+      <section class="submission-step" data-step="8" aria-labelledby="step-8-title" hidden>
+        <div class="submission-step__heading"><span>08</span><div><h2 id="step-8-title">Проверка</h2><p>Убедитесь, что модератор получит понятную информацию.</p></div></div>
+        <div class="submission-preview" data-preview></div>
+        <p class="submission-captcha-note">Перед отправкой выполняется антиспам-проверка. Заявка не будет опубликована автоматически.</p>
+      </section>
+
+      <div class="submission-error" role="alert" data-form-error hidden></div>
+      <div class="submission-actions">
+        <button class="submission-secondary" type="button" data-clear-draft>Очистить</button>
+        <span></span>
+        <button class="submission-secondary" type="button" data-prev hidden>Назад</button>
+        <button class="submission-primary" type="button" data-next>Продолжить</button>
+        <button class="submission-primary" type="submit" data-submit hidden>Отправить заявку</button>
+      </div>
+    </form>
+
+    <section class="submission-success" data-success hidden tabindex="-1">
+      <img src="/static/brand/turistika-icon.svg" width="70" height="70" alt="">
+      <p class="submission-eyebrow">Заявка принята</p>
+      <h2>Спасибо! Мы получили информацию.</h2>
+      <p>Сохраните номер и ссылку: они нужны для проверки статуса.</p>
+      <strong data-success-number></strong>
+      <a class="submission-primary" data-tracking-link href="/submission-status">Проверить статус</a>
+      <a class="submission-secondary" href="/">Вернуться к карте</a>
+    </section>
+  </main>
+
+  <footer class="submission-footer"><div class="submission-frame">© Туристика · Информация проходит ручную модерацию</div></footer>
+</body>
+</html>
