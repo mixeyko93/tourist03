@@ -339,6 +339,52 @@ export type SuperadminAuditRecord = {
   created_at?: string | null;
 };
 
+export type PlacementSubmissionSummary = {
+  id: number;
+  public_number: string;
+  status: string;
+  place_name?: string | null;
+  place_type_id?: number | null;
+  place_type_name?: string | null;
+  region?: string | null;
+  applicant_role?: string | null;
+  applicant_name?: string | null;
+  assigned_admin_id?: number | null;
+  assigned_admin_name?: string | null;
+  spam_score: number;
+  media_count: number;
+  created_at: string;
+  submitted_at?: string | null;
+  updated_at: string;
+  content_version: number;
+  published_camp_id?: number | null;
+};
+
+export type PlacementSubmissionDetail = PlacementSubmissionSummary & {
+  [key: string]: unknown;
+  applicant_phone?: string | null;
+  applicant_email?: string | null;
+  applicant_telegram?: string | null;
+  applicant_whatsapp?: string | null;
+  applicant_max?: string | null;
+  preferred_contact_type?: string | null;
+  address?: string | null;
+  city?: string | null;
+  locality?: string | null;
+  lat?: number | null;
+  lng?: number | null;
+  short_description?: string | null;
+  description?: string | null;
+  public_contacts?: Array<Record<string, unknown>>;
+  amenities?: Array<Record<string, unknown>>;
+  rooms_payload?: Array<Record<string, unknown>>;
+  video_urls?: string[];
+  consents?: Record<string, boolean>;
+  media?: Array<Record<string, unknown>>;
+  history?: Array<Record<string, unknown>>;
+  notes?: Array<Record<string, unknown>>;
+};
+
 function buildQuery(params: Record<string, string | number | boolean | null | undefined>) {
   const query = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
@@ -361,6 +407,108 @@ async function assertOk(response: Response) {
   }
   const payload = await parseJson(response);
   throw new Error(typeof payload?.detail === "string" ? payload.detail : "Не удалось выполнить запрос");
+}
+
+async function submissionRequest(path: string, init?: RequestInit) {
+  const response = await fetch(path, {
+    credentials: "same-origin",
+    ...init,
+    headers: {
+      Accept: "application/json",
+      ...(init?.body ? { "Content-Type": "application/json" } : {}),
+      ...init?.headers,
+    },
+  });
+  await assertOk(response);
+  return (await response.json()) as Record<string, unknown>;
+}
+
+export async function fetchPlacementSubmissions(
+  params: { status?: string; search?: string; spamRisk?: string; signal?: AbortSignal } = {},
+) {
+  const response = await fetch(
+    `/api/superadmin/submissions${buildQuery({
+      status: params.status,
+      q: params.search,
+      spam_risk: params.spamRisk,
+      limit: 100,
+    })}`,
+    { credentials: "same-origin", signal: params.signal },
+  );
+  await assertOk(response);
+  return (await response.json()) as {
+    ok: boolean;
+    items: PlacementSubmissionSummary[];
+    total: number;
+    limit: number;
+    offset: number;
+  };
+}
+
+export async function fetchPlacementSubmission(submissionId: number, signal?: AbortSignal) {
+  const payload = await submissionRequest(`/api/superadmin/submissions/${submissionId}`, { signal });
+  return payload.submission as PlacementSubmissionDetail;
+}
+
+export async function updatePlacementSubmission(
+  submissionId: number,
+  payload: Record<string, unknown>,
+) {
+  return submissionRequest(`/api/superadmin/submissions/${submissionId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function changePlacementSubmissionStatus(
+  submissionId: number,
+  status: string,
+  payload: { contentVersion?: number; publicComment?: string; internalComment?: string } = {},
+) {
+  return submissionRequest(`/api/superadmin/submissions/${submissionId}/status`, {
+    method: "POST",
+    body: JSON.stringify({
+      status,
+      content_version: payload.contentVersion,
+      public_comment: payload.publicComment,
+      internal_comment: payload.internalComment,
+    }),
+  });
+}
+
+export async function runPlacementSubmissionAction(
+  submissionId: number,
+  action: "request-clarification" | "approve" | "reject" | "archive",
+  status: string,
+  payload: { contentVersion?: number; publicComment?: string; internalComment?: string } = {},
+) {
+  return submissionRequest(`/api/superadmin/submissions/${submissionId}/${action}`, {
+    method: "POST",
+    body: JSON.stringify({
+      status,
+      content_version: payload.contentVersion,
+      public_comment: payload.publicComment,
+      internal_comment: payload.internalComment,
+    }),
+  });
+}
+
+export async function addPlacementSubmissionNote(
+  submissionId: number,
+  text: string,
+  isVisibleToApplicant = false,
+) {
+  return submissionRequest(`/api/superadmin/submissions/${submissionId}/notes`, {
+    method: "POST",
+    body: JSON.stringify({ text, is_visible_to_applicant: isVisibleToApplicant }),
+  });
+}
+
+export async function createPlacementObjectDraft(submissionId: number, idempotencyKey: string) {
+  return submissionRequest(`/api/superadmin/submissions/${submissionId}/create-object-draft`, {
+    method: "POST",
+    body: JSON.stringify({ idempotency_key: idempotencyKey }),
+  });
 }
 
 async function parseSessionResponse(response: Response): Promise<SuperadminSessionResponse> {

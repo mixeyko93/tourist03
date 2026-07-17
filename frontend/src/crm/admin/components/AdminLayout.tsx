@@ -11,6 +11,7 @@ const baseAdminTabs = [
   { label: "Пользователи", path: "/admin/users" },
   { label: "Учётные записи", path: "/admin/accounts" },
   { label: "Модерация", path: "/admin/moderation" },
+  { label: "Заявки на размещение", path: "/admin/submissions" },
   { label: "Архив", path: "/admin/archive" },
 ];
 
