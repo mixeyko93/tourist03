@@ -13,10 +13,13 @@ from PIL import Image, UnidentifiedImageError
 
 from tourist03.config import UPLOAD_DIR
 from tourist03.domain import bookings as booking_domain
+from tourist03.domain.submissions import tracking_token_for
 from tourist03.public_catalog import normalize_bbox, validate_slug
 from tourist03.repositories import catalog as catalog_repo
+from tourist03.repositories import submissions as submission_repo
 from tourist03.schemas import CampStatusUpdateRequest
 from tourist03.settings import get_settings
+from tourist03.security import get_superadmin_session_principal
 from tourist03.storage import _normalize_move, _room_photos_from_fs
 
 
@@ -349,10 +352,43 @@ async def api_camps_upsert_new(req: Request):
 async def api_camps_upsert(camp_id: int, req: Request):
     data = await req.json()
     try:
-        return catalog_repo.upsert_camp(camp_id, data, _normalize_move)
+        result = catalog_repo.upsert_camp(camp_id, data, _normalize_move)
     except ValueError as exc:
         status_code = 404 if str(exc) == "Объект не найден" else 400
         raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    if str(data.get("publication_status") or "").strip().lower() == "published":
+        actor = get_superadmin_session_principal(req) or {}
+        try:
+            submission = submission_repo.mark_submission_published_by_camp(
+                camp_id,
+                actor_id=actor.get("id"),
+            )
+            if submission:
+                settings = req.app.state.settings
+                tracking_token = tracking_token_for(
+                    submission["public_number"],
+                    settings.session_secret_key,
+                )
+                submission_repo.enqueue_submission_notifications(
+                    submission["id"],
+                    event_type="placement_submission_published",
+                    title=f"Объект опубликован: {submission['public_number']}",
+                    body=f"{submission['public_number']} · {submission.get('place_name') or 'Объект'}",
+                    admin_action_url=(
+                        f"{settings.superadmin_base_url.rstrip('/')}/admin/bases/{camp_id}"
+                    ),
+                    applicant_email=submission.get("applicant_email"),
+                    applicant_title=f"Объект опубликован · {submission['public_number']}",
+                    applicant_body="Карточка объекта опубликована на карте Туристики.",
+                    applicant_action_url=(
+                        f"{settings.public_base_url}/submission-status"
+                        f"#number={submission['public_number']}&token={tracking_token}"
+                    ),
+                )
+        except Exception:
+            # Каталожная публикация не откатывается из-за сбоя вторичного уведомления.
+            pass
+    return result
 
 
 def api_camp_status_update(camp_id: int, payload: CampStatusUpdateRequest):

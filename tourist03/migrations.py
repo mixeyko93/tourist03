@@ -1291,6 +1291,419 @@ MIGRATIONS = (
         ALTER TABLE catalog.camp_amenities VALIDATE CONSTRAINT camp_amenities_amenity_fk;
         """,
     ),
+    MigrationStep(
+        version="0018_moderation_submissions",
+        sql="""
+        CREATE SCHEMA IF NOT EXISTS moderation;
+
+        CREATE TABLE IF NOT EXISTS moderation.placement_submissions (
+            id BIGSERIAL PRIMARY KEY,
+            public_number TEXT NOT NULL,
+            draft_token_hash TEXT NOT NULL,
+            tracking_token_hash TEXT,
+            submit_idempotency_key_hash TEXT,
+            applicant_role TEXT,
+            applicant_name TEXT,
+            applicant_organization TEXT,
+            applicant_position TEXT,
+            applicant_phone TEXT,
+            applicant_email TEXT,
+            applicant_telegram TEXT,
+            applicant_whatsapp TEXT,
+            applicant_max TEXT,
+            preferred_contact_type TEXT,
+            place_name TEXT,
+            place_type_id INTEGER,
+            region TEXT,
+            district TEXT,
+            city TEXT,
+            locality TEXT,
+            address TEXT,
+            lat DOUBLE PRECISION,
+            lng DOUBLE PRECISION,
+            short_description TEXT,
+            description TEXT,
+            seasonality TEXT,
+            working_hours JSONB NOT NULL DEFAULT '{}'::jsonb,
+            min_price INTEGER,
+            public_contacts JSONB NOT NULL DEFAULT '[]'::jsonb,
+            amenities JSONB NOT NULL DEFAULT '[]'::jsonb,
+            rooms_payload JSONB NOT NULL DEFAULT '[]'::jsonb,
+            video_urls JSONB NOT NULL DEFAULT '[]'::jsonb,
+            extra_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+            consents JSONB NOT NULL DEFAULT '{}'::jsonb,
+            status TEXT NOT NULL DEFAULT 'draft',
+            status_public_comment TEXT,
+            spam_score INTEGER NOT NULL DEFAULT 0,
+            source TEXT NOT NULL DEFAULT 'web',
+            locale TEXT NOT NULL DEFAULT 'ru',
+            ip_hash TEXT,
+            user_agent_hash TEXT,
+            submitted_at TIMESTAMPTZ,
+            reviewed_at TIMESTAMPTZ,
+            approved_at TIMESTAMPTZ,
+            rejected_at TIMESTAMPTZ,
+            consented_at TIMESTAMPTZ,
+            draft_expires_at TIMESTAMPTZ NOT NULL,
+            published_camp_id INTEGER,
+            assigned_admin_id INTEGER,
+            content_version INTEGER NOT NULL DEFAULT 1,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_submission_public_number_unique
+        ON moderation.placement_submissions((lower(public_number)));
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_submission_draft_token_unique
+        ON moderation.placement_submissions(draft_token_hash);
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_submission_tracking_token_unique
+        ON moderation.placement_submissions(tracking_token_hash)
+        WHERE tracking_token_hash IS NOT NULL;
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_submission_submit_idempotency_unique
+        ON moderation.placement_submissions(submit_idempotency_key_hash)
+        WHERE submit_idempotency_key_hash IS NOT NULL;
+
+        CREATE OR REPLACE FUNCTION moderation.touch_placement_submission()
+        RETURNS TRIGGER
+        LANGUAGE plpgsql
+        AS $$
+        BEGIN
+            NEW.updated_at := NOW();
+            NEW.content_version := GREATEST(
+                COALESCE(OLD.content_version, 0) + 1,
+                COALESCE(NEW.content_version, 1)
+            );
+            RETURN NEW;
+        END;
+        $$;
+
+        DROP TRIGGER IF EXISTS trg_placement_submissions_touch
+        ON moderation.placement_submissions;
+        CREATE TRIGGER trg_placement_submissions_touch
+        BEFORE UPDATE ON moderation.placement_submissions
+        FOR EACH ROW EXECUTE FUNCTION moderation.touch_placement_submission();
+        """,
+    ),
+    MigrationStep(
+        version="0019_submission_media",
+        sql="""
+        CREATE TABLE IF NOT EXISTS moderation.submission_media (
+            id BIGSERIAL PRIMARY KEY,
+            submission_id BIGINT NOT NULL,
+            media_type TEXT NOT NULL DEFAULT 'image',
+            scope TEXT NOT NULL DEFAULT 'place',
+            room_client_id TEXT,
+            storage_key TEXT NOT NULL,
+            thumbnail_storage_key TEXT,
+            preview_token TEXT NOT NULL,
+            public_preview_url TEXT NOT NULL,
+            original_filename TEXT,
+            safe_filename TEXT NOT NULL,
+            mime_type TEXT NOT NULL,
+            size_bytes BIGINT NOT NULL,
+            width INTEGER NOT NULL,
+            height INTEGER NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            is_cover BOOLEAN NOT NULL DEFAULT FALSE,
+            status TEXT NOT NULL DEFAULT 'staged',
+            attached_at TIMESTAMPTZ,
+            expires_at TIMESTAMPTZ NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            deleted_at TIMESTAMPTZ
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_submission_media_storage_unique
+        ON moderation.submission_media(storage_key);
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_submission_media_preview_token_unique
+        ON moderation.submission_media(preview_token);
+
+        CREATE INDEX IF NOT EXISTS idx_submission_media_submission_sort
+        ON moderation.submission_media(submission_id, scope, room_client_id, sort_order, id);
+        """,
+    ),
+    MigrationStep(
+        version="0020_submission_history_notes",
+        sql="""
+        CREATE TABLE IF NOT EXISTS moderation.submission_status_history (
+            id BIGSERIAL PRIMARY KEY,
+            submission_id BIGINT NOT NULL,
+            previous_status TEXT,
+            new_status TEXT NOT NULL,
+            actor_type TEXT NOT NULL,
+            actor_id BIGINT,
+            public_comment TEXT,
+            internal_comment TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS moderation.submission_notes (
+            id BIGSERIAL PRIMARY KEY,
+            submission_id BIGINT NOT NULL,
+            author_id BIGINT,
+            note_type TEXT NOT NULL DEFAULT 'internal',
+            text TEXT NOT NULL,
+            is_visible_to_applicant BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+        CREATE OR REPLACE FUNCTION moderation.reject_history_mutation()
+        RETURNS TRIGGER
+        LANGUAGE plpgsql
+        AS $$
+        BEGIN
+            RAISE EXCEPTION 'submission status history is immutable'
+                USING ERRCODE = '55000';
+        END;
+        $$;
+
+        DROP TRIGGER IF EXISTS trg_submission_history_immutable
+        ON moderation.submission_status_history;
+        CREATE TRIGGER trg_submission_history_immutable
+        BEFORE UPDATE OR DELETE ON moderation.submission_status_history
+        FOR EACH ROW EXECUTE FUNCTION moderation.reject_history_mutation();
+
+        CREATE INDEX IF NOT EXISTS idx_submission_history_submission_created
+        ON moderation.submission_status_history(submission_id, created_at, id);
+
+        CREATE INDEX IF NOT EXISTS idx_submission_notes_submission_created
+        ON moderation.submission_notes(submission_id, created_at, id);
+        """,
+    ),
+    MigrationStep(
+        version="0021_submission_outbox",
+        sql="""
+        ALTER TABLE crm.notification_events
+        ADD COLUMN IF NOT EXISTS submission_id BIGINT;
+        ALTER TABLE crm.notification_events
+        ADD COLUMN IF NOT EXISTS recipient_address TEXT;
+        ALTER TABLE crm.notification_events
+        ADD COLUMN IF NOT EXISTS dedupe_key TEXT;
+        ALTER TABLE crm.notification_events
+        ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE crm.notification_events
+        ADD COLUMN IF NOT EXISTS next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+        ALTER TABLE crm.notification_events
+        ADD COLUMN IF NOT EXISTS last_error TEXT;
+        ALTER TABLE crm.notification_events
+        ADD COLUMN IF NOT EXISTS sent_at TIMESTAMPTZ;
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_notification_events_dedupe_unique
+        ON crm.notification_events(dedupe_key)
+        WHERE dedupe_key IS NOT NULL;
+
+        CREATE INDEX IF NOT EXISTS idx_notification_events_delivery_queue
+        ON crm.notification_events(channel, status, next_attempt_at, id)
+        WHERE status = 'new';
+
+        CREATE INDEX IF NOT EXISTS idx_notification_events_submission
+        ON crm.notification_events(submission_id, created_at DESC, id DESC)
+        WHERE submission_id IS NOT NULL;
+        """,
+    ),
+    MigrationStep(
+        version="0022_submission_indexes",
+        sql="""
+        ALTER TABLE moderation.placement_submissions
+        DROP CONSTRAINT IF EXISTS placement_submissions_applicant_role_valid;
+        ALTER TABLE moderation.placement_submissions
+        ADD CONSTRAINT placement_submissions_applicant_role_valid
+        CHECK (
+            applicant_role IS NULL
+            OR applicant_role IN ('owner', 'representative', 'tourist')
+        ) NOT VALID;
+
+        ALTER TABLE moderation.placement_submissions
+        DROP CONSTRAINT IF EXISTS placement_submissions_status_valid;
+        ALTER TABLE moderation.placement_submissions
+        ADD CONSTRAINT placement_submissions_status_valid
+        CHECK (
+            status IN (
+                'draft', 'submitted', 'new', 'in_review',
+                'needs_clarification', 'approved', 'object_draft_created',
+                'published', 'rejected', 'withdrawn', 'archived'
+            )
+        ) NOT VALID;
+
+        ALTER TABLE moderation.placement_submissions
+        DROP CONSTRAINT IF EXISTS placement_submissions_coordinates_valid;
+        ALTER TABLE moderation.placement_submissions
+        ADD CONSTRAINT placement_submissions_coordinates_valid
+        CHECK (
+            (lat IS NULL AND lng IS NULL)
+            OR (lat BETWEEN -90 AND 90 AND lng BETWEEN -180 AND 180)
+        ) NOT VALID;
+
+        ALTER TABLE moderation.placement_submissions
+        DROP CONSTRAINT IF EXISTS placement_submissions_place_type_fk;
+        ALTER TABLE moderation.placement_submissions
+        ADD CONSTRAINT placement_submissions_place_type_fk
+        FOREIGN KEY (place_type_id) REFERENCES catalog.place_types(id)
+        ON DELETE RESTRICT NOT VALID;
+
+        ALTER TABLE moderation.placement_submissions
+        DROP CONSTRAINT IF EXISTS placement_submissions_camp_fk;
+        ALTER TABLE moderation.placement_submissions
+        ADD CONSTRAINT placement_submissions_camp_fk
+        FOREIGN KEY (published_camp_id) REFERENCES catalog.camps(id)
+        ON DELETE RESTRICT NOT VALID;
+
+        ALTER TABLE moderation.placement_submissions
+        DROP CONSTRAINT IF EXISTS placement_submissions_admin_fk;
+        ALTER TABLE moderation.placement_submissions
+        ADD CONSTRAINT placement_submissions_admin_fk
+        FOREIGN KEY (assigned_admin_id) REFERENCES auth.superadmin_accounts(id)
+        ON DELETE SET NULL NOT VALID;
+
+        ALTER TABLE moderation.submission_media
+        DROP CONSTRAINT IF EXISTS submission_media_submission_fk;
+        ALTER TABLE moderation.submission_media
+        ADD CONSTRAINT submission_media_submission_fk
+        FOREIGN KEY (submission_id)
+        REFERENCES moderation.placement_submissions(id)
+        ON DELETE CASCADE NOT VALID;
+
+        ALTER TABLE moderation.submission_media
+        DROP CONSTRAINT IF EXISTS submission_media_type_valid;
+        ALTER TABLE moderation.submission_media
+        ADD CONSTRAINT submission_media_type_valid
+        CHECK (media_type = 'image') NOT VALID;
+
+        ALTER TABLE moderation.submission_media
+        DROP CONSTRAINT IF EXISTS submission_media_scope_valid;
+        ALTER TABLE moderation.submission_media
+        ADD CONSTRAINT submission_media_scope_valid
+        CHECK (
+            (scope = 'place' AND room_client_id IS NULL)
+            OR (scope = 'room' AND NULLIF(trim(room_client_id), '') IS NOT NULL)
+        ) NOT VALID;
+
+        ALTER TABLE moderation.submission_media
+        DROP CONSTRAINT IF EXISTS submission_media_status_valid;
+        ALTER TABLE moderation.submission_media
+        ADD CONSTRAINT submission_media_status_valid
+        CHECK (status IN ('staged', 'attached', 'copied', 'rejected')) NOT VALID;
+
+        ALTER TABLE moderation.submission_media
+        DROP CONSTRAINT IF EXISTS submission_media_dimensions_valid;
+        ALTER TABLE moderation.submission_media
+        ADD CONSTRAINT submission_media_dimensions_valid
+        CHECK (
+            size_bytes > 0
+            AND width > 0
+            AND height > 0
+            AND sort_order >= 0
+        ) NOT VALID;
+
+        ALTER TABLE moderation.submission_status_history
+        DROP CONSTRAINT IF EXISTS submission_history_submission_fk;
+        ALTER TABLE moderation.submission_status_history
+        ADD CONSTRAINT submission_history_submission_fk
+        FOREIGN KEY (submission_id)
+        REFERENCES moderation.placement_submissions(id)
+        ON DELETE CASCADE NOT VALID;
+
+        ALTER TABLE moderation.submission_notes
+        DROP CONSTRAINT IF EXISTS submission_notes_submission_fk;
+        ALTER TABLE moderation.submission_notes
+        ADD CONSTRAINT submission_notes_submission_fk
+        FOREIGN KEY (submission_id)
+        REFERENCES moderation.placement_submissions(id)
+        ON DELETE CASCADE NOT VALID;
+
+        ALTER TABLE crm.notification_events
+        DROP CONSTRAINT IF EXISTS notification_events_submission_fk;
+        ALTER TABLE crm.notification_events
+        ADD CONSTRAINT notification_events_submission_fk
+        FOREIGN KEY (submission_id)
+        REFERENCES moderation.placement_submissions(id)
+        ON DELETE SET NULL NOT VALID;
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_submission_media_place_cover_unique
+        ON moderation.submission_media(submission_id)
+        WHERE scope = 'place' AND is_cover = TRUE AND deleted_at IS NULL;
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_submission_media_room_cover_unique
+        ON moderation.submission_media(submission_id, room_client_id)
+        WHERE scope = 'room' AND is_cover = TRUE AND deleted_at IS NULL;
+
+        CREATE INDEX IF NOT EXISTS idx_submissions_status_created
+        ON moderation.placement_submissions(status, created_at DESC, id DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_submissions_assignee_status
+        ON moderation.placement_submissions(assigned_admin_id, status, updated_at DESC, id DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_submissions_place_type_status
+        ON moderation.placement_submissions(place_type_id, status, created_at DESC, id DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_submissions_region_status
+        ON moderation.placement_submissions((lower(region)), status, created_at DESC, id DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_submissions_role_status
+        ON moderation.placement_submissions(applicant_role, status, created_at DESC, id DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_submissions_ip_submitted
+        ON moderation.placement_submissions(ip_hash, submitted_at DESC)
+        WHERE ip_hash IS NOT NULL AND submitted_at IS NOT NULL;
+
+        CREATE INDEX IF NOT EXISTS idx_submissions_draft_expiry
+        ON moderation.placement_submissions(draft_expires_at, id)
+        WHERE status = 'draft';
+
+        CREATE INDEX IF NOT EXISTS idx_submission_media_expiry
+        ON moderation.submission_media(expires_at, id)
+        WHERE deleted_at IS NULL AND status = 'staged';
+
+        CREATE OR REPLACE FUNCTION crm.reject_audit_mutation()
+        RETURNS TRIGGER
+        LANGUAGE plpgsql
+        AS $$
+        BEGIN
+            RAISE EXCEPTION 'audit log is immutable'
+                USING ERRCODE = '55000';
+        END;
+        $$;
+
+        DROP TRIGGER IF EXISTS trg_crm_audit_log_immutable
+        ON crm.audit_log;
+        CREATE TRIGGER trg_crm_audit_log_immutable
+        BEFORE UPDATE OR DELETE ON crm.audit_log
+        FOR EACH ROW EXECUTE FUNCTION crm.reject_audit_mutation();
+
+        ALTER TABLE moderation.placement_submissions
+        VALIDATE CONSTRAINT placement_submissions_applicant_role_valid;
+        ALTER TABLE moderation.placement_submissions
+        VALIDATE CONSTRAINT placement_submissions_status_valid;
+        ALTER TABLE moderation.placement_submissions
+        VALIDATE CONSTRAINT placement_submissions_coordinates_valid;
+        ALTER TABLE moderation.placement_submissions
+        VALIDATE CONSTRAINT placement_submissions_place_type_fk;
+        ALTER TABLE moderation.placement_submissions
+        VALIDATE CONSTRAINT placement_submissions_camp_fk;
+        ALTER TABLE moderation.placement_submissions
+        VALIDATE CONSTRAINT placement_submissions_admin_fk;
+        ALTER TABLE moderation.submission_media
+        VALIDATE CONSTRAINT submission_media_submission_fk;
+        ALTER TABLE moderation.submission_media
+        VALIDATE CONSTRAINT submission_media_type_valid;
+        ALTER TABLE moderation.submission_media
+        VALIDATE CONSTRAINT submission_media_scope_valid;
+        ALTER TABLE moderation.submission_media
+        VALIDATE CONSTRAINT submission_media_status_valid;
+        ALTER TABLE moderation.submission_media
+        VALIDATE CONSTRAINT submission_media_dimensions_valid;
+        ALTER TABLE moderation.submission_status_history
+        VALIDATE CONSTRAINT submission_history_submission_fk;
+        ALTER TABLE moderation.submission_notes
+        VALIDATE CONSTRAINT submission_notes_submission_fk;
+        ALTER TABLE crm.notification_events
+        VALIDATE CONSTRAINT notification_events_submission_fk;
+        """,
+    ),
 )
 
 CURRENT_MIGRATION_VERSION = MIGRATIONS[-1].version

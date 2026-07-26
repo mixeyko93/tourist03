@@ -2,6 +2,7 @@ const defaults = Object.freeze({
   public_booking: false,
   public_user_auth: false,
   telegram_webapp: false,
+  placement_submissions: false,
 });
 
 export function publicFeatures() {

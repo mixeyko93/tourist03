@@ -28,6 +28,10 @@ from tourist03.services.staff_bot import (
     link_superadmin_account_by_code,
     format_superadmin_events_digest,
 )
+from tourist03.services.notification_delivery import (
+    cleanup_expired_submission_uploads,
+    deliver_pending_email_notifications,
+)
 from tourist03.settings import get_settings
 
 
@@ -463,8 +467,16 @@ async def _staff_background_loop(bot: Bot) -> None:
         try:
             created = enqueue_booking_escalations()
             delivered = await deliver_pending_telegram_notifications(bot)
-            if created or delivered:
-                logger.info("Бот уведомлений CRM обработал очередь: создано=%s, отправлено=%s", created, delivered)
+            email_delivered = deliver_pending_email_notifications()
+            expired_uploads = cleanup_expired_submission_uploads()
+            if created or delivered or email_delivered or expired_uploads:
+                logger.info(
+                    "Бот уведомлений CRM обработал очередь: создано=%s, telegram=%s, email=%s, orphan_media=%s",
+                    created,
+                    delivered,
+                    email_delivered,
+                    expired_uploads,
+                )
         except asyncio.CancelledError:
             raise
         except Exception:

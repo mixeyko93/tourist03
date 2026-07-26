@@ -508,8 +508,9 @@ async def deliver_pending_telegram_notifications(bot: Bot, *, limit: int = 100) 
                 reply_markup=build_staff_event_keyboard(event),
                 disable_web_page_preview=True,
             )
-        except Exception:
+        except Exception as exc:
             logger.exception("Не удалось доставить служебное уведомление %s в Telegram", event.get("id"))
+            notification_repo.mark_notification_failed(int(event["id"]), str(exc))
             continue
         if notification_repo.mark_telegram_notification_sent(int(event["id"])):
             sent_count += 1

@@ -301,6 +301,8 @@ def list_pending_telegram_notifications(*, limit: int = 100):
                     e.severity,
                     e.status,
                     e.metadata,
+                    e.attempts,
+                    e.next_attempt_at,
                     e.created_at
                 FROM crm.notification_events e
                 JOIN auth.camp_admin_accounts a ON a.id = e.recipient_admin_id
@@ -308,6 +310,7 @@ def list_pending_telegram_notifications(*, limit: int = 100):
                 WHERE e.recipient_scope = 'crm'
                   AND e.channel = 'telegram'
                   AND e.status = 'new'
+                  AND e.next_attempt_at <= NOW()
                   AND a.archived_at IS NULL
                   AND a.is_active = TRUE
                   AND a.notifications_enabled = TRUE
@@ -332,6 +335,8 @@ def list_pending_telegram_notifications(*, limit: int = 100):
                     e.severity,
                     e.status,
                     e.metadata,
+                    e.attempts,
+                    e.next_attempt_at,
                     e.created_at
                 FROM crm.notification_events e
                 JOIN auth.superadmin_accounts sa ON sa.id = e.recipient_admin_id
@@ -339,6 +344,7 @@ def list_pending_telegram_notifications(*, limit: int = 100):
                 WHERE e.recipient_scope = 'superadmin'
                   AND e.channel = 'telegram'
                   AND e.status = 'new'
+                  AND e.next_attempt_at <= NOW()
                   AND sa.archived_at IS NULL
                   AND sa.is_active = TRUE
                   AND sa.telegram_chat_id IS NOT NULL
@@ -359,7 +365,10 @@ def mark_telegram_notification_sent(event_id: int) -> bool:
             UPDATE crm.notification_events
             SET status = 'closed',
                 read_at = COALESCE(read_at, NOW()),
-                closed_at = COALESCE(closed_at, NOW())
+                closed_at = COALESCE(closed_at, NOW()),
+                sent_at = COALESCE(sent_at, NOW()),
+                attempts = attempts + 1,
+                last_error = NULL
             WHERE id = %s
             """,
             (int(event_id),),
@@ -367,6 +376,63 @@ def mark_telegram_notification_sent(event_id: int) -> bool:
         changed = cur.rowcount > 0
         conn.commit()
         return changed
+
+
+def mark_notification_failed(event_id: int, error_message: str) -> bool:
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE crm.notification_events
+            SET attempts = attempts + 1,
+                last_error = left(%s, 1000),
+                next_attempt_at = NOW() + (
+                    LEAST(3600, GREATEST(30, power(2, LEAST(attempts, 7))::integer * 30))
+                    * INTERVAL '1 second'
+                ),
+                status = CASE WHEN attempts >= 9 THEN 'failed' ELSE 'new' END
+            WHERE id = %s
+            """,
+            ((error_message or "delivery failed")[:1000], int(event_id)),
+        )
+        changed = cur.rowcount > 0
+        conn.commit()
+        return changed
+
+
+def list_pending_email_notifications(*, limit: int = 100) -> list[dict]:
+    safe_limit = max(1, min(int(limit or 100), 500))
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT
+                id,
+                submission_id,
+                recipient_address,
+                event_type,
+                title,
+                body,
+                action_url,
+                severity,
+                attempts,
+                metadata,
+                created_at
+            FROM crm.notification_events
+            WHERE channel = 'email'
+              AND status = 'new'
+              AND next_attempt_at <= NOW()
+              AND NULLIF(trim(recipient_address), '') IS NOT NULL
+            ORDER BY created_at, id
+            LIMIT %s
+            """,
+            (safe_limit,),
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+
+def mark_email_notification_sent(event_id: int) -> bool:
+    return mark_telegram_notification_sent(event_id)
 
 
 def list_pending_webapp_bookings(*, limit: int = 200):

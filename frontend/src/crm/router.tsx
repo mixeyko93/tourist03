@@ -23,6 +23,7 @@ import AdminLoginPage from "./admin/pages/AdminLoginPage";
 import AdminModerationPage from "./admin/pages/AdminModerationPage";
 import AdminSuperadminsPage from "./admin/pages/AdminSuperadminsPage";
 import AdminAuditPage from "./admin/pages/AdminAuditPage";
+import AdminSubmissionsPage from "./admin/pages/AdminSubmissionsPage";
 import { crmPath } from "./paths";
 
 function RouteRedirect({ to, base = "" }: { to: string; base?: "" | "/react-map" }) {
@@ -76,6 +77,7 @@ function createAdminRoutes(base: "" | "/react-map"): RouteObject[] {
         { path: "users", Component: AdminUsersPage },
         { path: "accounts", Component: AdminAccountsPage },
         { path: "moderation", Component: AdminModerationPage },
+        { path: "submissions", Component: AdminSubmissionsPage },
         { path: "superadmins", Component: AdminSuperadminsPage },
         { path: "audit", Component: AdminAuditPage },
         { path: "archive", Component: AdminArchivePage },

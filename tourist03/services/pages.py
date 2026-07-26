@@ -177,6 +177,34 @@ def public_place_page(request: Request, slug: str):
     )
 
 
+def _standalone_public_page(request: Request, template_name: str) -> HTMLResponse:
+    settings = request.app.state.settings
+    template = PUBLIC_TEMPLATE_ENV.get_template(template_name)
+    return HTMLResponse(
+        template.render(
+            public_base_url=settings.public_base_url.rstrip("/"),
+            test_captcha=settings.environment in {"development", "test"}
+            and settings.submission_captcha_provider == "test",
+            captcha_test_token=settings.submission_captcha_test_token
+            if settings.environment in {"development", "test"}
+            and settings.submission_captcha_provider == "test"
+            else "",
+            captcha_provider=settings.submission_captcha_provider,
+            captcha_client_script_url=settings.submission_captcha_client_script_url,
+            captcha_site_key=settings.submission_captcha_site_key,
+        ),
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
+
+
+def add_place_page(request: Request):
+    return _standalone_public_page(request, "add-place.html")
+
+
+def submission_status_page(request: Request):
+    return _standalone_public_page(request, "submission-status.html")
+
+
 def api_version(request: Request):
     return {"ok": True, "app_version": request.app.state.settings.app_version or None}
 
