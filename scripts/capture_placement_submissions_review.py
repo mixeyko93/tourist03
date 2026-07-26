@@ -273,6 +273,67 @@ def go_next(page: Page) -> None:
     page.wait_for_timeout(180)
 
 
+def assert_coordinate_picker(browser, base_url: str, *, mobile: bool = False) -> None:
+    """Exercise map click/tap, manual entry, validation and IndexedDB restoration."""
+    context = browser.new_context(
+        viewport={"width": 390 if mobile else 1440, "height": 844 if mobile else 1000},
+        is_mobile=mobile,
+        has_touch=mobile,
+    )
+    page = context.new_page()
+    try:
+        mock_public_api(page)
+        page.goto(f"{base_url}/add-place", wait_until="domcontentloaded")
+        page.wait_for_selector('[data-save-status][data-state="saved"]', timeout=10_000)
+        fill_first_step(page)
+        go_next(page)
+        coordinate_map = page.locator("[data-coordinate-map]")
+        coordinate_map.scroll_into_view_if_needed()
+        page.wait_for_selector("[data-coordinate-map].leaflet-container", timeout=10_000)
+
+        if mobile:
+            coordinate_map.tap(position={"x": 125, "y": 155})
+        else:
+            coordinate_map.click(position={"x": 125, "y": 155})
+        first_values = (page.input_value('[name="lat"]'), page.input_value('[name="lng"]'))
+        if not all(first_values) or coordinate_map.locator(".leaflet-marker-icon").count() != 1:
+            raise AssertionError("Map interaction did not create a visible coordinate marker")
+
+        if mobile:
+            coordinate_map.tap(position={"x": 220, "y": 210})
+        else:
+            coordinate_map.click(position={"x": 220, "y": 210})
+        second_values = (page.input_value('[name="lat"]'), page.input_value('[name="lng"]'))
+        if second_values == first_values or coordinate_map.locator(".leaflet-marker-icon").count() != 1:
+            raise AssertionError("Second map interaction did not move the coordinate marker")
+
+        page.wait_for_selector('[data-save-status][data-state="saved"]', timeout=10_000)
+        page.reload(wait_until="domcontentloaded")
+        page.wait_for_selector('[data-save-status][data-state="saved"]', timeout=10_000)
+        page.wait_for_selector("[data-coordinate-map] .leaflet-marker-icon", timeout=10_000)
+        restored_values = (page.input_value('[name="lat"]'), page.input_value('[name="lng"]'))
+        if restored_values != second_values:
+            raise AssertionError("IndexedDB did not restore selected coordinates")
+
+        page.fill('[name="lat"]', "51.234567")
+        page.fill('[name="lng"]', "107.456789")
+        if coordinate_map.locator(".leaflet-marker-icon").count() != 1:
+            raise AssertionError("Manual coordinate input did not retain a visible marker")
+
+        page.fill('[name="place_name"]', "Координатная проверка")
+        page.select_option('[name="place_type_id"]', "1")
+        page.fill('[name="region"]', "Бурятия")
+        page.fill('[name="short_description"]', "Проверка координатного picker в браузере.")
+        page.fill('[name="lat"]', "91")
+        go_next(page)
+        if page.locator('[data-step="2"]:not([hidden])').count() != 1:
+            raise AssertionError("Out-of-range coordinates allowed navigation to the next step")
+        if "допустимый диапазон" not in page.locator("[data-form-error]").inner_text().lower():
+            raise AssertionError("Coordinate range error is not explained to the user")
+    finally:
+        context.close()
+
+
 def fill_complete_form(page: Page, output_dir: Path | None = None, prefix: str = "desktop") -> float:
     fill_first_step(page)
     if output_dir:
@@ -538,6 +599,9 @@ def main() -> int:
             entry.screenshot(path=str(output_dir / "desktop-public-entry.png"))
             entry.close()
 
+            assert_coordinate_picker(browser, base_url)
+            assert_coordinate_picker(browser, base_url, mobile=True)
+
             desktop = browser.new_page(viewport={"width": 1440, "height": 1000})
             mock_public_api(desktop)
             desktop.goto(f"{base_url}/add-place", wait_until="domcontentloaded")
@@ -648,6 +712,10 @@ def main() -> int:
         "browser_assertions": {
             "required_steps_cannot_be_skipped": True,
             "indexeddb_restore": True,
+            "coordinate_picker_desktop": True,
+            "coordinate_picker_mobile": True,
+            "coordinate_picker_manual_input": True,
+            "coordinate_picker_range_validation": True,
             "named_form_controls": True,
             "mobile_horizontal_overflow": False,
             "landing_loads_submission_bundle": False,

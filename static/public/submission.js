@@ -103,6 +103,24 @@ function nullableNumber(name) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function coordinateInputState() {
+  const rawLat = inputValue("lat");
+  const rawLng = inputValue("lng");
+  if (!rawLat && !rawLng) return { empty: true, valid: true, lat: null, lng: null };
+  if (!rawLat || !rawLng) {
+    return { empty: false, valid: false, message: "Укажите обе координаты объекта." };
+  }
+  const lat = Number(rawLat);
+  const lng = Number(rawLng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return { empty: false, valid: false, message: "Координаты указаны некорректно." };
+  }
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    return { empty: false, valid: false, message: "Координаты выходят за допустимый диапазон." };
+  }
+  return { empty: false, valid: true, lat, lng };
+}
+
 function collectPublicContacts() {
   return Array.from(document.querySelectorAll("[data-contact]"))
     .map((input, index) => ({
@@ -309,6 +327,17 @@ function validateStep(step) {
     invalid.focus();
     showError("Заполните обязательные поля этого шага.");
     return false;
+  }
+  if (step === 2) {
+    const coordinates = coordinateInputState();
+    if (!coordinates.valid) {
+      const target = form.elements.lat.value ? form.elements.lng : form.elements.lat;
+      form.elements.lat.setAttribute("aria-invalid", "true");
+      form.elements.lng.setAttribute("aria-invalid", "true");
+      target.focus();
+      showError(coordinates.message);
+      return false;
+    }
   }
   if (step === 1) {
     const role = inputValue("applicant_role");
@@ -541,21 +570,38 @@ function initialiseCoordinateMap() {
     attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     maxZoom:19,
   }).addTo(coordinateMap);
+  const setMarker = (lat, lng) => {
+    if (!coordinateMap) return;
+    if (!coordinateMarker) coordinateMarker = window.L.marker([lat, lng]).addTo(coordinateMap);
+    else coordinateMarker.setLatLng([lat, lng]);
+  };
   const update = (lat, lng) => {
     form.elements.lat.value = Number(lat).toFixed(6);
     form.elements.lng.value = Number(lng).toFixed(6);
-    if (!coordinateMarker) coordinateMarker = window.L.marker([lat, lng]).addTo(coordinateMap);
-    else coordinateMarker.setLatLng([lat, lng]);
+    setMarker(lat, lng);
     scheduleSave();
   };
   coordinateMap.on("click", (event) => update(event.latlng.lat, event.latlng.lng));
-  const lat = nullableNumber("lat");
-  const lng = nullableNumber("lng");
-  if (lat !== null && lng !== null) {
-    coordinateMarker = window.L.marker([lat, lng]).addTo(coordinateMap);
-    coordinateMap.setView([lat, lng], 11);
+  const coordinates = coordinateInputState();
+  if (coordinates.valid && !coordinates.empty) {
+    setMarker(coordinates.lat, coordinates.lng);
+    coordinateMap.setView([coordinates.lat, coordinates.lng], 11);
   }
   window.setTimeout(() => coordinateMap.invalidateSize(), 100);
+}
+
+function syncCoordinateMarkerFromInputs() {
+  if (!coordinateMap) return;
+  const coordinates = coordinateInputState();
+  if (!coordinates.valid || coordinates.empty) {
+    if (coordinateMarker) {
+      coordinateMap.removeLayer(coordinateMarker);
+      coordinateMarker = undefined;
+    }
+    return;
+  }
+  if (!coordinateMarker) coordinateMarker = window.L.marker([coordinates.lat, coordinates.lng]).addTo(coordinateMap);
+  else coordinateMarker.setLatLng([coordinates.lat, coordinates.lng]);
 }
 
 function renderPreview() {
@@ -670,6 +716,9 @@ async function clearDraft() {
 
 form.addEventListener("input", (event) => {
   event.target.removeAttribute?.("aria-invalid");
+  if (event.target === form.elements.lat || event.target === form.elements.lng) {
+    syncCoordinateMarkerFromInputs();
+  }
   updateRoleUI();
   scheduleSave();
 });

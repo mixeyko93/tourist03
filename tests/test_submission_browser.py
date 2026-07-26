@@ -37,6 +37,10 @@ class SubmissionBrowserSmokeTests(unittest.TestCase):
             self.assertEqual(metrics["form_steps"], 8)
             self.assertTrue(metrics["browser_assertions"]["required_steps_cannot_be_skipped"])
             self.assertTrue(metrics["browser_assertions"]["indexeddb_restore"])
+            self.assertTrue(metrics["browser_assertions"]["coordinate_picker_desktop"])
+            self.assertTrue(metrics["browser_assertions"]["coordinate_picker_mobile"])
+            self.assertTrue(metrics["browser_assertions"]["coordinate_picker_manual_input"])
+            self.assertTrue(metrics["browser_assertions"]["coordinate_picker_range_validation"])
             for filename in (
                 "desktop-step-1-applicant.png",
                 "desktop-submit-success.png",
