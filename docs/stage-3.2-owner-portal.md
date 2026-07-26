@@ -156,8 +156,8 @@ media URL, proposed/published payload и полного diff. Число SQL-з�
 
 - desktop: Performance 100, Accessibility 100, Best Practices 100, SEO 100,
   CLS 0;
-- mobile с тем же Lighthouse throttling profile: Performance 95,
-  Accessibility 100, Best Practices 100, SEO 100, LCP 2.798 s, TBT 0 ms,
+- mobile с тем же Lighthouse throttling profile: Performance 97,
+  Accessibility 100, Best Practices 100, SEO 100, LCP 2.560 s, TBT 0 ms,
   CLS 0.
 
 Trace, bundle sizes, API contract и команды воспроизведения описаны в

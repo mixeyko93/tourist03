@@ -55,6 +55,9 @@ payload, published snapshot, diff и 30 событий, хотя первый э
 - Login, dashboard, objects, editor, media uploader, history, profile и diff
   загружаются отдельными dynamic imports. Superadmin moderation остаётся
   отдельным admin route chunk.
+- Декоративные SVG первого dashboard объединены с owner route. Это убирает
+  девять отдельных shared-icon requests из критического пути, не меняя
+  внешнего вида или доступных названий контролов.
 - Dashboard выполняет один защищённый запрос вместо `session → dashboard`.
 - Dashboard возвращает до 20 объектов, пять summary изменений и семь событий.
   Полные proposed/published/diff/media payloads отсутствуют.
@@ -70,11 +73,11 @@ payload, published snapshot, diff и 30 событий, хотя первый э
 
 Локальный reproducible run после оптимизации:
 
-- mobile: Performance 95, Accessibility 100, Best Practices 100, SEO 100;
-- mobile: FCP 1512.8 ms, LCP 2797.8 ms, TBT 0 ms, CLS 0;
+- mobile: Performance 97, Accessibility 100, Best Practices 100, SEO 100;
+- mobile: FCP 1364.9 ms, LCP 2558.6 ms, TBT 0 ms, CLS 0;
 - desktop: Performance 100, Accessibility 100, Best Practices 100, SEO 100;
-- desktop: FCP 516.4 ms, LCP 633.9 ms, TBT 0 ms, CLS 0;
-- 24 initial requests, 234277 transferred bytes;
+- desktop: FCP 469.7 ms, LCP 569.7 ms, TBT 0 ms, CLS 0;
+- 14 initial requests, 228236 transferred bytes;
 - LCP после оптимизации: `Здравствуйте, Михаил`;
 - long tasks после оптимизации отсутствуют;
 - единственный заметный unused JS остаток — около 40.8 KB compressed transfer
@@ -90,7 +93,7 @@ payload, published snapshot, diff и 30 событий, хотя первый э
 
 Тестовый PostgreSQL 16 profile:
 
-- `/api/owner/dashboard`: 16.57 ms;
+- `/api/owner/dashboard`: около 16 ms на локальном PostgreSQL 16;
 - 6 SQL queries с учётом проверки owner session;
 - response 5083 bytes;
 - используется `idx_camp_owner_links_owner`;

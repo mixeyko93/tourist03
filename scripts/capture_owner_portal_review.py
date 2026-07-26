@@ -412,6 +412,8 @@ def run_lighthouse(base_url: str, output_dir: Path, *, mobile: bool) -> dict:
             raise AssertionError(f"Mobile Lighthouse Performance below 90: {categories}")
         if categories.get("accessibility") != 100:
             raise AssertionError(f"Mobile accessibility below 100: {categories}")
+        if result_metrics["initial_requests"] > 16 or result_metrics["transferred_bytes"] > 250_000:
+            raise AssertionError(f"Mobile initial route exceeds its network budget: {result_metrics}")
         if result_metrics["lcp_ms"] > 2800 or result_metrics["tbt_ms"] > 250 or result_metrics["cls"] > 0.05:
             raise AssertionError(f"Mobile web vitals outside budget: {result_metrics}")
     else:

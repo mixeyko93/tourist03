@@ -6,7 +6,7 @@ import {
   CircleAlert,
   Clock3,
   Sparkles,
-} from "lucide-react";
+} from "./initialIcons";
 
 import type { OwnerCamp, OwnerDashboard } from "./api";
 import { formatDate, OwnerBadge, QualityRing } from "./components";

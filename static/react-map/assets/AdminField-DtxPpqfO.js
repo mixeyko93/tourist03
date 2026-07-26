@@ -1,1 +1,0 @@
-import{j as e}from"./index-D-9yb3H3.js";function l({label:t,hint:s,className:r="",children:a}){return e.jsxs("label",{className:`space-y-2 ${r}`.trim(),children:[e.jsx("span",{className:"text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground",children:t}),a,s?e.jsx("span",{className:"block text-xs text-muted-foreground",children:s}):null]})}export{l as A};

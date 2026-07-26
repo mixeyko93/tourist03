@@ -6,7 +6,7 @@ import {
   Menu,
   UserRound,
   X,
-} from "lucide-react";
+} from "./initialIcons";
 import {
   Component,
   lazy,
