@@ -55,9 +55,10 @@ export type OwnerChange = {
   status: string;
   status_label: string;
   content_version: number;
-  proposed_payload: Record<string, unknown>;
-  published_snapshot: Record<string, unknown>;
-  diff_payload: ChangeDiff[];
+  proposed_payload?: Record<string, unknown>;
+  published_snapshot?: Record<string, unknown>;
+  diff_payload?: ChangeDiff[];
+  diff_count?: number;
   moderator_comment?: string | null;
   moderator_name?: string | null;
   submitted_at?: string | null;
@@ -95,7 +96,12 @@ export type OwnerDashboard = {
   camps: OwnerCamp[];
   attention: Array<{ camp_id: number; camp_name: string; message: string }>;
   pending_changes: OwnerChange[];
-  changes: OwnerChange[];
+  object_pagination: {
+    limit: number;
+    offset: number;
+    total: number;
+    has_more: boolean;
+  };
   activity: Array<{
     id: number;
     created_at: string;
@@ -104,15 +110,17 @@ export type OwnerDashboard = {
     camp_id?: number | null;
     action_url?: string | null;
   }>;
-  notifications: Array<{
-    id: number;
-    title: string;
-    body: string;
-    severity: string;
-    action_url?: string | null;
-    created_at: string;
-  }>;
 };
+
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
 
 export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -125,7 +133,7 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
   });
   const payload = (await response.json().catch(() => ({}))) as T & { detail?: string };
   if (!response.ok) {
-    throw new Error(payload.detail || `Ошибка запроса (${response.status})`);
+    throw new ApiError(payload.detail || `Ошибка запроса (${response.status})`, response.status);
   }
   return payload;
 }
@@ -149,6 +157,16 @@ export const ownerApi = {
       body: JSON.stringify({ token, password }),
     }),
   dashboard: () => apiRequest<OwnerDashboard & { ok: true }>("/api/owner/dashboard"),
+  camps: (limit = 20, offset = 0) =>
+    apiRequest<{
+      camps: OwnerCamp[];
+      pagination: OwnerDashboard["object_pagination"];
+    }>(`/api/owner/camps?limit=${limit}&offset=${offset}`),
+  changes: (limit = 30, offset = 0) =>
+    apiRequest<{
+      changes: OwnerChange[];
+      pagination: { limit: number; offset: number; total: number; has_more: boolean };
+    }>(`/api/owner/changes?limit=${limit}&offset=${offset}`),
   camp: (id: number) =>
     apiRequest<{
       camp: Record<string, unknown>;

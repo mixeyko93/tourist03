@@ -151,6 +151,24 @@ def _quality():
     }
 
 
+def _change_summaries(_owner_id, *, camp_id=None, statuses=None, limit=30, offset=0):
+    items = [CHANGE, APPLIED_CHANGE]
+    if camp_id is not None:
+        items = [item for item in items if item["camp_id"] == camp_id]
+    if statuses:
+        items = [item for item in items if item["status"] in statuses]
+    summaries = [
+        {
+            key: value
+            for key, value in item.items()
+            if key not in {"proposed_payload", "published_snapshot", "diff_payload", "history", "staged_media"}
+        }
+        | {"diff_count": len(item["diff_payload"])}
+        for item in items
+    ]
+    return summaries[offset:offset + limit]
+
+
 owner_service.get_current_owner = lambda _request: OWNER
 owner_service.get_superadmin = lambda _request: {
     "id": 1,
@@ -158,7 +176,7 @@ owner_service.get_superadmin = lambda _request: {
     "display_name": "Анна Модератор",
     "is_root": True,
 }
-owner_repo.list_owner_camps = lambda _owner_id: [
+owner_repo.list_owner_camps = lambda _owner_id, **_kwargs: [
     {
         "id": CAMP["id"],
         "name": CAMP["name"],
@@ -174,6 +192,7 @@ owner_repo.list_owner_camps = lambda _owner_id: [
     }
 ]
 owner_repo.get_camp_snapshots = lambda _ids: {CAMP["id"]: CAMP}
+owner_repo.get_camp_quality_snapshots = lambda _ids: {CAMP["id"]: CAMP}
 owner_repo.get_camp_snapshot = lambda _camp_id: CAMP
 owner_repo.owner_profile_statistics = lambda _owner_id: {
     "objects_count": 1,
@@ -182,6 +201,8 @@ owner_repo.owner_profile_statistics = lambda _owner_id: {
     "rejected_changes": 1,
 }
 owner_repo.list_owner_changes = lambda _owner_id, camp_id=None: [CHANGE, APPLIED_CHANGE]
+owner_repo.list_owner_change_summaries = _change_summaries
+owner_repo.count_owner_changes = lambda _owner_id, **_kwargs: 2
 owner_repo.list_owner_activity = lambda _owner_id, limit=30: [
     {"id": 8, "created_at": "2026-07-26T08:20:00Z", "type": "owner_change_in_review", "description": "Изменения взяты на проверку", "camp_id": 81, "action_url": "/owner/changes/170"},
     {"id": 7, "created_at": "2026-07-25T12:00:00Z", "type": "owner_change_submitted", "description": "Изменения отправлены на проверку", "camp_id": 81, "action_url": "/owner/changes/170"},

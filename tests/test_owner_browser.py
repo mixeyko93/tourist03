@@ -25,12 +25,13 @@ class OwnerPortalBrowserTests(unittest.TestCase):
                 text=True,
                 capture_output=True,
                 check=False,
-                timeout=180,
+                timeout=240,
             )
             self.assertEqual(result.returncode, 0, result.stdout + "\n" + result.stderr)
             expected = {
                 "desktop-login.png",
                 "desktop-dashboard.png",
+                "desktop-dashboard-loading.png",
                 "desktop-editor.png",
                 "desktop-diff.png",
                 "desktop-history.png",
@@ -38,11 +39,21 @@ class OwnerPortalBrowserTests(unittest.TestCase):
                 "desktop-superadmin-moderation.png",
                 "mobile-login.png",
                 "mobile-dashboard.png",
+                "mobile-dashboard-loading.png",
+                "mobile-open-drawer.png",
                 "mobile-editor.png",
                 "mobile-diff.png",
                 "mobile-history.png",
+                "mobile-profile.png",
+                "mobile-network-error.png",
                 "index.html",
                 "review-metrics.json",
+                "bundle-report.json",
+                "lighthouse-mobile.html",
+                "lighthouse-mobile.json",
+                "lighthouse-desktop.html",
+                "lighthouse-desktop.json",
+                "performance-summary.md",
             }
             self.assertTrue(expected.issubset({path.name for path in Path(output).iterdir()}))
 

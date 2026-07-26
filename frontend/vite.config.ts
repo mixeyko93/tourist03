@@ -16,5 +16,6 @@ export default defineConfig({
   build: {
     outDir: "../static/react-map",
     emptyOutDir: true,
+    manifest: true,
   },
 });

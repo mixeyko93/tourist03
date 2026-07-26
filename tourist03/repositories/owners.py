@@ -403,6 +403,92 @@ def get_camp_snapshots(camp_ids: Iterable[int]) -> dict[int, dict]:
         return result
 
 
+def get_camp_quality_snapshots(camp_ids: Iterable[int]) -> dict[int, dict]:
+    """Load only the fields required by dashboard quality calculations.
+
+    The query is independent of the number of camps and deliberately excludes
+    media URLs, captions, room photos and other editor/detail payloads.
+    """
+
+    normalized = sorted({int(camp_id) for camp_id in camp_ids})
+    if not normalized:
+        return {}
+    with _db_conn("catalog") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            WITH contact_summary AS (
+                SELECT
+                    camp_id,
+                    jsonb_agg(
+                        jsonb_build_object(
+                            'contact_type', contact_type,
+                            'value', value
+                        )
+                        ORDER BY sort_order, id
+                    ) AS contacts
+                FROM catalog.place_contacts
+                WHERE camp_id = ANY(%s)
+                GROUP BY camp_id
+            ),
+            amenity_summary AS (
+                SELECT
+                    camp_id,
+                    jsonb_agg(jsonb_build_object('amenity_id', amenity_id)) AS amenities
+                FROM catalog.camp_amenities
+                WHERE camp_id = ANY(%s)
+                GROUP BY camp_id
+            ),
+            room_summary AS (
+                SELECT
+                    camp_id,
+                    jsonb_agg(
+                        jsonb_build_object(
+                            'description', description,
+                            'price', price
+                        )
+                        ORDER BY id
+                    ) AS rooms
+                FROM catalog.rooms
+                WHERE camp_id = ANY(%s)
+                GROUP BY camp_id
+            ),
+            media_summary AS (
+                SELECT
+                    camp_id,
+                    jsonb_agg(
+                        jsonb_build_object(
+                            'media_type', media_type,
+                            'cover', cover
+                        )
+                        ORDER BY cover DESC, sort, id
+                    ) AS media
+                FROM catalog.camp_media
+                WHERE camp_id = ANY(%s)
+                GROUP BY camp_id
+            )
+            SELECT
+                camps.id, camps.name, camps.short_description, camps.description,
+                camps.lat, camps.lng, camps.min_price, camps.seasonality,
+                camps.working_hours, camps.video_urls, camps.confirmed_at,
+                camps.updated_at,
+                COALESCE(camps.metadata, '{}'::jsonb)->>'surroundings' AS surroundings,
+                COALESCE(contact_summary.contacts, '[]'::jsonb) AS contacts,
+                COALESCE(amenity_summary.amenities, '[]'::jsonb) AS amenities,
+                COALESCE(room_summary.rooms, '[]'::jsonb) AS rooms,
+                COALESCE(media_summary.media, '[]'::jsonb) AS media
+            FROM catalog.camps camps
+            LEFT JOIN contact_summary ON contact_summary.camp_id = camps.id
+            LEFT JOIN amenity_summary ON amenity_summary.camp_id = camps.id
+            LEFT JOIN room_summary ON room_summary.camp_id = camps.id
+            LEFT JOIN media_summary ON media_summary.camp_id = camps.id
+            WHERE camps.id = ANY(%s)
+            """,
+            (normalized, normalized, normalized, normalized, normalized),
+        )
+        return {int(row["id"]): dict(row) for row in cur.fetchall()}
+
+
 def owner_can_access_camp(owner_id: int, camp_id: int, *, write: bool = False, conn=None) -> bool:
     owns = conn is None
     if owns:
@@ -426,7 +512,7 @@ def owner_can_access_camp(owner_id: int, camp_id: int, *, write: bool = False, c
             context.__exit__(None, None, None)
 
 
-def list_owner_camps(owner_id: int) -> list[dict]:
+def list_owner_camps(owner_id: int, *, limit: int = 20, offset: int = 0) -> list[dict]:
     with _db_conn("catalog") as conn:
         cur = conn.cursor()
         cur.execute(
@@ -448,8 +534,13 @@ def list_owner_camps(owner_id: int) -> list[dict]:
             WHERE links.owner_account_id = %s
             GROUP BY camps.id, types.name, links.role_key, links.is_primary
             ORDER BY links.is_primary DESC, lower(camps.name), camps.id
+            LIMIT %s OFFSET %s
             """,
-            (int(owner_id),),
+            (
+                int(owner_id),
+                min(max(int(limit), 1), 100),
+                max(int(offset), 0),
+            ),
         )
         return [dict(row) for row in cur.fetchall()]
 
@@ -533,6 +624,68 @@ def list_owner_changes(owner_id: int, *, camp_id: int | None = None) -> list[dic
     for row in rows:
         row["status_label"] = owner_status_label(row["status"])
     return rows
+
+
+def list_owner_change_summaries(
+    owner_id: int,
+    *,
+    camp_id: int | None = None,
+    statuses: Iterable[str] | None = None,
+    limit: int = 30,
+    offset: int = 0,
+) -> list[dict]:
+    """Return moderation-history rows without proposed/published JSON payloads."""
+
+    clauses, params = ["changes.owner_account_id = %s"], [int(owner_id)]
+    if camp_id is not None:
+        clauses.append("changes.camp_id = %s")
+        params.append(int(camp_id))
+    normalized_statuses = sorted({str(status) for status in statuses or [] if status})
+    if normalized_statuses:
+        clauses.append("changes.status = ANY(%s)")
+        params.append(normalized_statuses)
+    params.extend((min(max(int(limit), 1), 100), max(int(offset), 0)))
+    with _db_conn("moderation") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT
+                changes.id, changes.public_number, changes.camp_id,
+                camps.name AS camp_name, camps.slug AS camp_slug,
+                changes.status, changes.content_version,
+                changes.moderator_comment, changes.submitted_at,
+                changes.decided_at, changes.updated_at, changes.created_at,
+                COALESCE(jsonb_array_length(changes.diff_payload), 0)::int AS diff_count
+            FROM moderation.owner_change_requests changes
+            JOIN catalog.camps camps ON camps.id = changes.camp_id
+            WHERE {' AND '.join(clauses)}
+            ORDER BY changes.updated_at DESC, changes.id DESC
+            LIMIT %s OFFSET %s
+            """,
+            tuple(params),
+        )
+        rows = [dict(row) for row in cur.fetchall()]
+    for row in rows:
+        row["status_label"] = owner_status_label(row["status"])
+    return rows
+
+
+def count_owner_changes(owner_id: int, *, camp_id: int | None = None) -> int:
+    clauses, params = ["owner_account_id = %s"], [int(owner_id)]
+    if camp_id is not None:
+        clauses.append("camp_id = %s")
+        params.append(int(camp_id))
+    with _db_conn("moderation") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT COUNT(*)::int AS count
+            FROM moderation.owner_change_requests
+            WHERE {' AND '.join(clauses)}
+            """,
+            tuple(params),
+        )
+        return int(cur.fetchone()["count"])
 
 
 def get_owner_change(

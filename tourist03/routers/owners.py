@@ -32,6 +32,7 @@ router.add_api_route("/api/owner/auth/reset-password", owner_service.owner_reset
 router.add_api_route("/api/owner/profile", owner_service.owner_update_profile, methods=["PATCH"], dependencies=owner_guard, responses=error_responses(401, 422, 500))
 router.add_api_route("/api/owner/profile/password", owner_service.owner_change_password, methods=["PATCH"], dependencies=owner_guard, responses=error_responses(400, 401, 422, 500))
 router.add_api_route("/api/owner/dashboard", owner_service.owner_dashboard, methods=["GET"], dependencies=owner_guard, responses=error_responses(401, 500))
+router.add_api_route("/api/owner/camps", owner_service.owner_list_camps, methods=["GET"], dependencies=owner_guard, responses=error_responses(401, 500))
 router.add_api_route("/api/owner/camps/{camp_id}", owner_service.owner_camp_detail, methods=["GET"], dependencies=owner_guard, responses=error_responses(401, 404, 500))
 router.add_api_route("/api/owner/camps/{camp_id}/unpublish", owner_service.owner_unpublish_camp, methods=["POST"], dependencies=owner_guard, responses=error_responses(401, 404, 500))
 router.add_api_route("/api/owner/changes", owner_service.owner_list_changes, methods=["GET"], dependencies=owner_guard, responses=error_responses(401, 500))

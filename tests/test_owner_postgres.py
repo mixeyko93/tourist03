@@ -1,6 +1,8 @@
 import asyncio
 import os
 import unittest
+from contextlib import contextmanager
+from unittest.mock import patch
 
 import httpx
 
@@ -8,6 +10,7 @@ import app as app_module
 from tourist03.db import _db_conn
 from tourist03.migrations import run_migrations
 from tourist03.owner_security import hash_owner_password
+from tourist03 import owner_security
 from tourist03.repositories import owners as owner_repo
 from tourist03.security import hash_password
 from tourist03.settings import Settings, configure_settings
@@ -336,9 +339,37 @@ class OwnerPortalPostgresTests(unittest.TestCase):
                 )
                 self.assertEqual(updated.status_code, 200, updated.text)
                 self.assertEqual(updated.json()["owner"]["company"], "Новая компания")
-                dashboard = await client.get("/api/owner/dashboard")
+                query_connections = 0
+                original_owner_conn = owner_repo._db_conn
+                original_security_conn = owner_security._db_conn
+
+                @contextmanager
+                def counted_owner_conn(schema):
+                    nonlocal query_connections
+                    query_connections += 1
+                    with original_owner_conn(schema) as conn:
+                        yield conn
+
+                @contextmanager
+                def counted_security_conn(schema):
+                    nonlocal query_connections
+                    query_connections += 1
+                    with original_security_conn(schema) as conn:
+                        yield conn
+
+                with (
+                    patch.object(owner_repo, "_db_conn", counted_owner_conn),
+                    patch.object(owner_security, "_db_conn", counted_security_conn),
+                ):
+                    dashboard = await client.get("/api/owner/dashboard")
                 self.assertEqual(dashboard.status_code, 200, dashboard.text)
-                self.assertEqual(dashboard.json()["profile_statistics"]["objects_count"], 1)
+                dashboard_payload = dashboard.json()
+                self.assertEqual(dashboard_payload["profile_statistics"]["objects_count"], 1)
+                self.assertNotIn("changes", dashboard_payload)
+                self.assertNotIn("notifications", dashboard_payload)
+                self.assertEqual(dashboard_payload["object_pagination"]["total"], 1)
+                self.assertLessEqual(query_connections, 6)
+                self.assertEqual(dashboard.headers["cache-control"], "no-store")
 
         asyncio.run(scenario())
 

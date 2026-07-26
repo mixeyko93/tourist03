@@ -10,6 +10,7 @@ from typing import Deque, Dict, Optional, Tuple
 
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 
 from tourist03.csrf import csrf_token_matches
 
@@ -50,6 +51,37 @@ PLACEMENT_SUBMISSION_PUBLIC_PAGES = {
     "/add-place",
     "/submission-status",
 }
+
+
+class StaticAssetCompressionMiddleware:
+    """Compress only public static assets.
+
+    Keeping compression scoped to ``/static`` avoids applying response
+    compression to authenticated HTML or JSON, while making direct Uvicorn
+    delivery match the compressed asset delivery expected from a reverse
+    proxy.
+    """
+
+    def __init__(self, app, minimum_size: int = 500):
+        self.app = app
+        self.compressed = GZipMiddleware(app, minimum_size=minimum_size)
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and scope.get("path", "").startswith("/static/"):
+            await self.compressed(scope, receive, send)
+            return
+        await self.app(scope, receive, send)
+
+
+class OwnerNoStoreMiddleware(BaseHTTPMiddleware):
+    """Prevent authenticated Owner Portal responses from entering shared caches."""
+
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        if request.url.path.startswith("/api/owner/"):
+            response.headers["Cache-Control"] = "no-store"
+            response.headers["Pragma"] = "no-cache"
+        return response
 
 
 class FeatureGateMiddleware(BaseHTTPMiddleware):

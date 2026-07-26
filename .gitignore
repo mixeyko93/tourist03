@@ -76,6 +76,7 @@ cache/
 !app.py
 !bot.py
 !static/**
+static/react-map/.vite/
 !templates/**
 !*.html
 

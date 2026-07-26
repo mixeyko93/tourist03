@@ -7,7 +7,13 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from tourist03.config import STATIC_DIR, logger
-from tourist03.http_middleware import CsrfMiddleware, FeatureGateMiddleware, RateLimitMiddleware
+from tourist03.http_middleware import (
+    CsrfMiddleware,
+    FeatureGateMiddleware,
+    OwnerNoStoreMiddleware,
+    RateLimitMiddleware,
+    StaticAssetCompressionMiddleware,
+)
 from tourist03.routers import admin, auth, bookings, bot_webhook, catalog, owners, pages, submissions, superadmin
 from tourist03.settings import Settings, configure_settings, get_settings
 
@@ -33,6 +39,8 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     # Middleware executes in reverse registration order. Session must therefore
     # be registered last so CSRF can safely access ``request.session``.
     application.add_middleware(FeatureGateMiddleware)
+    application.add_middleware(StaticAssetCompressionMiddleware)
+    application.add_middleware(OwnerNoStoreMiddleware)
     application.add_middleware(
         RateLimitMiddleware,
         memory_max_keys=resolved_settings.rate_limit_memory_max_keys,

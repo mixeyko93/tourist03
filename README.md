@@ -77,6 +77,8 @@ Proposed → moderation → Published workflow и требует включён�
 конфигурацией `OWNER_CARD_COMPLETENESS_WEIGHTS`, а не frontend-кодом.
 Архитектура, API и безопасный порядок включения описаны в
 [stage-3.2-owner-portal.md](docs/stage-3.2-owner-portal.md).
+Воспроизводимый Lighthouse, route chunks и PostgreSQL dashboard profile
+описаны в [performance.md](docs/performance.md).
 
 `FEATURE_PLACEMENT_SUBMISSIONS` включает публичные `/add-place`,
 `/submission-status` и `/api/public/submissions*`. При выключенном флаге они

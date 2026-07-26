@@ -282,7 +282,7 @@ export default function AdminOwnerChangesPage() {
                 <button key={item.id} onClick={() => void openChange(item.id)} className={`w-full rounded-2xl border p-4 text-left ${selected?.id === item.id ? "border-blue-500/60 bg-blue-500/10" : "border-border bg-background/55 hover:bg-accent"}`}>
                   <div className="flex items-start justify-between gap-2"><b className="text-sm">{item.camp_name}</b><span className="rounded-full bg-background px-2 py-1 text-[10px] text-muted-foreground">{statusLabels[item.status]}</span></div>
                   <p className="mt-2 text-xs text-muted-foreground">{item.public_number}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{item.diff_payload.length} полей · {formatDate(item.updated_at)}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{item.diff_count ?? item.diff_payload?.length ?? 0} полей · {formatDate(item.updated_at)}</p>
                 </button>
               ))}
               {!items.length ? <p className="p-4 text-sm text-muted-foreground">По выбранным фильтрам изменений нет.</p> : null}
@@ -305,7 +305,7 @@ export default function AdminOwnerChangesPage() {
                     </div>
                     {selected.moderator_comment ? <div className="mt-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">{selected.moderator_comment}</div> : null}
                   </section>
-                  <DiffViewer items={selected.diff_payload} title="Сравнение для модератора" />
+                  <DiffViewer items={selected.diff_payload || []} title="Сравнение для модератора" />
                   <section className="rounded-3xl border border-border bg-card/80 p-5">
                     <h3 className="font-semibold">История решения</h3>
                     <div className="mt-4 space-y-3">{selected.history?.map((event) => <div key={event.id} className="flex justify-between gap-4 border-t border-border pt-3 text-sm"><span>{event.summary}{event.comment ? ` · ${event.comment}` : ""}</span><time className="text-muted-foreground">{formatDate(event.created_at)}</time></div>)}</div>

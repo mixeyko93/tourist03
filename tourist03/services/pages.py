@@ -255,6 +255,8 @@ def admin_camps_page(request: Request):
 def _react_shell_title(request: Request) -> str:
     host = (request.url.hostname or "").lower()
     path = request.url.path or "/"
+    if path == "/owner" or path.startswith("/owner/"):
+        return "Кабинет владельца — Туристика"
     is_superadmin = host.startswith("superadmin.") or path.startswith("/admin")
     if is_superadmin:
         if path.startswith("/admin/login"):
@@ -271,6 +273,18 @@ def react_map_page(request: Request):
         try:
             html = Path(react_index).read_text(encoding="utf-8")
             html = html.replace("<title>Туристика Панель</title>", f"<title>{_react_shell_title(request)}</title>", 1)
+            if request.url.path == "/owner" or request.url.path.startswith("/owner/"):
+                owner_preloads = (
+                    '<link rel="preload" href="/static/fonts/manrope/manrope-extrabold.woff2" '
+                    'as="font" type="font/woff2" crossorigin>\n'
+                    '    <link rel="preload" href="/static/brand/turistika-logo-horizontal.svg" as="image">'
+                )
+                html = html.replace(
+                    '<link rel="icon" href="/static/brand/turistika-favicon.svg" type="image/svg+xml" />',
+                    '<link rel="icon" href="/static/brand/turistika-favicon.svg" type="image/svg+xml" />\n'
+                    f"    {owner_preloads}",
+                    1,
+                )
             return HTMLResponse(content=html, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
         except Exception:
             return FileResponse(react_index)

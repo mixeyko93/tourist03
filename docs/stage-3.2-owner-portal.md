@@ -145,18 +145,23 @@ superadmin moderation и mobile login/dashboard/editor/history/diff.
 
 ## Производительность и доступность
 
-Owner Portal загружается отдельным route chunk: CRM, публичная карта и страницы
-Superadmin не попадают в начальный owner bundle. В production build owner JS
-chunk занимает около 32 KB (8.8 KB gzip), owner CSS — около 20 KB (4.6 KB
-gzip). Dashboard использует batch snapshot query, поэтому число объектов не
-создаёт N+1 запросов к каталогу.
+Owner Portal разделён на отдельные route chunks: login, dashboard, objects,
+editor, media uploader, history, profile и diff. CRM, публичная карта и
+страницы Superadmin не попадают в начальный owner bundle. Dashboard использует
+один агрегированный quality query, limit/offset pagination и summary DTO без
+media URL, proposed/published payload и полного diff. Число SQL-запросов не
+растёт вместе с количеством объектов.
 
 Контрольный Lighthouse на локальном review-приложении:
 
-- desktop: Performance 99, Accessibility 100, Best Practices 100, SEO 100,
+- desktop: Performance 100, Accessibility 100, Best Practices 100, SEO 100,
   CLS 0;
-- mobile с эмуляцией медленной сети и без reverse-proxy compression:
-  Performance 79, Accessibility 100, Best Practices 100, SEO 100, CLS 0.015.
+- mobile с тем же Lighthouse throttling profile: Performance 95,
+  Accessibility 100, Best Practices 100, SEO 100, LCP 2.798 s, TBT 0 ms,
+  CLS 0.
+
+Trace, bundle sizes, API contract и команды воспроизведения описаны в
+[performance.md](performance.md).
 
 Никакие команды этапа не применяют production migrations и не выполняют
 deploy.

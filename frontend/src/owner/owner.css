@@ -196,6 +196,52 @@ body {
   display: none;
 }
 
+.owner-drawer-backdrop {
+  display: none;
+}
+
+.owner-route-loading {
+  display: grid;
+  min-height: 240px;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  color: var(--owner-muted);
+  text-align: center;
+}
+
+.owner-route-loading > span {
+  width: 34px;
+  height: 34px;
+  border: 3px solid #e2e5dc;
+  border-top-color: var(--owner-brand);
+  border-radius: 50%;
+  animation: owner-spin .8s linear infinite;
+}
+
+.owner-route-loading p {
+  margin: 0;
+  font-size: 12px;
+}
+
+.owner-route-error {
+  max-width: 620px;
+}
+
+.owner-route-error p {
+  color: var(--owner-muted);
+}
+
+.owner-load-more {
+  margin-top: 18px;
+}
+
+@keyframes owner-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .owner-eyebrow {
   margin: 0 0 8px;
   color: var(--owner-green);
@@ -1050,6 +1096,11 @@ body {
   background: #eaede6;
 }
 
+.owner-media-strip img.owner-media-placeholder {
+  padding: 20px;
+  object-fit: contain;
+}
+
 .owner-media-strip > div {
   position: relative;
   width: 100px;
@@ -1353,6 +1404,17 @@ body {
     transform: translateX(0);
   }
 
+  .owner-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 35;
+    display: block;
+    width: 100%;
+    border: 0;
+    padding: 0;
+    background: rgb(8 18 14 / 48%);
+  }
+
   .owner-main {
     margin-left: 0;
   }
@@ -1373,6 +1435,7 @@ body {
 
   .owner-mobile-header img {
     width: 148px;
+    height: 37px;
   }
 
   .owner-mobile-header button {
@@ -1497,5 +1560,9 @@ body {
   .owner-sidebar,
   .owner-sidebar nav button {
     transition: none;
+  }
+
+  .owner-route-loading > span {
+    animation: none;
   }
 }

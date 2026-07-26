@@ -185,12 +185,41 @@ def _camp_card(request: Request, camp: dict, snapshot: dict | None = None) -> di
     }
 
 
-def owner_dashboard(request: Request) -> dict:
-    owner = get_current_owner(request)
-    camp_rows = owner_repo.list_owner_camps(owner["id"])
-    snapshots = owner_repo.get_camp_snapshots(camp["id"] for camp in camp_rows)
+def _owner_camp_page(request: Request, owner_id: int, *, limit: int, offset: int) -> dict:
+    profile_statistics = owner_repo.owner_profile_statistics(owner_id)
+    camp_rows = owner_repo.list_owner_camps(owner_id, limit=limit, offset=offset)
+    snapshots = owner_repo.get_camp_quality_snapshots(camp["id"] for camp in camp_rows)
     camps = [_camp_card(request, camp, snapshots.get(int(camp["id"]))) for camp in camp_rows]
-    pending = owner_repo.list_owner_changes(owner["id"])
+    return {
+        "camps": camps,
+        "pagination": {
+            "limit": limit,
+            "offset": offset,
+            "total": profile_statistics["objects_count"],
+            "has_more": offset + len(camps) < profile_statistics["objects_count"],
+        },
+        "profile_statistics": profile_statistics,
+    }
+
+
+def owner_dashboard(
+    request: Request,
+    object_limit: int = Query(20, ge=1, le=50),
+    object_offset: int = Query(0, ge=0),
+) -> dict:
+    owner = get_current_owner(request)
+    camp_page = _owner_camp_page(
+        request,
+        owner["id"],
+        limit=object_limit,
+        offset=object_offset,
+    )
+    camps = camp_page["camps"]
+    pending = owner_repo.list_owner_change_summaries(
+        owner["id"],
+        statuses={"submitted", "in_review", "needs_changes", "approved"},
+        limit=5,
+    )
     attention = []
     for camp in camps:
         for recommendation in (camp.get("quality") or {}).get("recommendations", [])[:3]:
@@ -201,15 +230,26 @@ def owner_dashboard(request: Request) -> dict:
             "change_requests": request.app.state.settings.feature_owner_change_requests,
         },
         "owner": owner,
-        "profile_statistics": owner_repo.owner_profile_statistics(owner["id"]),
+        "profile_statistics": camp_page["profile_statistics"],
         "camps": camps,
+        "object_pagination": camp_page["pagination"],
         "attention": attention,
-        "pending_changes": [
-            item for item in pending if item["status"] in {"submitted", "in_review", "needs_changes", "approved"}
-        ],
-        "changes": pending,
-        "activity": owner_repo.list_owner_activity(owner["id"], limit=30),
-        "notifications": owner_repo.list_owner_notifications(owner["id"], limit=30),
+        "pending_changes": pending,
+        "activity": owner_repo.list_owner_activity(owner["id"], limit=7),
+    }
+
+
+def owner_list_camps(
+    request: Request,
+    limit: int = Query(20, ge=1, le=50),
+    offset: int = Query(0, ge=0),
+) -> dict:
+    owner = get_current_owner(request)
+    camp_page = _owner_camp_page(request, owner["id"], limit=limit, offset=offset)
+    return {
+        "ok": True,
+        "camps": camp_page["camps"],
+        "pagination": camp_page["pagination"],
     }
 
 
@@ -221,7 +261,11 @@ def owner_camp_detail(request: Request, camp_id: int) -> dict:
     if not snapshot:
         raise HTTPException(status_code=404, detail="Объект не найден")
     quality = calculate_card_quality(snapshot, request.app.state.settings.owner_card_completeness_weights)
-    changes = owner_repo.list_owner_changes(owner["id"], camp_id=camp_id)
+    changes = owner_repo.list_owner_change_summaries(
+        owner["id"],
+        camp_id=camp_id,
+        limit=20,
+    )
     return {
         "ok": True,
         "camp": snapshot,
@@ -235,9 +279,30 @@ def owner_camp_detail(request: Request, camp_id: int) -> dict:
     }
 
 
-def owner_list_changes(request: Request, camp_id: int | None = Query(None, ge=1)) -> dict:
+def owner_list_changes(
+    request: Request,
+    camp_id: int | None = Query(None, ge=1),
+    limit: int = Query(30, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+) -> dict:
     owner = get_current_owner(request)
-    return {"ok": True, "changes": owner_repo.list_owner_changes(owner["id"], camp_id=camp_id)}
+    changes = owner_repo.list_owner_change_summaries(
+        owner["id"],
+        camp_id=camp_id,
+        limit=limit,
+        offset=offset,
+    )
+    total = owner_repo.count_owner_changes(owner["id"], camp_id=camp_id)
+    return {
+        "ok": True,
+        "changes": changes,
+        "pagination": {
+            "limit": limit,
+            "offset": offset,
+            "total": total,
+            "has_more": offset + len(changes) < total,
+        },
+    }
 
 
 def owner_get_change(request: Request, change_id: int) -> dict:

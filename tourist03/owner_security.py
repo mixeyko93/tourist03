@@ -140,8 +140,12 @@ def get_owner_session_principal(request: Request) -> dict[str, Any] | None:
 
 
 def get_current_owner(request: Request) -> dict[str, Any]:
+    cached = getattr(request.state, "owner_principal", None)
+    if cached:
+        return cached
     owner = get_owner_session_principal(request)
     if owner:
+        request.state.owner_principal = owner
         return owner
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Войдите в кабинет владельца")
 
