@@ -8,7 +8,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from tourist03.config import STATIC_DIR, logger
 from tourist03.http_middleware import CsrfMiddleware, FeatureGateMiddleware, RateLimitMiddleware
-from tourist03.routers import admin, auth, bookings, bot_webhook, catalog, pages, submissions, superadmin
+from tourist03.routers import admin, auth, bookings, bot_webhook, catalog, owners, pages, submissions, superadmin
 from tourist03.settings import Settings, configure_settings, get_settings
 
 
@@ -64,6 +64,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     application.include_router(superadmin.router)
     application.include_router(catalog.router)
     application.include_router(submissions.router)
+    application.include_router(owners.router)
     application.include_router(admin.router)
     return application
 

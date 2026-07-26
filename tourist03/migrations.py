@@ -1704,6 +1704,389 @@ MIGRATIONS = (
         VALIDATE CONSTRAINT notification_events_submission_fk;
         """,
     ),
+    MigrationStep(
+        version="0023_owner_identity",
+        sql="""
+        CREATE TABLE IF NOT EXISTS auth.owner_accounts (
+            id BIGSERIAL PRIMARY KEY,
+            email TEXT NOT NULL,
+            password_hash TEXT NOT NULL,
+            display_name TEXT NOT NULL,
+            company TEXT,
+            phone TEXT,
+            telegram TEXT,
+            whatsapp TEXT,
+            max TEXT,
+            preferred_contact_type TEXT,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            account_status TEXT NOT NULL DEFAULT 'active',
+            two_factor_status TEXT NOT NULL DEFAULT 'disabled',
+            two_factor_config JSONB NOT NULL DEFAULT '{}'::jsonb,
+            telegram_user_id BIGINT,
+            telegram_chat_id BIGINT,
+            last_login TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_owner_accounts_email_unique
+        ON auth.owner_accounts((lower(email)));
+
+        CREATE TABLE IF NOT EXISTS auth.owner_password_reset_tokens (
+            id BIGSERIAL PRIMARY KEY,
+            owner_account_id BIGINT NOT NULL,
+            token_hash TEXT NOT NULL,
+            requested_ip_hash TEXT,
+            expires_at TIMESTAMPTZ NOT NULL,
+            used_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_owner_reset_token_hash_unique
+        ON auth.owner_password_reset_tokens(token_hash);
+
+        CREATE INDEX IF NOT EXISTS idx_owner_reset_owner_created
+        ON auth.owner_password_reset_tokens(owner_account_id, created_at DESC, id DESC);
+
+        CREATE TABLE IF NOT EXISTS auth.owner_login_events (
+            id BIGSERIAL PRIMARY KEY,
+            owner_account_id BIGINT,
+            email_hash TEXT,
+            event_type TEXT NOT NULL,
+            success BOOLEAN NOT NULL DEFAULT FALSE,
+            ip_hash TEXT,
+            user_agent_hash TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_owner_login_events_owner_created
+        ON auth.owner_login_events(owner_account_id, created_at DESC, id DESC);
+
+        CREATE TABLE IF NOT EXISTS catalog.camp_owner_links (
+            id BIGSERIAL PRIMARY KEY,
+            camp_id INTEGER NOT NULL,
+            owner_account_id BIGINT NOT NULL,
+            role_key TEXT NOT NULL DEFAULT 'owner',
+            is_primary BOOLEAN NOT NULL DEFAULT FALSE,
+            created_by_superadmin_id BIGINT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE (camp_id, owner_account_id)
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_camp_owner_primary_unique
+        ON catalog.camp_owner_links(camp_id)
+        WHERE is_primary = TRUE;
+
+        CREATE INDEX IF NOT EXISTS idx_camp_owner_links_owner
+        ON catalog.camp_owner_links(owner_account_id, camp_id);
+
+        CREATE OR REPLACE FUNCTION auth.touch_owner_account()
+        RETURNS TRIGGER
+        LANGUAGE plpgsql
+        AS $$
+        BEGIN
+            NEW.updated_at := NOW();
+            RETURN NEW;
+        END;
+        $$;
+
+        DROP TRIGGER IF EXISTS trg_owner_accounts_touch ON auth.owner_accounts;
+        CREATE TRIGGER trg_owner_accounts_touch
+        BEFORE UPDATE ON auth.owner_accounts
+        FOR EACH ROW EXECUTE FUNCTION auth.touch_owner_account();
+        """,
+    ),
+    MigrationStep(
+        version="0024_owner_change_requests",
+        sql="""
+        CREATE TABLE IF NOT EXISTS moderation.owner_change_requests (
+            id BIGSERIAL PRIMARY KEY,
+            public_number TEXT NOT NULL,
+            camp_id INTEGER NOT NULL,
+            owner_account_id BIGINT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'draft',
+            proposed_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+            published_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
+            diff_payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+            base_content_version INTEGER NOT NULL,
+            content_version INTEGER NOT NULL DEFAULT 1,
+            moderator_account_id BIGINT,
+            moderator_comment TEXT,
+            apply_idempotency_key_hash TEXT,
+            submitted_at TIMESTAMPTZ,
+            decided_at TIMESTAMPTZ,
+            applied_at TIMESTAMPTZ,
+            archived_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_owner_change_public_number_unique
+        ON moderation.owner_change_requests((lower(public_number)));
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_owner_change_apply_key_unique
+        ON moderation.owner_change_requests(apply_idempotency_key_hash)
+        WHERE apply_idempotency_key_hash IS NOT NULL;
+
+        CREATE TABLE IF NOT EXISTS moderation.owner_change_request_media (
+            id BIGSERIAL PRIMARY KEY,
+            change_request_id BIGINT NOT NULL,
+            media_type TEXT NOT NULL DEFAULT 'image',
+            action TEXT NOT NULL DEFAULT 'add',
+            scope TEXT NOT NULL DEFAULT 'place',
+            room_client_id TEXT,
+            target_media_id BIGINT,
+            storage_key TEXT,
+            thumbnail_storage_key TEXT,
+            preview_token TEXT,
+            public_preview_url TEXT,
+            original_filename TEXT,
+            safe_filename TEXT,
+            mime_type TEXT,
+            size_bytes BIGINT,
+            width INTEGER,
+            height INTEGER,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            is_cover BOOLEAN NOT NULL DEFAULT FALSE,
+            status TEXT NOT NULL DEFAULT 'staged',
+            expires_at TIMESTAMPTZ,
+            applied_media_id BIGINT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            deleted_at TIMESTAMPTZ
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_owner_change_media_preview_unique
+        ON moderation.owner_change_request_media(preview_token)
+        WHERE preview_token IS NOT NULL;
+
+        CREATE TABLE IF NOT EXISTS moderation.owner_change_request_history (
+            id BIGSERIAL PRIMARY KEY,
+            change_request_id BIGINT NOT NULL,
+            previous_status TEXT,
+            new_status TEXT NOT NULL,
+            actor_type TEXT NOT NULL,
+            actor_id BIGINT,
+            summary TEXT NOT NULL,
+            comment TEXT,
+            snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS moderation.owner_change_request_notes (
+            id BIGSERIAL PRIMARY KEY,
+            change_request_id BIGINT NOT NULL,
+            author_type TEXT NOT NULL,
+            author_id BIGINT,
+            text TEXT NOT NULL,
+            is_visible_to_owner BOOLEAN NOT NULL DEFAULT FALSE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+        CREATE OR REPLACE FUNCTION moderation.touch_owner_change_request()
+        RETURNS TRIGGER
+        LANGUAGE plpgsql
+        AS $$
+        BEGIN
+            NEW.updated_at := NOW();
+            NEW.content_version := GREATEST(
+                COALESCE(OLD.content_version, 0) + 1,
+                COALESCE(NEW.content_version, 1)
+            );
+            RETURN NEW;
+        END;
+        $$;
+
+        DROP TRIGGER IF EXISTS trg_owner_change_request_touch
+        ON moderation.owner_change_requests;
+        CREATE TRIGGER trg_owner_change_request_touch
+        BEFORE UPDATE ON moderation.owner_change_requests
+        FOR EACH ROW EXECUTE FUNCTION moderation.touch_owner_change_request();
+
+        CREATE OR REPLACE FUNCTION moderation.reject_owner_change_history_mutation()
+        RETURNS TRIGGER
+        LANGUAGE plpgsql
+        AS $$
+        BEGIN
+            RAISE EXCEPTION 'owner change request history is immutable'
+                USING ERRCODE = '55000';
+        END;
+        $$;
+
+        DROP TRIGGER IF EXISTS trg_owner_change_history_immutable
+        ON moderation.owner_change_request_history;
+        CREATE TRIGGER trg_owner_change_history_immutable
+        BEFORE UPDATE OR DELETE ON moderation.owner_change_request_history
+        FOR EACH ROW EXECUTE FUNCTION moderation.reject_owner_change_history_mutation();
+        """,
+    ),
+    MigrationStep(
+        version="0025_owner_integrity_outbox",
+        sql="""
+        ALTER TABLE auth.owner_accounts
+        DROP CONSTRAINT IF EXISTS owner_accounts_status_valid;
+        ALTER TABLE auth.owner_accounts
+        ADD CONSTRAINT owner_accounts_status_valid
+        CHECK (account_status IN ('active', 'suspended', 'invited', 'archived')) NOT VALID;
+
+        ALTER TABLE auth.owner_accounts
+        DROP CONSTRAINT IF EXISTS owner_accounts_contact_valid;
+        ALTER TABLE auth.owner_accounts
+        ADD CONSTRAINT owner_accounts_contact_valid
+        CHECK (
+            preferred_contact_type IS NULL
+            OR preferred_contact_type IN ('email', 'phone', 'telegram', 'whatsapp', 'max')
+        ) NOT VALID;
+
+        ALTER TABLE auth.owner_password_reset_tokens
+        DROP CONSTRAINT IF EXISTS owner_reset_account_fk;
+        ALTER TABLE auth.owner_password_reset_tokens
+        ADD CONSTRAINT owner_reset_account_fk
+        FOREIGN KEY (owner_account_id) REFERENCES auth.owner_accounts(id)
+        ON DELETE CASCADE NOT VALID;
+
+        ALTER TABLE auth.owner_login_events
+        DROP CONSTRAINT IF EXISTS owner_login_account_fk;
+        ALTER TABLE auth.owner_login_events
+        ADD CONSTRAINT owner_login_account_fk
+        FOREIGN KEY (owner_account_id) REFERENCES auth.owner_accounts(id)
+        ON DELETE SET NULL NOT VALID;
+
+        ALTER TABLE catalog.camp_owner_links
+        DROP CONSTRAINT IF EXISTS camp_owner_link_camp_fk;
+        ALTER TABLE catalog.camp_owner_links
+        ADD CONSTRAINT camp_owner_link_camp_fk
+        FOREIGN KEY (camp_id) REFERENCES catalog.camps(id)
+        ON DELETE CASCADE NOT VALID;
+
+        ALTER TABLE catalog.camp_owner_links
+        DROP CONSTRAINT IF EXISTS camp_owner_link_owner_fk;
+        ALTER TABLE catalog.camp_owner_links
+        ADD CONSTRAINT camp_owner_link_owner_fk
+        FOREIGN KEY (owner_account_id) REFERENCES auth.owner_accounts(id)
+        ON DELETE CASCADE NOT VALID;
+
+        ALTER TABLE catalog.camp_owner_links
+        DROP CONSTRAINT IF EXISTS camp_owner_link_role_valid;
+        ALTER TABLE catalog.camp_owner_links
+        ADD CONSTRAINT camp_owner_link_role_valid
+        CHECK (role_key IN ('primary_owner', 'owner', 'representative', 'manager', 'editor', 'viewer'))
+        NOT VALID;
+
+        ALTER TABLE moderation.owner_change_requests
+        DROP CONSTRAINT IF EXISTS owner_change_camp_fk;
+        ALTER TABLE moderation.owner_change_requests
+        ADD CONSTRAINT owner_change_camp_fk
+        FOREIGN KEY (camp_id) REFERENCES catalog.camps(id)
+        ON DELETE RESTRICT NOT VALID;
+
+        ALTER TABLE moderation.owner_change_requests
+        DROP CONSTRAINT IF EXISTS owner_change_owner_fk;
+        ALTER TABLE moderation.owner_change_requests
+        ADD CONSTRAINT owner_change_owner_fk
+        FOREIGN KEY (owner_account_id) REFERENCES auth.owner_accounts(id)
+        ON DELETE RESTRICT NOT VALID;
+
+        ALTER TABLE moderation.owner_change_requests
+        DROP CONSTRAINT IF EXISTS owner_change_moderator_fk;
+        ALTER TABLE moderation.owner_change_requests
+        ADD CONSTRAINT owner_change_moderator_fk
+        FOREIGN KEY (moderator_account_id) REFERENCES auth.superadmin_accounts(id)
+        ON DELETE SET NULL NOT VALID;
+
+        ALTER TABLE moderation.owner_change_requests
+        DROP CONSTRAINT IF EXISTS owner_change_status_valid;
+        ALTER TABLE moderation.owner_change_requests
+        ADD CONSTRAINT owner_change_status_valid
+        CHECK (
+            status IN (
+                'draft', 'submitted', 'in_review', 'needs_changes',
+                'approved', 'applied', 'rejected', 'withdrawn', 'archived'
+            )
+        ) NOT VALID;
+
+        ALTER TABLE moderation.owner_change_request_media
+        DROP CONSTRAINT IF EXISTS owner_change_media_request_fk;
+        ALTER TABLE moderation.owner_change_request_media
+        ADD CONSTRAINT owner_change_media_request_fk
+        FOREIGN KEY (change_request_id)
+        REFERENCES moderation.owner_change_requests(id)
+        ON DELETE CASCADE NOT VALID;
+
+        ALTER TABLE moderation.owner_change_request_history
+        DROP CONSTRAINT IF EXISTS owner_change_history_request_fk;
+        ALTER TABLE moderation.owner_change_request_history
+        ADD CONSTRAINT owner_change_history_request_fk
+        FOREIGN KEY (change_request_id)
+        REFERENCES moderation.owner_change_requests(id)
+        ON DELETE CASCADE NOT VALID;
+
+        ALTER TABLE moderation.owner_change_request_notes
+        DROP CONSTRAINT IF EXISTS owner_change_notes_request_fk;
+        ALTER TABLE moderation.owner_change_request_notes
+        ADD CONSTRAINT owner_change_notes_request_fk
+        FOREIGN KEY (change_request_id)
+        REFERENCES moderation.owner_change_requests(id)
+        ON DELETE CASCADE NOT VALID;
+
+        ALTER TABLE crm.notification_events
+        ADD COLUMN IF NOT EXISTS owner_account_id BIGINT;
+        ALTER TABLE crm.notification_events
+        ADD COLUMN IF NOT EXISTS owner_change_request_id BIGINT;
+
+        ALTER TABLE crm.notification_events
+        DROP CONSTRAINT IF EXISTS notification_events_owner_account_fk;
+        ALTER TABLE crm.notification_events
+        ADD CONSTRAINT notification_events_owner_account_fk
+        FOREIGN KEY (owner_account_id) REFERENCES auth.owner_accounts(id)
+        ON DELETE SET NULL NOT VALID;
+
+        ALTER TABLE crm.notification_events
+        DROP CONSTRAINT IF EXISTS notification_events_owner_change_fk;
+        ALTER TABLE crm.notification_events
+        ADD CONSTRAINT notification_events_owner_change_fk
+        FOREIGN KEY (owner_change_request_id)
+        REFERENCES moderation.owner_change_requests(id)
+        ON DELETE SET NULL NOT VALID;
+
+        CREATE INDEX IF NOT EXISTS idx_owner_change_owner_status
+        ON moderation.owner_change_requests(owner_account_id, status, updated_at DESC, id DESC);
+        CREATE INDEX IF NOT EXISTS idx_owner_change_camp_status
+        ON moderation.owner_change_requests(camp_id, status, updated_at DESC, id DESC);
+        CREATE INDEX IF NOT EXISTS idx_owner_change_moderation_queue
+        ON moderation.owner_change_requests(status, submitted_at, id)
+        WHERE status IN ('submitted', 'in_review', 'needs_changes');
+        CREATE INDEX IF NOT EXISTS idx_owner_change_media_request_sort
+        ON moderation.owner_change_request_media(change_request_id, scope, room_client_id, sort_order, id);
+        CREATE INDEX IF NOT EXISTS idx_owner_change_history_request_created
+        ON moderation.owner_change_request_history(change_request_id, created_at DESC, id DESC);
+        CREATE INDEX IF NOT EXISTS idx_owner_change_notes_request_created
+        ON moderation.owner_change_request_notes(change_request_id, created_at DESC, id DESC);
+        CREATE INDEX IF NOT EXISTS idx_notification_events_owner
+        ON crm.notification_events(owner_account_id, created_at DESC, id DESC)
+        WHERE owner_account_id IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_notification_events_owner_change
+        ON crm.notification_events(owner_change_request_id, created_at DESC, id DESC)
+        WHERE owner_change_request_id IS NOT NULL;
+
+        ALTER TABLE auth.owner_accounts VALIDATE CONSTRAINT owner_accounts_status_valid;
+        ALTER TABLE auth.owner_accounts VALIDATE CONSTRAINT owner_accounts_contact_valid;
+        ALTER TABLE auth.owner_password_reset_tokens VALIDATE CONSTRAINT owner_reset_account_fk;
+        ALTER TABLE auth.owner_login_events VALIDATE CONSTRAINT owner_login_account_fk;
+        ALTER TABLE catalog.camp_owner_links VALIDATE CONSTRAINT camp_owner_link_camp_fk;
+        ALTER TABLE catalog.camp_owner_links VALIDATE CONSTRAINT camp_owner_link_owner_fk;
+        ALTER TABLE catalog.camp_owner_links VALIDATE CONSTRAINT camp_owner_link_role_valid;
+        ALTER TABLE moderation.owner_change_requests VALIDATE CONSTRAINT owner_change_camp_fk;
+        ALTER TABLE moderation.owner_change_requests VALIDATE CONSTRAINT owner_change_owner_fk;
+        ALTER TABLE moderation.owner_change_requests VALIDATE CONSTRAINT owner_change_moderator_fk;
+        ALTER TABLE moderation.owner_change_requests VALIDATE CONSTRAINT owner_change_status_valid;
+        ALTER TABLE moderation.owner_change_request_media VALIDATE CONSTRAINT owner_change_media_request_fk;
+        ALTER TABLE moderation.owner_change_request_history VALIDATE CONSTRAINT owner_change_history_request_fk;
+        ALTER TABLE moderation.owner_change_request_notes VALIDATE CONSTRAINT owner_change_notes_request_fk;
+        ALTER TABLE crm.notification_events VALIDATE CONSTRAINT notification_events_owner_account_fk;
+        ALTER TABLE crm.notification_events VALIDATE CONSTRAINT notification_events_owner_change_fk;
+        """,
+    ),
 )
 
 CURRENT_MIGRATION_VERSION = MIGRATIONS[-1].version

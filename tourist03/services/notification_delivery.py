@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import smtplib
 import ssl
+from datetime import datetime
 from email.message import EmailMessage
 
+from tourist03.owner_security import owner_reset_token_for
 from tourist03.repositories import notifications as notification_repo
 from tourist03.repositories import submissions as submission_repo
 from tourist03.settings import Settings, get_settings
@@ -24,6 +26,19 @@ def _send_email(event: dict, settings: Settings) -> None:
     message["From"] = settings.smtp_from
     message["To"] = str(event["recipient_address"])
     action_url = str(event.get("action_url") or "").strip()
+    if action_url.startswith("/"):
+        action_url = f"{settings.public_base_url.rstrip('/')}{action_url}"
+    if event.get("event_type") == "owner_password_reset_requested":
+        payload = event.get("action_payload") or {}
+        expires_at = datetime.fromisoformat(str(payload["expires_at"]).replace("Z", "+00:00"))
+        token = owner_reset_token_for(
+            int(payload["reset_id"]),
+            int(payload["owner_id"]),
+            expires_at,
+            settings.session_secret_key,
+        )
+        separator = "&" if "?" in action_url else "?"
+        action_url = f"{action_url}{separator}token={token}"
     text = str(event.get("body") or "").strip()
     if action_url:
         text = f"{text}\n\nПроверить статус: {action_url}"

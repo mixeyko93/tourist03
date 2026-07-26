@@ -207,6 +207,10 @@ class SubmissionMigrationUpgradeTests(unittest.TestCase):
             self.assertEqual(
                 [row["table_name"] for row in cur.fetchall()],
                 [
+                    "owner_change_request_history",
+                    "owner_change_request_media",
+                    "owner_change_request_notes",
+                    "owner_change_requests",
                     "placement_submissions",
                     "submission_media",
                     "submission_notes",

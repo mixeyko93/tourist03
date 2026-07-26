@@ -15,6 +15,7 @@ from tourist03.security import (
     link_superadmin_telegram_account,
     log_crm_audit_event,
 )
+from tourist03.settings import get_settings
 from tourist03.services import superadmin as superadmin_service
 
 
@@ -160,7 +161,9 @@ def _event_url(action_url: Optional[str], *, recipient_scope: Optional[str] = No
     normalized = (action_url or "").strip()
     if not normalized:
         return None
-    if recipient_scope == "superadmin" or normalized.startswith("/admin"):
+    if recipient_scope == "owner":
+        base = get_settings().public_base_url.rstrip("/")
+    elif recipient_scope == "superadmin" or normalized.startswith("/admin"):
         base = (SUPERADMIN_BASE_URL or "https://superadmin.turist03.ru").rstrip("/")
     else:
         base = (CRM_BASE_URL or "https://crm.turist03.ru").rstrip("/")

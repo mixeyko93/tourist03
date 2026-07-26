@@ -38,6 +38,9 @@ PUBLIC_BOOKING_SUFFIXES = ("/available-rooms", "/busy-ranges", "/rooms-busy")
 CSRF_LOGIN_EXEMPTIONS = {
     ("POST", "/api/admin/login"),
     ("POST", "/api/superadmin/session"),
+    ("POST", "/api/owner/auth/login"),
+    ("POST", "/api/owner/auth/forgot-password"),
+    ("POST", "/api/owner/auth/reset-password"),
 }
 PLACEMENT_SUBMISSION_PUBLIC_PREFIXES = (
     "/api/public/submissions",
@@ -63,6 +66,14 @@ class FeatureGateMiddleware(BaseHTTPMiddleware):
         ):
             blocked = True
         elif not settings.feature_owner_portal and (path == "/owner" or path.startswith("/owner/") or path.startswith("/api/owner")):
+            blocked = True
+        elif not settings.feature_owner_portal and path.startswith("/api/superadmin/owners"):
+            blocked = True
+        elif not settings.feature_owner_change_requests and (
+            path.startswith("/api/owner/changes")
+            or (path.startswith("/api/owner/camps/") and "/changes" in path)
+            or path.startswith("/api/superadmin/owner-changes")
+        ):
             blocked = True
         elif not settings.feature_legacy_tourist_app and (
             path == "/legacy-tourist-app" or path.startswith("/legacy-tourist-app/")
@@ -158,8 +169,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         settings = request.app.state.settings
         path = request.url.path
         method = request.method.upper()
-        if path in {"/api/admin/login", "/api/superadmin/session"} and method == "POST":
+        if path in {"/api/admin/login", "/api/superadmin/session", "/api/owner/auth/login"} and method == "POST":
             return "login", settings.rate_limit_login_per_minute
+        if path.startswith("/api/owner/auth/") and method in UNSAFE_METHODS:
+            return "owner-auth", settings.rate_limit_auth_per_minute
+        if path.startswith("/api/owner/") and method in UNSAFE_METHODS:
+            return "owner-write", settings.rate_limit_public_post_per_minute
         if path.startswith("/api/auth/") and method in UNSAFE_METHODS:
             return "auth", settings.rate_limit_auth_per_minute
         if path in {"/api/upload", "/api/admin/upload"} and method == "POST":
@@ -229,6 +244,7 @@ class CsrfMiddleware(BaseHTTPMiddleware):
         return (
             path.startswith("/api/admin/")
             or path.startswith("/api/superadmin/")
+            or path.startswith("/api/owner/")
             or path.startswith("/api/admincamps/")
             or path == "/api/camps"
             or path.startswith("/api/camps/")
@@ -241,7 +257,12 @@ class CsrfMiddleware(BaseHTTPMiddleware):
         if request.app.state.settings.csrf_legacy_compatibility:
             return await call_next(request)
         session = request.session
-        has_panel_session = bool(session.get("admin_id") or session.get("superadmin") or session.get("superadmin_account_id"))
+        has_panel_session = bool(
+            session.get("admin_id")
+            or session.get("superadmin")
+            or session.get("superadmin_account_id")
+            or session.get("owner_account_id")
+        )
         if has_panel_session and not csrf_token_matches(request):
             return JSONResponse({"detail": "CSRF token is missing or invalid"}, status_code=403)
         return await call_next(request)

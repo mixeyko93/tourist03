@@ -102,8 +102,13 @@ def prepare_submission_image(data: bytes, settings: Settings) -> PreparedImage:
     )
 
 
-def store_prepared_image(prepared: PreparedImage, settings: Settings) -> tuple[str, str, str]:
-    relative_dir = Path("submissions") / "staged"
+def store_prepared_image(
+    prepared: PreparedImage,
+    settings: Settings,
+    *,
+    relative_dir: Path | None = None,
+) -> tuple[str, str, str]:
+    relative_dir = relative_dir or Path("submissions") / "staged"
     target_dir = Path(settings.upload_dir).resolve() / relative_dir
     target_dir.mkdir(parents=True, exist_ok=True)
     stem = secrets.token_hex(20)
