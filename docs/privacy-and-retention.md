@@ -1,4 +1,4 @@
-# Персональные данные и retention заявок
+# Персональные данные и retention заявок и Owner Portal
 
 Документ относится к публичным заявкам на размещение Этапа 3.1. Он описывает
 технические границы хранения, но не заменяет утверждённую юридическую политику
@@ -59,3 +59,21 @@ applicant contacts или audit автоматически не реализов
 До production enablement владелец продукта должен утвердить публичный текст
 согласия, фактические сроки, privacy contact и процедуру исполнения запросов
 субъектов данных.
+
+## Owner Portal
+
+Owner email, имя, компания и контакты находятся в отдельной
+`auth.owner_accounts`; они не входят в public catalog DTO. Пароль хранится как
+Argon2id. Reset token не хранится в открытом виде ни в reset table, ни в
+notification outbox. Login events содержат только keyed hashes IP/email/UA.
+
+Proposed payload и moderator comments доступны только связанному владельцу и
+superadmin. Staged previews требуют активной owner session и проверки
+принадлежности Change Request. Activity feed использует allowlisted события
+существующего immutable audit log и не отдаёт внутренние CRM payload.
+
+Автоматическое удаление owner accounts и истории модерации в Этапе 3.2 не
+включается. Сроки для rejected/archived Change Requests и staged owner media
+должны быть отдельно утверждены до production cleanup. Значение
+`OWNER_CHANGE_REQUEST_TTL_DAYS` ограничивает срок staged media, но само по себе
+не разрешает удаление истории или опубликованных файлов.

@@ -9,7 +9,7 @@
 3. Зафиксировать SHA предыдущей версии и подготовить rollback owner.
 4. На сервере создать и проверить backup через `PYTHON_BIN=./.venv/bin/python BACKUP_ROOT=/var/backups/tourist03 ./scripts/backup.sh`.
 5. В отдельной test БД выполнить `scripts/restore-check.sh` для актуального backup.
-6. Проверить `python -m tourist03.migrations status`: до upgrade допустима только ожидаемая цепочка до `0022_submission_indexes`, неизвестных revisions быть не должно.
+6. Проверить `python -m tourist03.migrations status`: до upgrade допустима только ожидаемая цепочка до `0025_owner_integrity_outbox`, неизвестных revisions быть не должно.
 7. В preview/test окружении открыть карту, фильтры и одну `/places/{slug}`; проверить, что draft/disabled/archived URL возвращают 404.
 8. Оставить `FEATURE_PLACEMENT_SUBMISSIONS=false`, пока не настроены и не проверены CAPTCHA client/server pair, SMTP, staff bot/outbox worker, upload volume и privacy owner.
 
@@ -43,6 +43,25 @@
    включить `FEATURE_PLACEMENT_SUBMISSIONS=true`.
 
 Test CAPTCHA token запрещён в production и не переносится из `.env.example`.
+
+## Enablement Owner Portal
+
+1. Оставить `FEATURE_OWNER_PORTAL=false` и
+   `FEATURE_OWNER_CHANGE_REQUESTS=false` во время upgrade.
+2. Проверить SMTP, email reset, общий outbox worker, Telegram delivery и
+   доступность одного upload volume для web/worker.
+3. Создать owner account только через superadmin, связать его с test-объектом
+   и проверить роли/изоляцию.
+4. В preview включить сначала Owner Portal, затем Change Requests. Пройти
+   login → dashboard → Proposed → diff → moderation → approved → apply и
+   проверить, что до apply публичная карточка не меняется.
+5. Отдельно проверить немедленное снятие с публикации и модерируемый запрос на
+   повторную публикацию.
+6. После acceptance согласованно включать флаги. Веса заполненности менять
+   только как версионируемую продуктовую конфигурацию.
+
+Для rollback сначала выключить Change Requests, затем Owner Portal. Не удалять
+owner schema, staged media, audit и outbox.
 
 ## Catalog backfill gate
 

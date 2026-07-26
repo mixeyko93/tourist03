@@ -61,12 +61,22 @@ RUN_UI_SMOKE=1 ./.venv/bin/python -m unittest tests.test_submission_browser -v
 FEATURE_PUBLIC_BOOKING=false
 FEATURE_PUBLIC_USER_AUTH=false
 FEATURE_OWNER_PORTAL=false
+FEATURE_OWNER_CHANGE_REQUESTS=false
 FEATURE_SERVICES=false
 FEATURE_TELEGRAM_WEBAPP=false
 FEATURE_PAID_PLACEMENT=false
 FEATURE_LEGACY_TOURIST_APP=false
 FEATURE_PLACEMENT_SUBMISSIONS=false
 ```
+
+`FEATURE_OWNER_PORTAL` включает отдельный `/owner` и `/api/owner/*`; это не
+учётные записи CRM. `FEATURE_OWNER_CHANGE_REQUESTS` дополнительно включает
+Proposed → moderation → Published workflow и требует включённого Owner Portal.
+Оба флага по умолчанию выключены. В production Owner Portal требует SMTP для
+восстановления доступа и уведомлений. Веса индекса заполненности задаются
+конфигурацией `OWNER_CARD_COMPLETENESS_WEIGHTS`, а не frontend-кодом.
+Архитектура, API и безопасный порядок включения описаны в
+[stage-3.2-owner-portal.md](docs/stage-3.2-owner-portal.md).
 
 `FEATURE_PLACEMENT_SUBMISSIONS` включает публичные `/add-place`,
 `/submission-status` и `/api/public/submissions*`. При выключенном флаге они
@@ -94,7 +104,7 @@ GET /places/{slug}
 
 List endpoint отдаёт только лёгкие данные карты и только записи с `publication_status=published` плюс legacy `status=active|published`. Detail содержит публичные contacts/media/rooms. Owner, manager, admin phones, moderation и audit data в public DTO не входят. `/api/camps` сохранён как deprecated compatibility API; CRM/superadmin остаются на защищённых internal routes.
 
-`/health` проверяет процесс, а `/ready` дополнительно проверяет доступ к DB и version `0022_submission_indexes`. Публичный каталог и форма заявки не зависят от Telegram SDK. Booking, public auth, owner portal, services и paid placement продолжают управляться отдельными feature flags.
+`/health` проверяет процесс, а `/ready` дополнительно проверяет доступ к DB и version `0025_owner_integrity_outbox`. Публичный каталог и форма заявки не зависят от Telegram SDK. Booking, public auth, owner portal, services и paid placement продолжают управляться отдельными feature flags.
 
 Production и CI используют Python 3.11. Dependency audit в CI всегда получает метаданные и пакеты из публичного PyPI (`https://pypi.org/simple`). Если production устанавливает зависимости через внутренний mirror, mirror обязан синхронизировать безопасные версии с PyPI; credentials такого mirror не хранятся в репозитории и не используются security-аудитом.
 
