@@ -1,5 +1,11 @@
 const UNSAFE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
-const LOGIN_EXEMPTIONS = new Set(["POST /api/admin/login", "POST /api/superadmin/session"]);
+const LOGIN_EXEMPTIONS = new Set([
+  "POST /api/admin/login",
+  "POST /api/superadmin/session",
+  "POST /api/owner/auth/login",
+  "POST /api/owner/auth/forgot-password",
+  "POST /api/owner/auth/reset-password",
+]);
 
 let csrfToken: string | null = null;
 let csrfRequest: Promise<string> | null = null;
@@ -28,6 +34,7 @@ function needsCsrf(path: string, method: string): boolean {
   return (
     path.startsWith("/api/admin/") ||
     path.startsWith("/api/superadmin/") ||
+    path.startsWith("/api/owner/") ||
     path.startsWith("/api/admincamps/") ||
     path === "/api/camps" ||
     path.startsWith("/api/camps/") ||
