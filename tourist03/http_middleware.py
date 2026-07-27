@@ -10,6 +10,7 @@ from typing import Deque, Dict, Optional, Tuple
 
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 
 from tourist03.csrf import csrf_token_matches
 
@@ -38,6 +39,9 @@ PUBLIC_BOOKING_SUFFIXES = ("/available-rooms", "/busy-ranges", "/rooms-busy")
 CSRF_LOGIN_EXEMPTIONS = {
     ("POST", "/api/admin/login"),
     ("POST", "/api/superadmin/session"),
+    ("POST", "/api/owner/auth/login"),
+    ("POST", "/api/owner/auth/forgot-password"),
+    ("POST", "/api/owner/auth/reset-password"),
 }
 PLACEMENT_SUBMISSION_PUBLIC_PREFIXES = (
     "/api/public/submissions",
@@ -47,6 +51,37 @@ PLACEMENT_SUBMISSION_PUBLIC_PAGES = {
     "/add-place",
     "/submission-status",
 }
+
+
+class StaticAssetCompressionMiddleware:
+    """Compress only public static assets.
+
+    Keeping compression scoped to ``/static`` avoids applying response
+    compression to authenticated HTML or JSON, while making direct Uvicorn
+    delivery match the compressed asset delivery expected from a reverse
+    proxy.
+    """
+
+    def __init__(self, app, minimum_size: int = 500):
+        self.app = app
+        self.compressed = GZipMiddleware(app, minimum_size=minimum_size)
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and scope.get("path", "").startswith("/static/"):
+            await self.compressed(scope, receive, send)
+            return
+        await self.app(scope, receive, send)
+
+
+class OwnerNoStoreMiddleware(BaseHTTPMiddleware):
+    """Prevent authenticated Owner Portal responses from entering shared caches."""
+
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        if request.url.path.startswith("/api/owner/"):
+            response.headers["Cache-Control"] = "no-store"
+            response.headers["Pragma"] = "no-cache"
+        return response
 
 
 class FeatureGateMiddleware(BaseHTTPMiddleware):
@@ -63,6 +98,14 @@ class FeatureGateMiddleware(BaseHTTPMiddleware):
         ):
             blocked = True
         elif not settings.feature_owner_portal and (path == "/owner" or path.startswith("/owner/") or path.startswith("/api/owner")):
+            blocked = True
+        elif not settings.feature_owner_portal and path.startswith("/api/superadmin/owners"):
+            blocked = True
+        elif not settings.feature_owner_change_requests and (
+            path.startswith("/api/owner/changes")
+            or (path.startswith("/api/owner/camps/") and "/changes" in path)
+            or path.startswith("/api/superadmin/owner-changes")
+        ):
             blocked = True
         elif not settings.feature_legacy_tourist_app and (
             path == "/legacy-tourist-app" or path.startswith("/legacy-tourist-app/")
@@ -158,8 +201,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         settings = request.app.state.settings
         path = request.url.path
         method = request.method.upper()
-        if path in {"/api/admin/login", "/api/superadmin/session"} and method == "POST":
+        if path in {"/api/admin/login", "/api/superadmin/session", "/api/owner/auth/login"} and method == "POST":
             return "login", settings.rate_limit_login_per_minute
+        if path.startswith("/api/owner/auth/") and method in UNSAFE_METHODS:
+            return "owner-auth", settings.rate_limit_auth_per_minute
+        if path.startswith("/api/owner/") and method in UNSAFE_METHODS:
+            return "owner-write", settings.rate_limit_public_post_per_minute
         if path.startswith("/api/auth/") and method in UNSAFE_METHODS:
             return "auth", settings.rate_limit_auth_per_minute
         if path in {"/api/upload", "/api/admin/upload"} and method == "POST":
@@ -229,6 +276,7 @@ class CsrfMiddleware(BaseHTTPMiddleware):
         return (
             path.startswith("/api/admin/")
             or path.startswith("/api/superadmin/")
+            or path.startswith("/api/owner/")
             or path.startswith("/api/admincamps/")
             or path == "/api/camps"
             or path.startswith("/api/camps/")
@@ -241,7 +289,12 @@ class CsrfMiddleware(BaseHTTPMiddleware):
         if request.app.state.settings.csrf_legacy_compatibility:
             return await call_next(request)
         session = request.session
-        has_panel_session = bool(session.get("admin_id") or session.get("superadmin") or session.get("superadmin_account_id"))
+        has_panel_session = bool(
+            session.get("admin_id")
+            or session.get("superadmin")
+            or session.get("superadmin_account_id")
+            or session.get("owner_account_id")
+        )
         if has_panel_session and not csrf_token_matches(request):
             return JSONResponse({"detail": "CSRF token is missing or invalid"}, status_code=403)
         return await call_next(request)

@@ -8,6 +8,7 @@ __pycache__/
 *.db
 .env
 .venv/
+.venv-*/
 artifacts/
 *.egg-info/
 *.pytest_cache/
@@ -75,6 +76,7 @@ cache/
 !app.py
 !bot.py
 !static/**
+static/react-map/.vite/
 !templates/**
 !*.html
 

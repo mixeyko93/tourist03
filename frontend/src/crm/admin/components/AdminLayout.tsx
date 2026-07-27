@@ -12,6 +12,7 @@ const baseAdminTabs = [
   { label: "Учётные записи", path: "/admin/accounts" },
   { label: "Модерация", path: "/admin/moderation" },
   { label: "Заявки на размещение", path: "/admin/submissions" },
+  { label: "Изменения владельцев", path: "/admin/owner-changes" },
   { label: "Архив", path: "/admin/archive" },
 ];
 
@@ -25,13 +26,17 @@ export default function AdminLayout() {
   const navigate = useNavigate();
   const [authState, setAuthState] = useState<"loading" | "authenticated" | "unauthenticated">("loading");
   const [authError, setAuthError] = useState("");
+  const [ownerChangesEnabled, setOwnerChangesEnabled] = useState(false);
   const [session, setSession] = useState<SuperadminSessionResponse | null>(null);
   const [telegramLinkInfo, setTelegramLinkInfo] = useState<null | { code: string; command: string; deep_link: string | null }>(null);
   const [telegramError, setTelegramError] = useState("");
   const [isIssuingTelegramCode, setIsIssuingTelegramCode] = useState(false);
   const loginPath = crmPath("/admin/login");
   const isRoot = Boolean(session?.account?.is_root);
-  const adminTabs = isRoot ? [...baseAdminTabs, ...rootOnlyTabs] : baseAdminTabs;
+  const visibleBaseTabs = ownerChangesEnabled
+    ? baseAdminTabs
+    : baseAdminTabs.filter((item) => item.path !== "/admin/owner-changes");
+  const adminTabs = isRoot ? [...visibleBaseTabs, ...rootOnlyTabs] : visibleBaseTabs;
   const activeTab = adminTabs.find((item) => location.pathname === crmPath(item.path));
 
   useDocumentTitle(activeTab ? `${activeTab.label} — Туристика Admin` : "Туристика Admin");
@@ -48,6 +53,15 @@ export default function AdminLayout() {
         setAuthState("unauthenticated");
       });
     return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/public/config", { credentials: "same-origin" })
+      .then((response) => response.json())
+      .then((payload: { features?: { owner_change_requests?: boolean } }) => {
+        setOwnerChangesEnabled(Boolean(payload.features?.owner_change_requests));
+      })
+      .catch(() => setOwnerChangesEnabled(false));
   }, []);
 
   if (authState === "loading") {

@@ -1,6 +1,6 @@
 # Миграции каталога и заявок
 
-Текущая обязательная версия: `0022_submission_indexes`. Приложение не применяет миграции при импорте или startup.
+Текущая обязательная версия: `0025_owner_integrity_outbox`. Приложение не применяет миграции при импорте или startup.
 
 ## Цепочка Этапа 2.2
 
@@ -22,6 +22,20 @@
 Migration integration строит точное состояние `0017_catalog_amenities`, сохраняет
 существующие catalog/CRM записи, дважды применяет `0018`–`0022` и проверяет
 запрет UPDATE/DELETE для status history и audit.
+
+## Цепочка Этапа 3.2
+
+- `0023_owner_identity` — отдельные owner accounts, reset/login events и связи
+  владельцев с несколькими объектами;
+- `0024_owner_change_requests` — Published/Proposed snapshots, staged media,
+  immutable history и notes;
+- `0025_owner_integrity_outbox` — внешние ключи, status/role checks, индексы и
+  owner references в существующем notification outbox.
+
+Revisions additive и по умолчанию недоступны продукту из-за двух feature flags.
+Integration suite применяет всю цепочку на чистом PostgreSQL и проверяет
+изоляцию владельцев, неизменность Published до approve, rejection,
+идемпотентный apply и отсутствие raw reset token.
 
 ## Команды
 
@@ -56,6 +70,8 @@ SELECT lower(slug), COUNT(*) FROM catalog.camps GROUP BY lower(slug) HAVING COUN
 SELECT to_regclass('moderation.placement_submissions');
 SELECT to_regclass('moderation.submission_media');
 SELECT COUNT(*) FROM moderation.submission_media WHERE status='staged' AND expires_at <= NOW();
+SELECT to_regclass('auth.owner_accounts');
+SELECT to_regclass('moderation.owner_change_requests');
 ```
 
 Для фильтров проверить `EXPLAIN (ANALYZE, BUFFERS)` по publication/type/region/city. На локальном acceptance query использовал `idx_camps_region_publication`; list payload 6 объектов — 2690 байт, p95 10,69 мс, detail — 3782 байта.
@@ -69,3 +85,10 @@ SELECT COUNT(*) FROM moderation.submission_media WHERE status='staged' AND expir
 отсутствия нужных заявок/связанных catalog drafts. Production restore
 выполняется только по runbook `docs/backup-restore.md`; dumps и uploads не
 удаляются.
+
+Для Owner Portal первый rollback — выключить
+`FEATURE_OWNER_CHANGE_REQUESTS`, затем `FEATURE_OWNER_PORTAL`. Schema, staged
+media, audit и outbox при этом сохраняются. Уже применённые одобренные
+изменения не откатываются автоматически: восстановление published snapshot
+требует нового проверяемого Change Request либо отдельного согласованного
+restore. Destructive downgrade отсутствует.

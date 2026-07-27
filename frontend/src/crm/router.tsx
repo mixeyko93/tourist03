@@ -1,30 +1,10 @@
 import { Navigate, createBrowserRouter, type RouteObject } from "react-router";
-import LegacyMapPage from "./routes/LegacyMapPage";
-import AppLayout from "./components/AppLayout";
-import TelegramLinkScanPage from "./pages/TelegramLinkScanPage";
-import AdminLayout from "./admin/components/AdminLayout";
-import LoginPage from "./pages/LoginPage";
-import DashboardPage from "./pages/DashboardPage";
-import CalendarPage from "./pages/CalendarPage";
-import ShiftsPage from "./pages/ShiftsPage";
-import EventsPage from "./pages/EventsPage";
-import ApprovalsPage from "./pages/ApprovalsPage";
-import BookingsPage from "./pages/BookingsPage";
-import RoomsPage from "./pages/RoomsPage";
-import GuestsPage from "./pages/GuestsPage";
-import ServicesPage from "./pages/ServicesPage";
-import SettingsPage from "./pages/SettingsPage";
-import AdminBasesPage from "./admin/pages/AdminBasesPage";
-import AdminBaseEditPage from "./admin/pages/AdminBaseEditPage";
-import AdminUsersPage from "./admin/pages/AdminUsersPage";
-import AdminAccountsPage from "./admin/pages/AdminAccountsPage";
-import AdminArchivePage from "./admin/pages/AdminArchivePage";
-import AdminLoginPage from "./admin/pages/AdminLoginPage";
-import AdminModerationPage from "./admin/pages/AdminModerationPage";
-import AdminSuperadminsPage from "./admin/pages/AdminSuperadminsPage";
-import AdminAuditPage from "./admin/pages/AdminAuditPage";
-import AdminSubmissionsPage from "./admin/pages/AdminSubmissionsPage";
+import type { ComponentType } from "react";
 import { crmPath } from "./paths";
+
+function lazyComponent(loader: () => Promise<{ default: ComponentType }>): RouteObject["lazy"] {
+  return async () => ({ Component: (await loader()).default });
+}
 
 function RouteRedirect({ to, base = "" }: { to: string; base?: "" | "/react-map" }) {
   return <Navigate to={crmPath(to, base)} replace />;
@@ -34,27 +14,27 @@ function createCrmRoutes(base: "" | "/react-map"): RouteObject[] {
   return [
     {
       path: crmPath("/login", base),
-      Component: LoginPage,
+      lazy: lazyComponent(() => import("./pages/LoginPage")),
     },
     {
       path: crmPath("/map", base),
-      Component: LegacyMapPage,
+      lazy: lazyComponent(() => import("./routes/LegacyMapPage")),
     },
     {
       path: base || "/",
-      Component: AppLayout,
+      lazy: lazyComponent(() => import("./components/AppLayout")),
       children: [
         { index: true, Component: () => <RouteRedirect to="/calendar" base={base} /> },
-        { path: "dashboard", Component: DashboardPage },
-        { path: "calendar", Component: CalendarPage },
-        { path: "shifts", Component: ShiftsPage },
-        { path: "events", Component: EventsPage },
-        { path: "approvals", Component: ApprovalsPage },
-        { path: "bookings", Component: BookingsPage },
-        { path: "rooms", Component: RoomsPage },
-        { path: "guests", Component: GuestsPage },
-        { path: "services", Component: ServicesPage },
-        { path: "settings", Component: SettingsPage },
+        { path: "dashboard", lazy: lazyComponent(() => import("./pages/DashboardPage")) },
+        { path: "calendar", lazy: lazyComponent(() => import("./pages/CalendarPage")) },
+        { path: "shifts", lazy: lazyComponent(() => import("./pages/ShiftsPage")) },
+        { path: "events", lazy: lazyComponent(() => import("./pages/EventsPage")) },
+        { path: "approvals", lazy: lazyComponent(() => import("./pages/ApprovalsPage")) },
+        { path: "bookings", lazy: lazyComponent(() => import("./pages/BookingsPage")) },
+        { path: "rooms", lazy: lazyComponent(() => import("./pages/RoomsPage")) },
+        { path: "guests", lazy: lazyComponent(() => import("./pages/GuestsPage")) },
+        { path: "services", lazy: lazyComponent(() => import("./pages/ServicesPage")) },
+        { path: "settings", lazy: lazyComponent(() => import("./pages/SettingsPage")) },
       ],
     },
   ];
@@ -64,31 +44,33 @@ function createAdminRoutes(base: "" | "/react-map"): RouteObject[] {
   return [
     {
       path: crmPath("/admin/login", base),
-      Component: AdminLoginPage,
+      lazy: lazyComponent(() => import("./admin/pages/AdminLoginPage")),
     },
     {
       path: crmPath("/admin", base),
-      Component: AdminLayout,
+      lazy: lazyComponent(() => import("./admin/components/AdminLayout")),
       children: [
         { index: true, Component: () => <RouteRedirect to="/admin/bases" base={base} /> },
-        { path: "bases", Component: AdminBasesPage },
-        { path: "bases/new", Component: AdminBaseEditPage },
-        { path: "bases/:id", Component: AdminBaseEditPage },
-        { path: "users", Component: AdminUsersPage },
-        { path: "accounts", Component: AdminAccountsPage },
-        { path: "moderation", Component: AdminModerationPage },
-        { path: "submissions", Component: AdminSubmissionsPage },
-        { path: "superadmins", Component: AdminSuperadminsPage },
-        { path: "audit", Component: AdminAuditPage },
-        { path: "archive", Component: AdminArchivePage },
+        { path: "bases", lazy: lazyComponent(() => import("./admin/pages/AdminBasesPage")) },
+        { path: "bases/new", lazy: lazyComponent(() => import("./admin/pages/AdminBaseEditPage")) },
+        { path: "bases/:id", lazy: lazyComponent(() => import("./admin/pages/AdminBaseEditPage")) },
+        { path: "users", lazy: lazyComponent(() => import("./admin/pages/AdminUsersPage")) },
+        { path: "accounts", lazy: lazyComponent(() => import("./admin/pages/AdminAccountsPage")) },
+        { path: "moderation", lazy: lazyComponent(() => import("./admin/pages/AdminModerationPage")) },
+        { path: "submissions", lazy: lazyComponent(() => import("./admin/pages/AdminSubmissionsPage")) },
+        { path: "owner-changes", lazy: lazyComponent(() => import("./admin/pages/AdminOwnerChangesPage")) },
+        { path: "superadmins", lazy: lazyComponent(() => import("./admin/pages/AdminSuperadminsPage")) },
+        { path: "audit", lazy: lazyComponent(() => import("./admin/pages/AdminAuditPage")) },
+        { path: "archive", lazy: lazyComponent(() => import("./admin/pages/AdminArchivePage")) },
       ],
     },
   ];
 }
 
 export const router = createBrowserRouter([
-  { path: "/tg-link", Component: TelegramLinkScanPage },
-  { path: "/react-map/tg-link", Component: TelegramLinkScanPage },
+  { path: "/owner/*", lazy: lazyComponent(() => import("../owner/OwnerPortal")) },
+  { path: "/tg-link", lazy: lazyComponent(() => import("./pages/TelegramLinkScanPage")) },
+  { path: "/react-map/tg-link", lazy: lazyComponent(() => import("./pages/TelegramLinkScanPage")) },
   ...createCrmRoutes(""),
   ...createAdminRoutes(""),
   ...createCrmRoutes("/react-map"),

@@ -19,6 +19,10 @@ def _session_principal(request: Request) -> Optional[str]:
     if admin_id:
         return f"admin:{admin_id}"
 
+    owner_account_id = session.get("owner_account_id")
+    if owner_account_id:
+        return f"owner:{owner_account_id}"
+
     superadmin_account_id = session.get("superadmin_account_id")
     if superadmin_account_id:
         return f"superadmin-account:{superadmin_account_id}"

@@ -110,11 +110,36 @@ class Settings(BaseSettings):
     feature_public_booking: bool = False
     feature_public_user_auth: bool = False
     feature_owner_portal: bool = False
+    feature_owner_change_requests: bool = False
     feature_services: bool = False
     feature_telegram_webapp: bool = False
     feature_paid_placement: bool = False
     feature_legacy_tourist_app: bool = False
     feature_placement_submissions: bool = False
+
+    owner_password_reset_ttl_minutes: int = Field(default=30, ge=5, le=1440)
+    owner_change_request_ttl_days: int = Field(default=30, ge=1, le=365)
+    owner_change_max_image_bytes: int = Field(default=10 * 1024 * 1024, ge=1024, le=50 * 1024 * 1024)
+    owner_change_max_image_pixels: int = Field(default=40_000_000, ge=1_000_000, le=100_000_000)
+    owner_card_completeness_weights: dict[str, int] = Field(
+        default_factory=lambda: {
+            "name": 8,
+            "short_description": 8,
+            "description": 10,
+            "photos": 12,
+            "cover": 8,
+            "contacts": 10,
+            "amenities": 8,
+            "rooms": 8,
+            "room_descriptions": 5,
+            "prices": 5,
+            "videos": 5,
+            "coordinates": 5,
+            "working_hours": 4,
+            "seasonality": 2,
+            "surroundings": 2,
+        }
+    )
 
     submission_max_place_photos: int = Field(default=20, ge=1, le=100)
     submission_max_room_photos: int = Field(default=5, ge=1, le=20)
@@ -180,6 +205,7 @@ class Settings(BaseSettings):
             "public_booking": self.feature_public_booking,
             "public_user_auth": self.feature_public_user_auth,
             "owner_portal": self.feature_owner_portal,
+            "owner_change_requests": self.feature_owner_change_requests,
             "services": self.feature_services,
             "telegram_webapp": self.feature_telegram_webapp,
             "paid_placement": self.feature_paid_placement,
@@ -189,6 +215,14 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_production_settings(self):
+        if self.feature_owner_change_requests and not self.feature_owner_portal:
+            raise ValueError("FEATURE_OWNER_CHANGE_REQUESTS requires FEATURE_OWNER_PORTAL")
+        if not self.owner_card_completeness_weights or any(
+            not isinstance(weight, int) or weight <= 0
+            for weight in self.owner_card_completeness_weights.values()
+        ):
+            raise ValueError("OWNER_CARD_COMPLETENESS_WEIGHTS must contain positive integer weights")
+
         if not self.is_production:
             return self
 
@@ -227,6 +261,8 @@ class Settings(BaseSettings):
                 raise ValueError("SUBMISSION_CAPTCHA_SITE_KEY must be configured in production")
             if not self.smtp_host or not self.smtp_from:
                 raise ValueError("SMTP_HOST and SMTP_FROM are required for placement submissions in production")
+        if self.feature_owner_portal and (not self.smtp_host or not self.smtp_from):
+            raise ValueError("SMTP_HOST and SMTP_FROM are required for Owner Portal in production")
         return self
 
 

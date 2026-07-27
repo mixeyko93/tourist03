@@ -1,0 +1,51 @@
+name: Owner Portal review
+
+"on":
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+jobs:
+  owner-portal-review:
+    if: github.head_ref == 'feature/owner-portal'
+    name: Capture Owner Portal review
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: owner_review
+          POSTGRES_USER: owner_review
+          POSTGRES_PASSWORD: owner-review-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U owner_review -d owner_review"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PG_HOST: 127.0.0.1
+      PG_PORT: "5432"
+      PG_DB: owner_review
+      PG_USER: owner_review
+      PG_PASSWORD: owner-review-password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python -m playwright install --with-deps chromium
+      - run: cd frontend && npm ci && npm run build
+      - run: OWNER_PORTAL_REVIEW_DIR=artifacts/owner-portal-review python scripts/capture_owner_portal_review.py
+      - run: PG_INTEGRATION_USE_EXISTING=1 python scripts/profile_owner_dashboard.py --output artifacts/owner-portal-review/dashboard-api-profile.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: owner-portal-review
+          path: artifacts/owner-portal-review
+          if-no-files-found: error
+          retention-days: 14

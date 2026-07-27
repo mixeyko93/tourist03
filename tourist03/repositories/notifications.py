@@ -348,6 +348,39 @@ def list_pending_telegram_notifications(*, limit: int = 100):
                   AND sa.archived_at IS NULL
                   AND sa.is_active = TRUE
                   AND sa.telegram_chat_id IS NOT NULL
+
+                UNION ALL
+
+                SELECT
+                    e.id,
+                    e.camp_id,
+                    c.name AS camp_name,
+                    e.recipient_scope,
+                    e.owner_account_id AS recipient_admin_id,
+                    o.display_name AS recipient_name,
+                    o.telegram_chat_id,
+                    NULL::text AS telegram_username,
+                    e.event_type,
+                    e.title,
+                    e.body,
+                    e.action_url,
+                    e.action_payload,
+                    e.severity,
+                    e.status,
+                    e.metadata,
+                    e.attempts,
+                    e.next_attempt_at,
+                    e.created_at
+                FROM crm.notification_events e
+                JOIN auth.owner_accounts o ON o.id = e.owner_account_id
+                LEFT JOIN catalog.camps c ON c.id = e.camp_id
+                WHERE e.recipient_scope = 'owner'
+                  AND e.channel = 'telegram'
+                  AND e.status = 'new'
+                  AND e.next_attempt_at <= NOW()
+                  AND o.account_status = 'active'
+                  AND o.is_active = TRUE
+                  AND o.telegram_chat_id IS NOT NULL
             ) AS q
             ORDER BY q.created_at ASC, q.id ASC
             LIMIT %s
@@ -409,11 +442,14 @@ def list_pending_email_notifications(*, limit: int = 100) -> list[dict]:
             SELECT
                 id,
                 submission_id,
+                owner_account_id,
+                owner_change_request_id,
                 recipient_address,
                 event_type,
                 title,
                 body,
                 action_url,
+                action_payload,
                 severity,
                 attempts,
                 metadata,
