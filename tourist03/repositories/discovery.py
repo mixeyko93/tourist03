@@ -103,8 +103,11 @@ def search_public_entities(
     entity_kinds: Optional[list[str]] = None,
     subtypes: Optional[list[str]] = None,
     tags: Optional[list[str]] = None,
+    amenities: Optional[list[str]] = None,
     region: Optional[str] = None,
+    district: Optional[str] = None,
     city: Optional[str] = None,
+    season: Optional[str] = None,
     sort: str = "relevance",
     limit: int = 24,
     offset: int = 0,
@@ -115,8 +118,11 @@ def search_public_entities(
         "entity_kinds": entity_kinds or [],
         "subtypes": subtypes or [],
         "tags": tags or [],
+        "amenities": amenities or [],
         "region": region,
+        "district": district,
         "city": city,
+        "season": season,
         "limit": limit,
         "offset": offset,
     }
@@ -138,10 +144,29 @@ def search_public_entities(
             ) = cardinality(%(tags)s::text[])
             """
         )
+    if amenities:
+        filters.append(
+            """
+            (
+                SELECT COUNT(DISTINCT amenity.slug)
+                FROM catalog.camp_amenities filter_link
+                JOIN catalog.amenities amenity ON amenity.id = filter_link.amenity_id
+                WHERE filter_link.camp_id = c.id
+                  AND amenity.is_active = TRUE
+                  AND amenity.slug = ANY(%(amenities)s::text[])
+            ) = cardinality(%(amenities)s::text[])
+            """
+        )
     if region:
         filters.append("lower(c.region) = lower(%(region)s)")
+    if district:
+        filters.append("lower(c.district) = lower(%(district)s)")
     if city:
         filters.append("lower(c.city) = lower(%(city)s)")
+    if season:
+        filters.append(
+            "lower(COALESCE(c.seasonality_key, c.seasonality, '')) = lower(%(season)s)"
+        )
 
     with _db_conn("catalog") as conn:
         cur = conn.cursor()
@@ -381,6 +406,10 @@ def search_public_editorial_content(
     include_routes: bool,
     region: Optional[str] = None,
     city: Optional[str] = None,
+    season: Optional[str] = None,
+    audience: Optional[str] = None,
+    difficulty: Optional[str] = None,
+    duration_max: Optional[int] = None,
     sort: str = "relevance",
     limit: int = 24,
     offset: int = 0,
@@ -389,6 +418,10 @@ def search_public_editorial_content(
         **_search_patterns(terms),
         "region": region,
         "city": city,
+        "season": season,
+        "audience": audience,
+        "difficulty": difficulty,
+        "duration_max": duration_max,
         "limit": limit,
         "offset": offset,
     }
@@ -399,6 +432,10 @@ def search_public_editorial_content(
             filters.append("lower(collection.region) = lower(%(region)s)")
         if city:
             filters.append("lower(collection.city) = lower(%(city)s)")
+        if season:
+            filters.append("lower(collection.season) = lower(%(season)s)")
+        if audience:
+            filters.append("lower(collection.audience) = lower(%(audience)s)")
         parts.append(
             f"""
             SELECT
@@ -450,6 +487,12 @@ def search_public_editorial_content(
             filters.append("lower(route.region) = lower(%(region)s)")
         if city:
             filters.append("lower(route.city) = lower(%(city)s)")
+        if season:
+            filters.append("lower(route.season) = lower(%(season)s)")
+        if difficulty:
+            filters.append("route.difficulty = %(difficulty)s")
+        if duration_max is not None:
+            filters.append("route.duration_minutes <= %(duration_max)s")
         parts.append(
             f"""
             SELECT
@@ -985,6 +1028,7 @@ def list_public_collections(
     season: Optional[str] = None,
     region: Optional[str] = None,
     city: Optional[str] = None,
+    audience: Optional[str] = None,
     limit: int = 12,
     offset: int = 0,
 ) -> dict:
@@ -994,6 +1038,7 @@ def list_public_collections(
         (season, "lower(collection.season)"),
         (region, "lower(collection.region)"),
         (city, "lower(collection.city)"),
+        (audience, "lower(collection.audience)"),
     ):
         if value:
             clauses.append(f"{expression} = lower(%s)")

@@ -2,7 +2,7 @@
   <div class="discovery-card-grid" data-result-grid>
     {% for item in items %}
       <article class="discovery-card" data-discovery-card data-source="{{ item.source or 'entity' }}">
-        <a class="discovery-card__cover" href="{{ item.href }}">
+        <a class="discovery-card__cover" href="{{ item.href }}" aria-label="Открыть «{{ item.title }}»">
           {% if item.cover %}
             <img src="{{ item.cover }}" alt="" width="520" height="340" loading="lazy" decoding="async">
           {% else %}

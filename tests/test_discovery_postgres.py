@@ -146,8 +146,27 @@ class DiscoveryPostgresTests(unittest.TestCase):
                 if slug == "fishing-exact":
                     cur.execute(
                         """
+                        UPDATE catalog.camps
+                        SET district = 'Сортавальский район',
+                            seasonality = 'Лето',
+                            seasonality_key = 'summer'
+                        WHERE id = %s
+                        """,
+                        (entity_id,),
+                    )
+                    cur.execute(
+                        """
                         INSERT INTO catalog.entity_tags(entity_id, tag_id)
                         SELECT %s, id FROM catalog.tags WHERE slug IN ('fishing', 'by-water')
+                        """,
+                        (entity_id,),
+                    )
+                    cur.execute(
+                        """
+                        INSERT INTO catalog.camp_amenities(camp_id, amenity_id)
+                        SELECT %s, id
+                        FROM catalog.amenities
+                        WHERE slug = 'parking'
                         """,
                         (entity_id,),
                     )
@@ -307,6 +326,38 @@ class DiscoveryPostgresTests(unittest.TestCase):
                 )
                 self.assertEqual(tagged.status_code, 200, tagged.text)
                 self.assertEqual([item["slug"] for item in tagged.json()["items"]], ["fishing-exact"])
+
+                faceted = await client.get(
+                    "/api/public/search",
+                    params={
+                        "q": "рыбалка",
+                        "district": "Сортавальский район",
+                        "amenity": "parking",
+                        "season": "summer",
+                    },
+                )
+                self.assertEqual(faceted.status_code, 200, faceted.text)
+                self.assertEqual(
+                    [item["slug"] for item in faceted.json()["items"]],
+                    ["fishing-exact"],
+                )
+
+                missing_amenity = await client.get(
+                    "/api/public/search",
+                    params={"q": "рыбалка", "amenity": "wifi"},
+                )
+                self.assertEqual(missing_amenity.status_code, 200, missing_amenity.text)
+                self.assertEqual(missing_amenity.json()["items"], [])
+
+                collections = await client.get(
+                    "/api/public/search",
+                    params={"source": "collection", "audience": "weekend"},
+                )
+                self.assertEqual(collections.status_code, 200, collections.text)
+                self.assertTrue(collections.json()["items"])
+                self.assertTrue(
+                    all(item["source"] == "collection" for item in collections.json()["items"])
+                )
 
         asyncio.run(scenario())
 

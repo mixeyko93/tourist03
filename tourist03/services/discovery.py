@@ -69,27 +69,36 @@ def _terms_or_400(request: Request, query: str):
 def api_public_search(
     request: Request,
     response: Response,
-    q: str = Query(..., min_length=1, max_length=120),
+    q: str = Query("", max_length=120),
+    source: Optional[Literal["entity", "collection", "route"]] = Query(None),
     entity_kind: Optional[str] = Query(None, max_length=240),
+    type: Optional[str] = Query(None, max_length=400),
     subtype: Optional[str] = Query(None, max_length=400),
     tag: Optional[str] = Query(None, max_length=400),
+    amenity: Optional[str] = Query(None, max_length=400),
     region: Optional[str] = Query(None, max_length=120),
+    district: Optional[str] = Query(None, max_length=120),
     city: Optional[str] = Query(None, max_length=120),
+    season: Optional[str] = Query(None, max_length=80),
+    difficulty: Optional[Literal["easy", "moderate", "hard"]] = Query(None),
+    audience: Optional[str] = Query(None, max_length=120),
+    duration_max: Optional[int] = Query(None, ge=1, le=525_600),
     sort: Literal["relevance", "newest"] = Query("relevance"),
     page: int = Query(1, ge=1, le=20),
     limit: int = Query(24, ge=1, le=50),
 ):
     try:
         kinds = _comma_values(entity_kind)
-        subtypes = _comma_values(subtype)
+        subtypes = _comma_values(",".join(value for value in (type, subtype) if value))
         tags = _comma_values(tag)
+        amenities = _comma_values(amenity)
     except DiscoveryValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not request.app.state.settings.feature_services:
         if kinds and "accommodation" not in kinds:
             return {
                 "query": q.strip(),
-                "normalized_query": _terms_or_400(request, q).normalized,
+                "normalized_query": _terms_or_400(request, q).normalized if q.strip() else "",
                 "items": [],
                 "total": 0,
                 "page": page,
@@ -97,36 +106,103 @@ def api_public_search(
                 "pages": 0,
             }
         kinds = ["accommodation"]
-    terms = _terms_or_400(request, q)
     normalized_region = _plain_filter(region, "Регион")
+    normalized_district = _plain_filter(district, "Район")
     normalized_city = _plain_filter(city, "Город")
+    normalized_season = _plain_filter(season, "Сезон")
+    normalized_audience = _plain_filter(audience, "Аудитория")
     offset = (page - 1) * limit
     settings = request.app.state.settings
+    if not q.strip():
+        if source == "collection" and settings.feature_editorial_collections:
+            result = discovery_repo.list_public_collections(
+                season=normalized_season,
+                region=normalized_region,
+                city=normalized_city,
+                audience=normalized_audience,
+                limit=limit,
+                offset=offset,
+            )
+            items = [
+                {
+                    **item,
+                    "source": "collection",
+                    "tags": [],
+                    "match_reasons": ["Редакционная подборка"],
+                }
+                for item in result["items"]
+            ]
+        elif source == "route" and settings.feature_tourism_routes:
+            result = discovery_repo.list_public_routes(
+                difficulty=difficulty,
+                season=normalized_season,
+                region=normalized_region,
+                city=normalized_city,
+                duration_max=duration_max,
+                limit=limit,
+                offset=offset,
+            )
+            items = [
+                {
+                    **item,
+                    "source": "route",
+                    "tags": [],
+                    "match_reasons": ["Готовый маршрут"],
+                }
+                for item in result["items"]
+            ]
+        else:
+            result = {"total": 0}
+            items = []
+        total = int(result["total"])
+        response.headers["Cache-Control"] = "public, max-age=30, stale-while-revalidate=60"
+        return {
+            "query": "",
+            "normalized_query": "",
+            "items": items,
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "pages": math.ceil(total / limit) if total else 0,
+        }
+    terms = _terms_or_400(request, q)
+    entity_specific = bool(kinds or subtypes or tags or amenities or normalized_district)
+    include_entities = source not in {"collection", "route"} and not (
+        difficulty or duration_max or normalized_audience
+    )
     include_collections = (
         settings.feature_editorial_collections
-        and not kinds
-        and not subtypes
-        and not tags
+        and source not in {"entity", "route"}
+        and not entity_specific
+        and difficulty is None
+        and duration_max is None
     )
     include_routes = (
         settings.feature_tourism_routes
-        and not kinds
-        and not subtypes
-        and not tags
+        and source not in {"entity", "collection"}
+        and not entity_specific
+        and normalized_audience is None
     )
     if include_collections or include_routes:
         window = offset + limit
-        entity_result = discovery_repo.search_public_entities(
-            terms,
-            entity_kinds=kinds or None,
-            subtypes=subtypes or None,
-            tags=tags or None,
-            region=normalized_region,
-            city=normalized_city,
-            sort=sort,
-            limit=window,
-            offset=0,
-            include_rank=True,
+        entity_result = (
+            discovery_repo.search_public_entities(
+                terms,
+                entity_kinds=kinds or None,
+                subtypes=subtypes or None,
+                tags=tags or None,
+                amenities=amenities or None,
+                region=normalized_region,
+                district=normalized_district,
+                city=normalized_city,
+                season=normalized_season,
+                sort=sort,
+                limit=window,
+                offset=0,
+                include_rank=True,
+            )
+            if include_entities
+            else {"items": [], "total": 0}
         )
         editorial_result = discovery_repo.search_public_editorial_content(
             terms,
@@ -134,6 +210,10 @@ def api_public_search(
             include_routes=include_routes,
             region=normalized_region,
             city=normalized_city,
+            season=normalized_season,
+            audience=normalized_audience,
+            difficulty=difficulty,
+            duration_max=duration_max,
             sort=sort,
             limit=window,
             offset=0,
@@ -167,16 +247,23 @@ def api_public_search(
             "total": int(entity_result["total"]) + int(editorial_result["total"]),
         }
     else:
-        result = discovery_repo.search_public_entities(
-            terms,
-            entity_kinds=kinds or None,
-            subtypes=subtypes or None,
-            tags=tags or None,
-            region=normalized_region,
-            city=normalized_city,
-            sort=sort,
-            limit=limit,
-            offset=offset,
+        result = (
+            discovery_repo.search_public_entities(
+                terms,
+                entity_kinds=kinds or None,
+                subtypes=subtypes or None,
+                tags=tags or None,
+                amenities=amenities or None,
+                region=normalized_region,
+                district=normalized_district,
+                city=normalized_city,
+                season=normalized_season,
+                sort=sort,
+                limit=limit,
+                offset=offset,
+            )
+            if include_entities
+            else {"items": [], "total": 0}
         )
     response.headers["Cache-Control"] = "public, max-age=30, stale-while-revalidate=60"
     total = int(result["total"])

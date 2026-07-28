@@ -184,7 +184,7 @@ export default function AdminRouteEditPage() {
             </div>
           </AdminCard>
           <AdminCard className="space-y-4 p-5 sm:p-6"><div><h3 className="text-lg font-semibold">Точки маршрута</h3><p className="text-sm text-muted-foreground">Можно выбрать карточку каталога или создать редакционную точку. Перетаскивание и кнопки меняют порядок.</p></div><RoutePoints points={draft.points} onChange={(points) => set("points", points)} /></AdminCard>
-          <AdminCard className="space-y-3 p-5 sm:p-6"><h3 className="text-lg font-semibold">GeoJSON линии</h3><p className="text-sm text-muted-foreground">Необязательный LineString/Feature. Размер и количество координат проверяются сервером.</p><textarea className={`${input} min-h-48 font-mono text-xs`} value={geojsonText} onChange={(event) => setGeojsonText(event.target.value)} /></AdminCard>
+          <AdminCard className="space-y-3 p-5 sm:p-6"><h3 className="text-lg font-semibold">GeoJSON линии</h3><p className="text-sm text-muted-foreground">Необязательный LineString/Feature. Размер и количество координат проверяются сервером.</p><textarea aria-label="GeoJSON линии маршрута" className={`${input} min-h-48 font-mono text-xs`} value={geojsonText} onChange={(event) => setGeojsonText(event.target.value)} /></AdminCard>
         </div>
         <aside className="space-y-6">
           <AdminCard className="space-y-4 p-5">

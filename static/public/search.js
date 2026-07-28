@@ -1,5 +1,5 @@
 import { attachAutocomplete } from "./autocomplete.js";
-import { createElement, getJson, renderCards, renderHistory, trackEvent } from "./discovery-common.js";
+import { createElement, getJson, rememberSearch, renderCards, renderHistory, shareUrl, trackEvent } from "./discovery-common.js";
 
 const form = document.querySelector("[data-search-form]");
 const input = document.querySelector("[data-search-input]");
@@ -9,10 +9,18 @@ const heading = document.querySelector("[data-search-heading]");
 const status = document.querySelector("[data-search-status]");
 const pagination = document.querySelector("[data-pagination]");
 const controls = {
+  source: document.querySelector("[data-filter-source]"),
   kind: document.querySelector("[data-filter-kind]"),
+  subtype: document.querySelector("[data-filter-subtype]"),
   region: document.querySelector("[data-filter-region]"),
+  district: document.querySelector("[data-filter-district]"),
   city: document.querySelector("[data-filter-city]"),
   tag: document.querySelector("[data-filter-tag]"),
+  amenity: document.querySelector("[data-filter-amenity]"),
+  season: document.querySelector("[data-filter-season]"),
+  difficulty: document.querySelector("[data-filter-difficulty]"),
+  duration_max: document.querySelector("[data-filter-duration]"),
+  audience: document.querySelector("[data-filter-audience]"),
   sort: document.querySelector("[data-filter-sort]"),
 };
 let requestController = null;
@@ -23,9 +31,16 @@ function stateFromUrl() {
     q: (params.get("q") || "").slice(0, 120),
     source: params.get("source") || "",
     entity_kind: params.get("entity_kind") || "",
+    subtype: params.get("subtype") || "",
     region: params.get("region") || "",
+    district: params.get("district") || "",
     city: params.get("city") || "",
     tag: params.get("tag") || "",
+    amenity: params.get("amenity") || "",
+    season: params.get("season") || "",
+    difficulty: params.get("difficulty") || "",
+    duration_max: params.get("duration_max") || "",
+    audience: params.get("audience") || "",
     sort: params.get("sort") || "relevance",
     page: Math.max(1, Number(params.get("page") || 1)),
   };
@@ -33,10 +48,18 @@ function stateFromUrl() {
 
 function applyState(state) {
   input.value = state.q;
+  controls.source.value = state.source;
   controls.kind.value = state.entity_kind;
+  controls.subtype.value = state.subtype;
   controls.region.value = state.region;
+  controls.district.value = state.district;
   controls.city.value = state.city;
   controls.tag.value = state.tag;
+  controls.amenity.value = state.amenity;
+  controls.season.value = state.season;
+  controls.difficulty.value = state.difficulty;
+  controls.duration_max.value = state.duration_max;
+  controls.audience.value = state.audience;
   controls.sort.value = state.sort;
 }
 
@@ -52,11 +75,18 @@ function currentState(page = 1) {
   const previous = stateFromUrl();
   return {
     q: input.value.trim(),
-    source: previous.source,
+    source: controls.source.value,
     entity_kind: controls.kind.value,
+    subtype: controls.subtype.value.trim(),
     region: controls.region.value.trim(),
+    district: controls.district.value.trim(),
     city: controls.city.value.trim(),
     tag: controls.tag.value.trim(),
+    amenity: controls.amenity.value.trim(),
+    season: controls.season.value,
+    difficulty: controls.difficulty.value,
+    duration_max: controls.duration_max.value,
+    audience: controls.audience.value.trim(),
     sort: controls.sort.value,
     page,
   };
@@ -64,7 +94,9 @@ function currentState(page = 1) {
 
 function searchApiUrl(state) {
   const params = new URLSearchParams({ q: state.q, page: String(state.page), limit: "18", sort: state.sort });
-  ["entity_kind", "region", "city", "tag"].forEach((key) => { if (state[key]) params.set(key, state[key]); });
+  ["source", "entity_kind", "subtype", "region", "district", "city", "tag", "amenity", "season", "difficulty", "duration_max", "audience"].forEach((key) => {
+    if (state[key]) params.set(key, state[key]);
+  });
   return `/api/public/search?${params}`;
 }
 
@@ -89,11 +121,16 @@ async function load(state, { updateUrl = true } = {}) {
   results.setAttribute("aria-busy", "true");
   try {
     const payload = await getJson(searchApiUrl(state), { signal: requestController.signal });
-    const filtered = state.source ? payload.items.filter((item) => item.source === state.source) : payload.items;
-    heading.textContent = state.q ? `По запросу «${state.q}»` : "Все идеи для поездки";
-    status.textContent = `Найдено: ${state.source ? filtered.length : payload.total}`;
-    renderCards(results, filtered, { emptyText: "Попробуйте убрать часть фильтров или изменить формулировку." });
-    renderPagination(state, state.source ? 1 : payload.pages);
+    heading.textContent = state.q
+      ? `По запросу «${state.q}»`
+      : state.source === "collection"
+        ? "Редакционные подборки"
+        : state.source === "route"
+          ? "Готовые маршруты"
+          : "Идеи для поездки";
+    status.textContent = `Найдено: ${payload.total}`;
+    renderCards(results, payload.items, { emptyText: "Попробуйте убрать часть фильтров или изменить формулировку." });
+    renderPagination(state, payload.pages);
   } catch (error) {
     if (error?.name === "AbortError") return;
     status.textContent = "Ошибка загрузки";
@@ -109,11 +146,21 @@ function navigate(state) {
   document.querySelector("#search-results")?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
 }
 
-form?.addEventListener("submit", (event) => { event.preventDefault(); trackEvent("search_submitted", { contentType: "search" }); navigate(currentState()); });
+form?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const state = currentState();
+  rememberSearch(state.q, urlFor(state));
+  trackEvent("search_submitted", { contentType: "search" });
+  navigate(state);
+});
 document.querySelector("[data-filter-apply]")?.addEventListener("click", () => { trackEvent("filter_changed", { contentType: "search" }); navigate(currentState()); });
 document.querySelector("[data-filter-reset]")?.addEventListener("click", () => {
   Object.values(controls).forEach((control) => { control.value = control === controls.sort ? "relevance" : ""; });
-  navigate({ q: input.value.trim(), source: "", entity_kind: "", region: "", city: "", tag: "", sort: "relevance", page: 1 });
+  navigate({
+    q: input.value.trim(), source: "", entity_kind: "", subtype: "", region: "", district: "",
+    city: "", tag: "", amenity: "", season: "", difficulty: "", duration_max: "", audience: "",
+    sort: "relevance", page: 1,
+  });
 });
 attachAutocomplete(input, suggestions, {
   onSelect: (item) => {
@@ -134,6 +181,9 @@ results?.addEventListener("click", (event) => {
   });
 });
 window.addEventListener("popstate", () => { const state = stateFromUrl(); applyState(state); load(state, { updateUrl: false }); });
+document.querySelector("[data-share-search]")?.addEventListener("click", () => {
+  shareUrl(new URL(urlFor(currentState(stateFromUrl().page)), location.origin).href, "Поиск — Туристика", document.querySelector("[data-share-feedback]"));
+});
 
 async function loadPopular() {
   const root = document.querySelector("[data-search-popular]");

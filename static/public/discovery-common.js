@@ -1,5 +1,7 @@
 const HISTORY_KEY = "touristika:recent:v1";
 const HISTORY_LIMIT = 20;
+const SEARCH_HISTORY_KEY = "touristika:searches:v1";
+const SEARCH_HISTORY_LIMIT = 10;
 
 export function createElement(tag, className, text) {
   const element = document.createElement(tag);
@@ -13,6 +15,7 @@ export function resultCard(item, { distance = false } = {}) {
   article.dataset.source = item.source || "entity";
   const cover = createElement("a", "discovery-card__cover");
   cover.href = item.href || "#";
+  cover.setAttribute("aria-label", `Открыть «${item.title || "туристический объект"}»`);
   if (item.cover) {
     const image = createElement("img");
     image.src = item.cover;
@@ -132,6 +135,55 @@ function readHistory() {
   }
 }
 
+function readSearchHistory() {
+  try {
+    const value = JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY) || "[]");
+    return Array.isArray(value)
+      ? value.filter((item) => item && item.href && item.title && item.kind === "search").slice(0, SEARCH_HISTORY_LIMIT)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function historyApiUrl(item) {
+  const slug = encodeURIComponent(item.slug || "");
+  if (!slug) return "";
+  if (item.kind === "entity") return `/api/public/entities/${slug}`;
+  if (item.kind === "collection") return `/api/public/collections/${slug}`;
+  if (item.kind === "route") return `/api/public/routes/${slug}`;
+  return "";
+}
+
+async function pruneUnavailableHistory(items) {
+  const checks = await Promise.all(items.slice(0, 8).map(async (item) => {
+    const url = historyApiUrl(item);
+    if (!url) return { item, unavailable: false };
+    try {
+      const response = await fetch(url, { headers: { Accept: "application/json" } });
+      return { item, unavailable: response.status === 404 };
+    } catch {
+      return { item, unavailable: false };
+    }
+  }));
+  const unavailable = new Set(checks.filter((check) => check.unavailable).map((check) => check.item.href));
+  if (!unavailable.size) return;
+  try {
+    localStorage.setItem(
+      HISTORY_KEY,
+      JSON.stringify(readHistory().filter((item) => !unavailable.has(item.href))),
+    );
+  } catch {}
+}
+
+export function rememberSearch(query, href) {
+  const title = String(query || "").trim().slice(0, 120);
+  if (!title || !String(href || "").startsWith("/search")) return;
+  const items = readSearchHistory().filter((item) => item.title.toLocaleLowerCase("ru") !== title.toLocaleLowerCase("ru"));
+  items.unshift({ kind: "search", title, href, visitedAt: new Date().toISOString() });
+  try { localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(items.slice(0, SEARCH_HISTORY_LIMIT))); } catch {}
+}
+
 export function rememberCurrentPage() {
   const { historyKind: kind, historySlug: slug, historyTitle: title } = document.body.dataset;
   if (!kind || !slug || !title) return;
@@ -157,7 +209,9 @@ export function renderHistory(root = document) {
   if (!container) return;
   const render = () => {
     container.replaceChildren();
-    const items = readHistory();
+    const items = [...readSearchHistory(), ...readHistory()]
+      .sort((left, right) => String(right.visitedAt || "").localeCompare(String(left.visitedAt || "")))
+      .slice(0, HISTORY_LIMIT);
     if (!items.length) {
       container.append(createElement("p", "", "История пока пуста."));
       return;
@@ -167,9 +221,11 @@ export function renderHistory(root = document) {
       link.href = item.href;
       container.append(link);
     });
+    pruneUnavailableHistory(items).catch(() => {});
   };
   root.querySelector("[data-history-clear]")?.addEventListener("click", () => {
     try { localStorage.removeItem(HISTORY_KEY); } catch {}
+    try { localStorage.removeItem(SEARCH_HISTORY_KEY); } catch {}
     render();
   });
   render();
