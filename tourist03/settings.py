@@ -117,6 +117,44 @@ class Settings(BaseSettings):
     feature_paid_placement: bool = False
     feature_legacy_tourist_app: bool = False
     feature_placement_submissions: bool = False
+    feature_discovery_search: bool = False
+    feature_editorial_collections: bool = False
+    feature_tourism_routes: bool = False
+    feature_nearby_discovery: bool = False
+    feature_related_entities: bool = False
+    feature_local_recent_history: bool = False
+
+    discovery_search_synonyms: dict[str, list[str]] = Field(
+        default_factory=lambda: {
+            "сап": ["sup", "сапборд"],
+            "квадроцикл": ["atv", "квадрик"],
+            "баня": ["сауна"],
+            "гостевой дом": ["гостевой"],
+            "экскурсия": ["тур"],
+            "санкт-петербург": ["питер", "спб"],
+            "нижний новгород": ["нижний"],
+            "московская область": ["подмосковье"],
+            "глэмпинг": ["glamping"],
+            "байкал": ["baikal"],
+        }
+    )
+    discovery_recommendation_weights: dict[str, int] = Field(
+        default_factory=lambda: {
+            "same_type": 24,
+            "same_subtype": 18,
+            "shared_tags": 16,
+            "shared_amenities": 8,
+            "same_region": 10,
+            "same_city": 12,
+            "nearby_distance": 10,
+            "shared_collection": 12,
+            "shared_route": 12,
+            "editorial_boost": 4,
+            "freshness": 4,
+        }
+    )
+    discovery_geojson_max_bytes: int = Field(default=256 * 1024, ge=1024, le=2 * 1024 * 1024)
+    discovery_geojson_max_coordinates: int = Field(default=5000, ge=2, le=50_000)
 
     owner_password_reset_ttl_minutes: int = Field(default=30, ge=5, le=1440)
     owner_change_request_ttl_days: int = Field(default=30, ge=1, le=365)
@@ -212,6 +250,12 @@ class Settings(BaseSettings):
             "paid_placement": self.feature_paid_placement,
             "legacy_tourist_app": self.feature_legacy_tourist_app,
             "placement_submissions": self.feature_placement_submissions,
+            "discovery_search": self.feature_discovery_search,
+            "editorial_collections": self.feature_editorial_collections,
+            "tourism_routes": self.feature_tourism_routes,
+            "nearby_discovery": self.feature_nearby_discovery,
+            "related_entities": self.feature_related_entities,
+            "local_recent_history": self.feature_local_recent_history,
         }
 
     @model_validator(mode="after")
@@ -223,6 +267,19 @@ class Settings(BaseSettings):
             for weight in self.owner_card_completeness_weights.values()
         ):
             raise ValueError("OWNER_CARD_COMPLETENESS_WEIGHTS must contain positive integer weights")
+        if not self.discovery_search_synonyms or any(
+            not isinstance(key, str)
+            or not key.strip()
+            or not isinstance(values, list)
+            or not all(isinstance(value, str) and value.strip() for value in values)
+            for key, values in self.discovery_search_synonyms.items()
+        ):
+            raise ValueError("DISCOVERY_SEARCH_SYNONYMS must contain non-empty string lists")
+        if not self.discovery_recommendation_weights or any(
+            not isinstance(weight, int) or weight < 0
+            for weight in self.discovery_recommendation_weights.values()
+        ):
+            raise ValueError("DISCOVERY_RECOMMENDATION_WEIGHTS must contain non-negative integer weights")
 
         if not self.is_production:
             return self

@@ -51,6 +51,24 @@ PLACEMENT_SUBMISSION_PUBLIC_PAGES = {
     "/add-place",
     "/submission-status",
 }
+DISCOVERY_SEARCH_PREFIXES = (
+    "/api/public/search",
+    "/search",
+)
+EDITORIAL_COLLECTION_PREFIXES = (
+    "/api/public/collections",
+    "/api/superadmin/collections",
+    "/collections",
+)
+TOURISM_ROUTE_PREFIXES = (
+    "/api/public/routes",
+    "/api/superadmin/routes",
+    "/routes",
+)
+NEARBY_DISCOVERY_PREFIXES = (
+    "/api/public/nearby",
+    "/nearby",
+)
 
 
 class StaticAssetCompressionMiddleware:
@@ -125,6 +143,26 @@ class FeatureGateMiddleware(BaseHTTPMiddleware):
                 )
             )
             blocked = not is_authenticated_preview
+        elif not settings.feature_discovery_search and path.startswith(DISCOVERY_SEARCH_PREFIXES):
+            blocked = True
+        elif not settings.feature_editorial_collections and path.startswith(EDITORIAL_COLLECTION_PREFIXES):
+            blocked = True
+        elif not settings.feature_tourism_routes and path.startswith(TOURISM_ROUTE_PREFIXES):
+            blocked = True
+        elif not settings.feature_nearby_discovery and path.startswith(NEARBY_DISCOVERY_PREFIXES):
+            blocked = True
+        elif not settings.feature_related_entities and (
+            path.startswith("/api/public/entities/")
+            and (path.endswith("/related") or path.endswith("/nearby"))
+        ):
+            blocked = True
+        elif not (
+            settings.feature_discovery_search
+            or settings.feature_editorial_collections
+            or settings.feature_tourism_routes
+            or settings.feature_nearby_discovery
+        ) and path == "/api/public/discovery/home":
+            blocked = True
         if blocked:
             return JSONResponse({"detail": "Not Found"}, status_code=404)
         return await call_next(request)

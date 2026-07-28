@@ -2831,6 +2831,241 @@ MIGRATIONS = (
         VALIDATE CONSTRAINT placement_submission_entity_schema_fk;
         """,
     ),
+    MigrationStep(
+        version="0029_discovery_tags",
+        sql="""
+        CREATE TABLE IF NOT EXISTS catalog.tags (
+            id BIGSERIAL PRIMARY KEY,
+            slug TEXT NOT NULL,
+            name TEXT NOT NULL,
+            category TEXT NOT NULL DEFAULT 'theme',
+            description TEXT,
+            icon_key TEXT NOT NULL DEFAULT 'tag',
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            CONSTRAINT tags_slug_format
+                CHECK (slug ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'),
+            CONSTRAINT tags_name_present
+                CHECK (NULLIF(btrim(name), '') IS NOT NULL),
+            CONSTRAINT tags_category_format
+                CHECK (category ~ '^[a-z][a-z0-9_-]{1,63}$'),
+            CONSTRAINT tags_icon_key_format
+                CHECK (icon_key ~ '^[a-z][a-z0-9_-]{0,63}$')
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_slug_unique
+        ON catalog.tags((lower(slug)));
+        CREATE INDEX IF NOT EXISTS idx_tags_active_category_sort
+        ON catalog.tags(is_active, category, sort_order, id);
+
+        CREATE TABLE IF NOT EXISTS catalog.entity_tags (
+            entity_id INTEGER NOT NULL,
+            tag_id BIGINT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (entity_id, tag_id),
+            CONSTRAINT entity_tags_entity_fk
+                FOREIGN KEY (entity_id) REFERENCES catalog.camps(id)
+                ON DELETE CASCADE,
+            CONSTRAINT entity_tags_tag_fk
+                FOREIGN KEY (tag_id) REFERENCES catalog.tags(id)
+                ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_entity_tags_tag_entity
+        ON catalog.entity_tags(tag_id, entity_id);
+
+        INSERT INTO catalog.tags (
+            slug, name, category, description, icon_key, sort_order
+        ) VALUES
+            ('with-children', 'С детьми', 'audience', 'Места и впечатления для семейной поездки', 'family', 10),
+            ('romantic', 'Романтический отдых', 'audience', NULL, 'heart', 20),
+            ('fishing', 'Рыбалка', 'theme', NULL, 'fishing', 30),
+            ('by-water', 'У воды', 'theme', NULL, 'water', 40),
+            ('beach', 'Пляж', 'theme', NULL, 'beach', 50),
+            ('active-rest', 'Активный отдых', 'theme', NULL, 'activity', 60),
+            ('weekend', 'Выходные', 'duration', NULL, 'calendar', 70),
+            ('winter', 'Зима', 'season', NULL, 'snowflake', 80),
+            ('summer', 'Лето', 'season', NULL, 'sun', 90),
+            ('spring', 'Весна', 'season', NULL, 'leaf', 100),
+            ('autumn', 'Осень', 'season', NULL, 'leaf', 110),
+            ('northern-lights', 'Северное сияние', 'theme', NULL, 'sparkles', 120),
+            ('mountains', 'Горы', 'nature', NULL, 'mountain', 130),
+            ('gastronomy', 'Гастрономия', 'theme', NULL, 'restaurant', 140),
+            ('history', 'История', 'theme', NULL, 'landmark', 150),
+            ('nature', 'Природа', 'theme', NULL, 'tree', 160),
+            ('extreme', 'Экстремальный отдых', 'theme', NULL, 'activity', 170),
+            ('free', 'Бесплатно', 'price', NULL, 'ticket', 180),
+            ('by-car', 'На машине', 'transport', NULL, 'car', 190),
+            ('without-car', 'Без автомобиля', 'transport', NULL, 'walk', 200),
+            ('accessible', 'Доступная среда', 'accessibility', NULL, 'accessible', 210),
+            ('pet-friendly', 'Pet-friendly', 'audience', NULL, 'pets', 220),
+            ('quiet-rest', 'Спокойный отдых', 'theme', NULL, 'quiet', 230)
+        ON CONFLICT ((lower(slug))) DO UPDATE SET
+            name = EXCLUDED.name,
+            category = EXCLUDED.category,
+            description = EXCLUDED.description,
+            icon_key = EXCLUDED.icon_key,
+            sort_order = EXCLUDED.sort_order,
+            updated_at = NOW();
+        """,
+    ),
+    MigrationStep(
+        version="0030_discovery_search",
+        sql="""
+        CREATE OR REPLACE FUNCTION catalog.normalize_search_text(value TEXT)
+        RETURNS TEXT
+        LANGUAGE SQL
+        IMMUTABLE
+        PARALLEL SAFE
+        AS $$
+            SELECT btrim(
+                regexp_replace(
+                    replace(
+                        replace(
+                            replace(
+                                replace(lower(COALESCE(value, '')), 'ё', 'е'),
+                                '-', ' '
+                            ),
+                            '_', ' '
+                        ),
+                        '/', ' '
+                    ),
+                    '[[:space:]]+',
+                    ' ',
+                    'g'
+                )
+            )
+        $$;
+
+        ALTER TABLE catalog.camps
+        ADD COLUMN IF NOT EXISTS search_aliases JSONB NOT NULL DEFAULT '[]'::jsonb;
+        ALTER TABLE catalog.camps
+        ADD COLUMN IF NOT EXISTS editorial_weight SMALLINT NOT NULL DEFAULT 0;
+
+        ALTER TABLE catalog.camps
+        DROP CONSTRAINT IF EXISTS camps_search_aliases_array;
+        ALTER TABLE catalog.camps
+        ADD CONSTRAINT camps_search_aliases_array
+        CHECK (jsonb_typeof(search_aliases) = 'array') NOT VALID;
+
+        ALTER TABLE catalog.camps
+        DROP CONSTRAINT IF EXISTS camps_editorial_weight_range;
+        ALTER TABLE catalog.camps
+        ADD CONSTRAINT camps_editorial_weight_range
+        CHECK (editorial_weight BETWEEN 0 AND 100) NOT VALID;
+
+        ALTER TABLE catalog.camps
+        ADD COLUMN IF NOT EXISTS search_document TEXT
+        GENERATED ALWAYS AS (
+            catalog.normalize_search_text(
+                COALESCE(name, '') || ' ' ||
+                COALESCE(slug, '') || ' ' ||
+                COALESCE(short_description, '') || ' ' ||
+                COALESCE(description, '') || ' ' ||
+                COALESCE(region, '') || ' ' ||
+                COALESCE(district, '') || ' ' ||
+                COALESCE(city, '') || ' ' ||
+                COALESCE(locality, '') || ' ' ||
+                COALESCE(address, '') || ' ' ||
+                search_aliases::TEXT
+            )
+        ) STORED;
+
+        ALTER TABLE catalog.camps
+        ADD COLUMN IF NOT EXISTS search_vector TSVECTOR
+        GENERATED ALWAYS AS (
+            setweight(
+                to_tsvector(
+                    'russian'::regconfig,
+                    catalog.normalize_search_text(
+                        COALESCE(name, '') || ' ' ||
+                        COALESCE(slug, '') || ' ' ||
+                        search_aliases::TEXT
+                    )
+                ),
+                'A'
+            )
+            ||
+            setweight(
+                to_tsvector(
+                    'russian'::regconfig,
+                    catalog.normalize_search_text(
+                        COALESCE(region, '') || ' ' ||
+                        COALESCE(district, '') || ' ' ||
+                        COALESCE(city, '') || ' ' ||
+                        COALESCE(locality, '') || ' ' ||
+                        COALESCE(address, '')
+                    )
+                ),
+                'B'
+            )
+            ||
+            setweight(
+                to_tsvector(
+                    'russian'::regconfig,
+                    catalog.normalize_search_text(COALESCE(short_description, ''))
+                ),
+                'C'
+            )
+            ||
+            setweight(
+                to_tsvector(
+                    'russian'::regconfig,
+                    catalog.normalize_search_text(COALESCE(description, ''))
+                ),
+                'D'
+            )
+        ) STORED;
+
+        CREATE INDEX IF NOT EXISTS idx_camps_discovery_search_vector
+        ON catalog.camps USING GIN(search_vector)
+        WHERE publication_status = 'published' AND visibility = 'public';
+        CREATE INDEX IF NOT EXISTS idx_camps_discovery_name_prefix
+        ON catalog.camps((lower(name)) TEXT_PATTERN_OPS)
+        WHERE publication_status = 'published' AND visibility = 'public';
+        CREATE INDEX IF NOT EXISTS idx_camps_discovery_slug_prefix
+        ON catalog.camps((lower(slug)) TEXT_PATTERN_OPS)
+        WHERE publication_status = 'published' AND visibility = 'public';
+        CREATE INDEX IF NOT EXISTS idx_camps_discovery_freshness
+        ON catalog.camps(
+            COALESCE(confirmed_at, updated_at) DESC,
+            editorial_weight DESC,
+            id
+        )
+        WHERE publication_status = 'published' AND visibility = 'public';
+
+        DO $extension$
+        BEGIN
+            BEGIN
+                CREATE EXTENSION IF NOT EXISTS pg_trgm;
+            EXCEPTION
+                WHEN insufficient_privilege OR undefined_file THEN
+                    RAISE NOTICE 'pg_trgm unavailable; discovery uses the FTS/prefix fallback';
+            END;
+        END
+        $extension$;
+
+        DO $index$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'
+            ) THEN
+                EXECUTE
+                    'CREATE INDEX IF NOT EXISTS idx_camps_discovery_document_trgm '
+                    'ON catalog.camps USING GIN(search_document gin_trgm_ops) '
+                    'WHERE publication_status = ''published'' AND visibility = ''public''';
+            END IF;
+        END
+        $index$;
+
+        ALTER TABLE catalog.camps
+        VALIDATE CONSTRAINT camps_search_aliases_array;
+        ALTER TABLE catalog.camps
+        VALIDATE CONSTRAINT camps_editorial_weight_range;
+        """,
+    ),
 )
 
 CURRENT_MIGRATION_VERSION = MIGRATIONS[-1].version
