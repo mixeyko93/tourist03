@@ -220,6 +220,7 @@ class UniversalCatalogPostgresTests(unittest.TestCase):
     def test_mixed_public_search_filters_and_moderated_owner_creation(self):
         async def scenario():
             application = app_module.create_app(self.settings)
+            test_idempotency_key = "-".join(("stage4-test", "0" * 16))
 
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=application),
@@ -767,7 +768,7 @@ class UniversalCatalogPostgresTests(unittest.TestCase):
                         f"{incomplete_change_id}/apply"
                     ),
                     headers={"X-CSRF-Token": admin_csrf},
-                    json={"idempotency_key": "stage4-incomplete-apply"},
+                    json={"idempotency_key": test_idempotency_key},
                 )
                 self.assertEqual(
                     incomplete_apply.status_code,
@@ -837,7 +838,7 @@ class UniversalCatalogPostgresTests(unittest.TestCase):
                 applied = await admin_client.post(
                     f"/api/superadmin/owner-changes/{change_id}/apply",
                     headers={"X-CSRF-Token": admin_csrf},
-                    json={"idempotency_key": "stage4-apply-once"},
+                    json={"idempotency_key": test_idempotency_key},
                 )
                 self.assertEqual(applied.status_code, 200, applied.text)
                 self.assertTrue(applied.json()["applied"])
