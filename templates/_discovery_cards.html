@@ -1,0 +1,27 @@
+{% macro entity_cards(items, empty_text="Пока ничего не найдено.") -%}
+  <div class="discovery-card-grid" data-result-grid>
+    {% for item in items %}
+      <article class="discovery-card" data-discovery-card data-source="{{ item.source or 'entity' }}">
+        <a class="discovery-card__cover" href="{{ item.href }}">
+          {% if item.cover %}
+            <img src="{{ item.cover }}" alt="" width="520" height="340" loading="lazy" decoding="async">
+          {% else %}
+            <span><img src="/static/brand/turistika-mark.svg" width="92" height="92" alt=""></span>
+          {% endif %}
+        </a>
+        <div class="discovery-card__body">
+          <p>{{ item.entity_kind_name or item.subtype_name or ("Подборка" if item.source == "collection" else "Маршрут" if item.source == "route" else "Туристический объект") }}{% if item.location %} · {{ item.location }}{% endif %}</p>
+          <h2><a href="{{ item.href }}">{{ item.title }}</a></h2>
+          {% if item.short_description %}<div>{{ item.short_description }}</div>{% endif %}
+          {% if item.match_reasons %}<ul>{% for reason in item.match_reasons %}<li>{{ reason }}</li>{% endfor %}</ul>{% endif %}
+          <footer>
+            <a href="{{ item.href }}">Открыть <span aria-hidden="true">→</span></a>
+            {% if item.source == "entity" %}<a href="/?entity={{ item.slug | urlencode }}#map-section">На карте</a>{% endif %}
+          </footer>
+        </div>
+      </article>
+    {% else %}
+      <div class="discovery-empty"><h2>Ничего не нашли</h2><p>{{ empty_text }}</p></div>
+    {% endfor %}
+  </div>
+{%- endmacro %}

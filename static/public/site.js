@@ -7,6 +7,9 @@ initialiseTelegramWebApp(features);
 document.querySelectorAll("[data-placement-submissions]").forEach((node) => {
   node.hidden = !features.placement_submissions;
 });
+document.querySelectorAll("[data-feature-link]").forEach((node) => {
+  node.hidden = !features[node.dataset.featureLink];
+});
 
 const menuToggle = document.querySelector("[data-menu-toggle]");
 const menu = document.querySelector("[data-menu]");
@@ -39,8 +42,11 @@ const mapFilterWifi = document.querySelector("[data-filter-wifi]");
 const mapFilterReset = document.querySelector("[data-filter-reset]");
 const mapCount = document.querySelector("[data-map-count]");
 const mapLegend = document.querySelector("[data-map-legend]");
+const mapAutocomplete = document.querySelector("[data-map-autocomplete]");
+const discoveryHome = document.querySelector("[data-discovery-home]");
 let mapController;
 let mapInitialisationScheduled = false;
+let autocompleteAttached = false;
 const pendingMapController = Object.freeze({ search() {}, reset() {}, locate() {} });
 
 function setMenuState(isOpen) {
@@ -119,7 +125,23 @@ searchInput?.addEventListener("input", () => {
   searchClear.hidden = !searchInput.value;
   ensureMap().search(searchInput.value);
 });
-searchInput?.addEventListener("focus", ensureMap);
+searchInput?.addEventListener("focus", () => {
+  ensureMap();
+  if (!features.discovery_search || autocompleteAttached || !mapAutocomplete) return;
+  autocompleteAttached = true;
+  import("./autocomplete.js?v=2026-07-28-01").then(({ attachAutocomplete }) => {
+    attachAutocomplete(searchInput, mapAutocomplete, {
+      onSelect(item) {
+        if (["entity", "collection", "route"].includes(item.source) && item.href) {
+          location.assign(item.href);
+          return;
+        }
+        searchInput.value = item.value || item.title || "";
+        ensureMap().search(searchInput.value);
+      },
+    });
+  }).catch(() => {});
+});
 searchClear?.addEventListener("click", () => {
   if (!searchInput) return;
   searchInput.value = "";
@@ -152,4 +174,25 @@ if ("IntersectionObserver" in window && mapShell) {
   observer.observe(mapShell);
 } else {
   ensureMap();
+}
+
+if (
+  discoveryHome
+  && (features.editorial_collections || features.tourism_routes || features.related_entities)
+) {
+  discoveryHome.hidden = false;
+  const loadDiscovery = () => import("./discovery-home.js?v=2026-07-28-01")
+    .then(({ loadDiscoveryHome }) => loadDiscoveryHome(discoveryHome))
+    .catch(() => { discoveryHome.hidden = true; });
+  if ("IntersectionObserver" in window) {
+    const discoveryObserver = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        loadDiscovery();
+        discoveryObserver.disconnect();
+      }
+    }, { rootMargin: "400px" });
+    discoveryObserver.observe(discoveryHome);
+  } else {
+    loadDiscovery();
+  }
 }

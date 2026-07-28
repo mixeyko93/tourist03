@@ -22,10 +22,10 @@
   <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="/static/vendor/leaflet-markercluster/MarkerCluster.css">
   <!-- TOURISTIKA_RUNTIME_CONFIG -->
-  <link rel="stylesheet" href="/static/public/site.css?v=2026-07-27-03">
+  <link rel="stylesheet" href="/static/public/site.css?v=2026-07-28-05">
   <script defer src="/static/vendor/leaflet/leaflet.js"></script>
   <script defer src="/static/vendor/leaflet-markercluster/leaflet.markercluster.js"></script>
-  <script type="module" src="/static/public/site.js?v=2026-07-27-04"></script>
+  <script type="module" src="/static/public/site.js?v=2026-07-28-05"></script>
 </head>
 <body>
   <a class="skip-link" href="#main-content">Перейти к содержанию</a>
@@ -42,6 +42,10 @@
       <nav class="site-nav" aria-label="Основная навигация" data-navigation>
         <a href="#top">Главная</a>
         <a href="#map-section">Карта</a>
+        <a href="/search" data-feature-link="discovery_search" hidden>Поиск</a>
+        <a href="/search?source=collection" data-feature-link="editorial_collections" hidden>Подборки</a>
+        <a href="/search?source=route" data-feature-link="tourism_routes" hidden>Маршруты</a>
+        <a href="/nearby" data-feature-link="nearby_discovery" hidden>Рядом</a>
         <a href="#about">О проекте</a>
         <a href="/add-place" data-placement-submissions hidden>Добавить объект</a>
       </nav>
@@ -63,6 +67,10 @@
     <nav aria-label="Мобильная навигация">
       <a href="#top">Главная</a>
       <a href="#map-section">Карта</a>
+      <a href="/search" data-feature-link="discovery_search" hidden>Поиск</a>
+      <a href="/search?source=collection" data-feature-link="editorial_collections" hidden>Подборки</a>
+      <a href="/search?source=route" data-feature-link="tourism_routes" hidden>Маршруты</a>
+      <a href="/nearby" data-feature-link="nearby_discovery" hidden>Рядом</a>
       <a href="#about">О проекте</a>
       <a href="/add-place" data-placement-submissions hidden>Добавить объект</a>
     </nav>
@@ -100,6 +108,7 @@
               <input id="map-search" type="search" placeholder="Места, услуги и впечатления" autocomplete="off" aria-controls="map-search-results" data-map-search>
               <button type="button" class="map-search__clear" data-search-clear aria-label="Очистить поиск" hidden>×</button>
             </label>
+            <div class="map-autocomplete" id="map-autocomplete" role="listbox" data-map-autocomplete hidden></div>
             <div class="map-tools" aria-label="Управление картой">
               <button type="button" data-map-filter-toggle aria-label="Открыть фильтры каталога" aria-expanded="true" aria-controls="map-filters" title="Фильтры">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"></path></svg>
@@ -172,6 +181,16 @@
           <p class="public-map__status" data-map-status role="status" aria-live="polite"></p>
           <div class="public-map__results" id="map-search-results" data-map-results aria-live="polite"></div>
         </div>
+      </div>
+    </section>
+
+    <section class="discovery-home" data-discovery-home hidden aria-labelledby="discovery-home-title">
+      <div class="site-frame">
+        <div class="section-heading">
+          <div><p class="eyebrow">Идеи для поездки</p><h2 id="discovery-home-title">Открывайте больше<br>вместе с Туристикой</h2></div>
+          <a class="button button--quiet" href="/search">Смотреть все</a>
+        </div>
+        <div class="discovery-home__groups" data-discovery-home-groups aria-live="polite"></div>
       </div>
     </section>
 

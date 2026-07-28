@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f5f7f2">
+  <title>{{ title }}</title>
+  <meta name="description" content="{{ description }}">
+  <meta name="robots" content="index,follow">
+  <link rel="canonical" href="{{ canonical }}">
+  <meta property="og:type" content="website"><meta property="og:locale" content="ru_RU"><meta property="og:site_name" content="Туристика"><meta property="og:title" content="{{ title }}"><meta property="og:description" content="{{ description }}"><meta property="og:url" content="{{ canonical }}"><meta property="og:image" content="{{ og_image }}">
+  <link rel="icon" href="/static/brand/turistika-favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="/static/public/discovery.css?v=2026-07-28-01">
+  <script defer src="/static/vendor/leaflet/leaflet.js"></script>
+  <script type="application/ld+json">{{ structured_data | tojson }}</script>
+  <script type="application/ld+json">{{ breadcrumbs_data | tojson }}</script>
+  <script type="module" src="/static/public/route-detail.js?v=2026-07-28-01"></script>
+</head>
+<body data-history-kind="route" data-history-slug="{{ route.slug }}" data-history-title="{{ route.title }}">
+  <a class="discovery-skip" href="#route-points">Перейти к точкам маршрута</a>
+  <header class="discovery-header"><a class="discovery-brand" href="/"><img src="/static/brand/turistika-icon.svg" width="46" height="46" alt=""><span><strong>Туристика</strong><small>Твоя карта впечатлений.</small></span></a><nav><a href="/#map-section">Карта</a><a href="/search">Поиск</a><a href="/nearby">Рядом</a></nav></header>
+  <main class="discovery-main">
+    <nav class="discovery-breadcrumbs" aria-label="Хлебные крошки"><a href="/">Главная</a><span>/</span><a href="/search">Маршруты</a><span>/</span><span aria-current="page">{{ route.title }}</span></nav>
+    <section class="content-hero">
+      <div><p class="discovery-eyebrow">Редакционный маршрут{% if route.region %} · {{ route.region }}{% endif %}</p><h1>{{ route.title }}</h1><p>{{ route.short_description }}</p><dl class="route-facts">{% if route.duration_text or route.duration_minutes %}<div><dt>Время</dt><dd>{{ route.duration_text or route.duration_minutes ~ " мин" }}</dd></div>{% endif %}{% if route.distance_km is not none %}<div><dt>Расстояние</dt><dd>{{ route.distance_km }} км</dd></div>{% endif %}{% if route.difficulty %}<div><dt>Сложность</dt><dd>{{ {"easy":"Лёгкая","moderate":"Средняя","hard":"Сложная"}.get(route.difficulty, route.difficulty) }}</dd></div>{% endif %}{% if route.transport_mode %}<div><dt>Транспорт</dt><dd>{{ {"walk":"Пешком","car":"Автомобиль","public_transport":"Общественный транспорт","bicycle":"Велосипед","boat":"По воде","mixed":"Смешанный"}.get(route.transport_mode, route.transport_mode) }}</dd></div>{% endif %}</dl><div class="content-hero__actions"><button class="discovery-button" type="button" data-scroll-route-map>Посмотреть карту</button><button class="discovery-button discovery-button--secondary" type="button" data-share-url="{{ canonical }}" data-share-title="{{ route.title }}">Поделиться</button></div></div>
+      <div class="content-hero__cover">{% if route.cover %}<img src="{{ route.cover }}" alt="" width="760" height="520" fetchpriority="high">{% else %}<span><img src="/static/brand/turistika-mark.svg" alt="" width="150" height="150"></span>{% endif %}</div>
+    </section>
+    {% if route.description %}<section class="content-description"><p class="discovery-eyebrow">О маршруте</p><h2>Как пройдёт поездка</h2><p>{{ route.description }}</p></section>{% endif %}
+    <section class="route-layout" id="route-points">
+      <div><div class="content-section-heading"><div><p class="discovery-eyebrow">План поездки</p><h2>{{ route.point_count }} точки</h2></div></div><ol class="route-timeline">{% for point in route.points %}<li><span>{{ loop.index }}</span><article><p>{% if point.overnight %}Ночёвка · {% endif %}{% if point.stay_minutes %}{{ point.stay_minutes }} мин{% else %}Точка маршрута{% endif %}</p><h3>{% if point.href %}<a href="{{ point.href }}">{{ point.title }}</a>{% else %}{{ point.title }}{% endif %}</h3>{% if point.description %}<div>{{ point.description }}</div>{% endif %}{% if point.transport_note %}<small>{{ point.transport_note }}</small>{% endif %}</article></li>{% endfor %}</ol></div>
+      <aside class="route-map-shell"><div class="route-map" data-route-map data-points='{{ route.points | tojson }}' data-geojson='{{ route.geojson | tojson if route.geojson else "null" }}' aria-label="Карта редакционного маршрута"></div><p>Линия показывает редакционную последовательность точек и не заменяет навигатор.</p></aside>
+    </section>
+  </main>
+  <p class="share-feedback" role="status" aria-live="polite" data-share-feedback></p>
+  <footer class="discovery-footer"><a class="discovery-brand" href="/"><img src="/static/brand/turistika-icon.svg" width="42" height="42" alt=""><span><strong>Туристика</strong><small>Твоя карта впечатлений.</small></span></a><p>Маршрут носит информационный характер. Проверяйте дорожные условия.</p></footer>
+</body>
+</html>

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f5f7f2">
+  <title>{{ title }}</title>
+  <meta name="description" content="{{ description }}">
+  <meta name="robots" content="index,follow">
+  <link rel="canonical" href="{{ canonical }}">
+  <meta property="og:type" content="website"><meta property="og:locale" content="ru_RU"><meta property="og:site_name" content="Туристика"><meta property="og:title" content="{{ title }}"><meta property="og:description" content="{{ description }}"><meta property="og:url" content="{{ canonical }}"><meta property="og:image" content="{{ og_image }}">
+  <link rel="icon" href="/static/brand/turistika-favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/public/discovery.css?v=2026-07-28-01">
+  <script type="application/ld+json">{{ structured_data | tojson }}</script>
+  <script type="application/ld+json">{{ breadcrumbs_data | tojson }}</script>
+  <script type="module" src="/static/public/discovery-detail.js?v=2026-07-28-01"></script>
+</head>
+<body data-history-kind="collection" data-history-slug="{{ collection.slug }}" data-history-title="{{ collection.title }}">
+  {% from "_discovery_cards.html" import entity_cards %}
+  <a class="discovery-skip" href="#collection-items">Перейти к местам</a>
+  <header class="discovery-header"><a class="discovery-brand" href="/"><img src="/static/brand/turistika-icon.svg" width="46" height="46" alt=""><span><strong>Туристика</strong><small>Твоя карта впечатлений.</small></span></a><nav><a href="/#map-section">Карта</a><a href="/search">Поиск</a><a href="/nearby">Рядом</a></nav></header>
+  <main class="discovery-main">
+    <nav class="discovery-breadcrumbs" aria-label="Хлебные крошки"><a href="/">Главная</a><span>/</span><a href="/search">Подборки</a><span>/</span><span aria-current="page">{{ collection.title }}</span></nav>
+    <section class="content-hero">
+      <div><p class="discovery-eyebrow">Редакционная подборка{% if collection.region %} · {{ collection.region }}{% endif %}</p><h1>{{ collection.title }}</h1><p>{{ collection.short_description }}</p><div class="content-hero__actions"><a class="discovery-button" href="/?collection={{ collection.slug | urlencode }}#map-section">Показать на карте</a><button class="discovery-button discovery-button--secondary" type="button" data-share-url="{{ canonical }}" data-share-title="{{ collection.title }}">Поделиться</button></div></div>
+      <div class="content-hero__cover">{% if collection.cover %}<img src="{{ collection.cover }}" alt="" width="760" height="520" fetchpriority="high">{% else %}<span><img src="/static/brand/turistika-mark.svg" alt="" width="150" height="150"></span>{% endif %}</div>
+    </section>
+    {% if collection.description %}<section class="content-description"><p class="discovery-eyebrow">Об идее</p><h2>Почему стоит посмотреть</h2><p>{{ collection.description }}</p></section>{% endif %}
+    <section class="content-items" id="collection-items"><div class="content-section-heading"><div><p class="discovery-eyebrow">В подборке</p><h2>{{ collection.item_count }} {{ "место" if collection.item_count == 1 else "места" if collection.item_count in [2,3,4] else "мест" }}</h2></div><a href="/?collection={{ collection.slug | urlencode }}#map-section">Открыть все на карте →</a></div>{{ entity_cards(collection.items, "Подборка обновляется. Загляните немного позже.") }}</section>
+  </main>
+  <p class="share-feedback" role="status" aria-live="polite" data-share-feedback></p>
+  <footer class="discovery-footer"><a class="discovery-brand" href="/"><img src="/static/brand/turistika-icon.svg" width="42" height="42" alt=""><span><strong>Туристика</strong><small>Твоя карта впечатлений.</small></span></a><p>Редакционные идеи для новых путешествий.</p></footer>
+</body>
+</html>

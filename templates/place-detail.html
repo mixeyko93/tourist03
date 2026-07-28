@@ -21,10 +21,11 @@
   <link rel="preload" href="/static/fonts/manrope/manrope-extrabold.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/static/public/place.css?v=2026-07-27-03">
   <script defer src="/static/public/place.js?v=2026-07-27-01"></script>
+  <script type="module" src="/static/public/discovery-detail.js?v=2026-07-28-01"></script>
   <script type="application/ld+json">{{ structured_data | tojson }}</script>
   <script type="application/ld+json">{{ breadcrumbs_data | tojson }}</script>
 </head>
-<body>
+<body{% if local_recent_history %} data-history-kind="entity" data-history-slug="{{ place.slug }}" data-history-title="{{ place.name }}"{% endif %}>
   {% from "_entity_sections.html" import render_entity_sections %}
   {% set entity_kind = place.entity_kind or {} %}
   {% if entity_kind is string %}
@@ -70,6 +71,7 @@
             {% if place.city or place.locality %}<span>{{ place.city or place.locality }}</span>{% endif %}
             {% if place.price_display or place.price_label %}<strong>{{ place.price_display or place.price_label }}</strong>{% elif place.min_price and (not place.price_mode or place.price_mode in ["from", "fixed"]) %}<strong>{% if place.price_mode != "fixed" %}от {% endif %}{{ "{:,}".format(place.min_price).replace(",", " ") }} ₽</strong>{% endif %}
           </div>
+          {% if local_recent_history %}<button class="place-share" type="button" data-share-url="{{ canonical }}" data-share-title="{{ place.name }}">Поделиться</button>{% endif %}
         </div>
         <div class="place-hero__visual">
           {% if place.cover %}
@@ -189,9 +191,27 @@
           <div class="video-links">{% for video in place.videos %}<a href="{{ video }}" target="_blank" rel="noopener noreferrer">Открыть видео <span aria-hidden="true">↗</span></a>{% endfor %}</div>
         </section>
         {% endif %}
+
+        {% if related_items %}
+        <section class="place-section" aria-labelledby="related-title">
+          <p class="place-eyebrow">Продолжить путешествие</p>
+          <h2 id="related-title">Вам также может понравиться</h2>
+          <div class="place-related">
+            {% for item in related_items %}
+              <article>
+                <a class="place-related__cover" href="{{ item.href }}">
+                  {% if item.cover %}<img src="{{ item.cover }}" alt="" loading="lazy" decoding="async" width="420" height="280">{% else %}<span><img src="/static/brand/turistika-mark.svg" alt="" width="72" height="72"></span>{% endif %}
+                </a>
+                <div><small>{{ item.entity_kind_name or item.subtype_name or "Туристический объект" }}</small><h3><a href="{{ item.href }}">{{ item.title }}</a></h3><p>{{ item.location or item.city or item.region or "Россия" }}</p></div>
+              </article>
+            {% endfor %}
+          </div>
+        </section>
+        {% endif %}
       </div>
     </div>
   </main>
+  <p class="place-share-feedback" role="status" aria-live="polite" data-share-feedback></p>
 
   <footer class="place-footer">
     <div class="place-frame"><a class="place-brand place-brand--footer" href="/"><img src="/static/brand/turistika-icon.svg" width="44" height="44" alt=""><span><strong>Туристика</strong><small>Твоя карта впечатлений.</small></span></a><p>Публичный каталог мест, услуг и впечатлений России.</p></div>

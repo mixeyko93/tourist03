@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f5f7f2">
+  <title>{{ title }}</title>
+  <meta name="description" content="{{ description }}">
+  <meta name="robots" content="noindex,follow">
+  <link rel="canonical" href="{{ canonical }}">
+  <link rel="icon" href="/static/brand/turistika-favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/static/fonts/manrope/manrope-regular.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/static/public/discovery.css?v=2026-07-28-01">
+  <script>window.__TOURISTIKA_FEATURES__={{ features | tojson }};</script>
+  <script type="module" src="/static/public/search.js?v=2026-07-28-01"></script>
+</head>
+<body>
+  <a class="discovery-skip" href="#search-results">Перейти к результатам</a>
+  <header class="discovery-header">
+    <a class="discovery-brand" href="/"><img src="/static/brand/turistika-icon.svg" width="46" height="46" alt=""><span><strong>Туристика</strong><small>Твоя карта впечатлений.</small></span></a>
+    <nav aria-label="Основная навигация"><a href="/#map-section">Карта</a>{% if features.editorial_collections %}<a href="/search?source=collection">Подборки</a>{% endif %}{% if features.tourism_routes %}<a href="/search?source=route">Маршруты</a>{% endif %}{% if features.nearby_discovery %}<a href="/nearby">Рядом</a>{% endif %}</nav>
+  </header>
+  <main class="discovery-main">
+    <section class="search-hero" aria-labelledby="search-title">
+      <p class="discovery-eyebrow">Поиск по Туристике</p>
+      <h1 id="search-title">Найдите идею<br>для следующей поездки</h1>
+      <form class="search-form" role="search" data-search-form>
+        <label for="discovery-query">Место, услуга, тема или маршрут</label>
+        <div><input id="discovery-query" name="q" type="search" value="{{ query }}" maxlength="120" autocomplete="off" placeholder="Например, рыбалка на Байкале" aria-autocomplete="list" aria-controls="search-suggestions" data-search-input><button type="submit">Найти</button></div>
+        <div class="search-suggestions" id="search-suggestions" role="listbox" data-search-suggestions hidden></div>
+      </form>
+      <div class="search-popular" data-search-popular aria-label="Популярные темы"></div>
+    </section>
+
+    <section class="search-layout" id="search-results">
+      <aside class="search-filters" aria-label="Фильтры поиска">
+        <div><h2>Уточнить поиск</h2><button type="button" data-filter-reset>Сбросить</button></div>
+        <label>Тип<select data-filter-kind><option value="">Всё</option><option value="accommodation">Проживание</option><option value="service">Услуги</option><option value="activity">Активности</option><option value="food">Питание</option><option value="transport">Транспорт</option><option value="excursion">Экскурсии</option></select></label>
+        <label>Регион<input type="text" maxlength="120" data-filter-region placeholder="Например, Карелия"></label>
+        <label>Город<input type="text" maxlength="120" data-filter-city placeholder="Например, Казань"></label>
+        <label>Тема<input type="text" maxlength="120" data-filter-tag placeholder="Например, с детьми"></label>
+        <label>Сортировка<select data-filter-sort><option value="relevance">По релевантности</option><option value="newest">Сначала обновлённые</option></select></label>
+        <button class="discovery-button discovery-button--secondary" type="button" data-filter-apply>Применить</button>
+      </aside>
+      <div class="search-results">
+        <div class="search-results__heading"><div><p class="discovery-eyebrow">Результаты</p><h2 data-search-heading>Начните поиск</h2></div><p role="status" aria-live="polite" data-search-status></p></div>
+        <div class="discovery-card-grid" data-search-results></div>
+        <nav class="search-pagination" aria-label="Страницы результатов" data-pagination></nav>
+        {% if local_recent_history %}<section class="recent-history" data-recent-history><div><h2>Недавно смотрели</h2><button type="button" data-history-clear>Очистить</button></div><div data-history-items></div></section>{% endif %}
+      </div>
+    </section>
+  </main>
+  <footer class="discovery-footer"><a class="discovery-brand" href="/"><img src="/static/brand/turistika-icon.svg" width="42" height="42" alt=""><span><strong>Туристика</strong><small>Твоя карта впечатлений.</small></span></a><p>Публичный каталог мест, услуг и маршрутов России.</p></footer>
+</body>
+</html>

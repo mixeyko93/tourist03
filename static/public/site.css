@@ -214,6 +214,38 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .benefit-list strong { font-size: 14px; font-weight: 800; }
 .benefit-list p { margin: 5px 0 0; color: rgba(255, 255, 255, .66); font-size: 12px; font-weight: 600; line-height: 1.65; }
 
+.map-autocomplete {
+  position: absolute;
+  z-index: 10;
+  top: 62px;
+  left: 0;
+  width: min(100%, 380px);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 16px 40px rgba(23, 33, 27, .18);
+  pointer-events: auto;
+}
+.map-autocomplete button { display: grid; width: 100%; padding: 10px 14px; text-align: left; border: 0; border-bottom: 1px solid var(--line); background: #fff; color: var(--ink); cursor: pointer; }
+.map-autocomplete button:hover, .map-autocomplete button[aria-selected="true"] { background: #edf7ef; }
+.map-autocomplete small { color: var(--ink-soft); }
+.discovery-home { padding: clamp(64px, 8vw, 110px) 0; background: #eef4ed; }
+.discovery-home__groups { display: grid; gap: 56px; }
+.discovery-home__group h3 { margin: 0 0 20px; font-size: clamp(25px, 3vw, 38px); letter-spacing: -.04em; }
+.discovery-home__track { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.discovery-home .discovery-card { overflow: hidden; border: 1px solid var(--line); border-radius: 20px; background: #fff; }
+.discovery-home .discovery-card__cover { display: grid; aspect-ratio: 1.55; place-items: center; overflow: hidden; background: #dce9dc; }
+.discovery-home .discovery-card__cover > img { width: 100%; height: 100%; object-fit: cover; }
+.discovery-home .discovery-card__cover span img { width: 76px; opacity: .4; }
+.discovery-home .discovery-card__body { display: grid; min-height: 175px; padding: 18px; gap: 8px; }
+.discovery-home .discovery-card__body > p { margin: 0; color: var(--ink-soft); font-size: 12px; }
+.discovery-home .discovery-card__body > p:first-child { color: var(--green); font-weight: 800; text-transform: uppercase; }
+.discovery-home .discovery-card h3 { margin: 0; font-size: 19px; }
+.discovery-home .discovery-card h3 a { text-decoration: none; }
+.discovery-home .discovery-card footer { display: flex; margin-top: auto; justify-content: space-between; gap: 8px; font-size: 11px; }
+.discovery-home .discovery-card footer a { color: var(--green); font-weight: 800; }
+
 .site-footer { padding: 52px 0 max(24px, env(safe-area-inset-bottom)); background: #101712; color: #fff; }
 .site-footer__grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 48px; padding-bottom: 40px; }
 .brand--footer .brand__copy span { color: rgba(255, 255, 255, .56); }
@@ -241,6 +273,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .public-map { min-height: 620px; border-radius: 20px; }
   .public-map__canvas { min-height: 620px; }
   .map-legend { max-width: calc(100% - 32px); }
+  .discovery-home__track { display: flex; margin-right: calc((100vw - 100%) / -2); padding-right: 16px; overflow-x: auto; scroll-snap-type: x mandatory; }
+  .discovery-home .discovery-card { flex: 0 0 min(78vw, 330px); scroll-snap-align: start; }
   .place-grid { grid-template-columns: repeat(2, 1fr); }
   .benefits-section__aside { width: min(200px, 50vw); }
   .benefit-list { grid-template-columns: 1fr 1fr; }
@@ -269,6 +303,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .public-map__topbar { top: 10px; right: 10px; left: 10px; gap: 8px; }
   .map-search { min-height: 47px; border-radius: 13px; }
   .map-search input { font-size: 12px; }
+  .map-autocomplete { top: 55px; width: calc(100% - 96px); }
   .map-tools { gap: 5px; }
   .map-tools button { width: 41px; height: 41px; border-radius: 12px; }
   .public-map__loading { top: 67px; left: 10px; font-size: 10px; }
