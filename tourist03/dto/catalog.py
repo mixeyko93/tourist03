@@ -159,6 +159,55 @@ class PublicPlaceTypeDTO(BaseModel):
     icon_key: str
     sort_order: int
     config: dict[str, Any] = Field(default_factory=dict)
+    entity_kind: Optional[str] = None
+    schema_key: Optional[str] = None
+    schema_version: Optional[int] = None
+
+
+class PublicEntityKindDTO(BaseModel):
+    id: int
+    key: str
+    slug: str
+    name: str
+    plural_name: str
+    marker_key: str
+    icon_key: str
+    sort_order: int
+    config: dict[str, Any] = Field(default_factory=dict)
+
+
+class PublicEntityTypeDTO(PublicPlaceTypeDTO):
+    entity_kind: str
+    schema_key: str
+    schema_version: int
+
+
+class PublicEntitySchemaDTO(BaseModel):
+    key: str
+    version: int
+    name: str
+    entity_kind: str
+    fields: list[dict[str, Any]] = Field(default_factory=list)
+    sections: list[dict[str, Any]] = Field(default_factory=list)
+    validation: dict[str, Any] = Field(default_factory=dict)
+    display: dict[str, Any] = Field(default_factory=dict)
+    schema_org_type: str
+
+
+class CatalogFacetOptionDTO(BaseModel):
+    value: str
+    label: str
+    count: int = 0
+
+
+class PublicCatalogFacetsDTO(BaseModel):
+    entity_kinds: list[CatalogFacetOptionDTO] = Field(default_factory=list)
+    subtypes: list[CatalogFacetOptionDTO] = Field(default_factory=list)
+    regions: list[CatalogFacetOptionDTO] = Field(default_factory=list)
+    districts: list[CatalogFacetOptionDTO] = Field(default_factory=list)
+    cities: list[CatalogFacetOptionDTO] = Field(default_factory=list)
+    seasonality: list[CatalogFacetOptionDTO] = Field(default_factory=list)
+    amenities: list[CatalogFacetOptionDTO] = Field(default_factory=list)
 
 
 class PublicAmenityDTO(BaseModel):
@@ -216,6 +265,16 @@ class PublicPlaceListDTO(BaseModel):
     min_price: Optional[int] = None
     primary_contacts: List[PublicPlaceContactDTO] = Field(default_factory=list)
     key_amenities: List[PublicAmenityDTO] = Field(default_factory=list)
+    entity_id: Optional[int] = None
+    entity_kind: Optional[PublicEntityKindDTO] = None
+    subtype: Optional[PublicPlaceTypeDTO] = None
+    schema_key: Optional[str] = None
+    schema_version: Optional[int] = None
+    attributes: dict[str, Any] = Field(default_factory=dict)
+    visibility: Optional[str] = None
+    price_mode: Optional[str] = None
+    currency: Optional[str] = None
+    price_display: Optional[str] = None
 
 
 class PublicPlaceListResponseDTO(BaseModel):
@@ -238,3 +297,33 @@ class PublicPlaceDetailDTO(PublicPlaceListDTO):
     rooms: List[PublicRoomDTO] = Field(default_factory=list)
     amenities: List[PublicAmenityDTO] = Field(default_factory=list)
     videos: List[str] = Field(default_factory=list)
+    display_sections: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class PublicEntityListDTO(PublicPlaceListDTO):
+    entity_id: int
+    entity_kind: PublicEntityKindDTO
+    subtype: PublicPlaceTypeDTO
+    schema_key: str
+    schema_version: int
+    visibility: str
+    price_mode: str
+    currency: str
+
+
+class PublicEntityListResponseDTO(BaseModel):
+    items: List[PublicEntityListDTO]
+    total: int
+    limit: int
+    offset: int
+
+
+class PublicEntityDetailDTO(PublicPlaceDetailDTO):
+    entity_id: int
+    entity_kind: PublicEntityKindDTO
+    subtype: PublicPlaceTypeDTO
+    schema_key: str
+    schema_version: int
+    visibility: str
+    price_mode: str
+    currency: str

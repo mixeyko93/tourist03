@@ -14,7 +14,7 @@ from PIL import Image, UnidentifiedImageError
 from tourist03.config import UPLOAD_DIR
 from tourist03.domain import bookings as booking_domain
 from tourist03.domain.submissions import tracking_token_for
-from tourist03.public_catalog import normalize_bbox, validate_slug
+from tourist03.public_catalog import normalize_bbox, normalize_filter_values, validate_slug
 from tourist03.repositories import catalog as catalog_repo
 from tourist03.repositories import submissions as submission_repo
 from tourist03.schemas import CampStatusUpdateRequest
@@ -107,6 +107,51 @@ def api_public_place_types():
     return catalog_repo.list_place_types()
 
 
+def api_public_entity_kinds(request: Request):
+    rows = catalog_repo.list_entity_kinds()
+    if request.app.state.settings.feature_services:
+        return rows
+    return [row for row in rows if row.get("key") == "accommodation"]
+
+
+def api_public_entity_types(
+    request: Request,
+    entity_kind: Optional[str] = Query(None, alias="type", max_length=80),
+):
+    normalized_kind = (entity_kind or "").strip().lower() or None
+    if not request.app.state.settings.feature_services:
+        if normalized_kind and normalized_kind != "accommodation":
+            return []
+        normalized_kind = "accommodation"
+    return catalog_repo.list_entity_types(entity_kind=normalized_kind)
+
+
+def api_public_entity_schemas(request: Request):
+    rows = catalog_repo.list_entity_schemas()
+    if request.app.state.settings.feature_services:
+        return rows
+    return [row for row in rows if row.get("entity_kind") == "accommodation"]
+
+
+def api_public_entity_schema(request: Request, schema_key: str):
+    try:
+        normalized_key = validate_slug(schema_key)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="not found")
+    rows = catalog_repo.list_entity_schemas(schema_key=normalized_key)
+    if not request.app.state.settings.feature_services:
+        rows = [row for row in rows if row.get("entity_kind") == "accommodation"]
+    if not rows:
+        raise HTTPException(status_code=404, detail="not found")
+    return rows[0]
+
+
+def api_public_catalog_facets(request: Request):
+    return catalog_repo.list_public_catalog_facets(
+        entity_kinds=None if request.app.state.settings.feature_services else ["accommodation"]
+    )
+
+
 def api_public_amenities():
     return catalog_repo.list_public_amenities()
 
@@ -147,6 +192,84 @@ def api_public_place_detail(slug: str):
     if not place:
         raise HTTPException(status_code=404, detail="not found")
     return place
+
+
+def api_public_entities(
+    request: Request,
+    q: Optional[str] = Query(None, max_length=120),
+    entity_kind: Optional[str] = Query(None, max_length=240),
+    type_: Optional[str] = Query(None, alias="type", max_length=240),
+    subtype: Optional[str] = Query(None, max_length=400),
+    region: Optional[str] = Query(None, max_length=120),
+    district: Optional[str] = Query(None, max_length=120),
+    city: Optional[str] = Query(None, max_length=120),
+    amenity: Optional[str] = Query(None, max_length=400),
+    seasonality: Optional[str] = Query(None, max_length=80),
+    open_now: bool = Query(False),
+    children: bool = Query(False),
+    pets: bool = Query(False),
+    parking: bool = Query(False),
+    wifi: bool = Query(False),
+    price_min: Optional[int] = Query(None, ge=0, le=1_000_000_000),
+    price_max: Optional[int] = Query(None, ge=0, le=1_000_000_000),
+    bbox: Optional[str] = Query(None, max_length=160),
+    map_only: bool = Query(False),
+    limit: int = Query(100, ge=1, le=200),
+    offset: int = Query(0, ge=0, le=10_000),
+):
+    try:
+        parsed_bbox = normalize_bbox(bbox)
+        kinds = normalize_filter_values(",".join(filter(None, (entity_kind, type_))))
+        subtypes = normalize_filter_values(subtype)
+        amenities = normalize_filter_values(amenity)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    normalized_seasonality = (seasonality or "").strip() or None
+    if normalized_seasonality and any(ord(character) < 32 for character in normalized_seasonality):
+        raise HTTPException(status_code=400, detail="Фильтр сезонности содержит недопустимое значение")
+    if price_min is not None and price_max is not None and price_min > price_max:
+        raise HTTPException(status_code=400, detail="Минимальная цена не может быть больше максимальной")
+    if not request.app.state.settings.feature_services:
+        if kinds and "accommodation" not in kinds:
+            return {"items": [], "total": 0, "limit": limit, "offset": offset}
+        kinds = ["accommodation"]
+    return catalog_repo.list_public_entities(
+        q=(q or "").strip() or None,
+        entity_kinds=kinds or None,
+        subtypes=subtypes or None,
+        region=(region or "").strip() or None,
+        district=(district or "").strip() or None,
+        city=(city or "").strip() or None,
+        amenities=amenities or None,
+        seasonality=normalized_seasonality,
+        open_now=open_now,
+        children=children,
+        pets=pets,
+        parking=parking,
+        wifi=wifi,
+        price_min=price_min,
+        price_max=price_max,
+        bbox=parsed_bbox,
+        map_only=map_only,
+        limit=limit,
+        offset=offset,
+    )
+
+
+def api_public_entity_detail(request: Request, slug: str):
+    try:
+        normalized_slug = validate_slug(slug)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="not found")
+    entity = catalog_repo.get_public_entity(normalized_slug)
+    if not entity:
+        raise HTTPException(status_code=404, detail="not found")
+    if (
+        not request.app.state.settings.feature_services
+        and (entity.get("entity_kind") or {}).get("key") != "accommodation"
+    ):
+        raise HTTPException(status_code=404, detail="not found")
+    return entity
 
 
 def api_camp_one(camp_id: int):
@@ -341,18 +464,44 @@ def api_camp_rooms_busy(
     return {"ok": True, "camp_id": camp_id, "from": date_from.isoformat(), "to": date_to.isoformat(), "rooms": out_rooms}
 
 
-async def api_camps_upsert_new(req: Request):
+async def _api_catalog_upsert_new(
+    req: Request,
+    *,
+    allowed_entity_kind: Optional[str] = None,
+):
     data = await req.json()
     try:
-        return catalog_repo.upsert_camp(None, data, _normalize_move)
+        return catalog_repo.upsert_camp(
+            None,
+            data,
+            _normalize_move,
+            allowed_entity_kind=allowed_entity_kind,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-async def api_camps_upsert(camp_id: int, req: Request):
+async def api_camps_upsert_new(req: Request):
+    return await _api_catalog_upsert_new(
+        req,
+        allowed_entity_kind="accommodation",
+    )
+
+
+async def _api_catalog_upsert(
+    camp_id: int,
+    req: Request,
+    *,
+    allowed_entity_kind: Optional[str] = None,
+):
     data = await req.json()
     try:
-        result = catalog_repo.upsert_camp(camp_id, data, _normalize_move)
+        result = catalog_repo.upsert_camp(
+            camp_id,
+            data,
+            _normalize_move,
+            allowed_entity_kind=allowed_entity_kind,
+        )
     except ValueError as exc:
         status_code = 404 if str(exc) == "Объект не найден" else 400
         raise HTTPException(status_code=status_code, detail=str(exc)) from exc
@@ -389,6 +538,22 @@ async def api_camps_upsert(camp_id: int, req: Request):
             # Каталожная публикация не откатывается из-за сбоя вторичного уведомления.
             pass
     return result
+
+
+async def api_camps_upsert(camp_id: int, req: Request):
+    return await _api_catalog_upsert(
+        camp_id,
+        req,
+        allowed_entity_kind="accommodation",
+    )
+
+
+async def api_entities_upsert_new(req: Request):
+    return await _api_catalog_upsert_new(req)
+
+
+async def api_entity_upsert(entity_id: int, req: Request):
+    return await _api_catalog_upsert(entity_id, req)
 
 
 def api_camp_status_update(camp_id: int, payload: CampStatusUpdateRequest):

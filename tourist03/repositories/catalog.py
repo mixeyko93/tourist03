@@ -3,6 +3,13 @@ from pathlib import Path
 from typing import Optional
 
 from tourist03.db import _db_conn, _pg_connect
+from tourist03.domain.catalog_entities import (
+    CatalogEntityValidationError,
+    build_display_sections,
+    format_price_text,
+    sanitize_entity_attributes_for_schema,
+    schema_org_type_for,
+)
 from tourist03.public_catalog import (
     PUBLICATION_STATUSES,
     normalize_contact,
@@ -23,20 +30,32 @@ CAMP_SELECT_ALL = """
            seasonality, working_hours, publication_status, published_at, confirmed_at,
            created_at, updated_at, content_version,
            public_email, public_phone, public_phone_secondary, public_site_url,
-           vk_url, telegram_url, whatsapp_url, max_url, video_urls, metadata
+           vk_url, telegram_url, whatsapp_url, max_url, video_urls, metadata,
+           schema_key, schema_version, attributes, seo, visibility,
+           price_mode, currency, seasonality_key, working_hours_mode
     FROM catalog.camps
 """
 
 PUBLIC_CAMP_SELECT = """
-    SELECT id, name, lat, lng, min_price, emoji,
-           lake_name, photo_main,
-           rooms_count, beds_count, address, phone, site_url, emoji_size,
-           bbq_count, bbq_shared_count, bath_count, sauna_count,
-           pools_private_count, pools_shared_count,
-           description, housing_type
-    FROM catalog.camps
+    SELECT c.id, c.name, c.lat, c.lng, c.min_price, c.emoji,
+           c.lake_name, c.photo_main,
+           c.rooms_count, c.beds_count, c.address, c.phone, c.site_url, c.emoji_size,
+           c.bbq_count, c.bbq_shared_count, c.bath_count, c.sauna_count,
+           c.pools_private_count, c.pools_shared_count,
+           c.description, c.housing_type
+    FROM catalog.camps c
+    JOIN catalog.place_types pt ON pt.id = c.place_type_id
+    JOIN catalog.entity_kinds ek ON ek.id = pt.entity_kind_id
 """
-PUBLIC_CAMP_STATUS_SQL = "lower(status) IN ('active', 'published') AND publication_status = 'published'"
+PUBLIC_CAMP_STATUS_SQL = (
+    "lower(COALESCE(status, '')) IN ('active', 'published') "
+    "AND publication_status = 'published' AND visibility = 'public' "
+    "AND EXISTS ("
+    "SELECT 1 FROM catalog.place_types legacy_pt "
+    "JOIN catalog.entity_kinds legacy_ek ON legacy_ek.id = legacy_pt.entity_kind_id "
+    "WHERE legacy_pt.id = place_type_id AND legacy_ek.slug = 'accommodation'"
+    ")"
+)
 
 
 def list_camps():
@@ -69,7 +88,7 @@ def get_public_camp(camp_id: int):
         cur = conn.cursor()
         cur.execute(
             PUBLIC_CAMP_SELECT
-            + f" WHERE id=%s AND {PUBLIC_CAMP_STATUS_SQL}",
+            + f" WHERE c.id=%s AND {PUBLIC_CAMP_STATUS_SQL}",
             (camp_id,),
         )
         row = cur.fetchone()
@@ -77,16 +96,101 @@ def get_public_camp(camp_id: int):
 
 
 def list_place_types(*, include_inactive: bool = False):
+    """Legacy accommodation subtype dictionary.
+
+    New catalog consumers must use ``list_entity_types``. Keeping this projection
+    accommodation-only prevents services from appearing in booking and placement
+    clients that historically interpret every place type as lodging.
+    """
+
+    with _db_conn("catalog") as conn:
+        cur = conn.cursor()
+        active_sql = "" if include_inactive else "AND pt.is_active = TRUE"
+        cur.execute(
+            f"""
+            SELECT pt.id, pt.slug, pt.name, pt.plural_name, pt.marker_key,
+                   pt.icon_key, pt.sort_order, pt.is_active, pt.config,
+                   ek.slug AS entity_kind,
+                   pt.default_schema_key AS schema_key,
+                   pt.default_schema_version AS schema_version
+            FROM catalog.place_types pt
+            JOIN catalog.entity_kinds ek ON ek.id = pt.entity_kind_id
+            WHERE ek.slug = 'accommodation' {active_sql}
+            ORDER BY pt.sort_order, pt.id
+            """
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+
+def list_entity_kinds(*, include_inactive: bool = False):
     with _db_conn("catalog") as conn:
         cur = conn.cursor()
         where = "" if include_inactive else "WHERE is_active = TRUE"
         cur.execute(
             f"""
-            SELECT id, slug, name, plural_name, marker_key, icon_key, sort_order, is_active, config
-            FROM catalog.place_types
+            SELECT id, slug AS key, slug, name, plural_name, marker_key,
+                   icon_key, sort_order, config
+            FROM catalog.entity_kinds
             {where}
             ORDER BY sort_order, id
             """
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+
+def list_entity_types(*, entity_kind: Optional[str] = None, include_inactive: bool = False):
+    clauses = []
+    params: list = []
+    if not include_inactive:
+        clauses.extend(["pt.is_active = TRUE", "ek.is_active = TRUE"])
+    if entity_kind:
+        clauses.append("ek.slug = %s")
+        params.append(entity_kind.lower())
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    with _db_conn("catalog") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT pt.id, pt.slug, pt.name, pt.plural_name, pt.marker_key,
+                   pt.icon_key, pt.sort_order, pt.config,
+                   ek.slug AS entity_kind,
+                   pt.default_schema_key AS schema_key,
+                   pt.default_schema_version AS schema_version
+            FROM catalog.place_types pt
+            JOIN catalog.entity_kinds ek ON ek.id = pt.entity_kind_id
+            {where}
+            ORDER BY ek.sort_order, pt.sort_order, pt.id
+            """,
+            tuple(params),
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+
+def list_entity_schemas(
+    *,
+    schema_key: Optional[str] = None,
+    include_inactive: bool = False,
+):
+    params: list = []
+    clauses = [] if include_inactive else ["es.is_active = TRUE"]
+    if schema_key:
+        clauses.append("es.schema_key = %s")
+        params.append(schema_key.lower())
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    with _db_conn("catalog") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT es.schema_key AS key, es.version, es.name,
+                   ek.slug AS entity_kind, es.applicable_kinds,
+                   es.fields, es.sections, es.validation, es.display,
+                   es.schema_org_type, es.quality_keys
+            FROM catalog.entity_schemas es
+            JOIN catalog.entity_kinds ek ON ek.id = es.entity_kind_id
+            {where}
+            ORDER BY es.schema_key, es.version DESC
+            """,
+            tuple(params),
         )
         return [dict(row) for row in cur.fetchall()]
 
@@ -161,6 +265,24 @@ def _place_type_from_row(row: dict) -> dict:
         "icon_key": row.pop("place_type_icon_key"),
         "sort_order": int(row.pop("place_type_sort_order") or 0),
         "config": row.pop("place_type_config") or {},
+        "entity_kind": row.get("entity_kind_slug"),
+        "schema_key": row.get("schema_key"),
+        "schema_version": row.get("schema_version"),
+    }
+
+
+def _entity_kind_from_row(row: dict) -> dict:
+    slug = row.pop("entity_kind_slug")
+    return {
+        "id": int(row.pop("entity_kind_id")),
+        "key": slug,
+        "slug": slug,
+        "name": row.pop("entity_kind_name"),
+        "plural_name": row.pop("entity_kind_plural_name"),
+        "marker_key": row.pop("entity_kind_marker_key"),
+        "icon_key": row.pop("entity_kind_icon_key"),
+        "sort_order": int(row.pop("entity_kind_sort_order") or 0),
+        "config": row.pop("entity_kind_config") or {},
     }
 
 
@@ -231,6 +353,12 @@ def _public_place_select() -> str:
             c.lat,
             c.lng,
             c.min_price,
+            c.schema_key,
+            c.schema_version,
+            c.attributes,
+            c.visibility,
+            c.price_mode,
+            c.currency,
             pt.id AS place_type_id,
             pt.slug AS place_type_slug,
             pt.name AS place_type_name,
@@ -239,6 +367,14 @@ def _public_place_select() -> str:
             pt.icon_key AS place_type_icon_key,
             pt.sort_order AS place_type_sort_order,
             pt.config AS place_type_config,
+            ek.id AS entity_kind_id,
+            ek.slug AS entity_kind_slug,
+            ek.name AS entity_kind_name,
+            ek.plural_name AS entity_kind_plural_name,
+            ek.marker_key AS entity_kind_marker_key,
+            ek.icon_key AS entity_kind_icon_key,
+            ek.sort_order AS entity_kind_sort_order,
+            ek.config AS entity_kind_config,
             COALESCE(
                 (
                     SELECT cm.url
@@ -260,7 +396,229 @@ def _public_place_select() -> str:
             ) AS cover
         FROM catalog.camps c
         JOIN catalog.place_types pt ON pt.id = c.place_type_id
+        JOIN catalog.entity_kinds ek ON ek.id = pt.entity_kind_id
     """
+
+
+def _public_entity_filters(
+    *,
+    q: Optional[str] = None,
+    entity_kinds: Optional[list[str]] = None,
+    subtypes: Optional[list[str]] = None,
+    region: Optional[str] = None,
+    district: Optional[str] = None,
+    city: Optional[str] = None,
+    amenities: Optional[list[str]] = None,
+    seasonality: Optional[str] = None,
+    open_now: bool = False,
+    children: bool = False,
+    pets: bool = False,
+    parking: bool = False,
+    wifi: bool = False,
+    price_min: Optional[int] = None,
+    price_max: Optional[int] = None,
+    bbox: Optional[tuple[float, float, float, float]] = None,
+) -> tuple[list[str], list]:
+    clauses = [
+        "c.publication_status = 'published'",
+        "lower(COALESCE(c.status, '')) IN ('active', 'published')",
+        "c.visibility = 'public'",
+        "pt.is_active = TRUE",
+        "ek.is_active = TRUE",
+    ]
+    params: list = []
+    if q:
+        clauses.append(
+            """(
+                to_tsvector(
+                    'simple'::regconfig,
+                    COALESCE(c.name, '') || ' ' ||
+                    COALESCE(c.short_description, '') || ' ' ||
+                    COALESCE(c.description, '') || ' ' ||
+                    COALESCE(c.region, '') || ' ' ||
+                    COALESCE(c.district, '') || ' ' ||
+                    COALESCE(c.city, '') || ' ' ||
+                    COALESCE(c.locality, '') || ' ' ||
+                    COALESCE(c.address, '')
+                ) @@ websearch_to_tsquery('simple'::regconfig, %s)
+                OR pt.name ILIKE %s OR pt.plural_name ILIKE %s
+                OR ek.name ILIKE %s OR ek.plural_name ILIKE %s
+                OR COALESCE(pt.config->'search_aliases', '[]'::jsonb)::text ILIKE %s
+                OR EXISTS (
+                    SELECT 1
+                    FROM catalog.camp_amenities search_ca
+                    JOIN catalog.amenities search_a ON search_a.id = search_ca.amenity_id
+                    WHERE search_ca.camp_id = c.id AND search_a.name ILIKE %s
+                )
+            )"""
+        )
+        pattern = f"%{q}%"
+        params.extend([q, pattern, pattern, pattern, pattern, pattern, pattern])
+    if entity_kinds:
+        clauses.append("ek.slug = ANY(%s)")
+        params.append([value.lower() for value in entity_kinds])
+    if subtypes:
+        clauses.append("pt.slug = ANY(%s)")
+        params.append([value.lower() for value in subtypes])
+    if region:
+        clauses.append("lower(c.region) = lower(%s)")
+        params.append(region)
+    if district:
+        clauses.append("lower(c.district) = lower(%s)")
+        params.append(district)
+    if city:
+        clauses.append("lower(c.city) = lower(%s)")
+        params.append(city)
+    if seasonality:
+        clauses.append("lower(COALESCE(c.seasonality_key, c.seasonality, '')) = lower(%s)")
+        params.append(seasonality)
+    if amenities:
+        clauses.append(
+            """
+            (
+                SELECT COUNT(DISTINCT lower(filter_a.slug))
+                FROM catalog.camp_amenities filter_ca
+                JOIN catalog.amenities filter_a ON filter_a.id = filter_ca.amenity_id
+                WHERE filter_ca.camp_id = c.id
+                  AND filter_a.is_active = TRUE
+                  AND lower(filter_a.slug) = ANY(%s)
+            ) = %s
+            """
+        )
+        params.append([slug.lower() for slug in amenities])
+        params.append(len(set(amenities)))
+    for enabled, slug in (
+        (children, "children"),
+        (pets, "pets"),
+        (parking, "parking"),
+        (wifi, "wifi"),
+    ):
+        if enabled:
+            clauses.append(
+                """EXISTS (
+                    SELECT 1
+                    FROM catalog.camp_amenities quick_ca
+                    JOIN catalog.amenities quick_a ON quick_a.id = quick_ca.amenity_id
+                    WHERE quick_ca.camp_id = c.id AND quick_a.slug = %s AND quick_a.is_active = TRUE
+                )"""
+            )
+            params.append(slug)
+    if open_now:
+        clauses.append(
+            "catalog.entity_is_open_now(c.working_hours_mode, c.working_hours)"
+        )
+    if price_min is not None:
+        clauses.append("c.min_price >= %s")
+        params.append(price_min)
+    if price_max is not None:
+        clauses.append("c.min_price <= %s")
+        params.append(price_max)
+    if bbox:
+        min_lng, min_lat, max_lng, max_lat = bbox
+        clauses.extend(["c.lng BETWEEN %s AND %s", "c.lat BETWEEN %s AND %s"])
+        params.extend([min_lng, max_lng, min_lat, max_lat])
+    return clauses, params
+
+
+def _price_display(row: dict) -> Optional[str]:
+    try:
+        return format_price_text(
+            row.get("min_price"),
+            price_mode=str(row.get("price_mode") or "from"),
+            currency=str(row.get("currency") or "RUB"),
+        ) or None
+    except CatalogEntityValidationError:
+        return None
+
+
+def _public_entity_item(row: dict, contacts: dict[int, list[dict]], amenities: dict[int, list[dict]]) -> dict:
+    entity_id = int(row["id"])
+    subtype = _place_type_from_row(row)
+    entity_kind = _entity_kind_from_row(row)
+    raw_attributes = row.get("attributes")
+    attributes = raw_attributes if isinstance(raw_attributes, dict) else {}
+    summary_attribute_keys = {"duration", "duration_minutes", "capacity", "languages", "price_unit", "age_limit"}
+    row["attributes"] = {key: value for key, value in attributes.items() if key in summary_attribute_keys}
+    row["entity_id"] = entity_id
+    row["entity_kind"] = entity_kind
+    row["place_type"] = subtype
+    row["subtype"] = dict(subtype)
+    row["cover"] = safe_public_asset_url(row.get("cover") or "")
+    row["primary_contacts"] = contacts.get(entity_id, [])[:2]
+    row["key_amenities"] = amenities.get(entity_id, [])[:6]
+    row["price_display"] = _price_display(row)
+    return row
+
+
+def list_public_entities(
+    *,
+    q: Optional[str] = None,
+    entity_kinds: Optional[list[str]] = None,
+    subtypes: Optional[list[str]] = None,
+    region: Optional[str] = None,
+    district: Optional[str] = None,
+    city: Optional[str] = None,
+    amenities: Optional[list[str]] = None,
+    seasonality: Optional[str] = None,
+    open_now: bool = False,
+    children: bool = False,
+    pets: bool = False,
+    parking: bool = False,
+    wifi: bool = False,
+    price_min: Optional[int] = None,
+    price_max: Optional[int] = None,
+    bbox: Optional[tuple[float, float, float, float]] = None,
+    map_only: bool = False,
+    limit: int = 50,
+    offset: int = 0,
+):
+    clauses, params = _public_entity_filters(
+        q=q,
+        entity_kinds=entity_kinds,
+        subtypes=subtypes,
+        region=region,
+        district=district,
+        city=city,
+        amenities=amenities,
+        seasonality=seasonality,
+        open_now=open_now,
+        children=children,
+        pets=pets,
+        parking=parking,
+        wifi=wifi,
+        price_min=price_min,
+        price_max=price_max,
+        bbox=bbox,
+    )
+    if map_only:
+        clauses.extend(["c.is_visible_on_map = TRUE", "c.lat IS NOT NULL", "c.lng IS NOT NULL"])
+
+    where_sql = " AND ".join(clauses)
+    with _db_conn("catalog") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT COUNT(*) AS total
+            FROM catalog.camps c
+            JOIN catalog.place_types pt ON pt.id = c.place_type_id
+            JOIN catalog.entity_kinds ek ON ek.id = pt.entity_kind_id
+            WHERE {where_sql}
+            """,
+            tuple(params),
+        )
+        total = int(cur.fetchone()["total"])
+        cur.execute(
+            _public_place_select()
+            + f" WHERE {where_sql} ORDER BY ek.sort_order, pt.sort_order, lower(c.name), c.id LIMIT %s OFFSET %s",
+            tuple([*params, limit, offset]),
+        )
+        rows = [dict(row) for row in cur.fetchall()]
+        camp_ids = [int(row["id"]) for row in rows]
+        contacts = _list_public_contacts_for_ids(cur, camp_ids)
+        amenities_by_camp = _list_public_amenities_for_ids(cur, camp_ids)
+
+    items = [_public_entity_item(row, contacts, amenities_by_camp) for row in rows]
+    return {"items": items, "total": total, "limit": limit, "offset": offset}
 
 
 def list_public_places(
@@ -274,74 +632,81 @@ def list_public_places(
     limit: int = 50,
     offset: int = 0,
 ):
-    clauses = ["c.publication_status = 'published'", "lower(COALESCE(c.status, '')) IN ('active', 'published')"]
-    params: list = []
-    if q:
-        clauses.append(
-            "(c.name ILIKE %s OR c.short_description ILIKE %s OR c.address ILIKE %s OR c.region ILIKE %s OR c.city ILIKE %s OR c.locality ILIKE %s)"
-        )
-        pattern = f"%{q}%"
-        params.extend([pattern] * 6)
-    if place_type:
-        clauses.append("lower(pt.slug) = %s")
-        params.append(place_type.lower())
-    if region:
-        clauses.append("lower(c.region) = lower(%s)")
-        params.append(region)
-    if city:
-        clauses.append("lower(c.city) = lower(%s)")
-        params.append(city)
-    if amenities:
-        clauses.append(
-            """
-            EXISTS (
-                SELECT 1
-                FROM catalog.camp_amenities filter_ca
-                JOIN catalog.amenities filter_a ON filter_a.id = filter_ca.amenity_id
-                WHERE filter_ca.camp_id = c.id
-                  AND filter_a.is_active = TRUE
-                  AND lower(filter_a.slug) = ANY(%s)
-            )
-            """
-        )
-        params.append([slug.lower() for slug in amenities])
-    if bbox:
-        min_lng, min_lat, max_lng, max_lat = bbox
-        clauses.extend(["c.lng BETWEEN %s AND %s", "c.lat BETWEEN %s AND %s"])
-        params.extend([min_lng, max_lng, min_lat, max_lat])
+    """Compatibility projection for the accommodation-only Stage 2 API."""
 
-    where_sql = " AND ".join(clauses)
+    return list_public_entities(
+        q=q,
+        entity_kinds=["accommodation"],
+        subtypes=[place_type] if place_type else None,
+        region=region,
+        city=city,
+        amenities=amenities,
+        bbox=bbox,
+        limit=limit,
+        offset=offset,
+    )
+
+
+def list_public_catalog_facets(*, entity_kinds: Optional[list[str]] = None):
+    kind_clause = " AND ek.slug = ANY(%s)" if entity_kinds else ""
+    kind_params = ([value.lower() for value in entity_kinds],) if entity_kinds else ()
+    base = """
+        FROM catalog.camps c
+        JOIN catalog.place_types pt ON pt.id = c.place_type_id
+        JOIN catalog.entity_kinds ek ON ek.id = pt.entity_kind_id
+        WHERE c.publication_status = 'published'
+          AND lower(COALESCE(c.status, '')) IN ('active', 'published')
+          AND c.visibility = 'public'
+          AND pt.is_active = TRUE
+          AND ek.is_active = TRUE
+    """ + kind_clause
+    facets: dict[str, list[dict]] = {}
     with _db_conn("catalog") as conn:
         cur = conn.cursor()
+        for key, value_sql, label_sql, extra in (
+            ("entity_kinds", "ek.slug", "ek.name", ""),
+            ("subtypes", "pt.slug", "pt.name", ""),
+            ("regions", "lower(c.region)", "c.region", "AND NULLIF(trim(c.region), '') IS NOT NULL"),
+            ("districts", "lower(c.district)", "c.district", "AND NULLIF(trim(c.district), '') IS NOT NULL"),
+            ("cities", "lower(c.city)", "c.city", "AND NULLIF(trim(c.city), '') IS NOT NULL"),
+            (
+                "seasonality",
+                "lower(COALESCE(c.seasonality_key, c.seasonality))",
+                "COALESCE(c.seasonality_key, c.seasonality)",
+                "AND NULLIF(trim(COALESCE(c.seasonality_key, c.seasonality)), '') IS NOT NULL",
+            ),
+        ):
+            cur.execute(
+                f"""
+                SELECT {value_sql} AS value, min({label_sql}) AS label, count(*) AS count
+                {base} {extra}
+                GROUP BY {value_sql}
+                ORDER BY min({label_sql})
+                """,
+                kind_params,
+            )
+            facets[key] = [dict(row) for row in cur.fetchall()]
         cur.execute(
-            f"""
-            SELECT COUNT(*) AS total
+            """
+            SELECT a.slug AS value, a.name AS label, count(DISTINCT ca.camp_id) AS count
             FROM catalog.camps c
             JOIN catalog.place_types pt ON pt.id = c.place_type_id
-            WHERE {where_sql}
+            JOIN catalog.entity_kinds ek ON ek.id = pt.entity_kind_id
+            JOIN catalog.camp_amenities ca ON ca.camp_id = c.id
+            JOIN catalog.amenities a ON a.id = ca.amenity_id AND a.is_active = TRUE
+            WHERE c.publication_status = 'published'
+              AND lower(COALESCE(c.status, '')) IN ('active', 'published')
+              AND c.visibility = 'public'
+              AND pt.is_active = TRUE
+              AND ek.is_active = TRUE
+            """ + kind_clause + """
+            GROUP BY a.slug, a.name, a.sort_order
+            ORDER BY a.sort_order, a.name
             """,
-            tuple(params),
+            kind_params,
         )
-        total = int(cur.fetchone()["total"])
-        cur.execute(
-            _public_place_select()
-            + f" WHERE {where_sql} ORDER BY pt.sort_order, lower(c.name), c.id LIMIT %s OFFSET %s",
-            tuple([*params, limit, offset]),
-        )
-        rows = [dict(row) for row in cur.fetchall()]
-        camp_ids = [int(row["id"]) for row in rows]
-        contacts = _list_public_contacts_for_ids(cur, camp_ids)
-        amenities_by_camp = _list_public_amenities_for_ids(cur, camp_ids)
-
-    items = []
-    for row in rows:
-        camp_id = int(row["id"])
-        row["place_type"] = _place_type_from_row(row)
-        row["cover"] = safe_public_asset_url(row.get("cover") or "")
-        row["primary_contacts"] = contacts.get(camp_id, [])[:2]
-        row["key_amenities"] = amenities_by_camp.get(camp_id, [])[:6]
-        items.append(row)
-    return {"items": items, "total": total, "limit": limit, "offset": offset}
+        facets["amenities"] = [dict(row) for row in cur.fetchall()]
+    return facets
 
 
 def _public_gallery(cur, camp_id: int) -> list[dict]:
@@ -475,7 +840,96 @@ def _public_rooms(cur, camp_id: int) -> list[dict]:
     return output
 
 
-def get_public_place(slug: str):
+def _attribute_display_value(value) -> str:
+    if isinstance(value, bool):
+        return "Да" if value else "Нет"
+    if isinstance(value, list):
+        return ", ".join(str(item) for item in value if item not in (None, ""))
+    if isinstance(value, dict):
+        return ", ".join(f"{key}: {item}" for key, item in value.items() if item not in (None, ""))
+    return str(value)
+
+
+def _public_display_sections(attributes: dict, schema: dict) -> list[dict]:
+    schema_key = str(schema.get("schema_key") or schema.get("key") or "")
+    schema_version = int(schema.get("version") or 1)
+    if schema_key:
+        try:
+            sections = build_display_sections(
+                attributes,
+                schema_key=schema_key,
+                schema_version=schema_version,
+            )
+            for section in sections:
+                for item in section.get("items", []):
+                    display_value = _attribute_display_value(item.get("value"))
+                    if item.get("unit"):
+                        display_value = f"{display_value} {item['unit']}"
+                    item["display_value"] = display_value
+                    item["kind"] = "fact"
+            return sections
+        except CatalogEntityValidationError:
+            pass
+    fields = {
+        str(field.get("key")): field
+        for field in (schema.get("fields") or [])
+        if isinstance(field, dict) and field.get("key") and field.get("public", True)
+    }
+    sections = schema.get("sections") if isinstance(schema.get("sections"), list) else []
+    output: list[dict] = []
+    rendered: set[str] = set()
+    for raw_section in sections:
+        if not isinstance(raw_section, dict):
+            continue
+        field_keys = raw_section.get("fields") or raw_section.get("field_keys") or []
+        if not isinstance(field_keys, list):
+            continue
+        items = []
+        for field_key in field_keys:
+            key = str(field_key)
+            field = fields.get(key)
+            value = attributes.get(key)
+            if not field or value in (None, "", [], {}):
+                continue
+            rendered.add(key)
+            items.append(
+                {
+                    "key": key,
+                    "label": field.get("label") or key.replace("_", " ").capitalize(),
+                    "value": value,
+                    "display_value": _attribute_display_value(value),
+                    "kind": field.get("kind") or field.get("type") or "text",
+                }
+            )
+        if items:
+            output.append(
+                {
+                    "key": raw_section.get("key") or f"section-{len(output) + 1}",
+                    "title": raw_section.get("title") or raw_section.get("label") or "Подробности",
+                    "eyebrow": raw_section.get("eyebrow"),
+                    "items": items,
+                }
+            )
+    remaining = []
+    for key, value in attributes.items():
+        field = fields.get(str(key))
+        if str(key) in rendered or not field or value in (None, "", [], {}):
+            continue
+        remaining.append(
+            {
+                "key": str(key),
+                "label": field.get("label") or str(key).replace("_", " ").capitalize(),
+                "value": value,
+                "display_value": _attribute_display_value(value),
+                "kind": field.get("kind") or field.get("type") or "text",
+            }
+        )
+    if remaining:
+        output.append({"key": "details", "title": "Подробности", "eyebrow": None, "items": remaining})
+    return output
+
+
+def get_public_entity(slug: str):
     with _db_conn("catalog") as conn:
         cur = conn.cursor()
         cur.execute(
@@ -484,6 +938,7 @@ def get_public_place(slug: str):
               WHERE lower(c.slug) = lower(%s)
                 AND c.publication_status = 'published'
                 AND lower(COALESCE(c.status, '')) IN ('active', 'published')
+                AND c.visibility IN ('public', 'unlisted')
             """,
             (slug,),
         )
@@ -495,22 +950,34 @@ def get_public_place(slug: str):
         cur.execute(
             """
             SELECT description, district, address, seasonality, working_hours,
-                   confirmed_at, updated_at, video_urls
+                   confirmed_at, updated_at, video_urls, attributes, seo,
+                   seasonality_key, working_hours_mode
             FROM catalog.camps
             WHERE id = %s
             """,
             (camp_id,),
         )
         details = dict(cur.fetchone())
+        if not isinstance(details.get("working_hours"), dict):
+            details["working_hours"] = {}
         contacts = _list_public_contacts_for_ids(cur, [camp_id]).get(camp_id, [])
         amenities = _list_public_amenities_for_ids(cur, [camp_id]).get(camp_id, [])
         gallery = _public_gallery(cur, camp_id)
-        rooms = _public_rooms(cur, camp_id)
+        entity_kind_slug = str(row.get("entity_kind_slug") or "")
+        rooms = _public_rooms(cur, camp_id) if entity_kind_slug == "accommodation" else []
+        cur.execute(
+            """
+            SELECT es.schema_key, es.version, es.fields, es.sections,
+                   es.validation, es.display, es.schema_org_type
+            FROM catalog.entity_schemas es
+            WHERE es.schema_key = %s AND es.version = %s
+            """,
+            (row.get("schema_key"), row.get("schema_version")),
+        )
+        schema_row = cur.fetchone()
+        schema = dict(schema_row) if schema_row else {}
 
-    row["place_type"] = _place_type_from_row(row)
-    row["cover"] = safe_public_asset_url(row.get("cover") or "")
-    row["primary_contacts"] = contacts[:2]
-    row["key_amenities"] = amenities[:6]
+    row = _public_entity_item(row, {camp_id: contacts}, {camp_id: amenities})
     row.update({key: value for key, value in details.items() if key != "video_urls"})
     row["contacts"] = contacts
     row["amenities"] = amenities
@@ -519,20 +986,49 @@ def get_public_place(slug: str):
     video_values = details.get("video_urls") if isinstance(details.get("video_urls"), list) else []
     media_videos = [item["url"] for item in gallery if item["media_type"] == "video"]
     row["videos"] = list(dict.fromkeys(filter(None, [*(safe_video_url(str(value)) for value in video_values), *media_videos])))
+    attributes = details.get("attributes") if isinstance(details.get("attributes"), dict) else {}
+    row["attributes"] = attributes
+    row["display_sections"] = _public_display_sections(attributes, schema)
+    row["schema_org_type"] = (
+        schema_org_type_for(entity_kind_slug)
+        if entity_kind_slug in {"event", "sight"}
+        else schema.get("schema_org_type")
+        or schema_org_type_for(entity_kind_slug)
+    )
     return row
 
 
-def list_published_place_sitemap():
+def get_public_place(slug: str):
+    """Accommodation-only compatibility projection for the Stage 2 detail API."""
+
+    entity = get_public_entity(slug)
+    if not entity:
+        return None
+    kind = entity.get("entity_kind") or {}
+    kind_key = kind.get("key") if isinstance(kind, dict) else str(kind)
+    return entity if kind_key == "accommodation" else None
+
+
+def list_published_place_sitemap(*, entity_kinds: Optional[list[str]] = None):
+    kind_clause = " AND kinds.slug = ANY(%s)" if entity_kinds else ""
+    params = ([value.lower() for value in entity_kinds],) if entity_kinds else ()
     with _db_conn("catalog") as conn:
         cur = conn.cursor()
         cur.execute(
             """
-            SELECT slug, updated_at
-            FROM catalog.camps
-            WHERE publication_status = 'published'
-              AND lower(COALESCE(status, '')) IN ('active', 'published')
-            ORDER BY lower(slug), id
+            SELECT camps.slug, camps.updated_at
+            FROM catalog.camps camps
+            JOIN catalog.place_types types ON types.id = camps.place_type_id
+            JOIN catalog.entity_kinds kinds ON kinds.id = types.entity_kind_id
+            WHERE camps.publication_status = 'published'
+              AND lower(COALESCE(camps.status, '')) IN ('active', 'published')
+              AND camps.visibility = 'public'
             """
+            + kind_clause
+            + """
+            ORDER BY lower(camps.slug), camps.id
+            """,
+            params,
         )
         return [dict(row) for row in cur.fetchall()]
 
@@ -1099,8 +1595,11 @@ def list_room_busy_rows(room_id: int, date_from, date_to, blocked_statuses: tupl
             FROM crm.bookings b
             JOIN catalog.rooms r ON r.id = b.room_id
             JOIN catalog.camps c ON c.id = r.camp_id
+            JOIN catalog.place_types pt ON pt.id = c.place_type_id
+            JOIN catalog.entity_kinds ek ON ek.id = pt.entity_kind_id
             WHERE b.room_id=%s
               AND lower(c.status) IN ('active', 'published')
+              AND ek.slug = 'accommodation'
               AND (b.status IS NULL OR lower(b.status) NOT IN %s)
               AND b.check_in < %s
               AND b.check_out > %s
@@ -1163,17 +1662,56 @@ def _catalog_json_list(value, fallback: Optional[list] = None) -> list:
     return value
 
 
+def _validated_entity_attributes(
+    cur,
+    schema_key: str,
+    schema_version: int,
+    value,
+    *,
+    include_inactive: bool = False,
+) -> dict:
+    attributes = _catalog_json_object(value)
+    cur.execute(
+        """
+        SELECT schema_key, version, name, applicable_kinds, fields, sections,
+               validation, display, schema_org_type, quality_keys
+        FROM catalog.entity_schemas
+        WHERE schema_key = %s AND version = %s
+          AND (%s OR is_active = TRUE)
+        """,
+        (schema_key, schema_version, include_inactive),
+    )
+    raw_schema = cur.fetchone()
+    if not raw_schema:
+        raise ValueError("Схема карточки недоступна")
+    schema = dict(raw_schema)
+    schema["title"] = schema.pop("name")
+    try:
+        return sanitize_entity_attributes_for_schema(
+            attributes,
+            schema,
+        )
+    except CatalogEntityValidationError as exc:
+        raise ValueError(str(exc)) from exc
+
+
 def _resolve_place_type(cur, data: dict, current: Optional[dict]):
     requested_id = data.get("place_type_id")
     requested_slug = str(data.get("place_type") or data.get("place_type_slug") or "").strip().lower()
+    select_sql = """
+        SELECT pt.id, pt.slug, pt.is_active, pt.default_schema_key,
+               pt.default_schema_version, ek.slug AS entity_kind
+        FROM catalog.place_types pt
+        JOIN catalog.entity_kinds ek ON ek.id = pt.entity_kind_id
+    """
     if requested_id is not None:
-        cur.execute("SELECT id, slug, is_active FROM catalog.place_types WHERE id = %s", (requested_id,))
+        cur.execute(select_sql + " WHERE pt.id = %s", (requested_id,))
     elif requested_slug:
-        cur.execute("SELECT id, slug, is_active FROM catalog.place_types WHERE lower(slug) = %s", (requested_slug,))
+        cur.execute(select_sql + " WHERE lower(pt.slug) = %s", (requested_slug,))
     elif current and current.get("place_type_id"):
-        cur.execute("SELECT id, slug, is_active FROM catalog.place_types WHERE id = %s", (current["place_type_id"],))
+        cur.execute(select_sql + " WHERE pt.id = %s", (current["place_type_id"],))
     else:
-        cur.execute("SELECT id, slug, is_active FROM catalog.place_types WHERE slug = 'recreation-base'")
+        cur.execute(select_sql + " WHERE pt.slug = 'recreation-base'")
     row = cur.fetchone()
     if not row:
         raise ValueError("Указан неизвестный тип объекта")
@@ -1319,6 +1857,129 @@ def _publication_warnings(
     return warnings
 
 
+def ensure_entities_ready_for_publication(
+    cur,
+    entity_ids,
+    *,
+    block_owner_storage_drafts: bool,
+    skip_already_published: bool,
+) -> None:
+    """Fail closed before a catalog row becomes publicly visible.
+
+    The cursor belongs to the caller's transaction so moderation apply can
+    validate the fully merged row (including contacts and staged media) and
+    roll every write back when readiness is incomplete.
+    """
+
+    normalized_ids = sorted(
+        {
+            int(entity_id)
+            for entity_id in entity_ids
+            if int(entity_id) > 0
+        }
+    )
+    if not normalized_ids:
+        return
+    cur.execute(
+        """
+        SELECT
+            c.id,
+            c.name,
+            c.slug,
+            c.place_type_id,
+            c.publication_status,
+            c.visibility,
+            c.short_description,
+            c.lat,
+            c.lng,
+            COALESCE(
+                c.metadata @> '{"cover_placeholder_confirmed": true}'::jsonb,
+                FALSE
+            ) AS placeholder_confirmed,
+            (
+                NULLIF(c.photo_main, '') IS NOT NULL
+                OR EXISTS (
+                    SELECT 1
+                    FROM catalog.camp_media media
+                    WHERE media.camp_id = c.id
+                      AND media.media_type = 'image'
+                      AND media.moderation_status = 'approved'
+                )
+                OR EXISTS (
+                    SELECT 1
+                    FROM catalog.camp_photos photos
+                    WHERE photos.camp_id = c.id
+                )
+            ) AS has_cover,
+            EXISTS (
+                SELECT 1
+                FROM catalog.place_contacts contacts
+                WHERE contacts.camp_id = c.id
+                  AND contacts.is_public = TRUE
+            ) AS has_public_contact,
+            EXISTS (
+                SELECT 1
+                FROM catalog.camp_owner_links owners
+                WHERE owners.camp_id = c.id
+            ) AS has_owner
+        FROM catalog.camps c
+        WHERE c.id = ANY(%s)
+        ORDER BY c.id
+        FOR UPDATE OF c
+        """,
+        (normalized_ids,),
+    )
+    readiness_rows = [dict(row) for row in cur.fetchall()]
+    found_ids = {int(row["id"]) for row in readiness_rows}
+    missing_ids = [
+        entity_id for entity_id in normalized_ids if entity_id not in found_ids
+    ]
+    if missing_ids:
+        raise ValueError(
+            "Карточки не найдены: "
+            + ", ".join(str(entity_id) for entity_id in missing_ids)
+        )
+
+    blocked: list[str] = []
+    for row in readiness_rows:
+        if skip_already_published and row.get("publication_status") == "published":
+            continue
+        reasons: list[str] = []
+        if (
+            block_owner_storage_drafts
+            and row.get("publication_status") == "draft"
+            and row.get("visibility") == "hidden"
+            and bool(row.get("has_owner"))
+        ):
+            reasons.append(
+                "черновик владельца должен пройти модерацию и применение"
+            )
+        reasons.extend(
+            _publication_warnings(
+                name=str(row.get("name") or "").strip(),
+                slug=str(row.get("slug") or "").strip(),
+                place_type_id=int(row.get("place_type_id") or 0),
+                lat=row.get("lat"),
+                lng=row.get("lng"),
+                short_description=str(
+                    row.get("short_description") or ""
+                ).strip(),
+                has_cover=bool(row.get("has_cover")),
+                placeholder_confirmed=bool(
+                    row.get("placeholder_confirmed")
+                ),
+                has_public_contact=bool(row.get("has_public_contact")),
+            )
+        )
+        if reasons:
+            blocked.append(
+                f"#{int(row['id'])} {str(row.get('name') or 'Без названия')}: "
+                + "; ".join(reasons)
+            )
+    if blocked:
+        raise ValueError("Публикация невозможна: " + " | ".join(blocked))
+
+
 def list_camp_busy_rows(camp_id: int, date_from, date_to, blocked_statuses: tuple[str, ...]):
     with _db_conn("crm") as conn:
         cur = conn.cursor()
@@ -1338,7 +1999,13 @@ def list_camp_busy_rows(camp_id: int, date_from, date_to, blocked_statuses: tupl
         return [dict(row) for row in cur.fetchall()]
 
 
-def upsert_camp(camp_id: Optional[int], data: dict, normalize_move):
+def upsert_camp(
+    camp_id: Optional[int],
+    data: dict,
+    normalize_move,
+    *,
+    allowed_entity_kind: Optional[str] = None,
+):
     conn = _pg_connect("catalog")
     try:
         cur = conn.cursor()
@@ -1357,7 +2024,32 @@ def upsert_camp(camp_id: Optional[int], data: dict, normalize_move):
             reserved_id = int(cur.fetchone()["id"])
 
         place_type = _resolve_place_type(cur, data, current)
+        if (
+            allowed_entity_kind
+            and place_type.get("entity_kind") != allowed_entity_kind
+        ):
+            raise ValueError("Legacy API поддерживает только объекты проживания")
         slug = _resolve_place_slug(cur, data, current, reserved_id)
+        type_changed = not current or int(current.get("place_type_id") or 0) != int(place_type["id"])
+        if current and type_changed and place_type.get("entity_kind") != "accommodation":
+            cur.execute(
+                "SELECT 1 FROM catalog.rooms WHERE camp_id = %s LIMIT 1",
+                (camp_id,),
+            )
+            if cur.fetchone():
+                raise ValueError(
+                    "Тип объекта нельзя изменить, пока у карточки есть варианты размещения"
+                )
+        schema_key = (
+            place_type["default_schema_key"]
+            if type_changed
+            else str(current.get("schema_key") or place_type["default_schema_key"])
+        )
+        schema_version = (
+            int(place_type["default_schema_version"])
+            if type_changed
+            else int(current.get("schema_version") or place_type["default_schema_version"])
+        )
         publication_status = str(
             data.get("publication_status")
             or (current.get("publication_status") if current else "draft")
@@ -1402,6 +2094,55 @@ def upsert_camp(camp_id: Optional[int], data: dict, normalize_move):
             data.get("metadata") if "metadata" in data else None,
             current.get("metadata") if current else {},
         )
+        attributes = _validated_entity_attributes(
+            cur,
+            schema_key,
+            schema_version,
+            data.get("attributes")
+            if "attributes" in data
+            else ({} if type_changed else (current.get("attributes") if current else {})),
+            include_inactive=bool(current and not type_changed),
+        )
+        seo = _catalog_json_object(
+            data.get("seo") if "seo" in data else None,
+            current.get("seo") if current and not type_changed else {},
+        )
+        allowed_seo_keys = {"title", "description", "og_title", "og_description", "og_image", "noindex"}
+        if set(seo).difference(allowed_seo_keys):
+            raise ValueError("SEO-данные содержат недоступные поля")
+        visibility = str(
+            data.get("visibility")
+            if "visibility" in data
+            else (current.get("visibility") if current else "public")
+        ).strip().lower()
+        if visibility not in {"public", "unlisted", "hidden"}:
+            raise ValueError("Некорректная видимость карточки")
+        price_mode = str(
+            data.get("price_mode")
+            if "price_mode" in data
+            else (current.get("price_mode") if current else "none")
+        ).strip().lower()
+        if price_mode not in {"from", "fixed", "request", "free", "none"}:
+            raise ValueError("Некорректный формат цены")
+        currency = str(
+            data.get("currency")
+            if "currency" in data
+            else (current.get("currency") if current else "RUB")
+        ).strip().upper()
+        if len(currency) != 3 or not currency.isalpha() or not currency.isascii():
+            raise ValueError("Некорректный код валюты")
+        seasonality_key = str(
+            data.get("seasonality_key")
+            if "seasonality_key" in data
+            else (current.get("seasonality_key") if current else "")
+        ).strip().lower() or None
+        working_hours_mode = str(
+            data.get("working_hours_mode")
+            if "working_hours_mode" in data
+            else (current.get("working_hours_mode") if current else "schedule")
+        ).strip().lower()
+        if working_hours_mode not in {"schedule", "always_open", "by_appointment", "seasonal", "closed"}:
+            raise ValueError("Некорректный формат режима работы")
         raw_video_urls = _catalog_json_list(
             data.get("video_urls") if "video_urls" in data else None,
             current.get("video_urls") if current else [],
@@ -1430,6 +2171,8 @@ def upsert_camp(camp_id: Optional[int], data: dict, normalize_move):
         admin_phones = (data.get("admin_phones") or "").strip()
         site_url = (data.get("site_url") or data.get("site") or "").strip()
         rooms_payload = data.get("rooms_full") or data.get("rooms") or []
+        if place_type.get("entity_kind") != "accommodation" and rooms_payload:
+            raise ValueError("Варианты размещения доступны только объектам проживания")
 
         def _to_int(value, default=0):
             try:
@@ -1503,13 +2246,22 @@ def upsert_camp(camp_id: Optional[int], data: dict, normalize_move):
             UPDATE catalog.camps SET
                 slug = %s,
                 place_type_id = %s,
+                schema_key = %s,
+                schema_version = %s,
                 short_description = %s,
                 region = %s,
                 district = %s,
                 city = %s,
                 locality = %s,
                 seasonality = %s,
+                seasonality_key = %s,
                 working_hours = %s::jsonb,
+                working_hours_mode = %s,
+                attributes = %s::jsonb,
+                seo = %s::jsonb,
+                visibility = %s,
+                price_mode = %s,
+                currency = %s,
                 publication_status = %s,
                 published_at = CASE WHEN %s = 'published' THEN COALESCE(published_at, NOW()) ELSE published_at END,
                 confirmed_at = %s,
@@ -1520,13 +2272,22 @@ def upsert_camp(camp_id: Optional[int], data: dict, normalize_move):
             (
                 slug,
                 place_type["id"],
+                schema_key,
+                schema_version,
                 short_description,
                 region,
                 district,
                 city,
                 locality,
                 seasonality,
+                seasonality_key,
                 json.dumps(working_hours, ensure_ascii=False),
+                working_hours_mode,
+                json.dumps(attributes, ensure_ascii=False),
+                json.dumps(seo, ensure_ascii=False),
+                visibility,
+                price_mode,
+                currency,
                 publication_status,
                 publication_status,
                 confirmed_at,

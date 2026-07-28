@@ -10,6 +10,12 @@ from tourist03.dto.catalog import (
     CatalogRoomDTO,
     PublicCampDTO,
     PublicAmenityDTO,
+    PublicCatalogFacetsDTO,
+    PublicEntityDetailDTO,
+    PublicEntityKindDTO,
+    PublicEntityListResponseDTO,
+    PublicEntitySchemaDTO,
+    PublicEntityTypeDTO,
     PublicPlaceDetailDTO,
     PublicPlaceListResponseDTO,
     PublicPlaceTypeDTO,
@@ -32,11 +38,62 @@ router.add_api_route(
     responses=error_responses(500),
 )
 router.add_api_route(
+    "/api/public/entity-kinds",
+    catalog_service.api_public_entity_kinds,
+    methods=["GET"],
+    response_model=list[PublicEntityKindDTO],
+    responses=error_responses(500),
+)
+router.add_api_route(
+    "/api/public/entity-types",
+    catalog_service.api_public_entity_types,
+    methods=["GET"],
+    response_model=list[PublicEntityTypeDTO],
+    responses=error_responses(422, 500),
+)
+router.add_api_route(
+    "/api/public/entity-schemas",
+    catalog_service.api_public_entity_schemas,
+    methods=["GET"],
+    response_model=list[PublicEntitySchemaDTO],
+    responses=error_responses(500),
+)
+router.add_api_route(
+    "/api/public/entity-schemas/{schema_key}",
+    catalog_service.api_public_entity_schema,
+    methods=["GET"],
+    response_model=PublicEntitySchemaDTO,
+    responses=error_responses(404, 422, 500),
+)
+router.add_api_route(
+    "/api/public/catalog-facets",
+    catalog_service.api_public_catalog_facets,
+    methods=["GET"],
+    response_model=PublicCatalogFacetsDTO,
+    responses=error_responses(500),
+)
+router.add_api_route(
     "/api/public/amenities",
     catalog_service.api_public_amenities,
     methods=["GET"],
     response_model=list[PublicAmenityDTO],
     responses=error_responses(500),
+)
+router.add_api_route(
+    "/api/public/entities",
+    catalog_service.api_public_entities,
+    methods=["GET"],
+    response_model=PublicEntityListResponseDTO,
+    response_model_exclude_none=True,
+    responses=error_responses(400, 422, 500),
+)
+router.add_api_route(
+    "/api/public/entities/{slug}",
+    catalog_service.api_public_entity_detail,
+    methods=["GET"],
+    response_model=PublicEntityDetailDTO,
+    response_model_exclude_none=True,
+    responses=error_responses(404, 422, 500),
 )
 router.add_api_route(
     "/api/public/places",
@@ -63,6 +120,22 @@ router.add_api_route(
     response_model_exclude_none=True,
     responses=error_responses(500),
     deprecated=True,
+)
+router.add_api_route(
+    "/api/superadmin/entities",
+    catalog_service.api_entities_upsert_new,
+    methods=["POST"],
+    dependencies=superadmin_guard,
+    response_model=CampUpsertResponseDTO,
+    responses=error_responses(400, 401, 422, 500),
+)
+router.add_api_route(
+    "/api/superadmin/entities/{entity_id}",
+    catalog_service.api_entity_upsert,
+    methods=["PUT"],
+    dependencies=superadmin_guard,
+    response_model=CampUpsertResponseDTO,
+    responses=error_responses(400, 401, 404, 422, 500),
 )
 router.add_api_route(
     "/api/camps/{camp_id}",
