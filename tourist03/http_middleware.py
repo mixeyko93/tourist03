@@ -53,6 +53,7 @@ PLACEMENT_SUBMISSION_PUBLIC_PAGES = {
 }
 DISCOVERY_SEARCH_PREFIXES = (
     "/api/public/search",
+    "/api/public/discovery/events",
     "/search",
 )
 EDITORIAL_COLLECTION_PREFIXES = (

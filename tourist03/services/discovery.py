@@ -20,12 +20,27 @@ from tourist03.domain.discovery import (
     validate_weight_config,
 )
 from tourist03.dto.discovery import (
+    DiscoveryEventRequestDTO,
     SuperadminCollectionUpsertRequestDTO,
     SuperadminRouteUpsertRequestDTO,
 )
 from tourist03.public_catalog import safe_public_asset_url, validate_slug
 from tourist03.repositories import discovery as discovery_repo
 from tourist03.security import get_superadmin_session_principal, log_crm_audit_event
+
+
+def api_public_discovery_event(
+    payload: DiscoveryEventRequestDTO,
+    response: Response,
+):
+    discovery_repo.record_aggregate_event(
+        event_type=payload.event_type,
+        content_type=payload.content_type,
+        content_slug=payload.content_slug,
+        topic_key=payload.topic_key,
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return {"ok": True}
 
 
 def _comma_values(value: Optional[str]) -> list[str]:

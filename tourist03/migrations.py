@@ -3463,6 +3463,47 @@ MIGRATIONS = (
         WHERE entity_id IS NOT NULL;
         """,
     ),
+    MigrationStep(
+        version="0034_discovery_metrics",
+        sql="""
+        CREATE TABLE IF NOT EXISTS content.discovery_daily_metrics (
+            day DATE NOT NULL DEFAULT CURRENT_DATE,
+            event_type TEXT NOT NULL,
+            content_type TEXT NOT NULL DEFAULT '',
+            content_slug TEXT NOT NULL DEFAULT '',
+            topic_key TEXT NOT NULL DEFAULT '',
+            event_count BIGINT NOT NULL DEFAULT 0,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            CONSTRAINT discovery_metrics_event_type_allowed CHECK (
+                event_type IN (
+                    'search_submitted',
+                    'suggestion_selected',
+                    'search_result_opened',
+                    'collection_opened',
+                    'route_opened',
+                    'nearby_requested',
+                    'nearby_permission_granted',
+                    'nearby_permission_denied',
+                    'related_entity_opened',
+                    'share_clicked',
+                    'filter_changed'
+                )
+            ),
+            CONSTRAINT discovery_metrics_content_type_allowed CHECK (
+                content_type IN ('', 'entity', 'collection', 'route', 'search', 'nearby')
+            ),
+            CONSTRAINT discovery_metrics_daily_key UNIQUE (
+                day,
+                event_type,
+                content_type,
+                content_slug,
+                topic_key
+            )
+        );
+        CREATE INDEX IF NOT EXISTS idx_discovery_metrics_day_event
+        ON content.discovery_daily_metrics(day DESC, event_type);
+        """,
+    ),
 )
 
 CURRENT_MIGRATION_VERSION = MIGRATIONS[-1].version

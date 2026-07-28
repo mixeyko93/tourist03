@@ -199,10 +199,10 @@
           <div class="place-related">
             {% for item in related_items %}
               <article>
-                <a class="place-related__cover" href="{{ item.href }}">
+                <a class="place-related__cover" href="{{ item.href }}" data-related-entity="{{ item.slug }}">
                   {% if item.cover %}<img src="{{ item.cover }}" alt="" loading="lazy" decoding="async" width="420" height="280">{% else %}<span><img src="/static/brand/turistika-mark.svg" alt="" width="72" height="72"></span>{% endif %}
                 </a>
-                <div><small>{{ item.entity_kind_name or item.subtype_name or "Туристический объект" }}</small><h3><a href="{{ item.href }}">{{ item.title }}</a></h3><p>{{ item.location or item.city or item.region or "Россия" }}</p></div>
+                <div><small>{{ item.entity_kind_name or item.subtype_name or "Туристический объект" }}</small><h3><a href="{{ item.href }}" data-related-entity="{{ item.slug }}">{{ item.title }}</a></h3><p>{{ item.location or item.city or item.region or "Россия" }}</p></div>
               </article>
             {% endfor %}
           </div>

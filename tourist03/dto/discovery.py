@@ -1,10 +1,32 @@
 from datetime import datetime
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 DiscoverySource = Literal["entity", "collection", "route", "location", "tag", "theme"]
+DiscoveryEventType = Literal[
+    "search_submitted",
+    "suggestion_selected",
+    "search_result_opened",
+    "collection_opened",
+    "route_opened",
+    "nearby_requested",
+    "nearby_permission_granted",
+    "nearby_permission_denied",
+    "related_entity_opened",
+    "share_clicked",
+    "filter_changed",
+]
+
+
+class DiscoveryEventRequestDTO(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    event_type: DiscoveryEventType
+    content_type: Optional[Literal["entity", "collection", "route", "search", "nearby"]] = None
+    content_slug: Optional[str] = Field(default=None, pattern=r"^[a-z0-9][a-z0-9-]{0,119}$")
+    topic_key: Optional[str] = Field(default=None, pattern=r"^[a-z0-9][a-z0-9-]{0,79}$")
 
 
 class DiscoverySearchResultDTO(BaseModel):

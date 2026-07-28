@@ -1,5 +1,5 @@
 import { attachAutocomplete } from "./autocomplete.js";
-import { createElement, getJson, renderCards, renderHistory } from "./discovery-common.js";
+import { createElement, getJson, renderCards, renderHistory, trackEvent } from "./discovery-common.js";
 
 const form = document.querySelector("[data-search-form]");
 const input = document.querySelector("[data-search-input]");
@@ -109,17 +109,29 @@ function navigate(state) {
   document.querySelector("#search-results")?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
 }
 
-form?.addEventListener("submit", (event) => { event.preventDefault(); navigate(currentState()); });
-document.querySelector("[data-filter-apply]")?.addEventListener("click", () => navigate(currentState()));
+form?.addEventListener("submit", (event) => { event.preventDefault(); trackEvent("search_submitted", { contentType: "search" }); navigate(currentState()); });
+document.querySelector("[data-filter-apply]")?.addEventListener("click", () => { trackEvent("filter_changed", { contentType: "search" }); navigate(currentState()); });
 document.querySelector("[data-filter-reset]")?.addEventListener("click", () => {
   Object.values(controls).forEach((control) => { control.value = control === controls.sort ? "relevance" : ""; });
   navigate({ q: input.value.trim(), source: "", entity_kind: "", region: "", city: "", tag: "", sort: "relevance", page: 1 });
 });
 attachAutocomplete(input, suggestions, {
   onSelect: (item) => {
+    trackEvent("suggestion_selected", {
+      contentType: ["entity", "collection", "route"].includes(item.source) ? item.source : "search",
+      contentSlug: item.slug || undefined,
+    });
     if (item.source === "entity" || item.source === "collection" || item.source === "route") location.assign(item.href);
     else navigate({ ...currentState(), q: item.value || item.title });
   },
+});
+results?.addEventListener("click", (event) => {
+  const link = event.target.closest?.("a");
+  const card = link?.closest?.("[data-source]");
+  if (link && card) trackEvent("search_result_opened", {
+    contentType: card.dataset.source || "entity",
+    contentSlug: new URL(link.href).pathname.split("/").filter(Boolean).pop(),
+  });
 });
 window.addEventListener("popstate", () => { const state = stateFromUrl(); applyState(state); load(state, { updateUrl: false }); });
 

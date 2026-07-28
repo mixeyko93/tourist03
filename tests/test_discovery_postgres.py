@@ -451,7 +451,7 @@ class DiscoveryPostgresTests(unittest.TestCase):
                     "geojson": None,
                     "status": "published",
                     "editorial_weight": 0,
-                    "editorial_exception": False,
+                    "editorial_exception": True,
                     "seo_title": "Черновой маршрут — Туристика",
                     "seo_description": "Проверка защиты публикации.",
                     "content_version": None,
@@ -581,3 +581,159 @@ class DiscoveryPostgresTests(unittest.TestCase):
                 )
 
         asyncio.run(scenario())
+
+    def test_public_ssr_sitemap_and_private_aggregate_metrics(self):
+        if not discovery_repo.get_public_collection("ssr-review"):
+            discovery_repo.upsert_superadmin_collection(
+                collection_id=None,
+                actor_id=None,
+                payload={
+                    "slug": "ssr-review",
+                    "title": "Идеи для проверки",
+                    "short_description": "Публичная подборка для SSR-проверки.",
+                    "description": None,
+                    "cover_url": "/static/brand/turistika-logo-stacked.svg",
+                    "collection_type": "manual",
+                    "status": "published",
+                    "region": "Республика Карелия",
+                    "city": None,
+                    "season": None,
+                    "audience": None,
+                    "editorial_weight": 0,
+                    "editorial_exception": True,
+                    "seo_title": "Идеи для проверки — Туристика",
+                    "seo_description": "Публичная подборка для проверки SSR и sitemap.",
+                    "content_version": None,
+                    "items": [
+                        {
+                            "entity_id": self.entity_ids["fishing-exact"],
+                            "position": 0,
+                            "editorial_note": None,
+                            "custom_title": None,
+                            "custom_description": None,
+                        }
+                    ],
+                    "rules": [],
+                },
+            )
+        if not discovery_repo.get_public_route("ssr-review-route"):
+            discovery_repo.upsert_superadmin_route(
+                route_id=None,
+                actor_id=None,
+                payload={
+                    "slug": "ssr-review-route",
+                    "title": "Проверочный маршрут",
+                    "short_description": "Публичный маршрут для SSR-проверки.",
+                    "description": None,
+                    "cover_url": "/static/brand/turistika-logo-stacked.svg",
+                    "route_type": "editorial",
+                    "transport_mode": "walk",
+                    "duration_minutes": 90,
+                    "duration_text": None,
+                    "distance_km": 3,
+                    "difficulty": "easy",
+                    "season": None,
+                    "region": "Республика Карелия",
+                    "city": None,
+                    "start_lat": 61.70,
+                    "start_lng": 30.69,
+                    "end_lat": 61.71,
+                    "end_lng": 30.70,
+                    "geojson": None,
+                    "status": "published",
+                    "editorial_weight": 0,
+                    "editorial_exception": False,
+                    "seo_title": "Проверочный маршрут — Туристика",
+                    "seo_description": "Публичный маршрут для проверки SSR и sitemap.",
+                    "content_version": None,
+                    "points": [
+                        {
+                            "position": 0,
+                            "entity_id": self.entity_ids["fishing-exact"],
+                            "custom_title": None,
+                            "description": None,
+                            "lat": None,
+                            "lng": None,
+                            "stay_minutes": 30,
+                            "overnight": False,
+                            "transport_note": None,
+                        },
+                        {
+                            "position": 1,
+                            "entity_id": None,
+                            "custom_title": "Финиш",
+                            "description": None,
+                            "lat": 61.71,
+                            "lng": 30.70,
+                            "stay_minutes": 30,
+                            "overnight": False,
+                            "transport_note": None,
+                        },
+                    ],
+                },
+            )
+
+        async def scenario():
+            application = app_module.create_app(self.settings)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=application),
+                base_url="http://testserver",
+            ) as client:
+                for path, expected in (
+                    ("/search?q=рыбалка", "Найдите идею"),
+                    ("/collections/ssr-review", "Редакционная подборка"),
+                    ("/routes/ssr-review-route", "План поездки"),
+                    ("/nearby", "Рядом со мной"),
+                ):
+                    response = await client.get(path)
+                    self.assertEqual(response.status_code, 200, response.text)
+                    self.assertIn(expected, response.text)
+
+                sitemap = await client.get("/sitemap.xml")
+                self.assertEqual(sitemap.status_code, 200, sitemap.text)
+                self.assertIn("/collections/ssr-review", sitemap.text)
+                self.assertIn("/routes/ssr-review-route", sitemap.text)
+
+                for _ in range(2):
+                    metric = await client.post(
+                        "/api/public/discovery/events",
+                        json={
+                            "event_type": "route_opened",
+                            "content_type": "route",
+                            "content_slug": "ssr-review-route",
+                        },
+                    )
+                    self.assertEqual(metric.status_code, 200, metric.text)
+                    self.assertEqual(metric.headers["cache-control"], "no-store")
+
+                forbidden = await client.post(
+                    "/api/public/discovery/events",
+                    json={
+                        "event_type": "search_submitted",
+                        "query": "редкий личный запрос",
+                    },
+                )
+                self.assertEqual(forbidden.status_code, 422)
+
+        asyncio.run(scenario())
+        with _db_conn("content") as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT event_count
+                FROM content.discovery_daily_metrics
+                WHERE event_type = 'route_opened'
+                  AND content_slug = 'ssr-review-route'
+                """
+            )
+            self.assertEqual(cur.fetchone()["event_count"], 2)
+            cur.execute(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'content'
+                  AND table_name = 'discovery_daily_metrics'
+                """
+            )
+            columns = {row["column_name"] for row in cur.fetchall()}
+            self.assertFalse({"query", "lat", "lng", "user_id", "ip"} & columns)

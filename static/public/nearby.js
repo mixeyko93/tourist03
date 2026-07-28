@@ -1,4 +1,4 @@
-import { getJson, renderCards } from "./discovery-common.js";
+import { getJson, renderCards, trackEvent } from "./discovery-common.js";
 
 const mapRoot = document.querySelector("[data-nearby-map]");
 const latInput = document.querySelector("[data-nearby-lat]");
@@ -43,6 +43,7 @@ async function search() {
     return;
   }
   setPoint(lat, lng);
+  trackEvent("nearby_requested", { contentType: "nearby" });
   status.textContent = "Ищем рядом…";
   try {
     const params = new URLSearchParams({ lat: String(lat), lng: String(lng), radius: radius.value, limit: "24" });
@@ -65,8 +66,8 @@ document.querySelector("[data-request-location]")?.addEventListener("click", () 
   }
   status.textContent = "Запрашиваем местоположение…";
   navigator.geolocation.getCurrentPosition(
-    ({ coords }) => { setPoint(coords.latitude, coords.longitude); search(); },
-    () => { status.textContent = "Не удалось определить местоположение. Выберите точку на карте."; },
+    ({ coords }) => { trackEvent("nearby_permission_granted", { contentType: "nearby" }); setPoint(coords.latitude, coords.longitude); search(); },
+    () => { trackEvent("nearby_permission_denied", { contentType: "nearby" }); status.textContent = "Не удалось определить местоположение. Выберите точку на карте."; },
     { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 },
   );
 });

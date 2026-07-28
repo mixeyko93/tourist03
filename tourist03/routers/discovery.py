@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 
 from tourist03.api_responses import error_responses
 from tourist03.dto.discovery import (
+    DiscoveryEventRequestDTO,
     DiscoveryPopularResponseDTO,
     DiscoveryHomeResponseDTO,
     DiscoverySearchResponseDTO,
@@ -23,6 +24,13 @@ from tourist03.services import discovery as discovery_service
 router = APIRouter()
 superadmin_guard = [Depends(get_superadmin)]
 
+router.add_api_route(
+    "/api/public/discovery/events",
+    discovery_service.api_public_discovery_event,
+    methods=["POST"],
+    response_model=dict,
+    responses=error_responses(422, 429, 500),
+)
 router.add_api_route(
     "/api/public/search",
     discovery_service.api_public_search,

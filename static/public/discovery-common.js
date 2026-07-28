@@ -81,6 +81,22 @@ export async function getJson(url, { signal } = {}) {
   return payload;
 }
 
+export function trackEvent(eventType, details = {}) {
+  const payload = {
+    event_type: eventType,
+    ...(details.contentType ? { content_type: details.contentType } : {}),
+    ...(details.contentSlug ? { content_slug: details.contentSlug } : {}),
+    ...(details.topicKey ? { topic_key: details.topicKey } : {}),
+  };
+  fetch("/api/public/discovery/events", {
+    method: "POST",
+    credentials: "same-origin",
+    keepalive: true,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  }).catch(() => {});
+}
+
 export async function shareUrl(url, title, feedback) {
   try {
     if (navigator.share) {
@@ -93,6 +109,10 @@ export async function shareUrl(url, title, feedback) {
   } catch (error) {
     if (error?.name !== "AbortError" && feedback) feedback.textContent = "Не удалось поделиться ссылкой";
   }
+  trackEvent("share_clicked", {
+    contentType: document.body.dataset.historyKind || undefined,
+    contentSlug: document.body.dataset.historySlug || undefined,
+  });
   if (feedback?.textContent) window.setTimeout(() => { feedback.textContent = ""; }, 2600);
 }
 
@@ -119,6 +139,17 @@ export function rememberCurrentPage() {
   const items = readHistory().filter((item) => item.href !== href);
   items.unshift({ kind, slug, title, href, visitedAt: new Date().toISOString() });
   try { localStorage.setItem(HISTORY_KEY, JSON.stringify(items.slice(0, HISTORY_LIMIT))); } catch {}
+  if (kind === "collection") trackEvent("collection_opened", { contentType: kind, contentSlug: slug });
+  if (kind === "route") trackEvent("route_opened", { contentType: kind, contentSlug: slug });
+}
+
+export function installDiscoveryLinkTracking(root = document) {
+  root.querySelectorAll("[data-related-entity]").forEach((link) => {
+    link.addEventListener("click", () => trackEvent("related_entity_opened", {
+      contentType: "entity",
+      contentSlug: link.dataset.relatedEntity,
+    }));
+  });
 }
 
 export function renderHistory(root = document) {

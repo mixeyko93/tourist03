@@ -1,5 +1,7 @@
 import unittest
 
+from pydantic import ValidationError
+
 from tourist03.domain.discovery import (
     DiscoveryValidationError,
     bounding_box,
@@ -12,6 +14,7 @@ from tourist03.domain.discovery import (
     validate_nearby_radius,
 )
 from tourist03.settings import Settings
+from tourist03.dto.discovery import DiscoveryEventRequestDTO
 
 
 class DiscoverySearchDomainTests(unittest.TestCase):
@@ -129,3 +132,24 @@ class DiscoverySettingsTests(unittest.TestCase):
         self.assertFalse(settings.feature_local_recent_history)
         self.assertIn("сап", settings.discovery_search_synonyms)
         self.assertGreater(settings.discovery_recommendation_weights["same_type"], 0)
+
+
+class DiscoveryAnalyticsPrivacyTests(unittest.TestCase):
+    def test_aggregate_event_contract_rejects_query_coordinates_and_unsafe_slugs(self):
+        event = DiscoveryEventRequestDTO(
+            event_type="route_opened",
+            content_type="route",
+            content_slug="karelia-weekend",
+        )
+        self.assertEqual(event.content_slug, "karelia-weekend")
+        for payload in (
+            {"event_type": "search_submitted", "query": "редкий личный запрос"},
+            {"event_type": "nearby_requested", "lat": 55.7, "lng": 37.6},
+            {
+                "event_type": "collection_opened",
+                "content_type": "collection",
+                "content_slug": "javascript:alert-1",
+            },
+        ):
+            with self.subTest(payload=payload), self.assertRaises(ValidationError):
+                DiscoveryEventRequestDTO.model_validate(payload)

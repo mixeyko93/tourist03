@@ -21,6 +21,44 @@ PUBLIC_ENTITY_PREDICATE = """
 """
 
 
+def record_aggregate_event(
+    *,
+    event_type: str,
+    content_type: str | None,
+    content_slug: str | None,
+    topic_key: str | None,
+) -> None:
+    """Increment a daily counter without storing identity, query text or coordinates."""
+    with _db_conn("content") as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO content.discovery_daily_metrics (
+                day,
+                event_type,
+                content_type,
+                content_slug,
+                topic_key,
+                event_count
+            )
+            VALUES (CURRENT_DATE, %(event_type)s, %(content_type)s, %(content_slug)s, %(topic_key)s, 1)
+            ON CONFLICT (day, event_type, content_type, content_slug, topic_key)
+            DO UPDATE SET
+                event_count = content.discovery_daily_metrics.event_count + 1,
+                updated_at = NOW()
+            """,
+            {
+                "event_type": event_type,
+                "content_type": content_type or "",
+                "content_slug": content_slug or "",
+                "topic_key": topic_key or "",
+            },
+        )
+        cur.execute(
+            "DELETE FROM content.discovery_daily_metrics WHERE day < CURRENT_DATE - 400"
+        )
+        conn.commit()
+
+
 def _pg_trgm_schema(cur) -> str | None:
     cur.execute(
         """
