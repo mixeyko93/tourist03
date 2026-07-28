@@ -19,21 +19,43 @@ RUN_PG_INTEGRATION = os.getenv("RUN_PG_INTEGRATION", "").strip().lower() in {
     "yes",
     "on",
 }
+USE_EXISTING_POSTGRES = os.getenv(
+    "PG_INTEGRATION_USE_EXISTING",
+    "",
+).strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 
 
 @unittest.skipUnless(RUN_PG_INTEGRATION, "requires RUN_PG_INTEGRATION=1")
 class DiscoveryPostgresTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.postgres = TemporaryPostgres()
-        cls.postgres.start()
+        cls.postgres = None
+        if USE_EXISTING_POSTGRES:
+            pg_host = os.environ["PG_HOST"]
+            pg_port = int(os.environ["PG_PORT"])
+            pg_db = os.environ["PG_DB"]
+            pg_user = os.environ["PG_USER"]
+            pg_password = os.environ.get("PG_PASSWORD", "")
+        else:
+            cls.postgres = TemporaryPostgres()
+            cls.postgres.start()
+            pg_host = "127.0.0.1"
+            pg_port = cls.postgres.port
+            pg_db = "postgres"
+            pg_user = "postgres"
+            pg_password = ""
         cls.settings = Settings(
             environment="test",
-            pg_host="127.0.0.1",
-            pg_port=cls.postgres.port,
-            pg_db="postgres",
-            pg_user="postgres",
-            pg_password="",
+            pg_host=pg_host,
+            pg_port=pg_port,
+            pg_db=pg_db,
+            pg_user=pg_user,
+            pg_password=pg_password,
             feature_services=True,
             feature_discovery_search=True,
             feature_editorial_collections=True,
@@ -49,7 +71,8 @@ class DiscoveryPostgresTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         clear_settings_override()
-        cls.postgres.stop()
+        if cls.postgres is not None:
+            cls.postgres.stop()
 
     @classmethod
     def _seed(cls):
