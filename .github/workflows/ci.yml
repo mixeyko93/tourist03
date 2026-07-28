@@ -76,6 +76,7 @@ jobs:
       - run: RUN_PG_INTEGRATION=1 PG_INTEGRATION_USE_EXISTING=1 python -m unittest tests.test_submission_postgres -v
       - run: RUN_PG_INTEGRATION=1 PG_INTEGRATION_USE_EXISTING=1 python -m unittest tests.test_owner_postgres -v
       - run: RUN_PG_INTEGRATION=1 PG_INTEGRATION_USE_EXISTING=1 python -m unittest tests.test_universal_catalog_postgres -v
+      - run: RUN_PG_INTEGRATION=1 PG_INTEGRATION_USE_EXISTING=1 python -m unittest tests.test_discovery_postgres -v
 
   secrets:
     name: Secret scan
