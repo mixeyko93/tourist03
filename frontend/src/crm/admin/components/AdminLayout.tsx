@@ -27,6 +27,7 @@ export default function AdminLayout() {
   const [authState, setAuthState] = useState<"loading" | "authenticated" | "unauthenticated">("loading");
   const [authError, setAuthError] = useState("");
   const [ownerChangesEnabled, setOwnerChangesEnabled] = useState(false);
+  const [discoveryFeatures, setDiscoveryFeatures] = useState({ collections: false, routes: false });
   const [session, setSession] = useState<SuperadminSessionResponse | null>(null);
   const [telegramLinkInfo, setTelegramLinkInfo] = useState<null | { code: string; command: string; deep_link: string | null }>(null);
   const [telegramError, setTelegramError] = useState("");
@@ -36,7 +37,11 @@ export default function AdminLayout() {
   const visibleBaseTabs = ownerChangesEnabled
     ? baseAdminTabs
     : baseAdminTabs.filter((item) => item.path !== "/admin/owner-changes");
-  const adminTabs = isRoot ? [...visibleBaseTabs, ...rootOnlyTabs] : visibleBaseTabs;
+  const discoveryTabs = [
+    ...(discoveryFeatures.collections ? [{ label: "Подборки", path: "/admin/collections" }] : []),
+    ...(discoveryFeatures.routes ? [{ label: "Маршруты", path: "/admin/routes" }] : []),
+  ];
+  const adminTabs = isRoot ? [...visibleBaseTabs, ...discoveryTabs, ...rootOnlyTabs] : [...visibleBaseTabs, ...discoveryTabs];
   const activeTab = adminTabs.find((item) => {
     const path = crmPath(item.path);
     return location.pathname === path || location.pathname.startsWith(`${path}/`);
@@ -62,10 +67,17 @@ export default function AdminLayout() {
   useEffect(() => {
     fetch("/api/public/config", { credentials: "same-origin" })
       .then((response) => response.json())
-      .then((payload: { features?: { owner_change_requests?: boolean } }) => {
+      .then((payload: { features?: { owner_change_requests?: boolean; editorial_collections?: boolean; tourism_routes?: boolean } }) => {
         setOwnerChangesEnabled(Boolean(payload.features?.owner_change_requests));
+        setDiscoveryFeatures({
+          collections: Boolean(payload.features?.editorial_collections),
+          routes: Boolean(payload.features?.tourism_routes),
+        });
       })
-      .catch(() => setOwnerChangesEnabled(false));
+      .catch(() => {
+        setOwnerChangesEnabled(false);
+        setDiscoveryFeatures({ collections: false, routes: false });
+      });
   }, []);
 
   if (authState === "loading") {

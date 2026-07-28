@@ -18,7 +18,7 @@ export async function loadDiscoveryHome(root) {
     [
       group("Редакционные подборки", payload.collections),
       group("Готовые маршруты", payload.routes),
-      group("Недавно добавили", payload.newest),
+      group("Недавно обновили", payload.recently_updated),
     ].filter(Boolean).forEach((section) => groups.append(section));
     if (!groups.childElementCount) root.hidden = true;
   } catch {

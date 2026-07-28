@@ -45,7 +45,7 @@ async function search() {
   setPoint(lat, lng);
   status.textContent = "Ищем рядом…";
   try {
-    const params = new URLSearchParams({ lat: String(lat), lng: String(lng), radius_km: radius.value, limit: "24" });
+    const params = new URLSearchParams({ lat: String(lat), lng: String(lng), radius: radius.value, limit: "24" });
     if (kind.value) params.set("entity_kind", kind.value);
     const payload = await getJson(`/api/public/nearby?${params}`);
     heading.textContent = `В радиусе ${radius.value} км`;
