@@ -155,3 +155,131 @@ class SuperadminCollectionDTO(BaseModel):
     content_version: int
     items: list[dict] = Field(default_factory=list)
     rules: list[dict] = Field(default_factory=list)
+
+
+class PublicRouteSummaryDTO(BaseModel):
+    id: int
+    slug: str
+    title: str
+    short_description: str
+    cover: Optional[str] = None
+    route_type: str
+    transport_mode: str
+    duration_minutes: Optional[int] = None
+    duration_text: Optional[str] = None
+    distance_km: Optional[float] = None
+    difficulty: Optional[str] = None
+    season: Optional[str] = None
+    region: Optional[str] = None
+    city: Optional[str] = None
+    point_count: int = 0
+    updated_at: Optional[datetime] = None
+    href: str
+
+
+class PublicRoutePointDTO(BaseModel):
+    id: int
+    position: int
+    entity_id: Optional[int] = None
+    entity_slug: Optional[str] = None
+    title: str
+    description: Optional[str] = None
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    stay_minutes: Optional[int] = None
+    overnight: bool = False
+    transport_note: Optional[str] = None
+    href: Optional[str] = None
+
+
+class PublicRouteListResponseDTO(BaseModel):
+    items: list[PublicRouteSummaryDTO]
+    total: int
+    limit: int
+    offset: int
+
+
+class PublicRouteDetailDTO(PublicRouteSummaryDTO):
+    description: Optional[str] = None
+    start_lat: Optional[float] = None
+    start_lng: Optional[float] = None
+    end_lat: Optional[float] = None
+    end_lng: Optional[float] = None
+    geojson: Optional[dict] = None
+    seo_title: Optional[str] = None
+    seo_description: Optional[str] = None
+    points: list[PublicRoutePointDTO] = Field(default_factory=list)
+
+
+class RoutePointInputDTO(BaseModel):
+    position: int = Field(ge=0)
+    entity_id: Optional[int] = Field(default=None, gt=0)
+    custom_title: Optional[str] = Field(default=None, max_length=200)
+    description: Optional[str] = Field(default=None, max_length=5000)
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    stay_minutes: Optional[int] = Field(default=None, ge=0, le=100_800)
+    overnight: bool = False
+    transport_note: Optional[str] = Field(default=None, max_length=2000)
+
+
+class SuperadminRouteUpsertRequestDTO(BaseModel):
+    slug: str = Field(min_length=2, max_length=120)
+    title: str = Field(min_length=1, max_length=200)
+    short_description: str = Field(min_length=1, max_length=500)
+    description: Optional[str] = Field(default=None, max_length=30_000)
+    cover_url: Optional[str] = Field(default=None, max_length=1000)
+    route_type: Literal["editorial", "walking", "driving", "cycling", "water", "mixed"] = "editorial"
+    transport_mode: Literal["walk", "car", "public_transport", "bicycle", "boat", "mixed"] = "mixed"
+    duration_minutes: Optional[int] = Field(default=None, gt=0, le=525_600)
+    duration_text: Optional[str] = Field(default=None, max_length=160)
+    distance_km: Optional[float] = Field(default=None, ge=0, le=1_000_000)
+    difficulty: Optional[Literal["easy", "moderate", "hard"]] = None
+    season: Optional[str] = Field(default=None, max_length=80)
+    region: Optional[str] = Field(default=None, max_length=120)
+    city: Optional[str] = Field(default=None, max_length=120)
+    start_lat: Optional[float] = None
+    start_lng: Optional[float] = None
+    end_lat: Optional[float] = None
+    end_lng: Optional[float] = None
+    geojson: Optional[dict] = None
+    status: Literal["draft", "in_review", "published", "disabled", "archived"] = "draft"
+    editorial_weight: int = Field(default=0, ge=0, le=100)
+    editorial_exception: bool = False
+    seo_title: Optional[str] = Field(default=None, max_length=200)
+    seo_description: Optional[str] = Field(default=None, max_length=500)
+    content_version: Optional[int] = Field(default=None, gt=0)
+    points: list[RoutePointInputDTO] = Field(default_factory=list, max_length=500)
+
+
+class SuperadminRouteDTO(BaseModel):
+    id: int
+    slug: str
+    title: str
+    short_description: str
+    description: Optional[str] = None
+    cover_url: Optional[str] = None
+    route_type: str
+    transport_mode: str
+    duration_minutes: Optional[int] = None
+    duration_text: Optional[str] = None
+    distance_km: Optional[float] = None
+    difficulty: Optional[str] = None
+    season: Optional[str] = None
+    region: Optional[str] = None
+    city: Optional[str] = None
+    start_lat: Optional[float] = None
+    start_lng: Optional[float] = None
+    end_lat: Optional[float] = None
+    end_lng: Optional[float] = None
+    geojson: Optional[dict] = None
+    status: str
+    editorial_weight: int = 0
+    editorial_exception: bool = False
+    seo_title: Optional[str] = None
+    seo_description: Optional[str] = None
+    published_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    content_version: int
+    points: list[dict] = Field(default_factory=list)

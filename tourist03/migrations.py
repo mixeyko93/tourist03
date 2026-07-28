@@ -3235,6 +3235,210 @@ MIGRATIONS = (
         ON content.collection_rules(collection_id, position, id);
         """,
     ),
+    MigrationStep(
+        version="0032_tourism_routes",
+        sql="""
+        CREATE TABLE IF NOT EXISTS content.routes (
+            id BIGSERIAL PRIMARY KEY,
+            slug TEXT NOT NULL,
+            title TEXT NOT NULL,
+            short_description TEXT NOT NULL,
+            description TEXT,
+            cover_url TEXT,
+            route_type TEXT NOT NULL DEFAULT 'editorial',
+            transport_mode TEXT NOT NULL DEFAULT 'mixed',
+            duration_minutes INTEGER,
+            duration_text TEXT,
+            distance_km NUMERIC(10, 2),
+            difficulty TEXT,
+            season TEXT,
+            region TEXT,
+            city TEXT,
+            start_lat DOUBLE PRECISION,
+            start_lng DOUBLE PRECISION,
+            end_lat DOUBLE PRECISION,
+            end_lng DOUBLE PRECISION,
+            geojson JSONB,
+            status TEXT NOT NULL DEFAULT 'draft',
+            editorial_weight SMALLINT NOT NULL DEFAULT 0,
+            editorial_exception BOOLEAN NOT NULL DEFAULT FALSE,
+            seo_title TEXT,
+            seo_description TEXT,
+            published_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            created_by BIGINT,
+            updated_by BIGINT,
+            content_version INTEGER NOT NULL DEFAULT 1,
+            search_document TEXT GENERATED ALWAYS AS (
+                catalog.normalize_search_text(
+                    COALESCE(title, '') || ' ' ||
+                    COALESCE(short_description, '') || ' ' ||
+                    COALESCE(description, '') || ' ' ||
+                    COALESCE(duration_text, '') || ' ' ||
+                    COALESCE(transport_mode, '') || ' ' ||
+                    COALESCE(difficulty, '') || ' ' ||
+                    COALESCE(season, '') || ' ' ||
+                    COALESCE(region, '') || ' ' ||
+                    COALESCE(city, '')
+                )
+            ) STORED,
+            search_vector TSVECTOR GENERATED ALWAYS AS (
+                setweight(
+                    to_tsvector(
+                        'russian'::regconfig,
+                        catalog.normalize_search_text(
+                            COALESCE(title, '') || ' ' || COALESCE(slug, '')
+                        )
+                    ),
+                    'A'
+                )
+                ||
+                setweight(
+                    to_tsvector(
+                        'russian'::regconfig,
+                        catalog.normalize_search_text(
+                            COALESCE(region, '') || ' ' ||
+                            COALESCE(city, '') || ' ' ||
+                            COALESCE(season, '') || ' ' ||
+                            COALESCE(transport_mode, '')
+                        )
+                    ),
+                    'B'
+                )
+                ||
+                setweight(
+                    to_tsvector(
+                        'russian'::regconfig,
+                        catalog.normalize_search_text(COALESCE(short_description, ''))
+                    ),
+                    'C'
+                )
+                ||
+                setweight(
+                    to_tsvector(
+                        'russian'::regconfig,
+                        catalog.normalize_search_text(COALESCE(description, ''))
+                    ),
+                    'D'
+                )
+            ) STORED,
+            CONSTRAINT routes_slug_format
+                CHECK (slug ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'),
+            CONSTRAINT routes_title_present
+                CHECK (NULLIF(btrim(title), '') IS NOT NULL),
+            CONSTRAINT routes_short_description_present
+                CHECK (NULLIF(btrim(short_description), '') IS NOT NULL),
+            CONSTRAINT routes_type_valid
+                CHECK (route_type IN ('editorial', 'walking', 'driving', 'cycling', 'water', 'mixed')),
+            CONSTRAINT routes_transport_mode_valid
+                CHECK (transport_mode IN ('walk', 'car', 'public_transport', 'bicycle', 'boat', 'mixed')),
+            CONSTRAINT routes_difficulty_valid
+                CHECK (difficulty IS NULL OR difficulty IN ('easy', 'moderate', 'hard')),
+            CONSTRAINT routes_status_valid
+                CHECK (status IN ('draft', 'in_review', 'published', 'disabled', 'archived')),
+            CONSTRAINT routes_duration_positive
+                CHECK (duration_minutes IS NULL OR duration_minutes > 0),
+            CONSTRAINT routes_distance_non_negative
+                CHECK (distance_km IS NULL OR distance_km >= 0),
+            CONSTRAINT routes_coordinate_pairs
+                CHECK (
+                    (
+                        (start_lat IS NULL AND start_lng IS NULL)
+                        OR (
+                            start_lat BETWEEN -90 AND 90
+                            AND start_lng BETWEEN -180 AND 180
+                        )
+                    )
+                    AND
+                    (
+                        (end_lat IS NULL AND end_lng IS NULL)
+                        OR (
+                            end_lat BETWEEN -90 AND 90
+                            AND end_lng BETWEEN -180 AND 180
+                        )
+                    )
+                ),
+            CONSTRAINT routes_geojson_object
+                CHECK (geojson IS NULL OR jsonb_typeof(geojson) = 'object'),
+            CONSTRAINT routes_editorial_weight_range
+                CHECK (editorial_weight BETWEEN 0 AND 100),
+            CONSTRAINT routes_content_version_positive
+                CHECK (content_version > 0),
+            CONSTRAINT routes_created_by_fk
+                FOREIGN KEY (created_by) REFERENCES auth.superadmin_accounts(id)
+                ON DELETE SET NULL,
+            CONSTRAINT routes_updated_by_fk
+                FOREIGN KEY (updated_by) REFERENCES auth.superadmin_accounts(id)
+                ON DELETE SET NULL
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_routes_slug_unique
+        ON content.routes((lower(slug)));
+        CREATE INDEX IF NOT EXISTS idx_routes_public
+        ON content.routes(status, published_at DESC, editorial_weight DESC, id)
+        WHERE status = 'published';
+        CREATE INDEX IF NOT EXISTS idx_routes_location
+        ON content.routes((lower(region)), (lower(city)), status, id);
+        CREATE INDEX IF NOT EXISTS idx_routes_characteristics
+        ON content.routes(transport_mode, difficulty, duration_minutes, status, id);
+        CREATE INDEX IF NOT EXISTS idx_routes_updated
+        ON content.routes(updated_at DESC, id);
+        CREATE INDEX IF NOT EXISTS idx_routes_search_vector
+        ON content.routes USING GIN(search_vector)
+        WHERE status = 'published';
+
+        CREATE TABLE IF NOT EXISTS content.route_points (
+            id BIGSERIAL PRIMARY KEY,
+            route_id BIGINT NOT NULL,
+            position INTEGER NOT NULL,
+            entity_id INTEGER,
+            custom_title TEXT,
+            description TEXT,
+            lat DOUBLE PRECISION,
+            lng DOUBLE PRECISION,
+            stay_minutes INTEGER,
+            overnight BOOLEAN NOT NULL DEFAULT FALSE,
+            transport_note TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            CONSTRAINT route_points_route_fk
+                FOREIGN KEY (route_id) REFERENCES content.routes(id)
+                ON DELETE CASCADE,
+            CONSTRAINT route_points_entity_fk
+                FOREIGN KEY (entity_id) REFERENCES catalog.camps(id)
+                ON DELETE RESTRICT,
+            CONSTRAINT route_points_position_non_negative
+                CHECK (position >= 0),
+            CONSTRAINT route_points_identity_present
+                CHECK (
+                    entity_id IS NOT NULL
+                    OR NULLIF(btrim(custom_title), '') IS NOT NULL
+                ),
+            CONSTRAINT route_points_coordinate_pair
+                CHECK (
+                    (lat IS NULL AND lng IS NULL)
+                    OR (
+                        lat BETWEEN -90 AND 90
+                        AND lng BETWEEN -180 AND 180
+                    )
+                ),
+            CONSTRAINT route_points_stay_non_negative
+                CHECK (stay_minutes IS NULL OR stay_minutes >= 0),
+            CONSTRAINT route_points_route_position_unique
+                UNIQUE (route_id, position)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_route_points_route_position
+        ON content.route_points(route_id, position, id);
+        CREATE INDEX IF NOT EXISTS idx_route_points_entity_route
+        ON content.route_points(entity_id, route_id)
+        WHERE entity_id IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_route_points_coordinates
+        ON content.route_points(lat, lng, route_id)
+        WHERE lat IS NOT NULL AND lng IS NOT NULL;
+        """,
+    ),
 )
 
 CURRENT_MIGRATION_VERSION = MIGRATIONS[-1].version

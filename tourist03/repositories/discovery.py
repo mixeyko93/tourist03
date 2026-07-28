@@ -1045,3 +1045,398 @@ def upsert_superadmin_collection(
             conn.rollback()
             raise
     return get_superadmin_collection(int(collection_id))
+
+
+def list_public_routes(
+    *,
+    transport_mode: Optional[str] = None,
+    difficulty: Optional[str] = None,
+    season: Optional[str] = None,
+    region: Optional[str] = None,
+    city: Optional[str] = None,
+    duration_max: Optional[int] = None,
+    limit: int = 12,
+    offset: int = 0,
+) -> dict:
+    clauses = ["route.status = 'published'"]
+    params: list = []
+    for value, expression in (
+        (transport_mode, "route.transport_mode"),
+        (difficulty, "route.difficulty"),
+        (season, "lower(route.season)"),
+        (region, "lower(route.region)"),
+        (city, "lower(route.city)"),
+    ):
+        if value:
+            clauses.append(f"{expression} = lower(%s)")
+            params.append(value)
+    if duration_max is not None:
+        clauses.append("route.duration_minutes <= %s")
+        params.append(duration_max)
+    where_sql = " AND ".join(clauses)
+    with _db_conn("content") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            f"SELECT COUNT(*) AS total FROM content.routes route WHERE {where_sql}",
+            tuple(params),
+        )
+        total = int(cur.fetchone()["total"])
+        cur.execute(
+            f"""
+            SELECT
+                route.id, route.slug, route.title, route.short_description,
+                route.cover_url AS cover, route.route_type,
+                route.transport_mode, route.duration_minutes,
+                route.duration_text, route.distance_km, route.difficulty,
+                route.season, route.region, route.city, route.updated_at,
+                (
+                    SELECT COUNT(*)
+                    FROM content.route_points point
+                    LEFT JOIN catalog.camps entity ON entity.id = point.entity_id
+                    WHERE point.route_id = route.id
+                      AND (
+                          point.entity_id IS NULL
+                          OR (
+                              entity.publication_status = 'published'
+                              AND lower(COALESCE(entity.status, '')) IN ('active', 'published')
+                              AND entity.visibility = 'public'
+                          )
+                      )
+                )::INTEGER AS point_count
+            FROM content.routes route
+            WHERE {where_sql}
+            ORDER BY route.editorial_weight DESC, route.published_at DESC, route.id
+            LIMIT %s OFFSET %s
+            """,
+            tuple([*params, limit, offset]),
+        )
+        rows = [dict(row) for row in cur.fetchall()]
+    for row in rows:
+        row["distance_km"] = float(row["distance_km"]) if row.get("distance_km") is not None else None
+        row["cover"] = safe_public_asset_url(row.get("cover") or "")
+        row["href"] = f"/routes/{row['slug']}"
+    return {"items": rows, "total": total, "limit": limit, "offset": offset}
+
+
+def get_public_route(slug: str) -> dict | None:
+    with _db_conn("content") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT
+                id, slug, title, short_description, description,
+                cover_url AS cover, route_type, transport_mode,
+                duration_minutes, duration_text, distance_km, difficulty,
+                season, region, city, start_lat, start_lng, end_lat, end_lng,
+                geojson, seo_title, seo_description, updated_at
+            FROM content.routes
+            WHERE lower(slug) = lower(%s)
+              AND status = 'published'
+            """,
+            (slug,),
+        )
+        raw = cur.fetchone()
+        if not raw:
+            return None
+        route = dict(raw)
+        cur.execute(
+            """
+            SELECT
+                point.id,
+                point.position,
+                point.entity_id,
+                entity.slug AS entity_slug,
+                COALESCE(NULLIF(point.custom_title, ''), entity.name, 'Точка маршрута') AS title,
+                point.description,
+                COALESCE(point.lat, entity.lat) AS lat,
+                COALESCE(point.lng, entity.lng) AS lng,
+                point.stay_minutes,
+                point.overnight,
+                point.transport_note
+            FROM content.route_points point
+            LEFT JOIN catalog.camps entity ON entity.id = point.entity_id
+            WHERE point.route_id = %s
+              AND (
+                  point.entity_id IS NULL
+                  OR (
+                      entity.publication_status = 'published'
+                      AND lower(COALESCE(entity.status, '')) IN ('active', 'published')
+                      AND entity.visibility = 'public'
+                  )
+              )
+            ORDER BY point.position, point.id
+            """,
+            (route["id"],),
+        )
+        route["points"] = [dict(row) for row in cur.fetchall()]
+    for point in route["points"]:
+        point["href"] = (
+            f"/places/{point['entity_slug']}"
+            if point.get("entity_slug")
+            else None
+        )
+    route["point_count"] = len(route["points"])
+    route["distance_km"] = float(route["distance_km"]) if route.get("distance_km") is not None else None
+    route["cover"] = safe_public_asset_url(route.get("cover") or "")
+    route["href"] = f"/routes/{route['slug']}"
+    return route
+
+
+def list_superadmin_routes(
+    *,
+    status: Optional[str] = None,
+    search: Optional[str] = None,
+) -> list[dict]:
+    clauses = ["TRUE"]
+    params: list = []
+    if status:
+        clauses.append("route.status = %s")
+        params.append(status)
+    if search:
+        clauses.append("(route.title ILIKE %s OR route.slug ILIKE %s)")
+        params.extend([f"%{search}%", f"%{search}%"])
+    with _db_conn("content") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT
+                route.*,
+                (SELECT COUNT(*) FROM content.route_points point
+                 WHERE point.route_id = route.id)::INTEGER AS point_count
+            FROM content.routes route
+            WHERE {' AND '.join(clauses)}
+            ORDER BY route.updated_at DESC, route.id DESC
+            """,
+            tuple(params),
+        )
+        rows = [dict(row) for row in cur.fetchall()]
+    for row in rows:
+        row["distance_km"] = float(row["distance_km"]) if row.get("distance_km") is not None else None
+    return rows
+
+
+def get_superadmin_route(route_id: int) -> dict | None:
+    with _db_conn("content") as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM content.routes WHERE id = %s", (route_id,))
+        raw = cur.fetchone()
+        if not raw:
+            return None
+        route = dict(raw)
+        cur.execute(
+            """
+            SELECT
+                point.id, point.position, point.entity_id,
+                entity.name AS entity_name, entity.slug AS entity_slug,
+                point.custom_title, point.description, point.lat, point.lng,
+                point.stay_minutes, point.overnight, point.transport_note,
+                point.created_at, point.updated_at
+            FROM content.route_points point
+            LEFT JOIN catalog.camps entity ON entity.id = point.entity_id
+            WHERE point.route_id = %s
+            ORDER BY point.position, point.id
+            """,
+            (route_id,),
+        )
+        route["points"] = [dict(row) for row in cur.fetchall()]
+    route["distance_km"] = float(route["distance_km"]) if route.get("distance_km") is not None else None
+    return route
+
+
+def preview_superadmin_route(route_id: int) -> dict | None:
+    route = get_superadmin_route(route_id)
+    if not route:
+        return None
+    points = []
+    for point in route["points"]:
+        point = dict(point)
+        point["title"] = (
+            point.get("custom_title")
+            or point.get("entity_name")
+            or "Точка маршрута"
+        )
+        point["href"] = (
+            f"/places/{point['entity_slug']}?preview=1"
+            if point.get("entity_slug")
+            else None
+        )
+        points.append(point)
+    route["points"] = points
+    route["point_count"] = len(points)
+    route["cover"] = safe_public_asset_url(route.get("cover_url") or "")
+    route["href"] = f"/routes/{route['slug']}?preview=1"
+    return route
+
+
+def upsert_superadmin_route(
+    *,
+    route_id: int | None,
+    payload: dict,
+    actor_id: int | None,
+) -> dict:
+    points = payload.pop("points", [])
+    expected_version = payload.pop("content_version", None)
+    payload["geojson"] = (
+        json.dumps(payload["geojson"], ensure_ascii=False)
+        if payload.get("geojson") is not None
+        else None
+    )
+    with _db_conn("content") as conn:
+        cur = conn.cursor()
+        try:
+            if route_id is None:
+                cur.execute(
+                    """
+                    INSERT INTO content.routes (
+                        slug, title, short_description, description, cover_url,
+                        route_type, transport_mode, duration_minutes,
+                        duration_text, distance_km, difficulty, season,
+                        region, city, start_lat, start_lng, end_lat, end_lng,
+                        geojson, status, editorial_weight, editorial_exception,
+                        seo_title, seo_description, published_at,
+                        created_by, updated_by
+                    )
+                    VALUES (
+                        %(slug)s, %(title)s, %(short_description)s, %(description)s,
+                        %(cover_url)s, %(route_type)s, %(transport_mode)s,
+                        %(duration_minutes)s, %(duration_text)s, %(distance_km)s,
+                        %(difficulty)s, %(season)s, %(region)s, %(city)s,
+                        %(start_lat)s, %(start_lng)s, %(end_lat)s, %(end_lng)s,
+                        %(geojson)s::jsonb, %(status)s, %(editorial_weight)s,
+                        %(editorial_exception)s, %(seo_title)s, %(seo_description)s,
+                        CASE WHEN %(status)s = 'published' THEN NOW() ELSE NULL END,
+                        %(actor_id)s, %(actor_id)s
+                    )
+                    RETURNING id
+                    """,
+                    {**payload, "actor_id": actor_id},
+                )
+                route_id = int(cur.fetchone()["id"])
+            else:
+                if expected_version is None:
+                    raise ValueError("Укажите версию маршрута")
+                cur.execute(
+                    """
+                    UPDATE content.routes
+                    SET slug = %(slug)s,
+                        title = %(title)s,
+                        short_description = %(short_description)s,
+                        description = %(description)s,
+                        cover_url = %(cover_url)s,
+                        route_type = %(route_type)s,
+                        transport_mode = %(transport_mode)s,
+                        duration_minutes = %(duration_minutes)s,
+                        duration_text = %(duration_text)s,
+                        distance_km = %(distance_km)s,
+                        difficulty = %(difficulty)s,
+                        season = %(season)s,
+                        region = %(region)s,
+                        city = %(city)s,
+                        start_lat = %(start_lat)s,
+                        start_lng = %(start_lng)s,
+                        end_lat = %(end_lat)s,
+                        end_lng = %(end_lng)s,
+                        geojson = %(geojson)s::jsonb,
+                        status = %(status)s,
+                        editorial_weight = %(editorial_weight)s,
+                        editorial_exception = %(editorial_exception)s,
+                        seo_title = %(seo_title)s,
+                        seo_description = %(seo_description)s,
+                        published_at = CASE
+                            WHEN %(status)s = 'published' AND published_at IS NULL THEN NOW()
+                            WHEN %(status)s <> 'published' THEN NULL
+                            ELSE published_at
+                        END,
+                        updated_by = %(actor_id)s,
+                        updated_at = NOW(),
+                        content_version = content_version + 1
+                    WHERE id = %(route_id)s
+                      AND content_version = %(expected_version)s
+                    RETURNING id
+                    """,
+                    {
+                        **payload,
+                        "actor_id": actor_id,
+                        "route_id": route_id,
+                        "expected_version": expected_version,
+                    },
+                )
+                if not cur.fetchone():
+                    cur.execute(
+                        "SELECT content_version FROM content.routes WHERE id = %s",
+                        (route_id,),
+                    )
+                    if not cur.fetchone():
+                        raise KeyError("Маршрут не найден")
+                    raise ValueError("Маршрут уже изменён. Обновите страницу")
+
+            cur.execute("DELETE FROM content.route_points WHERE route_id = %s", (route_id,))
+            for point in points:
+                cur.execute(
+                    """
+                    INSERT INTO content.route_points (
+                        route_id, position, entity_id, custom_title,
+                        description, lat, lng, stay_minutes, overnight,
+                        transport_note
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        route_id,
+                        point["position"],
+                        point.get("entity_id"),
+                        point.get("custom_title"),
+                        point.get("description"),
+                        point.get("lat"),
+                        point.get("lng"),
+                        point.get("stay_minutes"),
+                        point.get("overnight", False),
+                        point.get("transport_note"),
+                    ),
+                )
+            cur.execute("SELECT * FROM content.routes WHERE id = %s", (route_id,))
+            route = dict(cur.fetchone())
+            if route["status"] == "published":
+                if not safe_public_asset_url(route.get("cover_url") or ""):
+                    raise ValueError("Для публикации добавьте безопасную обложку")
+                if not route.get("seo_title") or not route.get("seo_description"):
+                    raise ValueError("Для публикации заполните SEO title и description")
+                cur.execute(
+                    """
+                    SELECT
+                        COUNT(*)::INTEGER AS point_count,
+                        COUNT(*) FILTER (
+                            WHERE COALESCE(point.lat, entity.lat) IS NULL
+                               OR COALESCE(point.lng, entity.lng) IS NULL
+                        )::INTEGER AS missing_coordinates,
+                        COUNT(*) FILTER (
+                            WHERE point.entity_id IS NOT NULL
+                              AND NOT (
+                                  entity.publication_status = 'published'
+                                  AND lower(COALESCE(entity.status, '')) IN ('active', 'published')
+                                  AND entity.visibility = 'public'
+                              )
+                        )::INTEGER AS private_entities
+                    FROM content.route_points point
+                    LEFT JOIN catalog.camps entity ON entity.id = point.entity_id
+                    WHERE point.route_id = %s
+                    """,
+                    (route_id,),
+                )
+                validation = dict(cur.fetchone())
+                if validation["point_count"] < 2:
+                    raise ValueError("Для публикации требуется минимум две точки")
+                if validation["missing_coordinates"]:
+                    raise ValueError("У каждой опубликованной точки должны быть координаты")
+                if validation["private_entities"]:
+                    raise ValueError("Публичный маршрут не может содержать черновые сущности")
+            conn.commit()
+        except (errors.UniqueViolation, errors.ForeignKeyViolation, errors.CheckViolation) as exc:
+            conn.rollback()
+            raise ValueError(
+                "Проверьте уникальность slug, позиции и данные точек маршрута"
+            ) from exc
+        except Exception:
+            conn.rollback()
+            raise
+    return get_superadmin_route(int(route_id))

@@ -7,8 +7,11 @@ from tourist03.dto.discovery import (
     DiscoverySuggestionResponseDTO,
     PublicCollectionDetailDTO,
     PublicCollectionListResponseDTO,
+    PublicRouteDetailDTO,
+    PublicRouteListResponseDTO,
     SuperadminCollectionDTO,
     SuperadminCollectionUpsertRequestDTO,
+    SuperadminRouteDTO,
 )
 from tourist03.security import get_superadmin
 from tourist03.services import discovery as discovery_service
@@ -81,6 +84,65 @@ router.add_api_route(
     dependencies=superadmin_guard,
     response_model=SuperadminCollectionDTO,
     response_model_exclude_none=True,
+    responses=error_responses(401, 404, 422, 500),
+)
+router.add_api_route(
+    "/api/public/routes",
+    discovery_service.api_public_routes,
+    methods=["GET"],
+    response_model=PublicRouteListResponseDTO,
+    response_model_exclude_none=True,
+    responses=error_responses(400, 422, 500),
+)
+router.add_api_route(
+    "/api/public/routes/{slug}",
+    discovery_service.api_public_route_detail,
+    methods=["GET"],
+    response_model=PublicRouteDetailDTO,
+    response_model_exclude_none=True,
+    responses=error_responses(404, 422, 500),
+)
+router.add_api_route(
+    "/api/superadmin/routes",
+    discovery_service.superadmin_list_routes,
+    methods=["GET"],
+    dependencies=superadmin_guard,
+    response_model=list[SuperadminRouteDTO],
+    response_model_exclude_none=True,
+    responses=error_responses(401, 422, 500),
+)
+router.add_api_route(
+    "/api/superadmin/routes",
+    discovery_service.superadmin_create_route,
+    methods=["POST"],
+    dependencies=superadmin_guard,
+    response_model=SuperadminRouteDTO,
+    response_model_exclude_none=True,
+    responses=error_responses(401, 409, 422, 500),
+)
+router.add_api_route(
+    "/api/superadmin/routes/{route_id}",
+    discovery_service.superadmin_route_detail,
+    methods=["GET"],
+    dependencies=superadmin_guard,
+    response_model=SuperadminRouteDTO,
+    response_model_exclude_none=True,
+    responses=error_responses(401, 404, 422, 500),
+)
+router.add_api_route(
+    "/api/superadmin/routes/{route_id}",
+    discovery_service.superadmin_update_route,
+    methods=["PUT"],
+    dependencies=superadmin_guard,
+    response_model=SuperadminRouteDTO,
+    response_model_exclude_none=True,
+    responses=error_responses(401, 404, 409, 422, 500),
+)
+router.add_api_route(
+    "/api/superadmin/routes/{route_id}/preview",
+    discovery_service.superadmin_route_preview,
+    methods=["GET"],
+    dependencies=superadmin_guard,
     responses=error_responses(401, 404, 422, 500),
 )
 router.add_api_route(

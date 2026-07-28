@@ -37,6 +37,7 @@ class DiscoveryPostgresTests(unittest.TestCase):
             feature_services=True,
             feature_discovery_search=True,
             feature_editorial_collections=True,
+            feature_tourism_routes=True,
             session_secret_key="discovery-postgres-test-secret-at-least-32-characters",
         )
         configure_settings(cls.settings)
@@ -353,5 +354,142 @@ class DiscoveryPostgresTests(unittest.TestCase):
             ) as client:
                 response = await client.get("/api/public/search", params={"q": "рыбалка"})
                 self.assertEqual(response.status_code, 404)
+
+        asyncio.run(scenario())
+
+    def test_routes_points_geojson_and_draft_entity_protection(self):
+        route = discovery_repo.upsert_superadmin_route(
+            route_id=None,
+            actor_id=None,
+            payload={
+                "slug": "karelia-weekend",
+                "title": "Выходные в Карелии",
+                "short_description": "Редакционный маршрут на два дня.",
+                "description": "Маршрут соединяет рыбалку и обзорную точку.",
+                "cover_url": "/static/brand/turistika-logo-stacked.svg",
+                "route_type": "driving",
+                "transport_mode": "car",
+                "duration_minutes": 2880,
+                "duration_text": "2 дня",
+                "distance_km": 48.5,
+                "difficulty": "easy",
+                "season": "summer",
+                "region": "Республика Карелия",
+                "city": "Сортавала",
+                "start_lat": 61.70,
+                "start_lng": 30.69,
+                "end_lat": 61.76,
+                "end_lng": 30.76,
+                "geojson": {
+                    "type": "LineString",
+                    "coordinates": [[30.69, 61.70], [30.76, 61.76]],
+                },
+                "status": "published",
+                "editorial_weight": 15,
+                "editorial_exception": False,
+                "seo_title": "Выходные в Карелии — маршрут Туристики",
+                "seo_description": "Готовый редакционный маршрут по Карелии.",
+                "content_version": None,
+                "points": [
+                    {
+                        "position": 0,
+                        "entity_id": self.entity_ids["fishing-exact"],
+                        "custom_title": None,
+                        "description": "Начните с озера.",
+                        "lat": None,
+                        "lng": None,
+                        "stay_minutes": 180,
+                        "overnight": False,
+                        "transport_note": "На машине",
+                    },
+                    {
+                        "position": 1,
+                        "entity_id": None,
+                        "custom_title": "Смотровая площадка",
+                        "description": "Финальная точка маршрута.",
+                        "lat": 61.76,
+                        "lng": 30.76,
+                        "stay_minutes": 60,
+                        "overnight": False,
+                        "transport_note": "Короткая прогулка",
+                    },
+                ],
+            },
+        )
+        self.assertEqual(route["content_version"], 1)
+        public = discovery_repo.get_public_route("karelia-weekend")
+        self.assertEqual(public["point_count"], 2)
+        self.assertEqual(public["points"][0]["entity_slug"], "fishing-exact")
+        self.assertEqual(public["points"][1]["title"], "Смотровая площадка")
+        self.assertEqual(public["geojson"]["type"], "LineString")
+
+        with self.assertRaisesRegex(ValueError, "черновые сущности"):
+            discovery_repo.upsert_superadmin_route(
+                route_id=None,
+                actor_id=None,
+                payload={
+                    "slug": "unsafe-draft-route",
+                    "title": "Черновой маршрут",
+                    "short_description": "Не должен публиковаться.",
+                    "description": None,
+                    "cover_url": "/static/brand/turistika-logo-stacked.svg",
+                    "route_type": "editorial",
+                    "transport_mode": "mixed",
+                    "duration_minutes": None,
+                    "duration_text": "Один день",
+                    "distance_km": None,
+                    "difficulty": None,
+                    "season": None,
+                    "region": None,
+                    "city": None,
+                    "start_lat": None,
+                    "start_lng": None,
+                    "end_lat": None,
+                    "end_lng": None,
+                    "geojson": None,
+                    "status": "published",
+                    "editorial_weight": 0,
+                    "editorial_exception": False,
+                    "seo_title": "Черновой маршрут — Туристика",
+                    "seo_description": "Проверка защиты публикации.",
+                    "content_version": None,
+                    "points": [
+                        {
+                            "position": 0,
+                            "entity_id": self.entity_ids["fishing-draft"],
+                            "custom_title": None,
+                            "description": None,
+                            "lat": 61.70,
+                            "lng": 30.69,
+                            "stay_minutes": None,
+                            "overnight": False,
+                            "transport_note": None,
+                        },
+                        {
+                            "position": 1,
+                            "entity_id": None,
+                            "custom_title": "Вторая точка",
+                            "description": None,
+                            "lat": 61.71,
+                            "lng": 30.70,
+                            "stay_minutes": None,
+                            "overnight": False,
+                            "transport_note": None,
+                        },
+                    ],
+                },
+            )
+
+        async def scenario():
+            application = app_module.create_app(self.settings)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=application),
+                base_url="http://testserver",
+            ) as client:
+                response = await client.get("/api/public/routes/karelia-weekend")
+                self.assertEqual(response.status_code, 200, response.text)
+                self.assertEqual(response.json()["point_count"], 2)
+                missing = await client.get("/api/public/routes/unsafe-draft-route")
+                self.assertEqual(missing.status_code, 404)
 
         asyncio.run(scenario())
