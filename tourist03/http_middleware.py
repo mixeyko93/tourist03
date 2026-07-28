@@ -250,7 +250,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return "auth", settings.rate_limit_auth_per_minute
         if path in {"/api/upload", "/api/admin/upload"} and method == "POST":
             return "upload", settings.rate_limit_upload_per_minute
-        if path == "/api/public/entities" and method == "GET":
+        if (
+            path == "/api/public/entities"
+            or path.startswith("/api/public/search")
+            or path.startswith("/api/public/nearby")
+        ) and method == "GET":
             return "public-catalog", settings.rate_limit_public_search_per_minute
         if path.startswith("/api/public/") and method in UNSAFE_METHODS:
             return "public-post", settings.rate_limit_public_post_per_minute
