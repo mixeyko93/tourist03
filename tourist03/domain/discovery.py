@@ -26,6 +26,21 @@ COLLECTION_CONDITION_KEYS = frozenset(
         "audiences",
     }
 )
+RECOMMENDATION_WEIGHT_KEYS = frozenset(
+    {
+        "same_type",
+        "same_subtype",
+        "shared_tags",
+        "shared_amenities",
+        "same_region",
+        "same_city",
+        "nearby_distance",
+        "shared_collection",
+        "shared_route",
+        "editorial_boost",
+        "freshness",
+    }
+)
 _WHITESPACE_RE = re.compile(r"\s+")
 
 _CYRILLIC_TO_LATIN = {

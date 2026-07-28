@@ -149,11 +149,17 @@ class FeatureGateMiddleware(BaseHTTPMiddleware):
             blocked = True
         elif not settings.feature_tourism_routes and path.startswith(TOURISM_ROUTE_PREFIXES):
             blocked = True
-        elif not settings.feature_nearby_discovery and path.startswith(NEARBY_DISCOVERY_PREFIXES):
+        elif not settings.feature_nearby_discovery and (
+            path.startswith(NEARBY_DISCOVERY_PREFIXES)
+            or (
+                path.startswith("/api/public/entities/")
+                and path.endswith("/nearby")
+            )
+        ):
             blocked = True
         elif not settings.feature_related_entities and (
             path.startswith("/api/public/entities/")
-            and (path.endswith("/related") or path.endswith("/nearby"))
+            and path.endswith("/related")
         ):
             blocked = True
         elif not (

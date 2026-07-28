@@ -3,12 +3,15 @@ from fastapi import APIRouter, Depends
 from tourist03.api_responses import error_responses
 from tourist03.dto.discovery import (
     DiscoveryPopularResponseDTO,
+    DiscoveryHomeResponseDTO,
     DiscoverySearchResponseDTO,
     DiscoverySuggestionResponseDTO,
+    NearbyResponseDTO,
     PublicCollectionDetailDTO,
     PublicCollectionListResponseDTO,
     PublicRouteDetailDTO,
     PublicRouteListResponseDTO,
+    RelatedEntityResponseDTO,
     SuperadminCollectionDTO,
     SuperadminCollectionUpsertRequestDTO,
     SuperadminRouteDTO,
@@ -85,6 +88,38 @@ router.add_api_route(
     response_model=SuperadminCollectionDTO,
     response_model_exclude_none=True,
     responses=error_responses(401, 404, 422, 500),
+)
+router.add_api_route(
+    "/api/public/nearby",
+    discovery_service.api_public_nearby,
+    methods=["GET"],
+    response_model=NearbyResponseDTO,
+    response_model_exclude_none=True,
+    responses=error_responses(400, 422, 500),
+)
+router.add_api_route(
+    "/api/public/entities/{slug}/nearby",
+    discovery_service.api_public_entity_nearby,
+    methods=["GET"],
+    response_model=NearbyResponseDTO,
+    response_model_exclude_none=True,
+    responses=error_responses(404, 422, 500),
+)
+router.add_api_route(
+    "/api/public/entities/{slug}/related",
+    discovery_service.api_public_related_entities,
+    methods=["GET"],
+    response_model=RelatedEntityResponseDTO,
+    response_model_exclude_none=True,
+    responses=error_responses(404, 422, 500),
+)
+router.add_api_route(
+    "/api/public/discovery/home",
+    discovery_service.api_public_discovery_home,
+    methods=["GET"],
+    response_model=DiscoveryHomeResponseDTO,
+    response_model_exclude_none=True,
+    responses=error_responses(500),
 )
 router.add_api_route(
     "/api/public/routes",

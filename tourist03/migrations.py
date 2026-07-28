@@ -3439,6 +3439,30 @@ MIGRATIONS = (
         WHERE lat IS NOT NULL AND lng IS NOT NULL;
         """,
     ),
+    MigrationStep(
+        version="0033_discovery_indexes",
+        sql="""
+        CREATE INDEX IF NOT EXISTS idx_camps_discovery_coordinates_public
+        ON catalog.camps(lat, lng, id)
+        WHERE publication_status = 'published'
+          AND visibility = 'public'
+          AND lat IS NOT NULL
+          AND lng IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_camps_discovery_kind_freshness
+        ON catalog.camps(
+            place_type_id,
+            COALESCE(confirmed_at, updated_at) DESC,
+            id
+        )
+        WHERE publication_status = 'published'
+          AND visibility = 'public';
+        CREATE INDEX IF NOT EXISTS idx_collection_items_collection_position
+        ON content.collection_items(collection_id, position, entity_id);
+        CREATE INDEX IF NOT EXISTS idx_route_points_route_entity_position
+        ON content.route_points(route_id, entity_id, position)
+        WHERE entity_id IS NOT NULL;
+        """,
+    ),
 )
 
 CURRENT_MIGRATION_VERSION = MIGRATIONS[-1].version

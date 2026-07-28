@@ -70,6 +70,7 @@ def search_public_entities(
     sort: str = "relevance",
     limit: int = 24,
     offset: int = 0,
+    include_rank: bool = False,
 ) -> dict:
     params = {
         **_search_patterns(terms),
@@ -320,7 +321,9 @@ def search_public_entities(
     total = int(rows[0].pop("total")) if rows else 0
     items = []
     for row in rows:
-        row.pop("relevance_score", None)
+        rank = float(row.pop("relevance_score", 0) or 0)
+        if include_rank:
+            row["_search_rank"] = rank
         row.pop("confirmed_at", None)
         row["source"] = "entity"
         row["href"] = f"/places/{row['slug']}"
@@ -333,11 +336,237 @@ def search_public_entities(
     return {"items": items, "total": total}
 
 
-def list_search_suggestions(terms: SearchTerms, *, limit: int = 10) -> list[dict]:
+def search_public_editorial_content(
+    terms: SearchTerms,
+    *,
+    include_collections: bool,
+    include_routes: bool,
+    region: Optional[str] = None,
+    city: Optional[str] = None,
+    sort: str = "relevance",
+    limit: int = 24,
+    offset: int = 0,
+) -> dict:
+    params = {
+        **_search_patterns(terms),
+        "region": region,
+        "city": city,
+        "limit": limit,
+        "offset": offset,
+    }
+    parts = []
+    if include_collections:
+        filters = ["collection.status = 'published'"]
+        if region:
+            filters.append("lower(collection.region) = lower(%(region)s)")
+        if city:
+            filters.append("lower(collection.city) = lower(%(city)s)")
+        parts.append(
+            f"""
+            SELECT
+                'collection'::TEXT AS source,
+                collection.id::TEXT AS id,
+                collection.slug,
+                collection.title,
+                collection.short_description,
+                '/collections/' || collection.slug AS href,
+                collection.cover_url AS cover,
+                NULL::TEXT AS entity_kind,
+                NULL::TEXT AS entity_kind_name,
+                NULL::TEXT AS subtype,
+                NULL::TEXT AS subtype_name,
+                collection.region,
+                collection.city,
+                NULL::DOUBLE PRECISION AS lat,
+                NULL::DOUBLE PRECISION AS lng,
+                collection.updated_at,
+                (
+                    CASE
+                        WHEN catalog.normalize_search_text(collection.title) = %(query)s THEN 960
+                        WHEN catalog.normalize_search_text(collection.title) LIKE (%(query)s || '%%') THEN 790
+                        WHEN catalog.normalize_search_text(collection.slug) = replace(%(query)s, ' ', '-') THEN 750
+                        ELSE 0
+                    END
+                    + ts_rank_cd(
+                        collection.search_vector,
+                        websearch_to_tsquery('russian'::regconfig, %(query)s),
+                        32
+                    ) * 170
+                    + LEAST(collection.editorial_weight, 100) * 0.25
+                )::DOUBLE PRECISION AS search_rank
+            FROM content.collections collection
+            WHERE {' AND '.join(filters)}
+              AND (
+                  EXISTS (
+                      SELECT 1 FROM unnest(%(variants)s::text[]) variant
+                      WHERE collection.search_vector
+                          @@ websearch_to_tsquery('russian'::regconfig, variant)
+                  )
+                  OR collection.search_document LIKE ANY(%(contains)s::text[])
+              )
+            """
+        )
+    if include_routes:
+        filters = ["route.status = 'published'"]
+        if region:
+            filters.append("lower(route.region) = lower(%(region)s)")
+        if city:
+            filters.append("lower(route.city) = lower(%(city)s)")
+        parts.append(
+            f"""
+            SELECT
+                'route'::TEXT AS source,
+                route.id::TEXT AS id,
+                route.slug,
+                route.title,
+                route.short_description,
+                '/routes/' || route.slug AS href,
+                route.cover_url AS cover,
+                NULL::TEXT AS entity_kind,
+                NULL::TEXT AS entity_kind_name,
+                NULL::TEXT AS subtype,
+                NULL::TEXT AS subtype_name,
+                route.region,
+                route.city,
+                route.start_lat AS lat,
+                route.start_lng AS lng,
+                route.updated_at,
+                (
+                    CASE
+                        WHEN catalog.normalize_search_text(route.title) = %(query)s THEN 955
+                        WHEN catalog.normalize_search_text(route.title) LIKE (%(query)s || '%%') THEN 785
+                        WHEN catalog.normalize_search_text(route.slug) = replace(%(query)s, ' ', '-') THEN 745
+                        ELSE 0
+                    END
+                    + ts_rank_cd(
+                        route.search_vector,
+                        websearch_to_tsquery('russian'::regconfig, %(query)s),
+                        32
+                    ) * 170
+                    + LEAST(route.editorial_weight, 100) * 0.25
+                )::DOUBLE PRECISION AS search_rank
+            FROM content.routes route
+            WHERE {' AND '.join(filters)}
+              AND (
+                  EXISTS (
+                      SELECT 1 FROM unnest(%(variants)s::text[]) variant
+                      WHERE route.search_vector
+                          @@ websearch_to_tsquery('russian'::regconfig, variant)
+                  )
+                  OR route.search_document LIKE ANY(%(contains)s::text[])
+                  OR EXISTS (
+                      SELECT 1
+                      FROM content.route_points point
+                      LEFT JOIN catalog.camps entity ON entity.id = point.entity_id
+                      WHERE point.route_id = route.id
+                        AND catalog.normalize_search_text(
+                            COALESCE(point.custom_title, entity.name, '') || ' '
+                            || COALESCE(point.description, '')
+                        ) LIKE ANY(%(contains)s::text[])
+                  )
+              )
+            """
+        )
+    if not parts:
+        return {"items": [], "total": 0}
+    order_sql = (
+        "updated_at DESC, lower(title), source, id"
+        if sort == "newest"
+        else "search_rank DESC, lower(title), source, id"
+    )
+    with _db_conn("content") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            WITH matching AS (
+                {' UNION ALL '.join(parts)}
+            ),
+            paged AS (
+                SELECT *
+                FROM matching
+                ORDER BY {order_sql}
+                LIMIT %(limit)s OFFSET %(offset)s
+            )
+            SELECT paged.*, (SELECT COUNT(*) FROM matching) AS total
+            FROM paged
+            ORDER BY {order_sql}
+            """,
+            params,
+        )
+        rows = [dict(row) for row in cur.fetchall()]
+    total = int(rows[0].pop("total")) if rows else 0
+    for row in rows:
+        row["_search_rank"] = float(row.pop("search_rank", 0) or 0)
+        row["cover"] = safe_public_asset_url(row.get("cover") or "")
+        row["location"] = ", ".join(
+            value for value in (row.get("city"), row.get("region")) if value
+        ) or None
+        row["tags"] = []
+        row["match_reasons"] = [
+            "Редакционная подборка"
+            if row["source"] == "collection"
+            else "Готовый маршрут"
+        ]
+    return {"items": rows, "total": total}
+
+
+def list_search_suggestions(
+    terms: SearchTerms,
+    *,
+    include_collections: bool = False,
+    include_routes: bool = False,
+    limit: int = 10,
+) -> list[dict]:
     params = {
         **_search_patterns(terms),
         "limit": limit,
     }
+    editorial_parts = ""
+    if include_collections:
+        editorial_parts += """
+                UNION ALL
+
+                SELECT
+                    'collection', collection.id::TEXT, collection.title,
+                    'Подборка', collection.title,
+                    '/collections/' || collection.slug, collection.slug,
+                    CASE
+                        WHEN catalog.normalize_search_text(collection.title) = %(query)s THEN 900
+                        WHEN catalog.normalize_search_text(collection.title) LIKE (%(query)s || '%%') THEN 720
+                        ELSE 470
+                    END
+                FROM content.collections collection
+                WHERE collection.status = 'published'
+                  AND collection.search_document LIKE ANY(%(contains)s::text[])
+        """
+    if include_routes:
+        editorial_parts += """
+                UNION ALL
+
+                SELECT
+                    'route', route.id::TEXT, route.title,
+                    'Маршрут', route.title,
+                    '/routes/' || route.slug, route.slug,
+                    CASE
+                        WHEN catalog.normalize_search_text(route.title) = %(query)s THEN 895
+                        WHEN catalog.normalize_search_text(route.title) LIKE (%(query)s || '%%') THEN 715
+                        ELSE 465
+                    END
+                FROM content.routes route
+                WHERE route.status = 'published'
+                  AND (
+                      route.search_document LIKE ANY(%(contains)s::text[])
+                      OR EXISTS (
+                          SELECT 1
+                          FROM content.route_points point
+                          LEFT JOIN catalog.camps entity ON entity.id = point.entity_id
+                          WHERE point.route_id = route.id
+                            AND catalog.normalize_search_text(
+                                COALESCE(point.custom_title, entity.name, '')
+                            ) LIKE ANY(%(contains)s::text[])
+                      )
+                  )
+        """
     with _db_conn("catalog") as conn:
         cur = conn.cursor()
         cur.execute(
@@ -412,6 +641,7 @@ def list_search_suggestions(terms: SearchTerms, *, limit: int = 10) -> list[dict
                 WHERE {PUBLIC_ENTITY_PREDICATE}
                   AND NULLIF(btrim(c.city), '') IS NOT NULL
                   AND catalog.normalize_search_text(c.city) LIKE ANY(%(contains)s::text[])
+                {editorial_parts}
             )
             SELECT source, id, title, subtitle, value, href, slug
             FROM suggestions
@@ -1440,3 +1670,340 @@ def upsert_superadmin_route(
             conn.rollback()
             raise
     return get_superadmin_route(int(route_id))
+
+
+def list_nearby_entities(
+    *,
+    lat: float,
+    lng: float,
+    radius_km: int,
+    bbox: tuple[float, float, float, float],
+    entity_kinds: Optional[list[str]] = None,
+    exclude_entity_id: Optional[int] = None,
+    limit: int = 50,
+) -> list[dict]:
+    min_lng, min_lat, max_lng, max_lat = bbox
+    clauses = [
+        PUBLIC_ENTITY_PREDICATE,
+        "c.lat BETWEEN %(min_lat)s AND %(max_lat)s",
+        "c.lng BETWEEN %(min_lng)s AND %(max_lng)s",
+    ]
+    params = {
+        "lat": lat,
+        "lng": lng,
+        "radius": radius_km,
+        "min_lat": min_lat,
+        "max_lat": max_lat,
+        "min_lng": min_lng,
+        "max_lng": max_lng,
+        "entity_kinds": entity_kinds or [],
+        "exclude_entity_id": exclude_entity_id,
+        "limit": limit,
+    }
+    if entity_kinds:
+        clauses.append("ek.slug = ANY(%(entity_kinds)s::text[])")
+    if exclude_entity_id is not None:
+        clauses.append("c.id <> %(exclude_entity_id)s")
+    with _db_conn("catalog") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            WITH candidates AS (
+                SELECT
+                    c.id,
+                    (
+                        6371.0088 * 2 * asin(
+                            sqrt(
+                                LEAST(
+                                    1.0,
+                                    power(sin(radians(c.lat - %(lat)s) / 2), 2)
+                                    + cos(radians(%(lat)s))
+                                    * cos(radians(c.lat))
+                                    * power(sin(radians(c.lng - %(lng)s) / 2), 2)
+                                )
+                            )
+                        )
+                    ) AS distance_km
+                FROM catalog.camps c
+                JOIN catalog.place_types pt ON pt.id = c.place_type_id
+                JOIN catalog.entity_kinds ek ON ek.id = pt.entity_kind_id
+                WHERE {' AND '.join(clauses)}
+            )
+            SELECT id, distance_km
+            FROM candidates
+            WHERE distance_km <= %(radius)s
+            ORDER BY distance_km, id
+            LIMIT %(limit)s
+            """,
+            params,
+        )
+        distance_rows = [dict(row) for row in cur.fetchall()]
+        cards = _public_entity_cards_for_ids(
+            cur,
+            [int(row["id"]) for row in distance_rows],
+        )
+    items = []
+    for distance_row in distance_rows:
+        card = cards.get(int(distance_row["id"]))
+        if not card:
+            continue
+        card["distance_km"] = round(float(distance_row["distance_km"]), 1)
+        card["match_reasons"] = ["Рядом"]
+        items.append(card)
+    return items
+
+
+def _public_entity_discovery_context(cur, slug: str) -> dict | None:
+    cur.execute(
+        f"""
+        SELECT
+            c.id, c.slug, c.lat, c.lng, c.region, c.city,
+            ek.slug AS entity_kind, pt.slug AS subtype,
+            ARRAY(
+                SELECT tag.slug
+                FROM catalog.entity_tags link
+                JOIN catalog.tags tag ON tag.id = link.tag_id
+                WHERE link.entity_id = c.id AND tag.is_active = TRUE
+                ORDER BY tag.slug
+            ) AS tag_slugs,
+            ARRAY(
+                SELECT amenity.slug
+                FROM catalog.camp_amenities link
+                JOIN catalog.amenities amenity ON amenity.id = link.amenity_id
+                WHERE link.camp_id = c.id AND amenity.is_active = TRUE
+                ORDER BY amenity.slug
+            ) AS amenity_slugs,
+            ARRAY(
+                SELECT item.collection_id
+                FROM content.collection_items item
+                JOIN content.collections collection ON collection.id = item.collection_id
+                WHERE item.entity_id = c.id AND collection.status = 'published'
+                ORDER BY item.collection_id
+            ) AS collection_ids,
+            ARRAY(
+                SELECT point.route_id
+                FROM content.route_points point
+                JOIN content.routes route ON route.id = point.route_id
+                WHERE point.entity_id = c.id AND route.status = 'published'
+                ORDER BY point.route_id
+            ) AS route_ids
+        FROM catalog.camps c
+        JOIN catalog.place_types pt ON pt.id = c.place_type_id
+        JOIN catalog.entity_kinds ek ON ek.id = pt.entity_kind_id
+        WHERE {PUBLIC_ENTITY_PREDICATE}
+          AND lower(c.slug) = lower(%s)
+        """,
+        (slug,),
+    )
+    row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def get_public_entity_discovery_context(slug: str) -> dict | None:
+    with _db_conn("catalog") as conn:
+        return _public_entity_discovery_context(conn.cursor(), slug)
+
+
+def list_related_entities(
+    *,
+    slug: str,
+    weights: dict[str, int],
+    limit: int = 8,
+) -> list[dict] | None:
+    with _db_conn("catalog") as conn:
+        cur = conn.cursor()
+        context = _public_entity_discovery_context(cur, slug)
+        if not context:
+            return None
+        params = {
+            "entity_id": context["id"],
+            "entity_kind": context["entity_kind"],
+            "subtype": context["subtype"],
+            "tags": context.get("tag_slugs") or [],
+            "amenities": context.get("amenity_slugs") or [],
+            "region": context.get("region"),
+            "city": context.get("city"),
+            "lat": context.get("lat"),
+            "lng": context.get("lng"),
+            "collection_ids": context.get("collection_ids") or [],
+            "route_ids": context.get("route_ids") or [],
+            "limit": limit,
+            **{f"weight_{key}": value for key, value in weights.items()},
+        }
+        cur.execute(
+            f"""
+            WITH candidates AS (
+                SELECT
+                    c.id,
+                    c.editorial_weight,
+                    c.confirmed_at,
+                    c.updated_at,
+                    c.region,
+                    c.city,
+                    c.lat,
+                    c.lng,
+                    ek.slug AS entity_kind,
+                    pt.slug AS subtype,
+                    ARRAY(
+                        SELECT tag.slug
+                        FROM catalog.entity_tags link
+                        JOIN catalog.tags tag ON tag.id = link.tag_id
+                        WHERE link.entity_id = c.id AND tag.is_active = TRUE
+                    ) AS tag_slugs,
+                    ARRAY(
+                        SELECT amenity.slug
+                        FROM catalog.camp_amenities link
+                        JOIN catalog.amenities amenity ON amenity.id = link.amenity_id
+                        WHERE link.camp_id = c.id AND amenity.is_active = TRUE
+                    ) AS amenity_slugs,
+                    ARRAY(
+                        SELECT item.collection_id
+                        FROM content.collection_items item
+                        JOIN content.collections collection ON collection.id = item.collection_id
+                        WHERE item.entity_id = c.id AND collection.status = 'published'
+                    ) AS collection_ids,
+                    ARRAY(
+                        SELECT point.route_id
+                        FROM content.route_points point
+                        JOIN content.routes route ON route.id = point.route_id
+                        WHERE point.entity_id = c.id AND route.status = 'published'
+                    ) AS route_ids,
+                    CASE
+                        WHEN %(lat)s IS NULL OR %(lng)s IS NULL OR c.lat IS NULL OR c.lng IS NULL
+                        THEN NULL
+                        ELSE (
+                            6371.0088 * 2 * asin(
+                                sqrt(
+                                    LEAST(
+                                        1.0,
+                                        power(sin(radians(c.lat - %(lat)s) / 2), 2)
+                                        + cos(radians(%(lat)s))
+                                        * cos(radians(c.lat))
+                                        * power(sin(radians(c.lng - %(lng)s) / 2), 2)
+                                    )
+                                )
+                            )
+                        )
+                    END AS distance_km
+                FROM catalog.camps c
+                JOIN catalog.place_types pt ON pt.id = c.place_type_id
+                JOIN catalog.entity_kinds ek ON ek.id = pt.entity_kind_id
+                WHERE {PUBLIC_ENTITY_PREDICATE}
+                  AND c.id <> %(entity_id)s
+            ),
+            scored AS (
+                SELECT
+                    candidates.*,
+                    (
+                        CASE WHEN entity_kind = %(entity_kind)s THEN %(weight_same_type)s ELSE 0 END
+                        + CASE WHEN subtype = %(subtype)s THEN %(weight_same_subtype)s ELSE 0 END
+                        + cardinality(
+                            ARRAY(
+                                SELECT unnest(tag_slugs)
+                                INTERSECT
+                                SELECT unnest(%(tags)s::text[])
+                            )
+                        ) * %(weight_shared_tags)s
+                        + cardinality(
+                            ARRAY(
+                                SELECT unnest(amenity_slugs)
+                                INTERSECT
+                                SELECT unnest(%(amenities)s::text[])
+                            )
+                        ) * %(weight_shared_amenities)s
+                        + CASE
+                            WHEN %(region)s IS NOT NULL AND lower(region) = lower(%(region)s)
+                            THEN %(weight_same_region)s ELSE 0
+                        END
+                        + CASE
+                            WHEN %(city)s IS NOT NULL AND lower(city) = lower(%(city)s)
+                            THEN %(weight_same_city)s ELSE 0
+                        END
+                        + CASE
+                            WHEN distance_km <= 25 THEN %(weight_nearby_distance)s
+                            ELSE 0
+                        END
+                        + CASE
+                            WHEN collection_ids && %(collection_ids)s::bigint[]
+                            THEN %(weight_shared_collection)s ELSE 0
+                        END
+                        + CASE
+                            WHEN route_ids && %(route_ids)s::bigint[]
+                            THEN %(weight_shared_route)s ELSE 0
+                        END
+                        + (LEAST(editorial_weight, 100) / 100.0) * %(weight_editorial_boost)s
+                        + CASE
+                            WHEN COALESCE(confirmed_at, updated_at) >= NOW() - INTERVAL '365 days'
+                            THEN %(weight_freshness)s ELSE 0
+                        END
+                    )::DOUBLE PRECISION AS recommendation_score,
+                    cardinality(
+                        ARRAY(
+                            SELECT unnest(tag_slugs)
+                            INTERSECT
+                            SELECT unnest(%(tags)s::text[])
+                        )
+                    ) > 0 AS shared_tags,
+                    collection_ids && %(collection_ids)s::bigint[] AS shared_collection,
+                    route_ids && %(route_ids)s::bigint[] AS shared_route
+                FROM candidates
+            )
+            SELECT
+                id, entity_kind, subtype, region, city, distance_km,
+                shared_tags, shared_collection, shared_route,
+                recommendation_score
+            FROM scored
+            WHERE recommendation_score > 0
+            ORDER BY recommendation_score DESC, id
+            LIMIT %(limit)s
+            """,
+            params,
+        )
+        score_rows = [dict(row) for row in cur.fetchall()]
+        cards = _public_entity_cards_for_ids(
+            cur,
+            [int(row["id"]) for row in score_rows],
+        )
+    items = []
+    for score_row in score_rows:
+        card = cards.get(int(score_row["id"]))
+        if not card:
+            continue
+        if score_row.get("distance_km") is not None and float(score_row["distance_km"]) <= 25:
+            reason = "Рядом"
+        elif score_row.get("shared_collection"):
+            reason = "В этой подборке"
+        elif score_row.get("shared_route"):
+            reason = "В этом маршруте"
+        elif score_row.get("shared_tags"):
+            reason = "По этой теме"
+        elif score_row.get("subtype") == context.get("subtype"):
+            reason = "Похожий тип"
+        elif context.get("city") and score_row.get("city") == context.get("city"):
+            reason = "В этом городе"
+        else:
+            reason = "В этом регионе"
+        card["reason"] = reason
+        card["match_reasons"] = [reason]
+        items.append(card)
+    return items
+
+
+def list_recent_public_entities(*, limit: int = 8) -> list[dict]:
+    with _db_conn("catalog") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            f"""
+            SELECT c.id
+            FROM catalog.camps c
+            JOIN catalog.place_types pt ON pt.id = c.place_type_id
+            JOIN catalog.entity_kinds ek ON ek.id = pt.entity_kind_id
+            WHERE {PUBLIC_ENTITY_PREDICATE}
+            ORDER BY COALESCE(c.confirmed_at, c.updated_at) DESC, c.id DESC
+            LIMIT %s
+            """,
+            (limit,),
+        )
+        entity_ids = [int(row["id"]) for row in cur.fetchall()]
+        cards = _public_entity_cards_for_ids(cur, entity_ids)
+    return [cards[entity_id] for entity_id in entity_ids if entity_id in cards]

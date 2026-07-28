@@ -9,11 +9,15 @@ from fastapi import HTTPException, Query, Request, Response
 
 from tourist03.domain.discovery import (
     DiscoveryValidationError,
+    RECOMMENDATION_WEIGHT_KEYS,
+    bounding_box,
     build_search_terms,
     normalize_slug_filter,
     validate_collection_conditions,
     validate_coordinates,
     validate_geojson,
+    validate_nearby_radius,
+    validate_weight_config,
 )
 from tourist03.dto.discovery import (
     SuperadminCollectionUpsertRequestDTO,
@@ -57,7 +61,7 @@ def api_public_search(
     region: Optional[str] = Query(None, max_length=120),
     city: Optional[str] = Query(None, max_length=120),
     sort: Literal["relevance", "newest"] = Query("relevance"),
-    page: int = Query(1, ge=1, le=1000),
+    page: int = Query(1, ge=1, le=20),
     limit: int = Query(24, ge=1, le=50),
 ):
     try:
@@ -79,17 +83,86 @@ def api_public_search(
             }
         kinds = ["accommodation"]
     terms = _terms_or_400(request, q)
-    result = discovery_repo.search_public_entities(
-        terms,
-        entity_kinds=kinds or None,
-        subtypes=subtypes or None,
-        tags=tags or None,
-        region=_plain_filter(region, "Регион"),
-        city=_plain_filter(city, "Город"),
-        sort=sort,
-        limit=limit,
-        offset=(page - 1) * limit,
+    normalized_region = _plain_filter(region, "Регион")
+    normalized_city = _plain_filter(city, "Город")
+    offset = (page - 1) * limit
+    settings = request.app.state.settings
+    include_collections = (
+        settings.feature_editorial_collections
+        and not kinds
+        and not subtypes
+        and not tags
     )
+    include_routes = (
+        settings.feature_tourism_routes
+        and not kinds
+        and not subtypes
+        and not tags
+    )
+    if include_collections or include_routes:
+        window = offset + limit
+        entity_result = discovery_repo.search_public_entities(
+            terms,
+            entity_kinds=kinds or None,
+            subtypes=subtypes or None,
+            tags=tags or None,
+            region=normalized_region,
+            city=normalized_city,
+            sort=sort,
+            limit=window,
+            offset=0,
+            include_rank=True,
+        )
+        editorial_result = discovery_repo.search_public_editorial_content(
+            terms,
+            include_collections=include_collections,
+            include_routes=include_routes,
+            region=normalized_region,
+            city=normalized_city,
+            sort=sort,
+            limit=window,
+            offset=0,
+        )
+        source_order = {"entity": 0, "collection": 1, "route": 2}
+        merged = [*entity_result["items"], *editorial_result["items"]]
+        if sort == "newest":
+            merged.sort(
+                key=lambda item: (
+                    item.get("updated_at") is not None,
+                    item.get("updated_at"),
+                    -source_order.get(item.get("source"), 9),
+                    str(item.get("title") or "").lower(),
+                ),
+                reverse=True,
+            )
+        else:
+            merged.sort(
+                key=lambda item: (
+                    -float(item.get("_search_rank") or 0),
+                    source_order.get(item.get("source"), 9),
+                    str(item.get("title") or "").lower(),
+                    str(item.get("id")),
+                )
+            )
+        selected = merged[offset : offset + limit]
+        for item in selected:
+            item.pop("_search_rank", None)
+        result = {
+            "items": selected,
+            "total": int(entity_result["total"]) + int(editorial_result["total"]),
+        }
+    else:
+        result = discovery_repo.search_public_entities(
+            terms,
+            entity_kinds=kinds or None,
+            subtypes=subtypes or None,
+            tags=tags or None,
+            region=normalized_region,
+            city=normalized_city,
+            sort=sort,
+            limit=limit,
+            offset=offset,
+        )
     response.headers["Cache-Control"] = "public, max-age=30, stale-while-revalidate=60"
     total = int(result["total"])
     return {
@@ -113,7 +186,12 @@ def api_public_search_suggestions(
     response.headers["Cache-Control"] = "public, max-age=30, stale-while-revalidate=60"
     return {
         "query": terms.original,
-        "items": discovery_repo.list_search_suggestions(terms, limit=limit),
+        "items": discovery_repo.list_search_suggestions(
+            terms,
+            include_collections=request.app.state.settings.feature_editorial_collections,
+            include_routes=request.app.state.settings.feature_tourism_routes,
+            limit=limit,
+        ),
     }
 
 
@@ -545,3 +623,149 @@ def superadmin_update_route(
     payload: SuperadminRouteUpsertRequestDTO,
 ):
     return _save_superadmin_route(request, payload, route_id=route_id)
+
+
+def _nearby_kinds_or_400(
+    request: Request,
+    entity_kind: Optional[str],
+) -> list[str] | None:
+    try:
+        kinds = _comma_values(entity_kind)
+    except DiscoveryValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not request.app.state.settings.feature_services:
+        if kinds and "accommodation" not in kinds:
+            return []
+        return ["accommodation"]
+    return kinds or None
+
+
+def api_public_nearby(
+    request: Request,
+    response: Response,
+    lat: float = Query(...),
+    lng: float = Query(...),
+    radius: int = Query(25),
+    entity_kind: Optional[str] = Query(None, max_length=240),
+    limit: int = Query(30, ge=1, le=50),
+):
+    try:
+        latitude, longitude = validate_coordinates(lat, lng)
+        radius_km = validate_nearby_radius(radius)
+    except DiscoveryValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    kinds = _nearby_kinds_or_400(request, entity_kind)
+    if kinds == []:
+        items = []
+    else:
+        items = discovery_repo.list_nearby_entities(
+            lat=latitude,
+            lng=longitude,
+            radius_km=radius_km,
+            bbox=bounding_box(latitude, longitude, radius_km),
+            entity_kinds=kinds,
+            limit=limit,
+        )
+    response.headers["Cache-Control"] = "private, no-store"
+    response.headers["Pragma"] = "no-cache"
+    return {"items": items, "radius_km": radius_km, "total": len(items)}
+
+
+def api_public_entity_nearby(
+    request: Request,
+    response: Response,
+    slug: str,
+    radius: int = Query(25),
+    limit: int = Query(8, ge=1, le=20),
+):
+    try:
+        normalized_slug = validate_slug(slug)
+        radius_km = validate_nearby_radius(radius)
+    except (ValueError, DiscoveryValidationError):
+        raise HTTPException(status_code=404, detail="not found")
+    context = discovery_repo.get_public_entity_discovery_context(normalized_slug)
+    if not context:
+        raise HTTPException(status_code=404, detail="not found")
+    if context.get("lat") is None or context.get("lng") is None:
+        return {"items": [], "radius_km": radius_km, "total": 0}
+    kinds = None if request.app.state.settings.feature_services else ["accommodation"]
+    items = discovery_repo.list_nearby_entities(
+        lat=float(context["lat"]),
+        lng=float(context["lng"]),
+        radius_km=radius_km,
+        bbox=bounding_box(float(context["lat"]), float(context["lng"]), radius_km),
+        entity_kinds=kinds,
+        exclude_entity_id=int(context["id"]),
+        limit=limit,
+    )
+    response.headers["Cache-Control"] = "public, max-age=120, stale-while-revalidate=300"
+    return {"items": items, "radius_km": radius_km, "total": len(items)}
+
+
+def api_public_related_entities(
+    request: Request,
+    response: Response,
+    slug: str,
+    limit: int = Query(8, ge=1, le=20),
+):
+    try:
+        normalized_slug = validate_slug(slug)
+        weights = validate_weight_config(
+            request.app.state.settings.discovery_recommendation_weights,
+            RECOMMENDATION_WEIGHT_KEYS,
+        )
+    except ValueError:
+        raise HTTPException(status_code=404, detail="not found")
+    except DiscoveryValidationError as exc:
+        raise HTTPException(status_code=500, detail="Recommendation configuration is invalid") from exc
+    items = discovery_repo.list_related_entities(
+        slug=normalized_slug,
+        weights=weights,
+        limit=limit,
+    )
+    if items is None:
+        raise HTTPException(status_code=404, detail="not found")
+    if not request.app.state.settings.feature_services:
+        items = [
+            item
+            for item in items
+            if item.get("entity_kind") == "accommodation"
+        ]
+    response.headers["Cache-Control"] = "public, max-age=120, stale-while-revalidate=300"
+    return {"items": items[:limit]}
+
+
+def api_public_discovery_home(
+    request: Request,
+    response: Response,
+):
+    settings = request.app.state.settings
+    collections = (
+        discovery_repo.list_public_collections(limit=6)["items"]
+        if settings.feature_editorial_collections
+        else []
+    )
+    routes = (
+        discovery_repo.list_public_routes(limit=6)["items"]
+        if settings.feature_tourism_routes
+        else []
+    )
+    popular = (
+        discovery_repo.list_popular_topics(limit=8)
+        if settings.feature_discovery_search
+        else []
+    )
+    recently_updated = discovery_repo.list_recent_public_entities(limit=8)
+    if not settings.feature_services:
+        recently_updated = [
+            item
+            for item in recently_updated
+            if item.get("entity_kind") == "accommodation"
+        ]
+    response.headers["Cache-Control"] = "public, max-age=120, stale-while-revalidate=300"
+    return {
+        "collections": collections,
+        "routes": routes,
+        "recently_updated": recently_updated,
+        "popular": popular,
+    }

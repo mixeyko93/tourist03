@@ -38,6 +38,8 @@ class DiscoveryPostgresTests(unittest.TestCase):
             feature_discovery_search=True,
             feature_editorial_collections=True,
             feature_tourism_routes=True,
+            feature_nearby_discovery=True,
+            feature_related_entities=True,
             session_secret_key="discovery-postgres-test-secret-at-least-32-characters",
         )
         configure_settings(cls.settings)
@@ -491,5 +493,91 @@ class DiscoveryPostgresTests(unittest.TestCase):
                 self.assertEqual(response.json()["point_count"], 2)
                 missing = await client.get("/api/public/routes/unsafe-draft-route")
                 self.assertEqual(missing.status_code, 404)
+                universal_search = await client.get(
+                    "/api/public/search",
+                    params={"q": "выходные"},
+                )
+                self.assertEqual(
+                    universal_search.status_code,
+                    200,
+                    universal_search.text,
+                )
+                sources = {
+                    item["source"]
+                    for item in universal_search.json()["items"]
+                }
+                self.assertIn("collection", sources)
+                self.assertIn("route", sources)
+                suggestions = await client.get(
+                    "/api/public/search/suggestions",
+                    params={"q": "выход"},
+                )
+                self.assertEqual(suggestions.status_code, 200, suggestions.text)
+                self.assertTrue(
+                    {"collection", "route"}.issubset(
+                        {
+                            item["source"]
+                            for item in suggestions.json()["items"]
+                        }
+                    )
+                )
+
+        asyncio.run(scenario())
+
+    def test_nearby_related_and_discovery_home_are_public_only(self):
+        async def scenario():
+            application = app_module.create_app(self.settings)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=application),
+                base_url="http://testserver",
+            ) as client:
+                nearby = await client.get(
+                    "/api/public/nearby",
+                    params={"lat": 61.70, "lng": 30.69, "radius": 100},
+                )
+                self.assertEqual(nearby.status_code, 200, nearby.text)
+                self.assertEqual(nearby.headers["cache-control"], "private, no-store")
+                nearby_slugs = [item["slug"] for item in nearby.json()["items"]]
+                self.assertIn("fishing-exact", nearby_slugs)
+                self.assertNotIn("fishing-draft", nearby_slugs)
+                distances = [item["distance_km"] for item in nearby.json()["items"]]
+                self.assertEqual(distances, sorted(distances))
+
+                invalid_radius = await client.get(
+                    "/api/public/nearby",
+                    params={"lat": 61.70, "lng": 30.69, "radius": 12},
+                )
+                self.assertEqual(invalid_radius.status_code, 400)
+
+                entity_nearby = await client.get(
+                    "/api/public/entities/fishing-exact/nearby",
+                    params={"radius": 100},
+                )
+                self.assertEqual(entity_nearby.status_code, 200, entity_nearby.text)
+                self.assertNotIn(
+                    "fishing-exact",
+                    [item["slug"] for item in entity_nearby.json()["items"]],
+                )
+
+                related = await client.get(
+                    "/api/public/entities/fishing-exact/related"
+                )
+                self.assertEqual(related.status_code, 200, related.text)
+                related_items = related.json()["items"]
+                self.assertTrue(related_items)
+                self.assertNotIn(
+                    "fishing-exact",
+                    [item["slug"] for item in related_items],
+                )
+                self.assertTrue(all(item["reason"] for item in related_items))
+
+                home = await client.get("/api/public/discovery/home")
+                self.assertEqual(home.status_code, 200, home.text)
+                home_payload = home.json()
+                self.assertTrue(home_payload["collections"])
+                self.assertNotIn(
+                    "fishing-draft",
+                    [item["slug"] for item in home_payload["recently_updated"]],
+                )
 
         asyncio.run(scenario())

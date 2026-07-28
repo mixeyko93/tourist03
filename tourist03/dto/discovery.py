@@ -283,3 +283,28 @@ class SuperadminRouteDTO(BaseModel):
     updated_at: Optional[datetime] = None
     content_version: int
     points: list[dict] = Field(default_factory=list)
+
+
+class NearbyEntityDTO(DiscoverySearchResultDTO):
+    distance_km: float
+
+
+class NearbyResponseDTO(BaseModel):
+    items: list[NearbyEntityDTO]
+    radius_km: int
+    total: int
+
+
+class RelatedEntityDTO(DiscoverySearchResultDTO):
+    reason: str
+
+
+class RelatedEntityResponseDTO(BaseModel):
+    items: list[RelatedEntityDTO]
+
+
+class DiscoveryHomeResponseDTO(BaseModel):
+    collections: list[PublicCollectionSummaryDTO] = Field(default_factory=list)
+    routes: list[PublicRouteSummaryDTO] = Field(default_factory=list)
+    recently_updated: list[DiscoverySearchResultDTO] = Field(default_factory=list)
+    popular: list[DiscoveryPopularItemDTO] = Field(default_factory=list)
