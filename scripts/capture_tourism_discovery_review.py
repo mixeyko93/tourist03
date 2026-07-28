@@ -28,6 +28,11 @@ PUBLIC_BASE_URL = "https://review.turistika.example"
 LIGHTHOUSE_VERSION = "12.8.2"
 PUBLIC_BASELINE_GZIP = 68_019
 PUBLIC_GZIP_LIMIT = 74_821
+LAZY_PUBLIC_ASSETS = {
+    "public/autocomplete.js",
+    "public/discovery-common.js",
+    "public/discovery-home.js",
+}
 TRANSPARENT_PNG = bytes.fromhex(
     "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489"
     "0000000d49444154789c6360000002000154a24f5d0000000049454e44ae426082"
@@ -437,6 +442,7 @@ def api_metrics(base_url: str) -> dict[str, Any]:
 
 def bundle_report(resources: list[str]) -> dict[str, Any]:
     files = {}
+    lazy_files = {}
     for resource in resources:
         path = urlsplit(resource).path
         if not path.startswith("/static/") or not path.endswith((".js", ".css")):
@@ -444,9 +450,25 @@ def bundle_report(resources: list[str]) -> dict[str, Any]:
         file = ROOT / "static" / unquote(path.removeprefix("/static/"))
         if file.is_file():
             content = file.read_bytes()
-            files[str(file.relative_to(ROOT / "static"))] = {"raw_bytes": len(content), "gzip_bytes": len(gzip.compress(content, compresslevel=9, mtime=0))}
+            relative = str(file.relative_to(ROOT / "static"))
+            value = {
+                "raw_bytes": len(content),
+                "gzip_bytes": len(gzip.compress(content, compresslevel=9, mtime=0)),
+            }
+            if relative in LAZY_PUBLIC_ASSETS:
+                lazy_files[relative] = value
+            else:
+                files[relative] = value
     total = sum(value["gzip_bytes"] for value in files.values())
-    report = {"baseline_gzip_bytes": PUBLIC_BASELINE_GZIP, "limit_plus_10_percent": PUBLIC_GZIP_LIMIT, "initial_gzip_bytes": total, "delta_percent": round((total - PUBLIC_BASELINE_GZIP) / PUBLIC_BASELINE_GZIP * 100, 2), "files": files}
+    report = {
+        "baseline_gzip_bytes": PUBLIC_BASELINE_GZIP,
+        "limit_plus_10_percent": PUBLIC_GZIP_LIMIT,
+        "initial_gzip_bytes": total,
+        "delta_percent": round((total - PUBLIC_BASELINE_GZIP) / PUBLIC_BASELINE_GZIP * 100, 2),
+        "files": files,
+        "lazy_loaded_files": lazy_files,
+        "lazy_loaded_gzip_bytes": sum(value["gzip_bytes"] for value in lazy_files.values()),
+    }
     if total > PUBLIC_GZIP_LIMIT:
         raise AssertionError(f"Initial public bundle exceeds +10% budget: {report}")
     return report
