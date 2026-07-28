@@ -1,5 +1,6 @@
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -15,7 +16,7 @@ class TourismDiscoveryBrowserTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="tourism-discovery-browser-") as directory:
             completed = subprocess.run(
                 [
-                    os.environ.get("PYTHON", "python3"),
+                    os.environ.get("PYTHON") or sys.executable,
                     "scripts/capture_tourism_discovery_review.py",
                     "--skip-lighthouse",
                     "--output-dir",
