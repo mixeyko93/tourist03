@@ -1,0 +1,20 @@
+.map-autocomplete {
+  position: absolute;
+  z-index: 10;
+  top: 62px;
+  left: 0;
+  width: min(100%, 380px);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 16px 40px rgba(23, 33, 27, .18);
+  pointer-events: auto;
+}
+.map-autocomplete button { display: grid; width: 100%; padding: 10px 14px; text-align: left; border: 0; border-bottom: 1px solid var(--line); background: #fff; color: var(--ink); cursor: pointer; }
+.map-autocomplete button:hover, .map-autocomplete button[aria-selected="true"] { background: #edf7ef; }
+.map-autocomplete small { color: var(--ink-soft); }
+
+@media (max-width: 520px) {
+  .map-autocomplete { top: 55px; width: calc(100% - 96px); }
+}

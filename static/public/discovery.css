@@ -42,15 +42,15 @@ img { display: block; max-width: 100%; }
 .discovery-skip {
   position: fixed;
   z-index: 10000;
-  top: 10px;
+  top: max(10px, env(safe-area-inset-top, 0px));
   left: 10px;
   padding: 10px 14px;
-  transform: translateY(-160%);
+  transform: translateY(calc(-100% - max(40px, env(safe-area-inset-top, 0px))));
   border-radius: 12px;
   background: #111;
   color: #fff;
 }
-.discovery-skip:focus { transform: none; }
+.discovery-skip:focus-visible { transform: none; }
 .discovery-header, .discovery-footer {
   display: flex;
   width: min(1280px, calc(100% - 40px));

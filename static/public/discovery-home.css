@@ -1,0 +1,21 @@
+.discovery-home { overflow: clip; padding: clamp(64px, 8vw, 110px) 0; background: #eef4ed; }
+.discovery-home__groups { display: grid; gap: 56px; }
+.discovery-home__group { min-width: 0; }
+.discovery-home__group h3 { margin: 0 0 20px; font-size: clamp(25px, 3vw, 38px); letter-spacing: -.04em; }
+.discovery-home__track { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.discovery-home .discovery-card { overflow: hidden; border: 1px solid var(--line); border-radius: 20px; background: #fff; }
+.discovery-home .discovery-card__cover { display: grid; aspect-ratio: 1.55; place-items: center; overflow: hidden; background: #dce9dc; }
+.discovery-home .discovery-card__cover > img { width: 100%; height: 100%; object-fit: cover; }
+.discovery-home .discovery-card__cover span img { width: 76px; opacity: .4; }
+.discovery-home .discovery-card__body { display: grid; min-height: 175px; padding: 18px; gap: 8px; }
+.discovery-home .discovery-card__body > p { margin: 0; color: var(--ink-soft); font-size: 12px; }
+.discovery-home .discovery-card__body > p:first-child { color: var(--green); font-weight: 800; text-transform: uppercase; }
+.discovery-home .discovery-card h3 { margin: 0; font-size: 19px; }
+.discovery-home .discovery-card h3 a { text-decoration: none; }
+.discovery-home .discovery-card footer { display: flex; margin-top: auto; justify-content: space-between; gap: 8px; font-size: 11px; }
+.discovery-home .discovery-card footer a { color: var(--green); font-weight: 800; }
+
+@media (max-width: 800px) {
+  .discovery-home__track { display: flex; margin-right: calc((100vw - 100%) / -2); padding-right: 16px; overflow-x: auto; scroll-snap-type: x mandatory; }
+  .discovery-home .discovery-card { flex: 0 0 min(78vw, 330px); scroll-snap-align: start; }
+}

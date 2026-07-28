@@ -1,9 +1,12 @@
 import { publicFeatures } from "./feature-flags.js";
 import { initialisePublicMap } from "./map.js?v=2026-07-27-04";
-import { initialiseTelegramWebApp } from "./telegram.js";
 
 const features = publicFeatures();
-initialiseTelegramWebApp(features);
+if (features.telegram_webapp) {
+  import("./telegram.js").then(({ initialiseTelegramWebApp }) => {
+    initialiseTelegramWebApp(features);
+  }).catch(() => {});
+}
 document.querySelectorAll("[data-placement-submissions]").forEach((node) => {
   node.hidden = !features.placement_submissions;
 });
@@ -44,10 +47,19 @@ const mapCount = document.querySelector("[data-map-count]");
 const mapLegend = document.querySelector("[data-map-legend]");
 const mapAutocomplete = document.querySelector("[data-map-autocomplete]");
 const discoveryHome = document.querySelector("[data-discovery-home]");
+const belowFold = document.querySelector("#about");
 let mapController;
 let mapInitialisationScheduled = false;
 let autocompleteAttached = false;
 const pendingMapController = Object.freeze({ search() {}, reset() {}, locate() {} });
+
+function loadStylesheet(href) {
+  if (document.querySelector(`link[href="${href}"]`)) return;
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = href;
+  document.head.append(link);
+}
 
 function setMenuState(isOpen) {
   if (!menuToggle || !menu) return;
@@ -129,6 +141,7 @@ searchInput?.addEventListener("focus", () => {
   ensureMap();
   if (!features.discovery_search || autocompleteAttached || !mapAutocomplete) return;
   autocompleteAttached = true;
+  loadStylesheet("/static/public/autocomplete.css?v=2026-07-28-01");
   import("./autocomplete.js?v=2026-07-28-01").then(({ attachAutocomplete }) => {
     attachAutocomplete(searchInput, mapAutocomplete, {
       onSelect(item) {
@@ -181,9 +194,12 @@ if (
   && (features.editorial_collections || features.tourism_routes || features.related_entities)
 ) {
   discoveryHome.hidden = false;
-  const loadDiscovery = () => import("./discovery-home.js?v=2026-07-28-01")
-    .then(({ loadDiscoveryHome }) => loadDiscoveryHome(discoveryHome))
-    .catch(() => { discoveryHome.hidden = true; });
+  const loadDiscovery = () => {
+    loadStylesheet("/static/public/discovery-home.css?v=2026-07-28-01");
+    return import("./discovery-home.js?v=2026-07-28-01")
+      .then(({ loadDiscoveryHome }) => loadDiscoveryHome(discoveryHome))
+      .catch(() => { discoveryHome.hidden = true; });
+  };
   if ("IntersectionObserver" in window) {
     const discoveryObserver = new IntersectionObserver((entries) => {
       if (entries.some((entry) => entry.isIntersecting)) {
@@ -194,5 +210,20 @@ if (
     discoveryObserver.observe(discoveryHome);
   } else {
     loadDiscovery();
+  }
+}
+
+if (belowFold) {
+  const loadBelowFold = () => loadStylesheet("/static/public/site-below-fold.css?v=2026-07-28-01");
+  if ("IntersectionObserver" in window) {
+    const belowFoldObserver = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        loadBelowFold();
+        belowFoldObserver.disconnect();
+      }
+    }, { rootMargin: "600px" });
+    belowFoldObserver.observe(belowFold);
+  } else {
+    loadBelowFold();
   }
 }

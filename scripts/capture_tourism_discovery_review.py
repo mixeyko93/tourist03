@@ -28,10 +28,16 @@ PUBLIC_BASE_URL = "https://review.turistika.example"
 LIGHTHOUSE_VERSION = "12.8.2"
 PUBLIC_BASELINE_GZIP = 68_019
 PUBLIC_GZIP_LIMIT = 74_821
+PUBLIC_BEFORE_INITIAL_GZIP = 74_658
+PUBLIC_MIN_HEADROOM_GZIP = 1_024
 LAZY_PUBLIC_ASSETS = {
     "public/autocomplete.js",
+    "public/autocomplete.css",
     "public/discovery-common.js",
+    "public/discovery-home.css",
     "public/discovery-home.js",
+    "public/site-below-fold.css",
+    "public/telegram.js",
 }
 TRANSPARENT_PNG = bytes.fromhex(
     "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489"
@@ -137,7 +143,15 @@ def local_server() -> Iterator[str]:
             process.wait(10)
 
 
-def context(browser: Browser, *, width: int, height: int, mobile: bool = False, geolocation: dict[str, float] | None = None) -> BrowserContext:
+def context(
+    browser: Browser,
+    *,
+    width: int,
+    height: int,
+    mobile: bool = False,
+    geolocation: dict[str, float] | None = None,
+    web_share: bool = True,
+) -> BrowserContext:
     value = browser.new_context(
         viewport={"width": width, "height": height},
         locale="ru-RU",
@@ -148,10 +162,18 @@ def context(browser: Browser, *, width: int, height: int, mobile: bool = False, 
         geolocation=geolocation,
     )
     value.add_init_script(
-        """
+        f"""
         delete window.Telegram;
-        navigator.share = async () => true;
-        navigator.clipboard ??= { writeText: async () => true };
+        Object.defineProperty(navigator, "share", {{
+          configurable: true,
+          value: {"async () => true" if web_share else "undefined"},
+        }});
+        Object.defineProperty(navigator, "clipboard", {{
+          configurable: true,
+          value: {{
+            writeText: async (url) => {{ window.__reviewCopiedUrl = url; }},
+          }},
+        }});
         """
     )
     value.route(
@@ -191,11 +213,229 @@ def wait_map(page: Page) -> None:
     page.wait_for_function("document.querySelector('[data-map-loading]')?.hidden === true", timeout=20_000)
 
 
-def screenshot(page: Page, output: Path, name: str, *, full_page: bool = False, selector: str | None = None) -> None:
+def scroll_to_top(page: Page) -> None:
+    page.evaluate(
+        """() => {
+          const root = document.documentElement;
+          const body = document.body;
+          const rootBehavior = root.style.scrollBehavior;
+          const bodyBehavior = body.style.scrollBehavior;
+          root.style.scrollBehavior = "auto";
+          body.style.scrollBehavior = "auto";
+          window.scrollTo(0, 0);
+          root.style.scrollBehavior = rootBehavior;
+          body.style.scrollBehavior = bodyBehavior;
+        }"""
+    )
+    page.wait_for_function("window.scrollY === 0", timeout=5_000)
+
+
+def prepare_full_page_capture(page: Page) -> dict[str, Any]:
+    """Reset transient UI so fixed and sticky controls keep their document position."""
+
+    if page.locator("#about").count():
+        page.locator("#about").scroll_into_view_if_needed()
+        page.wait_for_function(
+            """() => [...document.styleSheets].some(
+              (sheet) => sheet.href?.includes("/static/public/site-below-fold.css")
+            )""",
+            timeout=5_000,
+        )
+    page.evaluate(
+        """() => {
+          if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+          document.body.classList.remove("menu-is-open");
+          const menu = document.querySelector("[data-menu]");
+          if (menu) menu.hidden = true;
+          const toggle = document.querySelector("[data-menu-toggle]");
+          if (toggle) {
+            toggle.setAttribute("aria-expanded", "false");
+            toggle.setAttribute("aria-label", "Открыть меню");
+          }
+          document.querySelectorAll("[data-map-autocomplete], [data-search-suggestions]")
+            .forEach((node) => { node.hidden = true; });
+          document.querySelectorAll("dialog[open]").forEach((dialog) => dialog.close());
+        }"""
+    )
+    scroll_to_top(page)
+    page.evaluate("() => document.fonts?.ready")
+    page.wait_for_timeout(180)
+    state = page.evaluate(
+        """() => {
+          const bounds = (selector) => {
+            const node = document.querySelector(selector);
+            if (!node) return null;
+            const rect = node.getBoundingClientRect();
+            return { top: rect.top, right: rect.right, bottom: rect.bottom, left: rect.left, width: rect.width, height: rect.height };
+          };
+          return {
+            scroll_y: window.scrollY,
+            scroll_width: document.documentElement.scrollWidth,
+            client_width: document.documentElement.clientWidth,
+            active_element: document.activeElement?.tagName || "",
+            skip_link: bounds(".skip-link, .discovery-skip"),
+            skip_focused: Boolean(document.querySelector(".skip-link:focus, .discovery-skip:focus")),
+            header: bounds(".site-header"),
+            hero: bounds(".hero"),
+          };
+        }"""
+    )
+    if state["scroll_y"] != 0:
+        raise AssertionError(f"Full-page capture did not return to the top: {state}")
+    if state["scroll_width"] > state["client_width"] + 1:
+        raise AssertionError(f"Full-page capture has horizontal overflow: {state}")
+    if state["skip_focused"]:
+        raise AssertionError(f"Skip link kept accidental focus: {state}")
+    skip = state["skip_link"]
+    if skip and skip["bottom"] > 0:
+        raise AssertionError(f"Skip link is visible without keyboard focus: {state}")
+    if state["header"] and state["hero"] and state["header"]["bottom"] > state["hero"]["top"] + 1:
+        raise AssertionError(f"Sticky header overlaps the hero: {state}")
+    return state
+
+
+def screenshot(
+    page: Page,
+    output: Path,
+    name: str,
+    *,
+    full_page: bool = False,
+    selector: str | None = None,
+) -> dict[str, Any] | None:
+    capture_state = None
     if selector:
         page.locator(selector).screenshot(path=str(output / name))
     else:
+        if full_page:
+            capture_state = prepare_full_page_capture(page)
         page.screenshot(path=str(output / name), full_page=full_page)
+    return capture_state
+
+
+def assert_skip_link(page: Page, *, mobile: bool) -> dict[str, Any]:
+    prepare_full_page_capture(page)
+    skip = page.locator(".skip-link")
+    main = page.locator("#main-content")
+    hidden = skip.bounding_box()
+    if not hidden or hidden["y"] + hidden["height"] > 0:
+        raise AssertionError(f"Skip link is visible on ordinary load: {hidden}")
+
+    page.keyboard.press("Tab")
+    page.wait_for_timeout(180)
+    focused = skip.evaluate(
+        "node => node === document.activeElement && node.matches(':focus-visible')"
+    )
+    visible = skip.bounding_box()
+    if not focused or not visible or visible["y"] < 0:
+        raise AssertionError(
+            f"Skip link is not visible for keyboard focus: {focused=}, {visible=}"
+        )
+
+    page.keyboard.press("Enter")
+    page.wait_for_function(
+        "document.activeElement?.id === 'main-content'",
+        timeout=5_000,
+    )
+    if main.get_attribute("tabindex") != "-1":
+        raise AssertionError("Skip target must accept programmatic focus")
+
+    page.evaluate("document.activeElement instanceof HTMLElement && document.activeElement.blur()")
+    page.wait_for_timeout(180)
+    blurred = skip.bounding_box()
+    if not blurred or blurred["y"] + blurred["height"] > 0:
+        raise AssertionError(f"Skip link remained visible after blur: {blurred}")
+
+    scroll_to_top(page)
+    hero = page.locator(".hero")
+    hero_box = hero.bounding_box()
+    if not hero_box:
+        raise AssertionError("Hero is missing")
+    x = min(hero_box["x"] + 8, page.viewport_size["width"] - 2)
+    y = min(hero_box["y"] + 8, page.viewport_size["height"] - 2)
+    if mobile:
+        page.touchscreen.tap(x, y)
+    else:
+        page.mouse.click(x, y)
+    page.wait_for_timeout(180)
+    pointer = skip.bounding_box()
+    if (
+        not pointer
+        or pointer["y"] + pointer["height"] > 0
+        or skip.evaluate("node => node.matches(':focus-visible')")
+    ):
+        raise AssertionError(f"Pointer interaction exposed the skip link: {pointer}")
+
+    return {
+        "hidden_on_load": True,
+        "keyboard_visible": True,
+        "target_focused": True,
+        "hidden_after_blur": True,
+        "hidden_after_pointer": True,
+    }
+
+
+def home_layout_metrics(page: Page, *, width: int, height: int) -> dict[str, int]:
+    state = prepare_full_page_capture(page)
+    layout = page.evaluate(
+        """() => {
+          const box = (selector) => {
+            const rect = document.querySelector(selector).getBoundingClientRect();
+            return { top: rect.top + scrollY, bottom: rect.bottom + scrollY, height: rect.height };
+          };
+          return {
+            header: box(".site-header"),
+            hero: box(".hero"),
+            map: box("#map"),
+          };
+        }"""
+    )
+    header = layout["header"]
+    hero = layout["hero"]
+    map_box = layout["map"]
+    if header["bottom"] > hero["top"] + 1:
+        raise AssertionError(f"Header overlaps hero: {layout}")
+    visible_map = max(0, round(height - map_box["top"]))
+    if width >= 1000:
+        if map_box["top"] > 650 or visible_map < 350:
+            raise AssertionError(f"Desktop map-first regression: {layout}")
+    elif width >= 390:
+        if visible_map < 200:
+            raise AssertionError(f"Mobile map-first regression: {layout}")
+    return {
+        "viewport_width": width,
+        "viewport_height": height,
+        "header_height": round(header["height"]),
+        "hero_top": round(hero["top"]),
+        "map_canvas_top": round(map_box["top"]),
+        "visible_map_pixels": visible_map,
+        "document_width": round(state["scroll_width"]),
+    }
+
+
+def assert_compact_mobile_header(browser: Browser, base_url: str) -> dict[str, int]:
+    ctx = context(browser, width=320, height=568, mobile=True)
+    page = ctx.new_page()
+    try:
+        page.goto(f"{base_url}/", wait_until="domcontentloaded")
+        page.wait_for_selector(".hero h1")
+        state = prepare_full_page_capture(page)
+        header = state["header"]
+        hero = state["hero"]
+        if not header or not hero or header["bottom"] > hero["top"] + 1:
+            raise AssertionError(f"320px header overlaps hero: {state}")
+        page.locator("[data-menu-toggle]").click()
+        page.wait_for_selector("[data-menu]:not([hidden])")
+        page.keyboard.press("Escape")
+        page.wait_for_function("document.querySelector('[data-menu]')?.hidden === true")
+        return {
+            "viewport_width": 320,
+            "viewport_height": 568,
+            "header_height": round(header["height"]),
+            "hero_top": round(hero["top"]),
+            "document_width": round(state["scroll_width"]),
+        }
+    finally:
+        ctx.close()
 
 
 def admin_api(route: Route) -> None:
@@ -246,10 +486,33 @@ def capture_public(browser: Browser, base_url: str, output: Path, *, mobile: boo
     try:
         page.goto(f"{base_url}/", wait_until="domcontentloaded")
         page.wait_for_selector("h1")
+        skip_link = assert_skip_link(page, mobile=mobile)
+        if not page.evaluate("matchMedia('(prefers-reduced-motion: reduce)').matches"):
+            raise AssertionError("Reduced-motion preference is not active")
         wait_map(page)
+        layout = home_layout_metrics(
+            page,
+            width=390 if mobile else 1440,
+            height=844 if mobile else 1000,
+        )
         resources = page.evaluate("performance.getEntriesByType('resource').map(item => item.name)")
-        screenshot(page, output, f"{prefix}-home.png", full_page=True)
-        scenarios.extend(["homepage discovery", "map transition", "direct refresh", "no Telegram", "reduced motion"])
+        full_page_capture = screenshot(
+            page,
+            output,
+            f"{prefix}-home.png",
+            full_page=True,
+        )
+        scenarios.extend(
+            [
+                "homepage discovery",
+                "map transition",
+                "direct refresh",
+                "no Telegram",
+                "reduced motion",
+                "skip link",
+                "header geometry",
+            ]
+        )
         if page.evaluate("typeof window.Telegram !== 'undefined'"):
             raise AssertionError("Telegram leaked into browser-first review")
         screenshot(page, output, f"{prefix}-map.png", selector="[data-map-shell]")
@@ -262,6 +525,29 @@ def capture_public(browser: Browser, base_url: str, output: Path, *, mobile: boo
         search.press("ArrowDown")
         if not search.get_attribute("aria-activedescendant"):
             raise AssertionError("Autocomplete keyboard state is missing")
+        autocomplete_geometry = page.evaluate(
+            """() => {
+              const suggestion = document.querySelector("[data-map-autocomplete]").getBoundingClientRect();
+              const tools = document.querySelector(".map-tools").getBoundingClientRect();
+              return {
+                suggestion: { left: suggestion.left, top: suggestion.top, right: suggestion.right, bottom: suggestion.bottom },
+                tools: { left: tools.left, top: tools.top, right: tools.right, bottom: tools.bottom },
+                viewport_width: innerWidth,
+              };
+            }"""
+        )
+        suggestion = autocomplete_geometry["suggestion"]
+        tools = autocomplete_geometry["tools"]
+        overlap = not (
+            suggestion["right"] <= tools["left"]
+            or suggestion["left"] >= tools["right"]
+            or suggestion["bottom"] <= tools["top"]
+            or suggestion["top"] >= tools["bottom"]
+        )
+        if overlap or suggestion["left"] < 0 or suggestion["right"] > autocomplete_geometry["viewport_width"]:
+            raise AssertionError(
+                f"Autocomplete overlaps critical map controls: {autocomplete_geometry}"
+            )
         screenshot(page, output, f"{prefix}-autocomplete.png", selector="[data-map-shell]")
         scenarios.extend(["autocomplete", "keyboard"])
 
@@ -277,16 +563,30 @@ def capture_public(browser: Browser, base_url: str, output: Path, *, mobile: boo
         page.locator("[data-search-form]").evaluate("form => form.requestSubmit()")
         page.wait_for_selector("[data-search-results] .discovery-empty")
         page.go_back()
+        page.wait_for_function(
+            "new URL(location.href).searchParams.get('q') === 'рыбалка'"
+        )
+        if page.locator("[data-search-input]").input_value() != "рыбалка":
+            raise AssertionError("Search input did not restore after browser Back")
         page.go_forward()
+        page.wait_for_function(
+            "new URL(location.href).searchParams.get('q') === 'несуществующее-направление'"
+        )
+        if page.locator("[data-search-input]").input_value() != "несуществующее-направление":
+            raise AssertionError("Search input did not restore after browser Forward")
         scenarios.extend(["empty state", "back/forward"])
 
         page.goto(f"{base_url}/collections/weekend-by-water", wait_until="domcontentloaded")
         page.wait_for_selector("#collection-items")
+        if page.url != f"{base_url}/collections/weekend-by-water":
+            raise AssertionError(f"Collection direct route changed unexpectedly: {page.url}")
         screenshot(page, output, f"{prefix}-collection.png", full_page=True)
         scenarios.extend(["collection page", "recent history"])
 
         page.goto(f"{base_url}/routes/karelia-weekend", wait_until="domcontentloaded")
         page.wait_for_selector("[data-route-map].leaflet-container")
+        if page.url != f"{base_url}/routes/karelia-weekend":
+            raise AssertionError(f"Route direct route changed unexpectedly: {page.url}")
         if mobile:
             page.locator("[data-share-url]").click()
             page.wait_for_function("document.querySelector('[data-share-feedback]')?.textContent.length > 0")
@@ -294,6 +594,47 @@ def capture_public(browser: Browser, base_url: str, output: Path, *, mobile: boo
             scenarios.append("share")
         screenshot(page, output, f"{prefix}-route.png", full_page=True)
         scenarios.append("route page")
+
+        if mobile:
+            fallback = context(
+                browser,
+                width=390,
+                height=844,
+                mobile=True,
+                web_share=False,
+            )
+            fallback_page = fallback.new_page()
+            try:
+                fallback_page.goto(
+                    f"{base_url}/routes/karelia-weekend",
+                    wait_until="domcontentloaded",
+                )
+                canonical = fallback_page.locator('link[rel="canonical"]').get_attribute(
+                    "href"
+                )
+                fallback_page.locator("[data-share-url]").click()
+                fallback_page.wait_for_function(
+                    "document.querySelector('[data-share-feedback]')?.textContent === 'Ссылка скопирована'"
+                )
+                copied = fallback_page.evaluate("window.__reviewCopiedUrl")
+                if copied != canonical:
+                    raise AssertionError(
+                        f"Share fallback copied a non-canonical URL: {copied=} {canonical=}"
+                    )
+                scenarios.append("canonical share fallback")
+            finally:
+                fallback.close()
+
+        for private_path in (
+            "/collections/draft-review-content",
+            "/routes/disabled-review-content",
+        ):
+            private_response = page.request.get(f"{base_url}{private_path}")
+            if private_response.status != 404:
+                raise AssertionError(
+                    f"Draft/disabled public page did not return 404: {private_path}"
+                )
+        scenarios.append("draft and disabled 404")
 
         page.goto(f"{base_url}/places/rybalka-na-onego", wait_until="domcontentloaded")
         page.wait_for_selector(".place-related")
@@ -316,7 +657,14 @@ def capture_public(browser: Browser, base_url: str, output: Path, *, mobile: boo
             try:
                 denied_page.goto(f"{base_url}/nearby", wait_until="domcontentloaded")
                 denied_page.locator("[data-request-location]").click()
-                denied_page.wait_for_timeout(400)
+                denied_page.wait_for_function(
+                    "document.querySelector('[data-nearby-status]')?.textContent.includes('Выберите точку на карте')"
+                )
+                if (
+                    not denied_page.locator("[data-nearby-lat]").is_visible()
+                    or not denied_page.locator("[data-nearby-lng]").is_visible()
+                ):
+                    raise AssertionError("Nearby permission denial hid the manual fallback")
                 screenshot(denied_page, output, "mobile-nearby-fallback.png")
                 scenarios.append("nearby denied")
             finally:
@@ -360,7 +708,14 @@ def capture_public(browser: Browser, base_url: str, output: Path, *, mobile: boo
         error_page.wait_for_selector("[data-search-results] .discovery-empty")
         error_page.close()
         scenarios.append("error state")
-        return {"scenarios": scenarios, "accessibility": assert_accessible(page, mobile=mobile)}, resources
+        return {
+            "scenarios": scenarios,
+            "accessibility": assert_accessible(page, mobile=mobile),
+            "skip_link": skip_link,
+            "full_page_capture": full_page_capture,
+            "layout": layout,
+            "autocomplete": autocomplete_geometry,
+        }, resources
     finally:
         ctx.close()
 
@@ -441,36 +796,72 @@ def api_metrics(base_url: str) -> dict[str, Any]:
 
 
 def bundle_report(resources: list[str]) -> dict[str, Any]:
-    files = {}
-    lazy_files = {}
+    files: dict[str, dict[str, int]] = {}
+    lazy_files: dict[str, dict[str, int]] = {}
+    resource_files: dict[str, Path] = {}
     for resource in resources:
         path = urlsplit(resource).path
         if not path.startswith("/static/") or not path.endswith((".js", ".css")):
             continue
         file = ROOT / "static" / unquote(path.removeprefix("/static/"))
         if file.is_file():
-            content = file.read_bytes()
             relative = str(file.relative_to(ROOT / "static"))
-            value = {
-                "raw_bytes": len(content),
-                "gzip_bytes": len(gzip.compress(content, compresslevel=9, mtime=0)),
-            }
-            if relative in LAZY_PUBLIC_ASSETS:
-                lazy_files[relative] = value
-            else:
-                files[relative] = value
+            resource_files[relative] = file
+
+    def measured(file: Path) -> dict[str, int]:
+        # Git normalises tracked text files to LF. Normalising here keeps the
+        # transfer-budget method identical on macOS and Linux worktrees.
+        content = file.read_bytes().replace(b"\r\n", b"\n")
+        return {
+            "raw_bytes": len(content),
+            "gzip_bytes": len(gzip.compress(content, compresslevel=9, mtime=0)),
+        }
+
+    for relative, file in sorted(resource_files.items()):
+        if relative not in LAZY_PUBLIC_ASSETS:
+            files[relative] = measured(file)
+    for relative in sorted(LAZY_PUBLIC_ASSETS):
+        file = ROOT / "static" / relative
+        if file.is_file():
+            lazy_files[relative] = measured(file)
+
     total = sum(value["gzip_bytes"] for value in files.values())
+    delta = (total - PUBLIC_BASELINE_GZIP) / PUBLIC_BASELINE_GZIP * 100
+    headroom = PUBLIC_GZIP_LIMIT - total
+    superadmin_assets = [
+        name
+        for name in files
+        if "superadmin" in name.lower() or name.startswith("admin/")
+    ]
     report = {
         "baseline_gzip_bytes": PUBLIC_BASELINE_GZIP,
         "limit_plus_10_percent": PUBLIC_GZIP_LIMIT,
+        "preferred_limit_plus_9_percent": round(PUBLIC_BASELINE_GZIP * 1.09),
+        "minimum_headroom_gzip_bytes": PUBLIC_MIN_HEADROOM_GZIP,
+        "before_initial_gzip_bytes": PUBLIC_BEFORE_INITIAL_GZIP,
+        "before_delta_percent": round(
+            (PUBLIC_BEFORE_INITIAL_GZIP - PUBLIC_BASELINE_GZIP)
+            / PUBLIC_BASELINE_GZIP
+            * 100,
+            2,
+        ),
         "initial_gzip_bytes": total,
-        "delta_percent": round((total - PUBLIC_BASELINE_GZIP) / PUBLIC_BASELINE_GZIP * 100, 2),
+        "delta_percent": round(delta, 2),
+        "saved_initial_gzip_bytes": PUBLIC_BEFORE_INITIAL_GZIP - total,
+        "headroom_to_10_percent_gzip_bytes": headroom,
         "files": files,
         "lazy_loaded_files": lazy_files,
         "lazy_loaded_gzip_bytes": sum(value["gzip_bytes"] for value in lazy_files.values()),
+        "superadmin_assets_in_initial": superadmin_assets,
+        "source_maps_included": False,
+        "methodology": "LF-normalised source bytes, gzip level 9, mtime 0",
     }
-    if total > PUBLIC_GZIP_LIMIT:
-        raise AssertionError(f"Initial public bundle exceeds +10% budget: {report}")
+    if superadmin_assets:
+        raise AssertionError(f"Superadmin code leaked into public initial bundle: {report}")
+    if headroom < PUBLIC_MIN_HEADROOM_GZIP:
+        raise AssertionError(
+            f"Initial public bundle has less than 1 KiB headroom: {report}"
+        )
     return report
 
 
@@ -505,8 +896,21 @@ def write_index(output: Path, metrics: dict[str, Any]) -> None:
     (output / "review-metrics.json").write_text(json.dumps(metrics, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     (output / "bundle-report.json").write_text(json.dumps(metrics["bundle"], ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     (output / "api-metrics.json").write_text(json.dumps(metrics["api"], ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    bundle = metrics["bundle"]
     (output / "verification-summary.md").write_text(
-        f"# Проверка Этапа 5\n\n- Browser scenarios: {metrics['scenario_count']}.\n- Desktop screenshots: {metrics['desktop_screenshots']}.\n- Mobile screenshots: {metrics['mobile_screenshots']}.\n- Public initial gzip: {metrics['bundle']['initial_gzip_bytes']} bytes ({metrics['bundle']['delta_percent']}%).\n- Telegram SDK: отсутствует.\n- Точные координаты и raw query в аналитике не сохраняются.\n",
+        "# Проверка Этапа 5\n\n"
+        f"- Browser scenarios: {metrics['scenario_count']}.\n"
+        f"- Desktop screenshots: {metrics['desktop_screenshots']}.\n"
+        f"- Mobile screenshots: {metrics['mobile_screenshots']}.\n"
+        f"- Public initial gzip до оптимизации: {bundle['before_initial_gzip_bytes']} bytes "
+        f"({bundle['before_delta_percent']}%).\n"
+        f"- Public initial gzip после оптимизации: {bundle['initial_gzip_bytes']} bytes "
+        f"({bundle['delta_percent']}%).\n"
+        f"- Экономия: {bundle['saved_initial_gzip_bytes']} bytes; запас до +10%: "
+        f"{bundle['headroom_to_10_percent_gzip_bytes']} bytes.\n"
+        "- Full-page capture возвращается наверх, сбрасывает случайный focus и закрывает transient UI.\n"
+        "- Telegram SDK: отсутствует в initial route и загружается только по feature flag.\n"
+        "- Точные координаты и raw query в аналитике не сохраняются.\n",
         encoding="utf-8",
     )
 
@@ -526,6 +930,7 @@ def main() -> int:
         try:
             desktop, resources = capture_public(browser, base_url, output, mobile=False)
             mobile, _ = capture_public(browser, base_url, output, mobile=True)
+            compact_mobile = assert_compact_mobile_header(browser, base_url)
             admin = capture_superadmin(browser, base_url, output)
             api = api_metrics(base_url)
         finally:
@@ -538,6 +943,7 @@ def main() -> int:
         "scenarios": sorted(scenarios),
         "desktop": desktop,
         "mobile": mobile,
+        "compact_mobile": compact_mobile,
         "superadmin": admin,
         "api": api,
         "bundle": bundle,
