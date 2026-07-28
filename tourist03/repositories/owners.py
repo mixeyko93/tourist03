@@ -8,13 +8,16 @@ from typing import Any, Iterable
 
 from tourist03.db import _db_conn
 from tourist03.domain.owner_changes import (
+    OwnerChangeValidationError,
     build_owner_diff,
     ensure_owner_status_transition,
     merged_owner_snapshot,
     new_owner_change_number,
     owner_status_label,
+    resolve_owner_room_media_target,
 )
 from tourist03.owner_security import hash_owner_token, owner_reset_token_for
+from tourist03.repositories import catalog as catalog_repo
 
 
 CAMP_COLUMNS = (
@@ -29,11 +32,17 @@ CAMP_COLUMNS = (
     "lat",
     "lng",
     "min_price",
+    "price_mode",
+    "currency",
     "seasonality",
+    "seasonality_key",
     "working_hours",
+    "working_hours_mode",
+    "attributes",
+    "seo",
     "video_urls",
 )
-JSON_CAMP_COLUMNS = frozenset({"working_hours", "video_urls"})
+JSON_CAMP_COLUMNS = frozenset({"working_hours", "attributes", "seo", "video_urls"})
 EDITABLE_REQUEST_STATUSES = frozenset({"draft", "needs_changes", "withdrawn"})
 
 
@@ -255,17 +264,26 @@ def consume_owner_reset(*, token_hash: str, password_hash: str) -> int | None:
 
 
 def _snapshot_with_cursor(cur, camp_id: int, *, lock: bool = False) -> dict | None:
-    lock_sql = " FOR UPDATE" if lock else ""
+    lock_sql = " FOR UPDATE OF camps" if lock else ""
     cur.execute(
         f"""
         SELECT
-            id, name, slug, place_type_id, short_description, description,
-            region, district, city, locality, address, lat, lng, min_price,
-            seasonality, working_hours, video_urls, publication_status,
-            status, confirmed_at, updated_at, content_version,
-            COALESCE(metadata, '{{}}'::jsonb) AS metadata
-        FROM catalog.camps
-        WHERE id = %s{lock_sql}
+            camps.id, camps.name, camps.slug, camps.place_type_id,
+            types.slug AS subtype, kinds.slug AS entity_kind,
+            camps.schema_key, camps.schema_version,
+            camps.short_description, camps.description,
+            camps.region, camps.district, camps.city, camps.locality,
+            camps.address, camps.lat, camps.lng, camps.min_price,
+            camps.price_mode, camps.currency, camps.seasonality,
+            camps.seasonality_key, camps.working_hours, camps.working_hours_mode,
+            camps.attributes, camps.seo, camps.video_urls,
+            camps.publication_status, camps.visibility,
+            camps.status, camps.confirmed_at, camps.updated_at, camps.content_version,
+            COALESCE(camps.metadata, '{{}}'::jsonb) AS metadata
+        FROM catalog.camps camps
+        JOIN catalog.place_types types ON types.id = camps.place_type_id
+        JOIN catalog.entity_kinds kinds ON kinds.id = types.entity_kind_id
+        WHERE camps.id = %s{lock_sql}
         """,
         (int(camp_id),),
     )
@@ -334,13 +352,22 @@ def get_camp_snapshots(camp_ids: Iterable[int]) -> dict[int, dict]:
         cur.execute(
             """
             SELECT
-                id, name, slug, place_type_id, short_description, description,
-                region, district, city, locality, address, lat, lng, min_price,
-                seasonality, working_hours, video_urls, publication_status,
-                status, confirmed_at, updated_at, content_version,
-                COALESCE(metadata, '{}'::jsonb) AS metadata
-            FROM catalog.camps
-            WHERE id = ANY(%s)
+                camps.id, camps.name, camps.slug, camps.place_type_id,
+                types.slug AS subtype, kinds.slug AS entity_kind,
+                camps.schema_key, camps.schema_version,
+                camps.short_description, camps.description,
+                camps.region, camps.district, camps.city, camps.locality,
+                camps.address, camps.lat, camps.lng, camps.min_price,
+                camps.price_mode, camps.currency, camps.seasonality,
+                camps.seasonality_key, camps.working_hours, camps.working_hours_mode,
+                camps.attributes, camps.seo, camps.video_urls,
+                camps.publication_status, camps.visibility,
+                camps.status, camps.confirmed_at, camps.updated_at, camps.content_version,
+                COALESCE(camps.metadata, '{}'::jsonb) AS metadata
+            FROM catalog.camps camps
+            JOIN catalog.place_types types ON types.id = camps.place_type_id
+            JOIN catalog.entity_kinds kinds ON kinds.id = types.entity_kind_id
+            WHERE camps.id = ANY(%s)
             """,
             (normalized,),
         )
@@ -470,6 +497,9 @@ def get_camp_quality_snapshots(camp_ids: Iterable[int]) -> dict[int, dict]:
             SELECT
                 camps.id, camps.name, camps.short_description, camps.description,
                 camps.lat, camps.lng, camps.min_price, camps.seasonality,
+                camps.price_mode, camps.attributes,
+                kinds.slug AS entity_kind,
+                camps.schema_key, camps.schema_version,
                 camps.working_hours, camps.video_urls, camps.confirmed_at,
                 camps.updated_at,
                 COALESCE(camps.metadata, '{}'::jsonb)->>'surroundings' AS surroundings,
@@ -478,6 +508,8 @@ def get_camp_quality_snapshots(camp_ids: Iterable[int]) -> dict[int, dict]:
                 COALESCE(room_summary.rooms, '[]'::jsonb) AS rooms,
                 COALESCE(media_summary.media, '[]'::jsonb) AS media
             FROM catalog.camps camps
+            JOIN catalog.place_types types ON types.id = camps.place_type_id
+            JOIN catalog.entity_kinds kinds ON kinds.id = types.entity_kind_id
             LEFT JOIN contact_summary ON contact_summary.camp_id = camps.id
             LEFT JOIN amenity_summary ON amenity_summary.camp_id = camps.id
             LEFT JOIN room_summary ON room_summary.camp_id = camps.id
@@ -512,15 +544,34 @@ def owner_can_access_camp(owner_id: int, camp_id: int, *, write: bool = False, c
             context.__exit__(None, None, None)
 
 
-def list_owner_camps(owner_id: int, *, limit: int = 20, offset: int = 0) -> list[dict]:
+def list_owner_camps(
+    owner_id: int,
+    *,
+    limit: int = 20,
+    offset: int = 0,
+    entity_kind: str | None = None,
+) -> list[dict]:
+    clauses = ["links.owner_account_id = %s"]
+    params: list[Any] = [int(owner_id)]
+    if entity_kind:
+        clauses.append("kinds.slug = %s")
+        params.append(str(entity_kind).strip().lower())
+    params.extend(
+        (
+            min(max(int(limit), 1), 100),
+            max(int(offset), 0),
+        )
+    )
     with _db_conn("catalog") as conn:
         cur = conn.cursor()
         cur.execute(
-            """
+            f"""
             SELECT
                 camps.id, camps.name, camps.slug, camps.publication_status,
                 camps.status, camps.updated_at, camps.confirmed_at,
-                types.name AS place_type_name,
+                types.name AS place_type_name, types.slug AS subtype,
+                kinds.slug AS entity_kind, kinds.name AS entity_kind_name,
+                camps.schema_key, camps.schema_version,
                 links.role_key, links.is_primary,
                 COUNT(changes.id) FILTER (
                     WHERE changes.status IN ('submitted', 'in_review', 'needs_changes', 'approved')
@@ -528,28 +579,32 @@ def list_owner_camps(owner_id: int, *, limit: int = 20, offset: int = 0) -> list
             FROM catalog.camp_owner_links links
             JOIN catalog.camps camps ON camps.id = links.camp_id
             LEFT JOIN catalog.place_types types ON types.id = camps.place_type_id
+            LEFT JOIN catalog.entity_kinds kinds ON kinds.id = types.entity_kind_id
             LEFT JOIN moderation.owner_change_requests changes
               ON changes.camp_id = camps.id
              AND changes.owner_account_id = links.owner_account_id
-            WHERE links.owner_account_id = %s
-            GROUP BY camps.id, types.name, links.role_key, links.is_primary
+            WHERE {' AND '.join(clauses)}
+            GROUP BY camps.id, types.name, types.slug, kinds.slug, kinds.name,
+                     links.role_key, links.is_primary
             ORDER BY links.is_primary DESC, lower(camps.name), camps.id
             LIMIT %s OFFSET %s
             """,
-            (
-                int(owner_id),
-                min(max(int(limit), 1), 100),
-                max(int(offset), 0),
-            ),
+            tuple(params),
         )
         return [dict(row) for row in cur.fetchall()]
 
 
-def owner_profile_statistics(owner_id: int) -> dict:
+def owner_profile_statistics(owner_id: int, *, entity_kind: str | None = None) -> dict:
+    kind_clause = "AND kinds.slug = %s" if entity_kind else ""
+    params: tuple[Any, ...] = (
+        (int(owner_id), str(entity_kind).strip().lower())
+        if entity_kind
+        else (int(owner_id),)
+    )
     with _db_conn("auth") as conn:
         cur = conn.cursor()
         cur.execute(
-            """
+            f"""
             SELECT
                 COUNT(DISTINCT links.camp_id)::int AS objects_count,
                 COUNT(DISTINCT changes.id) FILTER (WHERE changes.status IN ('approved', 'applied'))::int AS approved_changes,
@@ -557,20 +612,39 @@ def owner_profile_statistics(owner_id: int) -> dict:
                 COUNT(DISTINCT changes.id) FILTER (WHERE changes.status = 'rejected')::int AS rejected_changes
             FROM auth.owner_accounts accounts
             LEFT JOIN catalog.camp_owner_links links ON links.owner_account_id = accounts.id
+            LEFT JOIN catalog.camps camps ON camps.id = links.camp_id
+            LEFT JOIN catalog.place_types types ON types.id = camps.place_type_id
+            LEFT JOIN catalog.entity_kinds kinds ON kinds.id = types.entity_kind_id
             LEFT JOIN moderation.owner_change_requests changes
               ON changes.owner_account_id = accounts.id
+             AND changes.camp_id = links.camp_id
             WHERE accounts.id = %s
+              {kind_clause}
             """,
-            (int(owner_id),),
+            params,
         )
         return dict(cur.fetchone())
 
 
-def list_owner_activity(owner_id: int, *, limit: int = 30) -> list[dict]:
+def list_owner_activity(
+    owner_id: int,
+    *,
+    limit: int = 30,
+    entity_kind: str | None = None,
+) -> list[dict]:
+    kind_clause = (
+        "AND (audit.camp_id IS NULL OR kinds.slug = %s)"
+        if entity_kind
+        else ""
+    )
+    params: list[Any] = [int(owner_id), int(owner_id)]
+    if entity_kind:
+        params.append(str(entity_kind).strip().lower())
+    params.append(min(max(int(limit), 1), 100))
     with _db_conn("crm") as conn:
         cur = conn.cursor()
         cur.execute(
-            """
+            f"""
             SELECT
                 audit.id, audit.created_at, audit.action_type AS type,
                 audit.action_label AS description, audit.camp_id,
@@ -581,6 +655,9 @@ def list_owner_activity(owner_id: int, *, limit: int = 30) -> list[dict]:
                     ELSE NULL
                 END AS action_url
             FROM crm.audit_log audit
+            LEFT JOIN catalog.camps camps ON camps.id = audit.camp_id
+            LEFT JOIN catalog.place_types types ON types.id = camps.place_type_id
+            LEFT JOIN catalog.entity_kinds kinds ON kinds.id = types.entity_kind_id
             WHERE (
                 (audit.actor_type = 'owner' AND audit.actor_id = %s)
                 OR (
@@ -595,10 +672,11 @@ def list_owner_activity(owner_id: int, *, limit: int = 30) -> list[dict]:
                     )
                 )
             )
+            {kind_clause}
             ORDER BY audit.created_at DESC, audit.id DESC
             LIMIT %s
             """,
-            (int(owner_id), int(owner_id), min(max(int(limit), 1), 100)),
+            tuple(params),
         )
         return [dict(row) for row in cur.fetchall()]
 
@@ -631,6 +709,7 @@ def list_owner_change_summaries(
     *,
     camp_id: int | None = None,
     statuses: Iterable[str] | None = None,
+    entity_kind: str | None = None,
     limit: int = 30,
     offset: int = 0,
 ) -> list[dict]:
@@ -640,6 +719,9 @@ def list_owner_change_summaries(
     if camp_id is not None:
         clauses.append("changes.camp_id = %s")
         params.append(int(camp_id))
+    if entity_kind:
+        clauses.append("kinds.slug = %s")
+        params.append(str(entity_kind).strip().lower())
     normalized_statuses = sorted({str(status) for status in statuses or [] if status})
     if normalized_statuses:
         clauses.append("changes.status = ANY(%s)")
@@ -652,12 +734,16 @@ def list_owner_change_summaries(
             SELECT
                 changes.id, changes.public_number, changes.camp_id,
                 camps.name AS camp_name, camps.slug AS camp_slug,
+                types.slug AS subtype, kinds.slug AS entity_kind,
+                changes.schema_key, changes.schema_version,
                 changes.status, changes.content_version,
                 changes.moderator_comment, changes.submitted_at,
                 changes.decided_at, changes.updated_at, changes.created_at,
                 COALESCE(jsonb_array_length(changes.diff_payload), 0)::int AS diff_count
             FROM moderation.owner_change_requests changes
             JOIN catalog.camps camps ON camps.id = changes.camp_id
+            JOIN catalog.place_types types ON types.id = camps.place_type_id
+            JOIN catalog.entity_kinds kinds ON kinds.id = types.entity_kind_id
             WHERE {' AND '.join(clauses)}
             ORDER BY changes.updated_at DESC, changes.id DESC
             LIMIT %s OFFSET %s
@@ -670,17 +756,28 @@ def list_owner_change_summaries(
     return rows
 
 
-def count_owner_changes(owner_id: int, *, camp_id: int | None = None) -> int:
-    clauses, params = ["owner_account_id = %s"], [int(owner_id)]
+def count_owner_changes(
+    owner_id: int,
+    *,
+    camp_id: int | None = None,
+    entity_kind: str | None = None,
+) -> int:
+    clauses, params = ["changes.owner_account_id = %s"], [int(owner_id)]
     if camp_id is not None:
-        clauses.append("camp_id = %s")
+        clauses.append("changes.camp_id = %s")
         params.append(int(camp_id))
+    if entity_kind:
+        clauses.append("kinds.slug = %s")
+        params.append(str(entity_kind).strip().lower())
     with _db_conn("moderation") as conn:
         cur = conn.cursor()
         cur.execute(
             f"""
             SELECT COUNT(*)::int AS count
-            FROM moderation.owner_change_requests
+            FROM moderation.owner_change_requests changes
+            JOIN catalog.camps camps ON camps.id = changes.camp_id
+            JOIN catalog.place_types types ON types.id = camps.place_type_id
+            JOIN catalog.entity_kinds kinds ON kinds.id = types.entity_kind_id
             WHERE {' AND '.join(clauses)}
             """,
             tuple(params),
@@ -709,10 +806,13 @@ def get_owner_change(
         cur.execute(
             f"""
             SELECT changes.*, camps.name AS camp_name, camps.slug AS camp_slug,
+                   types.slug AS subtype, kinds.slug AS entity_kind,
                    owners.display_name AS owner_name, owners.email AS owner_email,
                    COALESCE(reviewers.display_name, reviewers.login) AS moderator_name
             FROM moderation.owner_change_requests changes
             JOIN catalog.camps camps ON camps.id = changes.camp_id
+            JOIN catalog.place_types types ON types.id = camps.place_type_id
+            JOIN catalog.entity_kinds kinds ON kinds.id = types.entity_kind_id
             JOIN auth.owner_accounts owners ON owners.id = changes.owner_account_id
             LEFT JOIN auth.superadmin_accounts reviewers ON reviewers.id = changes.moderator_account_id
             WHERE {' AND '.join(clauses)}
@@ -747,6 +847,143 @@ def get_owner_change(
     finally:
         if owns:
             context.__exit__(None, None, None)
+
+
+def create_owner_entity(
+    *,
+    owner_id: int,
+    entity_kind: str,
+    subtype: str,
+    name: str,
+    proposed_payload: dict,
+) -> tuple[dict, dict]:
+    """Create an invisible storage row and its first moderated change atomically."""
+
+    with _db_conn("moderation") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT
+                types.id AS place_type_id,
+                types.default_schema_key AS schema_key,
+                types.default_schema_version AS schema_version,
+                kinds.slug AS entity_kind
+            FROM catalog.place_types types
+            JOIN catalog.entity_kinds kinds ON kinds.id = types.entity_kind_id
+            WHERE types.slug = %s
+              AND kinds.slug = %s
+              AND types.is_active = TRUE
+              AND kinds.is_active = TRUE
+            LIMIT 1
+            """,
+            (subtype, entity_kind),
+        )
+        catalog_type = cur.fetchone()
+        if not catalog_type:
+            raise ValueError("Выбранный тип сущности недоступен")
+
+        cur.execute(
+            """
+            SELECT
+                nextval(pg_get_serial_sequence('catalog.camps', 'id'))::int AS id,
+                catalog.slugify_place_name(%s) AS base_slug
+            """,
+            (name,),
+        )
+        identity = cur.fetchone()
+        entity_id = int(identity["id"])
+        base_slug = str(identity["base_slug"])
+        cur.execute("SELECT 1 FROM catalog.camps WHERE lower(slug) = lower(%s)", (base_slug,))
+        slug = base_slug if not cur.fetchone() else f"{base_slug}-{entity_id}"
+        is_accommodation = entity_kind == "accommodation"
+        cur.execute(
+            """
+            INSERT INTO catalog.camps (
+                id, name, slug, place_type_id, schema_key, schema_version,
+                status, publication_status, visibility, is_visible_on_map,
+                accepts_bookings, accepts_standalone_services,
+                attributes, seo, price_mode, currency
+            )
+            VALUES (
+                %s, %s, %s, %s, %s, %s,
+                'disabled', 'draft', 'hidden', FALSE,
+                %s, %s,
+                '{}'::jsonb, '{}'::jsonb, 'none', 'RUB'
+            )
+            RETURNING id, name, slug, publication_status, status, visibility,
+                      schema_key, schema_version, content_version
+            """,
+            (
+                entity_id,
+                name,
+                slug,
+                int(catalog_type["place_type_id"]),
+                catalog_type["schema_key"],
+                int(catalog_type["schema_version"]),
+                is_accommodation,
+                not is_accommodation,
+            ),
+        )
+        entity = dict(cur.fetchone())
+        entity.update({"entity_kind": entity_kind, "subtype": subtype, "entity_id": entity_id})
+        cur.execute(
+            """
+            INSERT INTO catalog.camp_owner_links (
+                owner_account_id, camp_id, role_key, is_primary
+            )
+            VALUES (%s, %s, 'primary_owner', TRUE)
+            RETURNING id
+            """,
+            (int(owner_id), entity_id),
+        )
+        number = new_owner_change_number()
+        diff = build_owner_diff({}, proposed_payload)
+        cur.execute(
+            """
+            INSERT INTO moderation.owner_change_requests (
+                public_number, camp_id, owner_account_id, status,
+                proposed_payload, published_snapshot, diff_payload,
+                base_content_version, schema_key, schema_version
+            )
+            VALUES (%s, %s, %s, 'draft', %s::jsonb, '{}'::jsonb, %s::jsonb, %s, %s, %s)
+            RETURNING *
+            """,
+            (
+                number,
+                entity_id,
+                int(owner_id),
+                _json(proposed_payload),
+                _json(diff),
+                int(entity["content_version"]),
+                catalog_type["schema_key"],
+                int(catalog_type["schema_version"]),
+            ),
+        )
+        change = dict(cur.fetchone())
+        _insert_history(
+            cur,
+            change["id"],
+            None,
+            "draft",
+            "owner",
+            owner_id,
+            "Создана новая карточка",
+            snapshot={"entity_kind": entity_kind, "subtype": subtype},
+        )
+        _insert_audit(
+            cur,
+            actor_type="owner",
+            actor_id=owner_id,
+            actor_display=None,
+            camp_id=entity_id,
+            target_type="owner_change_request",
+            target_id=change["id"],
+            action_type="owner_entity_created",
+            action_label="Создана новая карточка",
+            metadata={"public_number": number, "entity_kind": entity_kind, "subtype": subtype},
+        )
+        conn.commit()
+    return entity, get_owner_change(change["id"], owner_id=owner_id)
 
 
 def create_owner_change(owner_id: int, camp_id: int) -> tuple[dict, bool]:
@@ -878,6 +1115,8 @@ def transition_owner_change(
     actor_id: int,
     owner_id: int | None = None,
     comment: str | None = None,
+    proposed_payload: dict | None = None,
+    expected_version: int | None = None,
 ) -> dict | None:
     with _db_conn("moderation") as conn:
         cur = conn.cursor()
@@ -889,11 +1128,24 @@ def transition_owner_change(
             f"SELECT * FROM moderation.owner_change_requests WHERE {' AND '.join(clauses)} FOR UPDATE",
             tuple(params),
         )
-        row = cur.fetchone()
+        raw_row = cur.fetchone()
+        row = dict(raw_row) if raw_row else None
         if not row:
             return None
+        next_diff = row["diff_payload"] or []
+        if proposed_payload is not None:
+            if target != "submitted" or actor_type != "owner":
+                raise ValueError("Сохранение доступно только при отправке владельцем")
+            if row["status"] not in EDITABLE_REQUEST_STATUSES:
+                raise ValueError("Черновик уже недоступен для отправки")
+            if expected_version is None or int(row["content_version"]) != int(expected_version):
+                raise RuntimeError("Черновик изменился. Обновите страницу")
+            next_diff = build_owner_diff(
+                row["published_snapshot"] or {},
+                proposed_payload,
+            )
         ensure_owner_status_transition(row["status"], target, comment=comment)
-        if target == "submitted" and not (row["diff_payload"] or []):
+        if target == "submitted" and not next_diff:
             cur.execute(
                 """
                 SELECT 1
@@ -914,19 +1166,57 @@ def transition_owner_change(
             "archived": "archived_at = NOW()",
         }
         extra = f", {timestamp_columns[target]}" if target in timestamp_columns else ""
-        cur.execute(
-            f"""
-            UPDATE moderation.owner_change_requests
-            SET status = %s,
-                moderator_account_id = CASE WHEN %s = 'superadmin' THEN %s ELSE moderator_account_id END,
-                moderator_comment = CASE WHEN %s = 'superadmin' THEN %s ELSE moderator_comment END
-                {extra}
-            WHERE id = %s
-            RETURNING *
-            """,
-            (target, actor_type, actor_id, actor_type, comment, int(change_id)),
-        )
+        if proposed_payload is not None:
+            cur.execute(
+                f"""
+                UPDATE moderation.owner_change_requests
+                SET proposed_payload = %s::jsonb,
+                    diff_payload = %s::jsonb,
+                    status = %s,
+                    moderator_account_id = CASE WHEN %s = 'superadmin' THEN %s ELSE moderator_account_id END,
+                    moderator_comment = CASE WHEN %s = 'superadmin' THEN %s ELSE moderator_comment END
+                    {extra}
+                WHERE id = %s
+                RETURNING *
+                """,
+                (
+                    _json(proposed_payload),
+                    _json(next_diff),
+                    target,
+                    actor_type,
+                    actor_id,
+                    actor_type,
+                    comment,
+                    int(change_id),
+                ),
+            )
+        else:
+            cur.execute(
+                f"""
+                UPDATE moderation.owner_change_requests
+                SET status = %s,
+                    moderator_account_id = CASE WHEN %s = 'superadmin' THEN %s ELSE moderator_account_id END,
+                    moderator_comment = CASE WHEN %s = 'superadmin' THEN %s ELSE moderator_comment END
+                    {extra}
+                WHERE id = %s
+                RETURNING *
+                """,
+                (target, actor_type, actor_id, actor_type, comment, int(change_id)),
+            )
         updated = dict(cur.fetchone())
+        if proposed_payload is not None:
+            _insert_audit(
+                cur,
+                actor_type="owner",
+                actor_id=actor_id,
+                actor_display=None,
+                camp_id=row["camp_id"],
+                target_type="owner_change_request",
+                target_id=change_id,
+                action_type="owner_change_saved",
+                action_label="Сохранены изменения",
+                metadata={"fields": [item["field"] for item in next_diff]},
+            )
         summary = {
             "submitted": "Изменения отправлены на проверку",
             "in_review": "Изменения взяты на проверку",
@@ -1073,8 +1363,18 @@ def apply_owner_change(
             raise RuntimeError("Объект не найден")
         if int(current["content_version"]) != int(request["base_content_version"]):
             raise RuntimeError("Карточка изменилась после создания запроса. Нужна повторная проверка")
+        if (
+            request.get("schema_key")
+            and (
+                request["schema_key"] != current.get("schema_key")
+                or int(request.get("schema_version") or 0) != int(current.get("schema_version") or 0)
+            )
+        ):
+            raise RuntimeError("Схема карточки изменилась после создания запроса. Нужна повторная проверка")
 
         proposed = request["proposed_payload"] or {}
+        if "rooms" in proposed and current.get("entity_kind") != "accommodation":
+            raise RuntimeError("Варианты размещения доступны только объектам проживания")
         merged = merged_owner_snapshot(current, proposed)
         assignments, params = [], []
         for column in CAMP_COLUMNS:
@@ -1095,7 +1395,10 @@ def apply_owner_change(
             cur.execute(
                 """
                 UPDATE catalog.camps
-                SET publication_status = 'published', status = 'active'
+                SET publication_status = 'published',
+                    status = 'active',
+                    visibility = CASE WHEN visibility = 'hidden' THEN 'public' ELSE visibility END,
+                    is_visible_on_map = (lat IS NOT NULL AND lng IS NOT NULL)
                 WHERE id = %s
                 """,
                 (int(request["camp_id"]),),
@@ -1121,6 +1424,8 @@ def apply_owner_change(
             (int(change_id),),
         )
         for media in cur.fetchall():
+            if media["scope"] == "room" and current.get("entity_kind") != "accommodation":
+                raise RuntimeError("Фото вариантов размещения недоступны для этого типа карточки")
             applied_media_id = None
             if media["action"] == "remove" and media.get("target_media_id"):
                 table = "catalog.camp_media" if media["scope"] == "place" else "catalog.room_media"
@@ -1185,6 +1490,17 @@ def apply_owner_change(
                 """,
                 (applied_media_id, int(media["id"])),
             )
+
+        if proposed.get("request_publication") is True:
+            try:
+                catalog_repo.ensure_entities_ready_for_publication(
+                    cur,
+                    [int(request["camp_id"])],
+                    block_owner_storage_drafts=False,
+                    skip_already_published=False,
+                )
+            except ValueError as exc:
+                raise RuntimeError(str(exc)) from exc
 
         cur.execute(
             """
@@ -1321,16 +1637,36 @@ def create_owner_change_media(
         cur.execute("SELECT pg_advisory_xact_lock(%s)", (83_200_000_000 + int(change_id),))
         cur.execute(
             """
-            SELECT camp_id, status
-            FROM moderation.owner_change_requests
-            WHERE id = %s AND owner_account_id = %s
-            FOR UPDATE
+            SELECT
+                changes.camp_id,
+                changes.status,
+                changes.proposed_payload,
+                changes.published_snapshot,
+                kinds.slug AS entity_kind
+            FROM moderation.owner_change_requests changes
+            JOIN catalog.camps camps ON camps.id = changes.camp_id
+            JOIN catalog.place_types types ON types.id = camps.place_type_id
+            JOIN catalog.entity_kinds kinds ON kinds.id = types.entity_kind_id
+            WHERE changes.id = %s
+              AND changes.owner_account_id = %s
+            FOR UPDATE OF changes
             """,
             (int(change_id), int(owner_id)),
         )
         change = cur.fetchone()
         if not change or change["status"] not in EDITABLE_REQUEST_STATUSES:
             raise ValueError("Черновик недоступен для загрузки")
+        normalized_scope = str(scope or "").strip().lower()
+        if normalized_scope not in {"place", "room"}:
+            raise OwnerChangeValidationError(
+                "Некорректный раздел фотографии"
+            )
+        normalized_room = None
+        if normalized_scope == "room":
+            normalized_room = resolve_owner_room_media_target(
+                dict(change),
+                room_client_id,
+            )
         cur.execute(
             """
             SELECT COUNT(*)::int AS count
@@ -1342,7 +1678,7 @@ def create_owner_change_media(
               AND action = 'add'
               AND status = 'staged'
             """,
-            (int(change_id), scope, room_client_id),
+            (int(change_id), normalized_scope, normalized_room),
         )
         if int(cur.fetchone()["count"]) >= int(max_count):
             raise ValueError("Достигнут лимит фотографий")
@@ -1356,7 +1692,7 @@ def create_owner_change_media(
                   AND room_client_id IS NOT DISTINCT FROM %s
                   AND deleted_at IS NULL
                 """,
-                (int(change_id), scope, room_client_id),
+                (int(change_id), normalized_scope, normalized_room),
             )
         cur.execute(
             """
@@ -1373,7 +1709,8 @@ def create_owner_change_media(
             RETURNING *
             """,
             (
-                int(change_id), scope, room_client_id, storage_key, thumbnail_storage_key,
+                int(change_id), normalized_scope, normalized_room,
+                storage_key, thumbnail_storage_key,
                 preview_token, public_preview_url, original_filename, safe_filename,
                 mime_type, int(size_bytes), int(width), int(height), int(sort_order),
                 bool(is_cover), expires_at,
@@ -1390,7 +1727,11 @@ def create_owner_change_media(
             target_id=change_id,
             action_type="owner_media_added",
             action_label="Добавлена фотография",
-            metadata={"media_id": row["id"], "scope": scope},
+            metadata={
+                "media_id": row["id"],
+                "scope": normalized_scope,
+                "room_client_id": normalized_room,
+            },
         )
         conn.commit()
         return row

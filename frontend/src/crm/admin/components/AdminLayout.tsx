@@ -7,7 +7,7 @@ import { useDocumentTitle } from "../../components/useDocumentTitle";
 import { AdminModal } from "./AdminModal";
 
 const baseAdminTabs = [
-  { label: "Базы и номера", path: "/admin/bases" },
+  { label: "Каталог", path: "/admin/entities" },
   { label: "Пользователи", path: "/admin/users" },
   { label: "Учётные записи", path: "/admin/accounts" },
   { label: "Модерация", path: "/admin/moderation" },
@@ -37,7 +37,11 @@ export default function AdminLayout() {
     ? baseAdminTabs
     : baseAdminTabs.filter((item) => item.path !== "/admin/owner-changes");
   const adminTabs = isRoot ? [...visibleBaseTabs, ...rootOnlyTabs] : visibleBaseTabs;
-  const activeTab = adminTabs.find((item) => location.pathname === crmPath(item.path));
+  const activeTab = adminTabs.find((item) => {
+    const path = crmPath(item.path);
+    return location.pathname === path || location.pathname.startsWith(`${path}/`);
+  })
+    || (location.pathname.includes("/admin/bases") ? adminTabs.find((item) => item.path === "/admin/entities") : undefined);
 
   useDocumentTitle(activeTab ? `${activeTab.label} — Туристика Admin` : "Туристика Admin");
 
@@ -77,7 +81,7 @@ export default function AdminLayout() {
   }
 
   if (!isRoot && rootOnlyTabs.some((item) => location.pathname === crmPath(item.path))) {
-    return <Navigate to={crmPath("/admin/bases")} replace />;
+    return <Navigate to={crmPath("/admin/entities")} replace />;
   }
 
   async function handleIssueTelegramLink() {
@@ -115,8 +119,8 @@ export default function AdminLayout() {
               <img src="/static/brand/turistika-icon.svg" alt="" aria-hidden="true" className="hidden h-11 w-11 rounded-2xl shadow-sm sm:block" />
               <div className="min-w-0 space-y-1">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-muted-foreground">Туристика Admin</p>
-                <h1 className="text-lg font-semibold tracking-[-0.04em] text-foreground">Панель суперадминистратора</h1>
-                <p className="text-sm text-muted-foreground">Управление базами, пользователями и учётными записями.</p>
+                <h1 className="text-lg font-semibold tracking-[-0.04em] text-foreground">Каталог и управление</h1>
+                <p className="text-sm text-muted-foreground">Управление карточками каталога, пользователями и учётными записями.</p>
               </div>
             </div>
 

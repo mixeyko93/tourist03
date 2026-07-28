@@ -16,6 +16,7 @@ from tourist03.dto.submissions import (
 )
 from tourist03.repositories import submissions as submission_repo
 from tourist03.security import get_superadmin, log_crm_audit_event
+from tourist03.services.submissions import _submission_entity_context
 
 
 def _actor(request: Request) -> dict:
@@ -233,7 +234,19 @@ def approve_submission(
     if not current:
         raise HTTPException(status_code=404, detail="Заявка не найдена")
     try:
-        validate_submission_payload(current)
+        context = _submission_entity_context(
+            request,
+            current.get("place_type_id"),
+            schema_key=current.get("schema_key"),
+            schema_version=current.get("schema_version"),
+        )
+        validate_submission_payload(
+            current,
+            entity_kind=context["entity_kind"],
+            schema_key=context["schema_key"],
+            schema_version=context["schema_version"],
+            schema_definition=context["schema_definition"],
+        )
     except SubmissionValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     normalized = payload.model_copy(update={"status": "approved"})

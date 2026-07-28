@@ -9,6 +9,10 @@ from typing import Any
 from psycopg2 import errors
 
 from tourist03.db import _db_conn, _pg_connect
+from tourist03.domain.catalog_entities import (
+    CatalogEntityValidationError,
+    sanitize_entity_attributes_for_schema,
+)
 from tourist03.domain.submissions import ensure_status_transition, hash_token, new_public_number
 
 
@@ -57,6 +61,7 @@ JSON_COLUMNS = frozenset(
         "consents",
     }
 )
+FINALIZABLE_COLUMNS = DRAFT_MUTABLE_COLUMNS | {"schema_key", "schema_version"}
 
 
 def _row_dict(row) -> dict | None:
@@ -234,7 +239,7 @@ def finalize_submission(
         assignments: list[str] = []
         params: list[Any] = []
         for key, value in cleaned_payload.items():
-            if key not in DRAFT_MUTABLE_COLUMNS:
+            if key not in FINALIZABLE_COLUMNS:
                 continue
             if key in JSON_COLUMNS:
                 assignments.append(f"{key} = %s::jsonb")
@@ -637,6 +642,9 @@ def list_submissions(
                 submissions.place_name,
                 submissions.place_type_id,
                 place_types.name AS place_type_name,
+                entity_kinds.slug AS entity_kind,
+                submissions.schema_key,
+                submissions.schema_version,
                 submissions.region,
                 submissions.applicant_role,
                 submissions.applicant_name,
@@ -657,6 +665,8 @@ def list_submissions(
             FROM moderation.placement_submissions submissions
             LEFT JOIN catalog.place_types place_types
               ON place_types.id = submissions.place_type_id
+            LEFT JOIN catalog.entity_kinds entity_kinds
+              ON entity_kinds.id = place_types.entity_kind_id
             LEFT JOIN auth.superadmin_accounts admins
               ON admins.id = submissions.assigned_admin_id
             WHERE {where_sql}
@@ -691,11 +701,16 @@ def get_submission_detail(submission_id: int) -> dict | None:
                 submissions.*,
                 place_types.name AS place_type_name,
                 place_types.slug AS place_type_slug,
+                entity_kinds.slug AS entity_kind,
+                place_types.default_schema_key AS place_type_schema_key,
+                place_types.default_schema_version AS place_type_schema_version,
                 admins.display_name AS assigned_admin_name,
                 camps.slug AS published_camp_slug
             FROM moderation.placement_submissions submissions
             LEFT JOIN catalog.place_types place_types
               ON place_types.id = submissions.place_type_id
+            LEFT JOIN catalog.entity_kinds entity_kinds
+              ON entity_kinds.id = place_types.entity_kind_id
             LEFT JOIN auth.superadmin_accounts admins
               ON admins.id = submissions.assigned_admin_id
             LEFT JOIN catalog.camps camps
@@ -955,6 +970,71 @@ def create_catalog_draft_from_submission(
             raise ValueError("Idempotency key обязателен")
 
         cur.execute(
+            """
+            SELECT
+                types.id,
+                types.default_schema_key,
+                types.default_schema_version,
+                kinds.slug AS entity_kind
+            FROM catalog.place_types types
+            JOIN catalog.entity_kinds kinds ON kinds.id = types.entity_kind_id
+            WHERE types.id = %s
+            LIMIT 1
+            """,
+            (source["place_type_id"],),
+        )
+        type_row = cur.fetchone()
+        if not type_row:
+            raise ValueError("Тип объекта заявки больше недоступен")
+        entity_type = dict(type_row)
+        schema_key = str(
+            source.get("schema_key") or entity_type["default_schema_key"] or ""
+        ).strip().lower()
+        schema_version = int(
+            source.get("schema_version")
+            or entity_type["default_schema_version"]
+            or 1
+        )
+        cur.execute(
+            """
+            SELECT
+                schemas.schema_key,
+                schemas.version,
+                schemas.name AS title,
+                schemas.applicable_kinds,
+                schemas.fields,
+                schemas.sections,
+                schemas.validation,
+                schemas.display,
+                schemas.schema_org_type,
+                schemas.quality_keys
+            FROM catalog.entity_schemas schemas
+            WHERE schemas.schema_key = %s
+              AND schemas.version = %s
+              AND schemas.applicable_kinds ? %s
+            LIMIT 1
+            """,
+            (schema_key, schema_version, entity_type["entity_kind"]),
+        )
+        schema_row = cur.fetchone()
+        if not schema_row:
+            raise ValueError("Замороженная схема заявки больше недоступна")
+        schema_definition = dict(schema_row)
+        try:
+            attributes = sanitize_entity_attributes_for_schema(
+                source.get("extra_data"),
+                schema_definition,
+            )
+        except CatalogEntityValidationError as exc:
+            raise ValueError(str(exc)) from exc
+        is_accommodation = entity_type["entity_kind"] == "accommodation"
+        if not is_accommodation and (source.get("rooms_payload") or []):
+            raise ValueError(
+                "Варианты размещения доступны только для объектов проживания"
+            )
+        price_mode = "from" if source.get("min_price") is not None else "request"
+
+        cur.execute(
             "SELECT catalog.slugify_place_name(%s) AS slug",
             (source["place_name"],),
         )
@@ -998,13 +1078,19 @@ def create_catalog_draft_from_submission(
                 min_price,
                 video_urls,
                 metadata,
+                schema_key,
+                schema_version,
+                attributes,
+                visibility,
+                price_mode,
+                currency,
                 is_visible_on_map,
                 accepts_bookings
             )
             VALUES (
                 %s, %s, %s, 'draft', 'disabled', %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, %s::jsonb, %s, %s::jsonb, %s::jsonb,
-                FALSE, FALSE
+                %s, %s, %s::jsonb, 'hidden', %s, 'RUB', FALSE, FALSE
             )
             RETURNING id, slug, publication_status
             """,
@@ -1026,6 +1112,10 @@ def create_catalog_draft_from_submission(
                 source["min_price"],
                 json.dumps(source["video_urls"] or [], ensure_ascii=False),
                 json.dumps(metadata, ensure_ascii=False),
+                schema_key,
+                schema_version,
+                json.dumps(attributes, ensure_ascii=False),
+                price_mode,
             ),
         )
         camp = dict(cur.fetchone())
@@ -1076,7 +1166,7 @@ def create_catalog_draft_from_submission(
             )
 
         room_id_by_client: dict[str, int] = {}
-        for room in source["rooms_payload"] or []:
+        for room in source["rooms_payload"] or [] if is_accommodation else []:
             if not isinstance(room, dict):
                 continue
             beds_single = int(room.get("beds_single") or 0)
@@ -1174,6 +1264,10 @@ def create_catalog_draft_from_submission(
                     (camp_id, url, int(media["sort_order"]), bool(media["is_cover"])),
                 )
             else:
+                if not is_accommodation:
+                    raise ValueError(
+                        "Фотографии вариантов размещения доступны только для проживания"
+                    )
                 room_id = room_id_by_client.get(str(media["room_client_id"] or ""))
                 if not room_id:
                     continue

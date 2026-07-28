@@ -6,6 +6,7 @@ from typing import Optional
 from fastapi import HTTPException, Request, status
 
 from tourist03.config import SUPERADMIN_LOGIN, logger
+from tourist03.dto.superadmin import SuperAdminEntityBulkRequest
 from tourist03.repositories import catalog as catalog_repo
 from tourist03.repositories import superadmin as superadmin_repo
 from tourist03.schemas import (
@@ -192,6 +193,7 @@ def superadmin_list_camps(
     archived_only: bool = False,
     search: Optional[str] = None,
     place_type: Optional[str] = None,
+    entity_kind: Optional[str] = None,
     publication_status: Optional[str] = None,
 ):
     return superadmin_repo.list_camps(
@@ -199,7 +201,28 @@ def superadmin_list_camps(
         archived_only=archived_only,
         search=search,
         place_type=place_type,
+        # Compatibility endpoint: CRM "Базы" has accommodation semantics
+        # (rooms, bookings and manager links), regardless of a supplied query.
+        entity_kind="accommodation",
         publication_status=publication_status,
+    )
+
+
+def superadmin_list_entities(
+    entity_kind: Optional[str] = None,
+    subtype: Optional[str] = None,
+    status: Optional[str] = None,
+    publication_status: Optional[str] = None,
+    archived_only: bool = False,
+    search: Optional[str] = None,
+):
+    return superadmin_repo.list_camps(
+        entity_kind=entity_kind,
+        place_type=subtype,
+        status=status,
+        publication_status=publication_status,
+        archived_only=archived_only,
+        search=search,
     )
 
 
@@ -207,7 +230,59 @@ def superadmin_camp_editor(camp_id: int):
     item = superadmin_repo.get_camp_editor_context(camp_id)
     if not item:
         raise HTTPException(status_code=404, detail="База не найдена")
+    accommodation_types = [
+        row
+        for row in item.get("entity_types", [])
+        if row.get("entity_kind") == "accommodation"
+    ]
+    accommodation_type_ids = {int(row["id"]) for row in accommodation_types}
+    if int(item["camp"].get("place_type_id") or 0) not in accommodation_type_ids:
+        raise HTTPException(status_code=404, detail="База не найдена")
+    item["place_types"] = accommodation_types
+    item["entity_types"] = accommodation_types
+    item["entity_kinds"] = [
+        row
+        for row in item.get("entity_kinds", [])
+        if row.get("key") == "accommodation" or row.get("slug") == "accommodation"
+    ]
+    item["entity_schemas"] = [
+        row
+        for row in item.get("entity_schemas", [])
+        if row.get("entity_kind") == "accommodation"
+    ]
     return item
+
+
+def superadmin_entity_editor(entity_id: int):
+    item = superadmin_repo.get_camp_editor_context(entity_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Карточка не найдена")
+    return item
+
+
+def superadmin_bulk_entities(
+    payload: SuperAdminEntityBulkRequest,
+    request: Request,
+):
+    try:
+        rows = superadmin_repo.bulk_update_entities(payload.entity_ids, payload.publication_status)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    principal = get_superadmin_session_principal(request) or {}
+    for row in rows:
+        log_crm_audit_event(
+            actor_type="superadmin",
+            actor_id=principal.get("id"),
+            actor_display=principal.get("display_name") or principal.get("login"),
+            camp_id=row["id"],
+            target_type="catalog_entity",
+            target_id=row["id"],
+            action_type="catalog_entity_bulk_status",
+            action_label="Изменён статус карточки",
+            new_value={"publication_status": payload.publication_status},
+            metadata={"bulk": True},
+        )
+    return {"ok": True, "items": rows}
 
 
 def create_camp_admin_account(payload: SuperAdminCreateAccountRequest):

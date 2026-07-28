@@ -1,3 +1,5 @@
+import type { EntityKind, EntityKindKey, EntitySchema } from "../../owner/api";
+
 export type SuperadminSessionResponse = {
   ok: boolean;
   authenticated: boolean;
@@ -38,6 +40,12 @@ export type SuperadminBaseSummary = {
   place_type_id?: number | null;
   place_type_slug?: string | null;
   place_type_name?: string | null;
+  entity_kind?: EntityKindKey | null;
+  entity_kind_name?: string | null;
+  schema_key?: string | null;
+  schema_version?: number | null;
+  visibility?: string | null;
+  price_mode?: string | null;
   address?: string | null;
   lake_name?: string | null;
   status?: string | null;
@@ -62,7 +70,13 @@ export type SuperadminPlaceType = {
   sort_order: number;
   is_active?: boolean;
   config?: Record<string, unknown>;
+  entity_kind?: EntityKindKey | null;
+  schema_key?: string | null;
+  schema_version?: number | null;
 };
+
+export type SuperadminEntityKind = EntityKind;
+export type SuperadminEntitySchema = EntitySchema;
 
 export type SuperadminAmenity = {
   id: number;
@@ -77,7 +91,7 @@ export type SuperadminAmenity = {
 
 export type SuperadminPlaceContact = {
   id?: number;
-  contact_type: "phone" | "email" | "website" | "telegram" | "whatsapp" | "max" | "vk" | "other";
+  contact_type: "phone" | "email" | "website" | "telegram" | "whatsapp" | "max" | "vk" | "route" | "other";
   label?: string | null;
   value: string;
   public_url?: string | null;
@@ -140,6 +154,16 @@ export type SuperadminBaseEditor = {
     name?: string | null;
     slug?: string | null;
     place_type_id?: number | null;
+    entity_kind?: EntityKindKey | null;
+    subtype?: string | null;
+    schema_key?: string | null;
+    schema_version?: number | null;
+    attributes?: Record<string, unknown> | null;
+    visibility?: string | null;
+    price_mode?: string | null;
+    currency?: string | null;
+    seasonality_key?: string | null;
+    working_hours_mode?: string | null;
     short_description?: string | null;
     region?: string | null;
     district?: string | null;
@@ -183,6 +207,9 @@ export type SuperadminBaseEditor = {
     is_active?: boolean | null;
   }>;
   place_types: SuperadminPlaceType[];
+  entity_types?: SuperadminPlaceType[];
+  entity_kinds?: SuperadminEntityKind[];
+  entity_schemas?: SuperadminEntitySchema[];
   amenities: SuperadminAmenity[];
   selected_amenities: SuperadminAmenity[];
   contacts: SuperadminPlaceContact[];
@@ -585,7 +612,7 @@ export async function issueSuperadminTelegramLink() {
 }
 
 export async function fetchSuperadminBases(
-  params: { archivedOnly?: boolean; status?: string; search?: string; placeType?: string; publicationStatus?: string; signal?: AbortSignal } = {},
+  params: { archivedOnly?: boolean; status?: string; search?: string; placeType?: string; entityKind?: string; publicationStatus?: string; signal?: AbortSignal } = {},
 ): Promise<SuperadminBaseSummary[]> {
   const response = await fetch(
     `/api/superadmin/camps${buildQuery({
@@ -593,6 +620,7 @@ export async function fetchSuperadminBases(
       status: params.status,
       search: params.search,
       place_type: params.placeType,
+      entity_kind: params.entityKind,
       publication_status: params.publicationStatus,
     })}`,
     {
@@ -604,14 +632,51 @@ export async function fetchSuperadminBases(
   return (await response.json()) as SuperadminBaseSummary[];
 }
 
+export async function fetchSuperadminEntities(
+  params: {
+    archivedOnly?: boolean;
+    status?: string;
+    search?: string;
+    entityKind?: string;
+    subtype?: string;
+    publicationStatus?: string;
+    signal?: AbortSignal;
+  } = {},
+): Promise<SuperadminBaseSummary[]> {
+  const response = await fetch(
+    `/api/superadmin/entities${buildQuery({
+      archived_only: params.archivedOnly ? true : undefined,
+      status: params.status,
+      search: params.search,
+      entity_kind: params.entityKind,
+      subtype: params.subtype,
+      publication_status: params.publicationStatus,
+    })}`,
+    { credentials: "same-origin", signal: params.signal },
+  );
+  await assertOk(response);
+  return (await response.json()) as SuperadminBaseSummary[];
+}
+
 export async function fetchCatalogDictionaries(signal?: AbortSignal) {
-  const [typesResponse, amenitiesResponse] = await Promise.all([
-    fetch("/api/public/place-types", { credentials: "same-origin", signal }),
+  const [typesResponse, kindsResponse, schemasResponse, amenitiesResponse] = await Promise.all([
+    fetch("/api/public/entity-types", { credentials: "same-origin", signal }),
+    fetch("/api/public/entity-kinds", { credentials: "same-origin", signal }),
+    fetch("/api/public/entity-schemas", { credentials: "same-origin", signal }),
     fetch("/api/public/amenities", { credentials: "same-origin", signal }),
   ]);
-  await Promise.all([assertOk(typesResponse), assertOk(amenitiesResponse)]);
+  await Promise.all([
+    assertOk(typesResponse),
+    assertOk(kindsResponse),
+    assertOk(schemasResponse),
+    assertOk(amenitiesResponse),
+  ]);
+  const placeTypes = (await typesResponse.json()) as SuperadminPlaceType[];
   return {
-    placeTypes: (await typesResponse.json()) as SuperadminPlaceType[],
+    placeTypes,
+    entityTypes: placeTypes,
+    entityKinds: (await kindsResponse.json()) as SuperadminEntityKind[],
+    entitySchemas: (await schemasResponse.json()) as SuperadminEntitySchema[],
     amenities: (await amenitiesResponse.json()) as SuperadminAmenity[],
   };
 }
@@ -623,6 +688,32 @@ export async function fetchSuperadminBaseEditor(campId: number, signal?: AbortSi
   });
   await assertOk(response);
   return (await response.json()) as SuperadminBaseEditor;
+}
+
+export async function fetchSuperadminEntityEditor(entityId: number, signal?: AbortSignal): Promise<SuperadminBaseEditor> {
+  const response = await fetch(`/api/superadmin/entities/${entityId}`, {
+    credentials: "same-origin",
+    signal,
+  });
+  await assertOk(response);
+  return (await response.json()) as SuperadminBaseEditor;
+}
+
+export async function bulkUpdateSuperadminEntities(
+  entityIds: number[],
+  publicationStatus: "draft" | "disabled" | "published" | "archived",
+) {
+  const response = await fetch("/api/superadmin/entities/bulk", {
+    method: "PATCH",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      entity_ids: [...new Set(entityIds)].filter((id) => Number.isInteger(id) && id > 0),
+      publication_status: publicationStatus,
+    }),
+  });
+  await assertOk(response);
+  return (await response.json()) as { ok: boolean; items: SuperadminBaseSummary[] };
 }
 
 export async function createSuperadminCamp(payload: Record<string, unknown>) {
@@ -645,6 +736,28 @@ export async function updateSuperadminCamp(campId: number, payload: Record<strin
     headers: {
       "Content-Type": "application/json",
     },
+    body: JSON.stringify(payload),
+  });
+  await assertOk(response);
+  return (await response.json()) as { ok: boolean; id: number; publication_warnings?: string[] };
+}
+
+export async function createSuperadminEntity(payload: Record<string, unknown>) {
+  const response = await fetch("/api/superadmin/entities", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  await assertOk(response);
+  return (await response.json()) as { ok: boolean; id: number; publication_warnings?: string[] };
+}
+
+export async function updateSuperadminEntity(entityId: number, payload: Record<string, unknown>) {
+  const response = await fetch(`/api/superadmin/entities/${entityId}`, {
+    method: "PUT",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
   await assertOk(response);

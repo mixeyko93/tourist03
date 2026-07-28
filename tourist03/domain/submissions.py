@@ -12,6 +12,11 @@ from typing import Any
 
 from email_validator import EmailNotValidError, validate_email
 
+from tourist03.domain.catalog_entities import (
+    CatalogEntityValidationError,
+    get_schema_definition,
+    sanitize_entity_attributes_for_schema,
+)
 from tourist03.public_catalog import normalize_contact, safe_video_url
 
 
@@ -244,7 +249,96 @@ def _normalize_rooms(value: Any) -> list[dict]:
     return result
 
 
-def validate_submission_payload(payload: dict) -> dict:
+def _entity_kind_key(value: Any) -> str:
+    if isinstance(value, dict):
+        value = value.get("key") or value.get("slug")
+    return str(value or "").strip().lower()
+
+
+def validate_submission_entity_data(
+    payload: dict,
+    *,
+    entity_kind: str | dict | None = None,
+    schema_key: str | None = None,
+    schema_version: int | None = None,
+    schema_definition: dict[str, Any] | None = None,
+) -> dict:
+    """Validate the type-specific part without introducing another workflow.
+
+    ``extra_data`` is the compatibility transport field used by the placement
+    form.  Its persisted meaning is the frozen catalog entity ``attributes``.
+    """
+
+    kind = _entity_kind_key(entity_kind or payload.get("entity_kind")) or "accommodation"
+    frozen_schema_key = str(
+        schema_key
+        or payload.get("schema_key")
+        or ("accommodation" if kind == "accommodation" else "")
+    ).strip().lower()
+    try:
+        frozen_schema_version = int(schema_version or payload.get("schema_version") or 1)
+    except (TypeError, ValueError) as exc:
+        raise SubmissionValidationError("Версия схемы карточки некорректна") from exc
+    if not frozen_schema_key:
+        raise SubmissionValidationError("Для выбранного типа не настроена схема карточки")
+
+    try:
+        schema = (
+            schema_definition
+            if schema_definition is not None
+            else get_schema_definition(frozen_schema_key, frozen_schema_version)
+        )
+        definition_key = str(
+            schema.get("schema_key") or schema.get("key") or ""
+        ).strip().lower()
+        try:
+            definition_version = int(schema.get("version") or 0)
+        except (TypeError, ValueError) as exc:
+            raise SubmissionValidationError("Версия схемы карточки некорректна") from exc
+        if (
+            definition_key != frozen_schema_key
+            or definition_version != frozen_schema_version
+        ):
+            raise SubmissionValidationError("Замороженная схема заявки не совпадает с данными формы")
+        attributes = sanitize_entity_attributes_for_schema(
+            payload.get("extra_data"),
+            schema,
+        )
+        applicable_kinds = {
+            str(value).strip().lower()
+            for value in schema.get("applicable_kinds", [])
+        }
+        if kind not in applicable_kinds:
+            raise SubmissionValidationError("Схема карточки не соответствует выбранному типу")
+    except CatalogEntityValidationError as exc:
+        raise SubmissionValidationError(str(exc)) from exc
+
+    raw_rooms = payload.get("rooms_payload")
+    if kind == "accommodation":
+        rooms = _normalize_rooms(raw_rooms)
+    else:
+        if raw_rooms not in (None, "", []):
+            raise SubmissionValidationError(
+                "Варианты размещения доступны только для объектов проживания"
+            )
+        rooms = []
+    return {
+        "entity_kind": kind,
+        "schema_key": frozen_schema_key,
+        "schema_version": frozen_schema_version,
+        "extra_data": attributes,
+        "rooms_payload": rooms,
+    }
+
+
+def validate_submission_payload(
+    payload: dict,
+    *,
+    entity_kind: str | dict | None = None,
+    schema_key: str | None = None,
+    schema_version: int | None = None,
+    schema_definition: dict[str, Any] | None = None,
+) -> dict:
     role = str(payload.get("applicant_role") or "").strip().lower()
     if role not in APPLICANT_ROLES:
         raise SubmissionValidationError("Выберите роль заявителя")
@@ -316,7 +410,13 @@ def validate_submission_payload(payload: dict) -> dict:
         else:
             raise SubmissionValidationError("Удобство имеет некорректный формат")
 
-    rooms = _normalize_rooms(payload.get("rooms_payload"))
+    entity_data = validate_submission_entity_data(
+        payload,
+        entity_kind=entity_kind,
+        schema_key=schema_key,
+        schema_version=schema_version,
+        schema_definition=schema_definition,
+    )
 
     min_price = payload.get("min_price")
     if min_price in (None, ""):
@@ -361,9 +461,11 @@ def validate_submission_payload(payload: dict) -> dict:
         "min_price": min_price,
         "public_contacts": _normalize_public_contacts(payload.get("public_contacts")),
         "amenities": normalized_amenities,
-        "rooms_payload": rooms,
+        "rooms_payload": entity_data["rooms_payload"],
         "video_urls": _normalize_video_urls(payload.get("video_urls")),
-        "extra_data": payload.get("extra_data") if isinstance(payload.get("extra_data"), dict) else {},
+        "extra_data": entity_data["extra_data"],
+        "schema_key": entity_data["schema_key"],
+        "schema_version": entity_data["schema_version"],
         "consents": {key: bool(value) for key, value in consents.items()},
     }
 

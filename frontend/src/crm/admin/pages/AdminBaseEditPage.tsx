@@ -18,7 +18,8 @@ import {
   Waves,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useLocation, useNavigate, useParams } from "react-router";
+import SchemaAttributeFields from "../../../owner/SchemaAttributeFields";
 import { PageMotion } from "../../components/PageMotion";
 import { usePageLoadState } from "../../components/usePageLoadState";
 import { crmPath } from "../../paths";
@@ -26,20 +27,31 @@ import { AdminCard } from "../components/AdminCard";
 import { AdminField } from "../components/AdminField";
 import { AdminStatusBadge } from "../components/AdminStatusBadge";
 import {
+  bulkUpdateSuperadminEntities,
   createSuperadminCamp,
+  createSuperadminEntity,
   deleteSuperadminCamp,
   fetchCatalogDictionaries,
   fetchSuperadminBaseEditor,
+  fetchSuperadminEntityEditor,
   updateSuperadminCamp,
   updateSuperadminCampStatus,
+  updateSuperadminEntity,
   uploadSuperadminMedia,
   type SuperadminBaseEditor,
   type SuperadminAmenity,
+  type SuperadminEntityKind,
+  type SuperadminEntitySchema,
   type SuperadminMediaItem,
-  type SuperadminPlaceContact,
   type SuperadminPlaceType,
 } from "../session";
 import { type AdminBaseApartment, type AdminBaseDraft, createEmptyAdminBaseDraft, createEmptyApartment } from "../baseDraft";
+import {
+  contactFieldsFromSnapshot,
+  mergeEditorContacts,
+  priceModeAfterAmountChange,
+  priceModeFromApi,
+} from "../entityEditorDraft";
 
 const markerOptions = [
   { key: "tent", label: "Кемпинг", icon: TentTree, emoji: "🏕️" },
@@ -74,8 +86,14 @@ function numberFromText(value: string) {
 }
 
 function formatPriceLabel(value?: number | null) {
-  const amount = Number(value || 0);
+  if (value == null) return "";
+  const amount = Number(value);
   return `${new Intl.NumberFormat("ru-RU").format(amount)} ₽`;
+}
+
+function optionalNumberFromText(value: string) {
+  const normalized = value.replace(/[^\d-]/g, "");
+  return normalized ? Number(normalized) : null;
 }
 
 function parseCoordinates(value: string) {
@@ -133,10 +151,6 @@ function normalizePhones(value?: string | null) {
     items.push("");
   }
   return items.slice(0, 3);
-}
-
-function contactValue(contacts: SuperadminPlaceContact[], type: SuperadminPlaceContact["contact_type"], index = 0) {
-  return contacts.filter((contact) => contact.contact_type === type && contact.is_public !== false)[index]?.value || "";
 }
 
 function toDateTimeLocal(value?: string | null) {
@@ -276,6 +290,8 @@ function roomToApartment(room: SuperadminBaseEditor["rooms"][number], index: num
 
 function campEditorToDraft(payload: SuperadminBaseEditor): AdminBaseDraft {
   const camp = payload.camp;
+  const contactsSnapshot = (payload.contacts || []).map((contact) => ({ ...contact }));
+  const contactFields = contactFieldsFromSnapshot(contactsSnapshot);
   const owner = splitContact(camp.owner);
   const manager = splitContact(camp.manager);
   const media = splitMediaItems(payload.media, payload.photos.map((photo) => photo.url));
@@ -287,6 +303,7 @@ function campEditorToDraft(payload: SuperadminBaseEditor): AdminBaseDraft {
     placeTypeId: String(camp.place_type_id || ""),
     publicationStatus: (camp.publication_status || "draft") as AdminBaseDraft["publicationStatus"],
     shortDescription: camp.short_description || "",
+    attributes: camp.attributes && typeof camp.attributes === "object" ? { ...camp.attributes } : {},
     region: camp.region || "",
     district: camp.district || "",
     city: camp.city || "",
@@ -294,14 +311,8 @@ function campEditorToDraft(payload: SuperadminBaseEditor): AdminBaseDraft {
     seasonality: camp.seasonality || "",
     workingHours: JSON.stringify(camp.working_hours || {}, null, 2),
     confirmedAt: toDateTimeLocal(camp.confirmed_at),
-    publicEmail: contactValue(payload.contacts || [], "email"),
-    publicPhone: contactValue(payload.contacts || [], "phone"),
-    publicPhoneSecondary: contactValue(payload.contacts || [], "phone", 1),
-    publicSite: contactValue(payload.contacts || [], "website"),
-    telegramUrl: contactValue(payload.contacts || [], "telegram"),
-    whatsappUrl: contactValue(payload.contacts || [], "whatsapp"),
-    maxUrl: contactValue(payload.contacts || [], "max"),
-    vkUrl: contactValue(payload.contacts || [], "vk"),
+    ...contactFields,
+    contactsSnapshot,
     videoLinks: (camp.video_urls || []).join("\n"),
     amenitySlugs: (payload.selected_amenities || []).map((amenity) => amenity.slug),
     coverPlaceholderConfirmed: Boolean(camp.metadata?.cover_placeholder_confirmed),
@@ -327,6 +338,8 @@ function campEditorToDraft(payload: SuperadminBaseEditor): AdminBaseDraft {
     markerIcon: markerIconFromEmoji(camp.emoji),
     description: camp.description || "",
     minPrice: formatPriceLabel(camp.min_price),
+    priceMode: priceModeFromApi(camp.price_mode, camp.min_price),
+    currency: /^[A-Za-z]{3}$/.test(camp.currency || "") ? String(camp.currency).toUpperCase() : "RUB",
     gallery: media.photos,
     videoUrl: media.videoUrl,
     videoPosterUrl: media.videoPosterUrl,
@@ -368,7 +381,7 @@ function apartmentToRoomPayload(apartment: AdminBaseApartment) {
   };
 }
 
-function buildCampPayload(draft: AdminBaseDraft) {
+function buildCampPayload(draft: AdminBaseDraft, includeRooms: boolean) {
   const coordinates = parseCoordinates(draft.coordinates);
   const rooms = draft.apartments
     .map(apartmentToRoomPayload)
@@ -390,23 +403,15 @@ function buildCampPayload(draft: AdminBaseDraft) {
   if (!workingHours || Array.isArray(workingHours) || typeof workingHours !== "object") {
     throw new Error("Режим работы должен быть JSON-объектом");
   }
-  const rawContacts: SuperadminPlaceContact[] = [
-    { contact_type: "phone", label: "Телефон", value: draft.publicPhone, is_public: true, sort_order: 10 },
-    { contact_type: "phone", label: "Дополнительный телефон", value: draft.publicPhoneSecondary, is_public: true, sort_order: 20 },
-    { contact_type: "email", label: "Email", value: draft.publicEmail, is_public: true, sort_order: 30 },
-    { contact_type: "website", label: "Сайт", value: draft.publicSite, is_public: true, sort_order: 40 },
-    { contact_type: "telegram", label: "Telegram", value: draft.telegramUrl, is_public: true, sort_order: 50 },
-    { contact_type: "whatsapp", label: "WhatsApp", value: draft.whatsappUrl, is_public: true, sort_order: 60 },
-    { contact_type: "max", label: "MAX", value: draft.maxUrl, is_public: true, sort_order: 70 },
-    { contact_type: "vk", label: "ВКонтакте", value: draft.vkUrl, is_public: true, sort_order: 80 },
-  ];
-  const contacts = rawContacts.filter((contact) => contact.value.trim());
+  const contacts = mergeEditorContacts(draft.contactsSnapshot, draft);
+  const minPrice = optionalNumberFromText(draft.minPrice);
   return {
     name: draft.name.trim(),
     slug: draft.slug.trim() || undefined,
     place_type_id: draft.placeTypeId ? Number(draft.placeTypeId) : undefined,
     publication_status: draft.publicationStatus,
     short_description: draft.shortDescription.trim(),
+    attributes: draft.attributes,
     region: draft.region.trim(),
     district: draft.district.trim(),
     city: draft.city.trim(),
@@ -431,7 +436,9 @@ function buildCampPayload(draft: AdminBaseDraft) {
     manager: joinContact(draft.managerName, draft.managerPhone),
     admin_phones: draft.adminPhones.map((phone) => phone.trim()).filter(Boolean).join(", "),
     site_url: draft.site.trim(),
-    min_price: numberFromText(draft.minPrice),
+    min_price: minPrice,
+    price_mode: draft.priceMode,
+    currency: draft.currency.trim().toUpperCase() || "RUB",
     bbq_count: numberFromText(draft.bbqPrivate),
     bbq_shared_count: numberFromText(draft.bbqShared),
     bath_count: numberFromText(draft.baths),
@@ -441,7 +448,7 @@ function buildCampPayload(draft: AdminBaseDraft) {
     beds_count: numberFromText(draft.beds),
     photos: draft.gallery.map((url, index) => ({ url, cover: index === 0, sort: index })),
     media: buildMediaItems(draft.gallery, draft.videoUrl, draft.videoPosterUrl, draft.videoSourceKind),
-    rooms,
+    rooms: includeRooms ? rooms : [],
   };
 }
 
@@ -760,12 +767,16 @@ function ApartmentCard({
 
 export default function AdminBaseEditPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
   const isNew = !id || id === "new";
+  const usesEntityRoute = location.pathname.includes("/admin/entities");
   const galleryInputRef = useRef<HTMLInputElement | null>(null);
   const [draft, setDraft] = useState<AdminBaseDraft>(() => createEmptyAdminBaseDraft());
   const [linkedAccounts, setLinkedAccounts] = useState<SuperadminBaseEditor["linked_accounts"]>([]);
   const [placeTypes, setPlaceTypes] = useState<SuperadminPlaceType[]>([]);
+  const [entityKinds, setEntityKinds] = useState<SuperadminEntityKind[]>([]);
+  const [entitySchemas, setEntitySchemas] = useState<SuperadminEntitySchema[]>([]);
   const [amenities, setAmenities] = useState<SuperadminAmenity[]>([]);
   const [originalPublicationStatus, setOriginalPublicationStatus] = useState<AdminBaseDraft["publicationStatus"]>("draft");
   const [isLoading, setIsLoading] = useState(!isNew);
@@ -777,12 +788,15 @@ export default function AdminBaseEditPage() {
   function loadExistingBase(campId: number, signal?: AbortSignal) {
     setIsLoading(true);
     setErrorMessage("");
-    return fetchSuperadminBaseEditor(campId, signal)
+    const fetchEditor = usesEntityRoute ? fetchSuperadminEntityEditor : fetchSuperadminBaseEditor;
+    return fetchEditor(campId, signal)
       .then((payload) => {
         setDraft(campEditorToDraft(payload));
         setOriginalPublicationStatus((payload.camp.publication_status || "draft") as AdminBaseDraft["publicationStatus"]);
         setLinkedAccounts(payload.linked_accounts);
-        setPlaceTypes(payload.place_types || []);
+        setPlaceTypes(payload.entity_types || payload.place_types || []);
+        setEntityKinds(payload.entity_kinds || []);
+        setEntitySchemas(payload.entity_schemas || []);
         setAmenities(payload.amenities || []);
       })
       .catch((error: unknown) => {
@@ -806,8 +820,10 @@ export default function AdminBaseEditPage() {
       setIsLoading(false);
       const controller = new AbortController();
       fetchCatalogDictionaries(controller.signal)
-        .then(({ placeTypes: nextTypes, amenities: nextAmenities }) => {
+        .then(({ entityTypes: nextTypes, entityKinds: nextKinds, entitySchemas: nextSchemas, amenities: nextAmenities }) => {
           setPlaceTypes(nextTypes);
+          setEntityKinds(nextKinds);
+          setEntitySchemas(nextSchemas);
           setAmenities(nextAmenities);
           setDraft((current) => ({ ...current, placeTypeId: current.placeTypeId || String(nextTypes[0]?.id || "") }));
         })
@@ -823,7 +839,16 @@ export default function AdminBaseEditPage() {
     loadExistingBase(Number(id), controller.signal);
 
     return () => controller.abort();
-  }, [id, isNew]);
+  }, [id, isNew, usesEntityRoute]);
+
+  const selectedPlaceType = placeTypes.find((type) => String(type.id) === draft.placeTypeId);
+  const selectedEntityKind = selectedPlaceType?.entity_kind
+    || entityKinds.find((kind) => kind.key === "accommodation")?.key
+    || "accommodation";
+  const selectedSchema = entitySchemas.find((schema) =>
+    schema.key === selectedPlaceType?.schema_key
+    && schema.version === Number(selectedPlaceType?.schema_version || 1));
+  const isAccommodation = selectedEntityKind === "accommodation";
 
   const publicationWarnings = [
     !draft.name.trim() ? "Название" : "",
@@ -832,13 +857,30 @@ export default function AdminBaseEditPage() {
     parseCoordinates(draft.coordinates).lat == null || parseCoordinates(draft.coordinates).lng == null ? "Координаты" : "",
     !draft.shortDescription.trim() ? "Краткое описание" : "",
     !draft.gallery.length && !draft.coverPlaceholderConfirmed ? "Обложка или подтверждённый placeholder" : "",
-    ![draft.publicPhone, draft.publicEmail, draft.publicSite, draft.telegramUrl, draft.whatsappUrl, draft.maxUrl, draft.vkUrl].some((value) => value.trim())
+    !mergeEditorContacts(draft.contactsSnapshot, draft).some((contact) => contact.is_public !== false && contact.value.trim())
       ? "Публичный контакт"
       : "",
   ].filter(Boolean);
 
   const updateField = <K extends keyof AdminBaseDraft>(field: K, value: AdminBaseDraft[K]) => {
     setDraft((current) => ({ ...current, [field]: value }));
+  };
+
+  const updateMinPrice = (value: string) => {
+    const amount = optionalNumberFromText(value);
+    setDraft((current) => ({
+      ...current,
+      minPrice: value,
+      priceMode: priceModeAfterAmountChange(current.priceMode, amount, isNew),
+    }));
+  };
+
+  const updatePlaceType = (placeTypeId: string) => {
+    setDraft((current) => ({
+      ...current,
+      placeTypeId,
+      attributes: {},
+    }));
   };
 
   const updateAdminPhone = (index: number, value: string) => {
@@ -880,29 +922,33 @@ export default function AdminBaseEditPage() {
       setErrorMessage("");
       setSuccessMessage("");
       if (!draft.name.trim()) {
-        throw new Error("Укажите название базы");
+        throw new Error("Укажите название карточки");
       }
       if (draft.publicationStatus === "published" && publicationWarnings.length && (isNew || originalPublicationStatus !== "published")) {
         throw new Error(`Для публикации заполните: ${publicationWarnings.join(", ")}`);
       }
 
-      const payload = buildCampPayload(draft);
+      const payload = buildCampPayload(draft, isAccommodation);
       if (isNew) {
-        const response = await createSuperadminCamp(payload);
-        setSuccessMessage("База создана.");
-        navigate(crmPath(`/admin/bases/${response.id}`), { replace: true });
+        const response = usesEntityRoute
+          ? await createSuperadminEntity(payload)
+          : await createSuperadminCamp(payload);
+        setSuccessMessage("Карточка создана.");
+        navigate(crmPath(`/admin/entities/${response.id}`), { replace: true });
         return;
       }
 
-      const response = await updateSuperadminCamp(Number(draft.id), payload);
+      const response = usesEntityRoute
+        ? await updateSuperadminEntity(Number(draft.id), payload)
+        : await updateSuperadminCamp(Number(draft.id), payload);
       await loadExistingBase(Number(draft.id));
       setSuccessMessage(
         response.publication_warnings?.length
           ? `Карточка сохранена. Предупреждения публикации: ${response.publication_warnings.join(", ")}.`
-          : "Карточка базы сохранена.",
+          : "Карточка сохранена.",
       );
     } catch (error: unknown) {
-      setErrorMessage(error instanceof Error ? error.message : "Не удалось сохранить базу");
+      setErrorMessage(error instanceof Error ? error.message : "Не удалось сохранить карточку");
     } finally {
       setIsSaving(false);
     }
@@ -912,32 +958,36 @@ export default function AdminBaseEditPage() {
     if (isNew) {
       return;
     }
-    if (!window.confirm("Отправить базу в архив?")) {
+    if (!window.confirm("Отправить карточку в архив?")) {
       return;
     }
     try {
       setIsSaving(true);
       setErrorMessage("");
       setSuccessMessage("");
-      await updateSuperadminCampStatus(Number(draft.id), "archived");
+      if (usesEntityRoute) {
+        await bulkUpdateSuperadminEntities([Number(draft.id)], "archived");
+      } else {
+        await updateSuperadminCampStatus(Number(draft.id), "archived");
+      }
       setDraft((current) => ({ ...current, status: "В архиве" }));
-      setSuccessMessage("База отправлена в архив.");
+      setSuccessMessage("Карточка отправлена в архив.");
     } catch (error: unknown) {
-      setErrorMessage(error instanceof Error ? error.message : "Не удалось архивировать базу");
+      setErrorMessage(error instanceof Error ? error.message : "Не удалось архивировать карточку");
     } finally {
       setIsSaving(false);
     }
   }
 
   async function handleDelete() {
-    if (isNew) {
+    if (isNew || usesEntityRoute) {
       return;
     }
     if (draft.status !== "В архиве") {
-      setErrorMessage("Удалять можно только базу, которая уже находится в архиве.");
+      setErrorMessage("Удалять можно только карточку, которая уже находится в архиве.");
       return;
     }
-    if (!window.confirm("Удалить архивную базу безвозвратно?")) {
+    if (!window.confirm("Удалить архивную карточку безвозвратно?")) {
       return;
     }
     try {
@@ -947,7 +997,7 @@ export default function AdminBaseEditPage() {
       await deleteSuperadminCamp(Number(draft.id));
       navigate(crmPath("/admin/archive"), { replace: true });
     } catch (error: unknown) {
-      setErrorMessage(error instanceof Error ? error.message : "Не удалось удалить базу");
+      setErrorMessage(error instanceof Error ? error.message : "Не удалось удалить карточку");
     } finally {
       setIsSaving(false);
     }
@@ -1096,13 +1146,13 @@ export default function AdminBaseEditPage() {
         <div className="flex flex-col gap-4 border-b border-border pb-6 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-              {draft.id === "new" ? "Новая база" : `База #${draft.id}`}
+              {draft.id === "new" ? "Новая карточка" : `Карточка #${draft.id}`}
             </p>
             <h2 className="text-2xl font-semibold tracking-[-0.04em] text-foreground">
-              {draft.id === "new" ? "Создание базы отдыха" : `Редактирование базы «${draft.name || "Без названия"}»`}
+              {draft.id === "new" ? "Создание карточки каталога" : `Редактирование «${draft.name || "Без названия"}»`}
             </h2>
             <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-              Полный редактор каталога: контакты, публикация, фотографии, видео, визуальный маркер и структура апартаментов.
+              Единый редактор каталога: публикация, схема типа, контакты, медиа и доступные для категории разделы.
             </p>
           </div>
 
@@ -1110,9 +1160,11 @@ export default function AdminBaseEditPage() {
             <button type="button" className="admin-button" onClick={handleArchive} disabled={isSaving || isNew}>
               В архив
             </button>
-            <button type="button" className="admin-button text-rose-300 hover:text-rose-200" onClick={handleDelete} disabled={isSaving || isNew}>
-              Удалить
-            </button>
+            {!usesEntityRoute ? (
+              <button type="button" className="admin-button text-rose-300 hover:text-rose-200" onClick={handleDelete} disabled={isSaving || isNew}>
+                Удалить
+              </button>
+            ) : null}
             <button type="button" className="admin-primary-button gap-2" onClick={handleSave} disabled={isSaving || isLoading}>
               <Save className="h-4 w-4" />
               {isSaving ? "Сохраняем..." : "Сохранить"}
@@ -1128,7 +1180,7 @@ export default function AdminBaseEditPage() {
         ) : null}
 
         {isLoading ? (
-          <div className="py-10 text-center text-sm text-muted-foreground">Загружаем карточку базы…</div>
+          <div className="py-10 text-center text-sm text-muted-foreground">Загружаем карточку…</div>
         ) : (
           <div className="mt-6 space-y-8">
             <div className="flex flex-wrap items-center gap-3">
@@ -1181,11 +1233,23 @@ export default function AdminBaseEditPage() {
                 ) : null}
               </div>
 
-              <div className="grid gap-4 lg:grid-cols-3">
-                <AdminField label="Тип объекта">
-                  <select className="admin-input" value={draft.placeTypeId} onChange={(event) => updateField("placeTypeId", event.target.value)}>
+              <div className="grid gap-4 lg:grid-cols-4">
+                <AdminField label="Категория">
+                  <select
+                    className="admin-input"
+                    value={selectedEntityKind}
+                    onChange={(event) => {
+                      const firstType = placeTypes.find((type) => type.entity_kind === event.target.value && type.is_active !== false);
+                      updatePlaceType(firstType ? String(firstType.id) : "");
+                    }}
+                  >
+                    {entityKinds.map((kind) => <option key={kind.id} value={kind.key}>{kind.name}</option>)}
+                  </select>
+                </AdminField>
+                <AdminField label="Подтип карточки">
+                  <select className="admin-input" value={draft.placeTypeId} onChange={(event) => updatePlaceType(event.target.value)}>
                     <option value="">Выберите тип</option>
-                    {placeTypes.map((type) => (
+                    {placeTypes.filter((type) => type.entity_kind === selectedEntityKind).map((type) => (
                       <option key={type.id} value={type.id} disabled={type.is_active === false && String(type.id) !== draft.placeTypeId}>
                         {type.name}{type.is_active === false ? " (неактивен)" : ""}
                       </option>
@@ -1231,6 +1295,22 @@ export default function AdminBaseEditPage() {
                 />
               </AdminField>
 
+              <div className="rounded-2xl border border-border bg-card/60 p-4">
+                <div className="mb-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Схема карточки</p>
+                  <h4 className="mt-2 text-base font-semibold text-foreground">{selectedSchema?.name || "Общие поля"}</h4>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                    Показываются только разрешённые поля схемы {selectedPlaceType?.schema_key || "выбранного типа"}.
+                  </p>
+                </div>
+                <SchemaAttributeFields
+                  variant="admin"
+                  schema={selectedSchema}
+                  values={draft.attributes}
+                  onChange={(attributes) => updateField("attributes", attributes)}
+                />
+              </div>
+
               <div className="grid gap-4 lg:grid-cols-4">
                 <AdminField label="Регион"><input className="admin-input" value={draft.region} onChange={(event) => updateField("region", event.target.value)} /></AdminField>
                 <AdminField label="Район"><input className="admin-input" value={draft.district} onChange={(event) => updateField("district", event.target.value)} /></AdminField>
@@ -1274,7 +1354,11 @@ export default function AdminBaseEditPage() {
                 <AdminField label="WhatsApp URL"><input className="admin-input" type="url" value={draft.whatsappUrl} onChange={(event) => updateField("whatsappUrl", event.target.value)} /></AdminField>
                 <AdminField label="MAX URL"><input className="admin-input" type="url" value={draft.maxUrl} onChange={(event) => updateField("maxUrl", event.target.value)} /></AdminField>
                 <AdminField label="VK URL"><input className="admin-input" type="url" value={draft.vkUrl} onChange={(event) => updateField("vkUrl", event.target.value)} /></AdminField>
+                <AdminField label="Ссылка на маршрут"><input className="admin-input" type="url" value={draft.routeUrl} onChange={(event) => updateField("routeUrl", event.target.value)} /></AdminField>
               </div>
+              <p className="text-xs leading-5 text-muted-foreground">
+                Дополнительные телефоны, непубличные и нестандартные контакты сохраняются без изменений.
+              </p>
 
               <AdminField label="Видео YouTube, Rutube или VK — по одной ссылке в строке">
                 <textarea className="admin-input min-h-24 resize-y" value={draft.videoLinks} onChange={(event) => updateField("videoLinks", event.target.value)} />
@@ -1293,15 +1377,15 @@ export default function AdminBaseEditPage() {
               <div className="rounded-2xl border border-border bg-card/75 p-4">
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">SEO preview</p>
                 <p className="mt-3 text-base font-semibold text-blue-300">
-                  {draft.name || "Название объекта"} — {placeTypes.find((type) => String(type.id) === draft.placeTypeId)?.name || "Тип объекта"}{draft.region ? `, ${draft.region}` : ""} | Туристика
+                  {draft.name || "Название карточки"} — {selectedPlaceType?.name || "Тип карточки"}{draft.region ? `, ${draft.region}` : ""} | Туристика
                 </p>
                 <p className="mt-1 text-sm leading-6 text-muted-foreground">{draft.shortDescription || "Добавьте краткое описание публичной карточки."}</p>
                 <p className="mt-2 text-xs text-emerald-400">/places/{draft.slug || "slug-obekta"}</p>
               </div>
             </div>
 
-            <div className="grid gap-4 xl:grid-cols-4">
-              <AdminField label="Название базы">
+            <div className="grid gap-4 xl:grid-cols-6">
+              <AdminField label="Название карточки">
                 <input className="admin-input" value={draft.name} onChange={(event) => updateField("name", event.target.value)} />
               </AdminField>
               <AdminField label="Озеро">
@@ -1311,7 +1395,25 @@ export default function AdminBaseEditPage() {
                 <input className="admin-input" value={draft.coordinates} onChange={(event) => updateField("coordinates", event.target.value)} />
               </AdminField>
               <AdminField label="Минимальная цена">
-                <input className="admin-input" value={draft.minPrice} onChange={(event) => updateField("minPrice", event.target.value)} />
+                <input className="admin-input" type="number" min="0" step="1" value={draft.minPrice} onChange={(event) => updateMinPrice(event.target.value)} />
+              </AdminField>
+              <AdminField label="Как показывать цену">
+                <select className="admin-input" value={draft.priceMode} onChange={(event) => updateField("priceMode", event.target.value as AdminBaseDraft["priceMode"])}>
+                  <option value="from">От указанной суммы</option>
+                  <option value="fixed">Фиксированная цена</option>
+                  <option value="request">Стоимость по запросу</option>
+                  <option value="free">Бесплатно</option>
+                  <option value="none">Не показывать цену</option>
+                </select>
+              </AdminField>
+              <AdminField label="Валюта">
+                <select className="admin-input" value={draft.currency} onChange={(event) => updateField("currency", event.target.value)}>
+                  {!["RUB", "USD", "EUR", "CNY"].includes(draft.currency) ? <option value={draft.currency}>{draft.currency}</option> : null}
+                  <option value="RUB">Российский рубль (RUB)</option>
+                  <option value="USD">Доллар США (USD)</option>
+                  <option value="EUR">Евро (EUR)</option>
+                  <option value="CNY">Китайский юань (CNY)</option>
+                </select>
               </AdminField>
             </div>
 
@@ -1340,12 +1442,12 @@ export default function AdminBaseEditPage() {
                   <input className="admin-input" value={phone} onChange={(event) => updateAdminPhone(index, event.target.value)} />
                 </AdminField>
               ))}
-              <AdminField label="Сайт базы">
+              <AdminField label="Сайт карточки">
                 <input className="admin-input" value={draft.site} onChange={(event) => updateField("site", event.target.value)} />
               </AdminField>
             </div>
 
-            <div className="space-y-5 border-t border-border pt-8">
+            {isAccommodation ? <div className="space-y-5 border-t border-border pt-8">
               <div className="flex flex-wrap items-center gap-3">
                 <MapPinned className="h-5 w-5 text-blue-500" />
                 <h3 className="text-lg font-semibold text-foreground">Параметры размещения и инфраструктуры</h3>
@@ -1387,7 +1489,7 @@ export default function AdminBaseEditPage() {
                   <input className="admin-input" value={draft.saunas} onChange={(event) => updateField("saunas", event.target.value)} />
                 </AdminField>
               </div>
-            </div>
+            </div> : null}
 
             <div className="space-y-5 border-t border-border pt-8">
               <div className="flex flex-wrap items-center gap-3">
@@ -1464,8 +1566,8 @@ export default function AdminBaseEditPage() {
                       <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Предпросмотр карточки</p>
                       <div className="mt-3 flex items-center justify-between rounded-2xl border border-border bg-background/80 px-4 py-3">
                         <div>
-                          <p className="text-sm font-semibold text-foreground">{draft.name || "Новая база"}</p>
-                          <p className="text-xs text-muted-foreground">{draft.lake || "Озеро не указано"}</p>
+                          <p className="text-sm font-semibold text-foreground">{draft.name || "Новая карточка"}</p>
+                          <p className="text-xs text-muted-foreground">{selectedPlaceType?.name || "Тип не выбран"}</p>
                         </div>
                         <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-500/10 text-blue-500">
                           {(() => {
@@ -1480,7 +1582,7 @@ export default function AdminBaseEditPage() {
               </div>
 
               <VideoPanel
-                title="Видео базы"
+                title="Видео карточки"
                 videoUrl={draft.videoUrl}
                 posterUrl={draft.videoPosterUrl}
                 sourceKind={draft.videoSourceKind}
@@ -1498,12 +1600,12 @@ export default function AdminBaseEditPage() {
             <div className="space-y-3 border-t border-border pt-8">
               <div className="flex items-center gap-3">
                 <Bath className="h-5 w-5 text-blue-500" />
-                <h3 className="text-lg font-semibold text-foreground">Описание базы</h3>
+                <h3 className="text-lg font-semibold text-foreground">Описание карточки</h3>
               </div>
               <textarea className="admin-input min-h-28 resize-y" value={draft.description} onChange={(event) => updateField("description", event.target.value)} />
             </div>
 
-            <div className="space-y-5 border-t border-border pt-8">
+            {isAccommodation ? <div className="space-y-5 border-t border-border pt-8">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
                   <BedDouble className="h-5 w-5 text-blue-500" />
@@ -1531,7 +1633,7 @@ export default function AdminBaseEditPage() {
                   />
                 ))}
               </div>
-            </div>
+            </div> : null}
           </div>
         )}
       </AdminCard>

@@ -50,7 +50,11 @@ function createAdminRoutes(base: "" | "/react-map"): RouteObject[] {
       path: crmPath("/admin", base),
       lazy: lazyComponent(() => import("./admin/components/AdminLayout")),
       children: [
-        { index: true, Component: () => <RouteRedirect to="/admin/bases" base={base} /> },
+        { index: true, Component: () => <RouteRedirect to="/admin/entities" base={base} /> },
+        { path: "entities", lazy: lazyComponent(() => import("./admin/pages/AdminBasesPage")) },
+        { path: "entities/new", lazy: lazyComponent(() => import("./admin/pages/AdminBaseEditPage")) },
+        { path: "entities/:id", lazy: lazyComponent(() => import("./admin/pages/AdminBaseEditPage")) },
+        // Compatibility aliases for saved links from the accommodation-only catalog.
         { path: "bases", lazy: lazyComponent(() => import("./admin/pages/AdminBasesPage")) },
         { path: "bases/new", lazy: lazyComponent(() => import("./admin/pages/AdminBaseEditPage")) },
         { path: "bases/:id", lazy: lazyComponent(() => import("./admin/pages/AdminBaseEditPage")) },

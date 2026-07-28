@@ -14,9 +14,14 @@ from fastapi import File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 
 from tourist03.csrf import issue_csrf_token
+from tourist03.domain.catalog_entities import (
+    CatalogEntityValidationError,
+    sanitize_entity_attributes_for_schema,
+)
 from tourist03.domain.owner_changes import (
     OwnerChangeValidationError,
     calculate_card_quality,
+    resolve_owner_room_media_target,
     sanitize_owner_payload,
 )
 from tourist03.dto.owners import (
@@ -26,6 +31,8 @@ from tourist03.dto.owners import (
     OwnerChangeApplyRequest,
     OwnerChangeDecisionRequest,
     OwnerChangePatchRequest,
+    OwnerChangeSubmitRequest,
+    OwnerEntityCreateRequest,
     OwnerForgotPasswordRequest,
     OwnerLoginRequest,
     OwnerPasswordPatchRequest,
@@ -63,6 +70,65 @@ def _technical_hash(request: Request, value: str) -> str | None:
 def _request_fingerprint(request: Request) -> tuple[str | None, str | None]:
     ip = request.client.host if request.client else ""
     return _technical_hash(request, ip), _technical_hash(request, request.headers.get("user-agent", ""))
+
+
+def _entity_schema(schema_key: str | None, schema_version: int | None = None) -> dict | None:
+    if not schema_key:
+        return None
+    rows = catalog_repo.list_entity_schemas(
+        schema_key=schema_key,
+        include_inactive=schema_version is not None,
+    )
+    if schema_version is None:
+        return rows[0] if rows else None
+    return next((row for row in rows if int(row.get("version") or 0) == int(schema_version)), None)
+
+
+def _owner_entity_kind_filter(request: Request) -> str | None:
+    return None if request.app.state.settings.feature_services else "accommodation"
+
+
+def _owner_entity_visible(request: Request, entity_kind: object) -> bool:
+    return bool(
+        request.app.state.settings.feature_services
+        or str(entity_kind or "accommodation").strip().lower() == "accommodation"
+    )
+
+
+def _require_owner_entity_visible(request: Request, entity_kind: object) -> None:
+    if not _owner_entity_visible(request, entity_kind):
+        raise HTTPException(status_code=404, detail="Объект не найден")
+
+
+def _validate_entity_attributes(
+    attributes: dict[str, Any],
+    schema: dict | None,
+    *,
+    require_required: bool = False,
+) -> dict[str, Any]:
+    if not schema:
+        raise OwnerChangeValidationError("Схема карточки недоступна")
+    definition = {
+        "schema_key": schema["key"],
+        "version": schema["version"],
+        "title": schema.get("name") or schema["key"],
+        "applicable_kinds": schema.get("applicable_kinds")
+        or [schema.get("entity_kind")],
+        "fields": schema.get("fields") or [],
+        "sections": schema.get("sections") or [],
+        "validation": schema.get("validation") or {},
+        "display": schema.get("display") or {},
+        "schema_org_type": schema.get("schema_org_type") or "LocalBusiness",
+        "quality_keys": schema.get("quality_keys") or [],
+    }
+    try:
+        return sanitize_entity_attributes_for_schema(
+            attributes,
+            definition,
+            require_required=require_required,
+        )
+    except CatalogEntityValidationError as exc:
+        raise OwnerChangeValidationError(str(exc)) from exc
 
 
 def owner_session(request: Request) -> dict:
@@ -186,8 +252,18 @@ def _camp_card(request: Request, camp: dict, snapshot: dict | None = None) -> di
 
 
 def _owner_camp_page(request: Request, owner_id: int, *, limit: int, offset: int) -> dict:
-    profile_statistics = owner_repo.owner_profile_statistics(owner_id)
-    camp_rows = owner_repo.list_owner_camps(owner_id, limit=limit, offset=offset)
+    entity_kind = _owner_entity_kind_filter(request)
+    kind_kwargs = {"entity_kind": entity_kind} if entity_kind else {}
+    profile_statistics = owner_repo.owner_profile_statistics(
+        owner_id,
+        **kind_kwargs,
+    )
+    camp_rows = owner_repo.list_owner_camps(
+        owner_id,
+        limit=limit,
+        offset=offset,
+        **kind_kwargs,
+    )
     snapshots = owner_repo.get_camp_quality_snapshots(camp["id"] for camp in camp_rows)
     camps = [_camp_card(request, camp, snapshots.get(int(camp["id"]))) for camp in camp_rows]
     return {
@@ -215,10 +291,12 @@ def owner_dashboard(
         offset=object_offset,
     )
     camps = camp_page["camps"]
+    entity_kind = _owner_entity_kind_filter(request)
     pending = owner_repo.list_owner_change_summaries(
         owner["id"],
         statuses={"submitted", "in_review", "needs_changes", "approved"},
         limit=5,
+        **({"entity_kind": entity_kind} if entity_kind else {}),
     )
     attention = []
     for camp in camps:
@@ -228,14 +306,21 @@ def owner_dashboard(
         "ok": True,
         "features": {
             "change_requests": request.app.state.settings.feature_owner_change_requests,
+            "entity_creation": True,
+            "universal_catalog": request.app.state.settings.feature_services,
         },
         "owner": owner,
         "profile_statistics": camp_page["profile_statistics"],
         "camps": camps,
+        "entities": camps,
         "object_pagination": camp_page["pagination"],
         "attention": attention,
         "pending_changes": pending,
-        "activity": owner_repo.list_owner_activity(owner["id"], limit=7),
+        "activity": owner_repo.list_owner_activity(
+            owner["id"],
+            limit=7,
+            **({"entity_kind": entity_kind} if entity_kind else {}),
+        ),
     }
 
 
@@ -253,6 +338,55 @@ def owner_list_camps(
     }
 
 
+def owner_list_entities(
+    request: Request,
+    limit: int = Query(20, ge=1, le=50),
+    offset: int = Query(0, ge=0),
+) -> dict:
+    owner = get_current_owner(request)
+    page = _owner_camp_page(request, owner["id"], limit=limit, offset=offset)
+    return {"ok": True, "entities": page["camps"], "pagination": page["pagination"]}
+
+
+def owner_create_entity(request: Request, payload: OwnerEntityCreateRequest) -> dict:
+    owner = get_current_owner(request)
+    if payload.entity_kind != "accommodation" and not request.app.state.settings.feature_services:
+        raise HTTPException(status_code=404, detail="Not Found")
+    type_rows = catalog_repo.list_entity_types(entity_kind=payload.entity_kind)
+    selected = next((row for row in type_rows if row.get("slug") == payload.subtype), None)
+    if not selected:
+        raise HTTPException(status_code=422, detail="Выберите доступный тип карточки")
+    proposed = {
+        "name": re.sub(r"\s+", " ", payload.name).strip(),
+        "short_description": payload.short_description,
+        "region": payload.region,
+        "district": payload.district,
+        "city": payload.city,
+        "address": payload.address,
+        "lat": payload.lat,
+        "lng": payload.lng,
+        "attributes": payload.attributes,
+        "min_price": payload.min_price,
+        "price_mode": payload.price_mode,
+        "currency": payload.currency.upper(),
+        "request_publication": True,
+    }
+    try:
+        proposed = sanitize_owner_payload(proposed)
+        schema = _entity_schema(selected.get("schema_key"), selected.get("schema_version"))
+        proposed["attributes"] = _validate_entity_attributes(proposed.get("attributes") or {}, schema)
+        entity, change = owner_repo.create_owner_entity(
+            owner_id=owner["id"],
+            entity_kind=payload.entity_kind,
+            subtype=payload.subtype,
+            name=proposed["name"],
+            proposed_payload=proposed,
+        )
+    except (OwnerChangeValidationError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {"ok": True, "entity": entity, "change": change}
+
+
 def owner_camp_detail(request: Request, camp_id: int) -> dict:
     owner = get_current_owner(request)
     if not owner_repo.owner_can_access_camp(owner["id"], camp_id):
@@ -260,23 +394,42 @@ def owner_camp_detail(request: Request, camp_id: int) -> dict:
     snapshot = owner_repo.get_camp_snapshot(camp_id)
     if not snapshot:
         raise HTTPException(status_code=404, detail="Объект не найден")
+    _require_owner_entity_visible(request, snapshot.get("entity_kind"))
     quality = calculate_card_quality(snapshot, request.app.state.settings.owner_card_completeness_weights)
     changes = owner_repo.list_owner_change_summaries(
         owner["id"],
         camp_id=camp_id,
         limit=20,
     )
+    editable = next(
+        (
+            item
+            for item in changes
+            if item.get("status") in {"draft", "needs_changes", "withdrawn"}
+        ),
+        None,
+    )
+    schema_source = editable or snapshot
     return {
         "ok": True,
         "camp": snapshot,
+        "entity": snapshot,
         "quality": quality,
         "changes": changes,
         "amenity_catalog": catalog_repo.list_public_amenities(),
+        "entity_schema": _entity_schema(
+            schema_source.get("schema_key"),
+            schema_source.get("schema_version"),
+        ),
         "activity": [
             item for item in owner_repo.list_owner_activity(owner["id"], limit=100)
             if item.get("camp_id") == camp_id
         ][:30],
     }
+
+
+def owner_entity_detail(request: Request, entity_id: int) -> dict:
+    return owner_camp_detail(request, entity_id)
 
 
 def owner_list_changes(
@@ -289,10 +442,15 @@ def owner_list_changes(
     changes = owner_repo.list_owner_change_summaries(
         owner["id"],
         camp_id=camp_id,
+        entity_kind=_owner_entity_kind_filter(request),
         limit=limit,
         offset=offset,
     )
-    total = owner_repo.count_owner_changes(owner["id"], camp_id=camp_id)
+    total = owner_repo.count_owner_changes(
+        owner["id"],
+        camp_id=camp_id,
+        entity_kind=_owner_entity_kind_filter(request),
+    )
     return {
         "ok": True,
         "changes": changes,
@@ -310,11 +468,16 @@ def owner_get_change(request: Request, change_id: int) -> dict:
     row = owner_repo.get_owner_change(change_id, owner_id=owner["id"])
     if not row:
         raise HTTPException(status_code=404, detail="Изменения не найдены")
+    _require_owner_entity_visible(request, row.get("entity_kind"))
     return {"ok": True, "change": row}
 
 
 def owner_create_change(request: Request, camp_id: int) -> dict:
     owner = get_current_owner(request)
+    snapshot = owner_repo.get_camp_snapshot(camp_id)
+    if not snapshot or not owner_repo.owner_can_access_camp(owner["id"], camp_id):
+        raise HTTPException(status_code=404, detail="Объект не найден или недоступен для изменения")
+    _require_owner_entity_visible(request, snapshot.get("entity_kind"))
     row, created = owner_repo.create_owner_change(owner["id"], camp_id)
     if not row:
         raise HTTPException(status_code=404, detail="Объект не найден или недоступен для изменения")
@@ -325,6 +488,15 @@ def owner_save_change(request: Request, change_id: int, payload: OwnerChangePatc
     owner = get_current_owner(request)
     try:
         proposed = sanitize_owner_payload(payload.proposed_payload)
+        existing = owner_repo.get_owner_change(change_id, owner_id=owner["id"])
+        if not existing:
+            raise HTTPException(status_code=404, detail="Черновик не найден")
+        _require_owner_entity_visible(request, existing.get("entity_kind"))
+        if "attributes" in proposed:
+            schema = _entity_schema(existing.get("schema_key"), existing.get("schema_version"))
+            proposed["attributes"] = _validate_entity_attributes(proposed["attributes"], schema)
+        if "rooms" in proposed and existing.get("entity_kind") != "accommodation":
+            raise OwnerChangeValidationError("Варианты размещения доступны только объектам проживания")
         row = owner_repo.save_owner_change(
             change_id,
             owner["id"],
@@ -340,8 +512,19 @@ def owner_save_change(request: Request, change_id: int, payload: OwnerChangePatc
     return {"ok": True, "change": row}
 
 
-def _owner_transition(request: Request, change_id: int, target: str) -> dict:
+def _owner_transition(
+    request: Request,
+    change_id: int,
+    target: str,
+    *,
+    proposed_payload: dict | None = None,
+    expected_version: int | None = None,
+) -> dict:
     owner = get_current_owner(request)
+    existing = owner_repo.get_owner_change(change_id, owner_id=owner["id"])
+    if not existing:
+        raise HTTPException(status_code=404, detail="Изменения не найдены")
+    _require_owner_entity_visible(request, existing.get("entity_kind"))
     try:
         row = owner_repo.transition_owner_change(
             change_id,
@@ -349,16 +532,58 @@ def _owner_transition(request: Request, change_id: int, target: str) -> dict:
             actor_type="owner",
             actor_id=owner["id"],
             owner_id=owner["id"],
+            proposed_payload=proposed_payload,
+            expected_version=expected_version,
         )
     except (OwnerChangeValidationError, ValueError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     if not row:
         raise HTTPException(status_code=404, detail="Изменения не найдены")
     return {"ok": True, "change": row}
 
 
-def owner_submit_change(request: Request, change_id: int) -> dict:
-    return _owner_transition(request, change_id, "submitted")
+def owner_submit_change(
+    request: Request,
+    change_id: int,
+    payload: OwnerChangeSubmitRequest | None = None,
+) -> dict:
+    owner = get_current_owner(request)
+    existing = owner_repo.get_owner_change(change_id, owner_id=owner["id"])
+    if not existing:
+        raise HTTPException(status_code=404, detail="Изменения не найдены")
+    _require_owner_entity_visible(request, existing.get("entity_kind"))
+    try:
+        proposed = sanitize_owner_payload(
+            payload.proposed_payload
+            if payload is not None
+            else existing.get("proposed_payload") or {}
+        )
+    except OwnerChangeValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    schema = _entity_schema(existing.get("schema_key"), existing.get("schema_version"))
+    if "attributes" in proposed:
+        try:
+            proposed["attributes"] = _validate_entity_attributes(
+                proposed["attributes"],
+                schema,
+                require_required=True,
+            )
+        except OwnerChangeValidationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if "rooms" in proposed and existing.get("entity_kind") != "accommodation":
+        raise HTTPException(
+            status_code=422,
+            detail="Варианты размещения доступны только объектам проживания",
+        )
+    return _owner_transition(
+        request,
+        change_id,
+        "submitted",
+        proposed_payload=proposed if payload is not None else None,
+        expected_version=payload.content_version if payload is not None else None,
+    )
 
 
 def owner_withdraw_change(request: Request, change_id: int) -> dict:
@@ -367,6 +592,10 @@ def owner_withdraw_change(request: Request, change_id: int) -> dict:
 
 def owner_unpublish_camp(request: Request, camp_id: int) -> dict:
     owner = get_current_owner(request)
+    snapshot = owner_repo.get_camp_snapshot(camp_id)
+    if not snapshot:
+        raise HTTPException(status_code=404, detail="Объект не найден")
+    _require_owner_entity_visible(request, snapshot.get("entity_kind"))
     row = owner_repo.unpublish_owner_camp(owner["id"], camp_id)
     if not row:
         raise HTTPException(status_code=404, detail="Объект не найден")
@@ -388,16 +617,30 @@ async def owner_upload_change_media(
 ) -> dict:
     owner = get_current_owner(request)
     settings = request.app.state.settings
+    change = owner_repo.get_owner_change(change_id, owner_id=owner["id"])
+    if not change:
+        raise HTTPException(status_code=404, detail="Черновик не найден")
+    _require_owner_entity_visible(request, change.get("entity_kind"))
     normalized_scope = (scope or "").strip().lower()
     normalized_room = (room_client_id or "").strip() or None
     if normalized_scope not in {"place", "room"}:
         raise HTTPException(status_code=400, detail="Некорректный раздел фотографии")
+    if change.get("status") not in {"draft", "needs_changes", "withdrawn"}:
+        raise HTTPException(
+            status_code=409,
+            detail="Черновик недоступен для загрузки",
+        )
     limit = settings.submission_max_place_photos
     if normalized_scope == "place":
         normalized_room = None
     else:
-        if not normalized_room or len(normalized_room) > 80:
-            raise HTTPException(status_code=400, detail="Не указан вариант размещения")
+        try:
+            normalized_room = resolve_owner_room_media_target(
+                change,
+                normalized_room,
+            )
+        except OwnerChangeValidationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         limit = settings.submission_max_room_photos
     raw = await file.read(settings.owner_change_max_image_bytes + 1)
     image_settings = settings.model_copy(
@@ -439,6 +682,9 @@ async def owner_upload_change_media(
             + timedelta(days=settings.owner_change_request_ttl_days),
             max_count=limit,
         )
+    except OwnerChangeValidationError as exc:
+        remove_stored_media(settings, storage_key, thumbnail_key)
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ValueError as exc:
         remove_stored_media(settings, storage_key, thumbnail_key)
         raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -472,6 +718,13 @@ def owner_change_media(
     row = owner_repo.get_owner_change_media(preview_token, owner["id"])
     if not row:
         raise HTTPException(status_code=404, detail="Файл не найден")
+    change = owner_repo.get_owner_change(
+        int(row["change_request_id"]),
+        owner_id=owner["id"],
+    )
+    if not change:
+        raise HTTPException(status_code=404, detail="Файл не найден")
+    _require_owner_entity_visible(request, change.get("entity_kind"))
     storage_key = row["thumbnail_storage_key"] if thumbnail else row["storage_key"]
     path = safe_storage_path(request.app.state.settings, storage_key)
     if not path or not path.is_file():
@@ -489,6 +742,10 @@ def owner_change_media(
 
 def owner_delete_change_media(request: Request, change_id: int, media_id: int) -> dict:
     owner = get_current_owner(request)
+    change = owner_repo.get_owner_change(change_id, owner_id=owner["id"])
+    if not change:
+        raise HTTPException(status_code=404, detail="Фотография не найдена")
+    _require_owner_entity_visible(request, change.get("entity_kind"))
     row = owner_repo.delete_owner_change_media(media_id, change_id, owner["id"])
     if not row:
         raise HTTPException(status_code=404, detail="Фотография не найдена")
@@ -502,6 +759,10 @@ def owner_delete_change_media(request: Request, change_id: int, media_id: int) -
 
 def owner_remove_published_media(request: Request, change_id: int, media_id: int) -> dict:
     owner = get_current_owner(request)
+    change = owner_repo.get_owner_change(change_id, owner_id=owner["id"])
+    if not change:
+        raise HTTPException(status_code=404, detail="Фотография не найдена")
+    _require_owner_entity_visible(request, change.get("entity_kind"))
     try:
         row = owner_repo.stage_owner_media_removal(
             change_id=change_id,
