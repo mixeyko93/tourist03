@@ -11,8 +11,12 @@ from tourist03.domain.discovery import (
     DiscoveryValidationError,
     build_search_terms,
     normalize_slug_filter,
+    validate_collection_conditions,
 )
+from tourist03.dto.discovery import SuperadminCollectionUpsertRequestDTO
+from tourist03.public_catalog import safe_public_asset_url, validate_slug
 from tourist03.repositories import discovery as discovery_repo
+from tourist03.security import get_superadmin_session_principal, log_crm_audit_event
 
 
 def _comma_values(value: Optional[str]) -> list[str]:
@@ -114,3 +118,190 @@ def api_public_search_popular(
 ):
     response.headers["Cache-Control"] = "public, max-age=300, stale-while-revalidate=900"
     return {"items": discovery_repo.list_popular_topics(limit=limit)}
+
+
+def api_public_collections(
+    response: Response,
+    season: Optional[str] = Query(None, max_length=80),
+    region: Optional[str] = Query(None, max_length=120),
+    city: Optional[str] = Query(None, max_length=120),
+    limit: int = Query(12, ge=1, le=50),
+    offset: int = Query(0, ge=0, le=10_000),
+):
+    response.headers["Cache-Control"] = "public, max-age=120, stale-while-revalidate=300"
+    return discovery_repo.list_public_collections(
+        season=_plain_filter(season, "Сезон"),
+        region=_plain_filter(region, "Регион"),
+        city=_plain_filter(city, "Город"),
+        limit=limit,
+        offset=offset,
+    )
+
+
+def api_public_collection_detail(
+    slug: str,
+    response: Response,
+):
+    try:
+        normalized_slug = validate_slug(slug)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="not found")
+    collection = discovery_repo.get_public_collection(normalized_slug)
+    if not collection:
+        raise HTTPException(status_code=404, detail="not found")
+    response.headers["Cache-Control"] = "public, max-age=120, stale-while-revalidate=300"
+    if collection.get("updated_at"):
+        response.headers["Last-Modified"] = collection["updated_at"].strftime(
+            "%a, %d %b %Y %H:%M:%S GMT"
+        )
+    return collection
+
+
+def _collection_payload_or_422(
+    payload: SuperadminCollectionUpsertRequestDTO,
+) -> dict:
+    data = payload.model_dump()
+    try:
+        data["slug"] = validate_slug(data["slug"])
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    for key in (
+        "title",
+        "short_description",
+        "description",
+        "region",
+        "city",
+        "season",
+        "audience",
+        "seo_title",
+        "seo_description",
+    ):
+        value = data.get(key)
+        data[key] = value.strip() if isinstance(value, str) and value.strip() else None
+    if not data["title"] or not data["short_description"]:
+        raise HTTPException(
+            status_code=422,
+            detail="Заполните название и краткое описание подборки",
+        )
+    cover_url = (data.get("cover_url") or "").strip()
+    if cover_url and not safe_public_asset_url(cover_url):
+        raise HTTPException(status_code=422, detail="Укажите безопасную ссылку на обложку")
+    data["cover_url"] = cover_url or None
+
+    item_ids = [item["entity_id"] for item in data["items"]]
+    item_positions = [item["position"] for item in data["items"]]
+    if len(item_ids) != len(set(item_ids)):
+        raise HTTPException(status_code=422, detail="Сущность не должна повторяться в подборке")
+    if len(item_positions) != len(set(item_positions)):
+        raise HTTPException(status_code=422, detail="Позиции элементов подборки должны быть уникальны")
+
+    rule_positions = [rule["position"] for rule in data["rules"]]
+    if len(rule_positions) != len(set(rule_positions)):
+        raise HTTPException(status_code=422, detail="Позиции правил подборки должны быть уникальны")
+    try:
+        for rule in data["rules"]:
+            rule["conditions"] = validate_collection_conditions(rule["conditions"])
+    except DiscoveryValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if data["collection_type"] == "manual" and data["rules"]:
+        raise HTTPException(status_code=422, detail="Ручная подборка не должна содержать правила")
+    if data["collection_type"] == "rule_based" and data["items"]:
+        raise HTTPException(status_code=422, detail="Подборка по правилам не должна содержать ручные элементы")
+    return data
+
+
+def superadmin_list_collections(
+    status: Optional[str] = Query(None, max_length=40),
+    search: Optional[str] = Query(None, max_length=120),
+):
+    normalized_status = (status or "").strip() or None
+    if normalized_status and normalized_status not in {
+        "draft",
+        "in_review",
+        "published",
+        "disabled",
+        "archived",
+    }:
+        raise HTTPException(status_code=422, detail="Неизвестный статус подборки")
+    return discovery_repo.list_superadmin_collections(
+        status=normalized_status,
+        search=(search or "").strip() or None,
+    )
+
+
+def superadmin_collection_detail(collection_id: int):
+    collection = discovery_repo.get_superadmin_collection(collection_id)
+    if not collection:
+        raise HTTPException(status_code=404, detail="Подборка не найдена")
+    return collection
+
+
+def superadmin_collection_preview(collection_id: int):
+    collection = discovery_repo.preview_superadmin_collection(collection_id)
+    if not collection:
+        raise HTTPException(status_code=404, detail="Подборка не найдена")
+    return collection
+
+
+def _save_superadmin_collection(
+    request: Request,
+    payload: SuperadminCollectionUpsertRequestDTO,
+    *,
+    collection_id: int | None,
+):
+    principal = get_superadmin_session_principal(request) or {}
+    before = (
+        discovery_repo.get_superadmin_collection(collection_id)
+        if collection_id is not None
+        else None
+    )
+    try:
+        collection = discovery_repo.upsert_superadmin_collection(
+            collection_id=collection_id,
+            payload=_collection_payload_or_422(payload),
+            actor_id=principal.get("id"),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc).strip("'")) from exc
+    except ValueError as exc:
+        status_code = 409 if "изменена" in str(exc) else 422
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    log_crm_audit_event(
+        actor_type="superadmin",
+        actor_id=principal.get("id"),
+        actor_display=principal.get("display_name") or principal.get("login"),
+        target_type="editorial_collection",
+        target_id=collection["id"],
+        action_type="collection_created" if before is None else "collection_updated",
+        action_label="Создана подборка" if before is None else "Обновлена подборка",
+        old_value={
+            "status": before.get("status"),
+            "content_version": before.get("content_version"),
+        }
+        if before
+        else None,
+        new_value={
+            "status": collection.get("status"),
+            "content_version": collection.get("content_version"),
+        },
+    )
+    return collection
+
+
+def superadmin_create_collection(
+    request: Request,
+    payload: SuperadminCollectionUpsertRequestDTO,
+):
+    return _save_superadmin_collection(request, payload, collection_id=None)
+
+
+def superadmin_update_collection(
+    collection_id: int,
+    request: Request,
+    payload: SuperadminCollectionUpsertRequestDTO,
+):
+    return _save_superadmin_collection(
+        request,
+        payload,
+        collection_id=collection_id,
+    )

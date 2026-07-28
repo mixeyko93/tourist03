@@ -7,6 +7,7 @@ from tourist03.domain.discovery import (
     haversine_km,
     normalize_search_text,
     transliterate_to_latin,
+    validate_collection_conditions,
     validate_geojson,
     validate_nearby_radius,
 )
@@ -89,6 +90,32 @@ class DiscoveryGeoDomainTests(unittest.TestCase):
         ):
             with self.subTest(invalid=invalid), self.assertRaises(DiscoveryValidationError):
                 validate_geojson(invalid, max_bytes=10_000, max_coordinates=10)
+
+
+class DiscoveryCollectionDomainTests(unittest.TestCase):
+    def test_collection_rules_accept_only_typed_allowlisted_conditions(self):
+        self.assertEqual(
+            validate_collection_conditions(
+                {
+                    "entity_kinds": ["activity"],
+                    "tags": ["with-children", "by-water"],
+                    "regions": ["Республика Карелия"],
+                }
+            ),
+            {
+                "entity_kinds": ["activity"],
+                "tags": ["with-children", "by-water"],
+                "regions": ["Республика Карелия"],
+            },
+        )
+        for invalid in (
+            {"sql": ["DROP TABLE catalog.camps"]},
+            {"tags": "fishing"},
+            {"tags": ["fishing' OR TRUE --"]},
+            {"cities": ["x" * 121]},
+        ):
+            with self.subTest(invalid=invalid), self.assertRaises(DiscoveryValidationError):
+                validate_collection_conditions(invalid)
 
 
 class DiscoverySettingsTests(unittest.TestCase):

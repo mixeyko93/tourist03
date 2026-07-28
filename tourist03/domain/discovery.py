@@ -14,6 +14,18 @@ MAX_SEARCH_QUERY_LENGTH = 120
 MAX_SEARCH_TOKENS = 16
 MAX_SEARCH_VARIANTS = 12
 NEARBY_RADII_KM = frozenset({5, 10, 25, 50, 100})
+COLLECTION_CONDITION_KEYS = frozenset(
+    {
+        "entity_kinds",
+        "subtypes",
+        "tags",
+        "amenities",
+        "regions",
+        "cities",
+        "seasons",
+        "audiences",
+    }
+)
 _WHITESPACE_RE = re.compile(r"\s+")
 
 _CYRILLIC_TO_LATIN = {
@@ -200,6 +212,37 @@ def normalize_slug_filter(values: Iterable[str], *, maximum: int = 30) -> list[s
             normalized.append(item)
         if len(normalized) > maximum:
             raise DiscoveryValidationError("Слишком много значений фильтра")
+    return normalized
+
+
+def validate_collection_conditions(value: object) -> dict[str, list[str]]:
+    if value in (None, {}):
+        return {}
+    if not isinstance(value, dict):
+        raise DiscoveryValidationError("Условия подборки должны быть объектом")
+    unknown = set(value).difference(COLLECTION_CONDITION_KEYS)
+    if unknown:
+        raise DiscoveryValidationError(
+            f"Неподдерживаемые условия подборки: {', '.join(sorted(unknown))}"
+        )
+    normalized: dict[str, list[str]] = {}
+    for key, raw_items in value.items():
+        if not isinstance(raw_items, list):
+            raise DiscoveryValidationError(f"Условие {key} должно быть списком")
+        if len(raw_items) > 30:
+            raise DiscoveryValidationError(f"Условие {key} содержит слишком много значений")
+        items: list[str] = []
+        for raw in raw_items:
+            item = str(raw or "").strip()
+            if not item or len(item) > 120 or any(ord(character) < 32 for character in item):
+                raise DiscoveryValidationError(f"Условие {key} содержит недопустимое значение")
+            normalized_item = item.lower() if key not in {"regions", "cities"} else item
+            if key in {"entity_kinds", "subtypes", "tags", "amenities"}:
+                normalized_item = normalize_slug_filter([normalized_item], maximum=1)[0]
+            if normalized_item not in items:
+                items.append(normalized_item)
+        if items:
+            normalized[key] = items
     return normalized
 
 

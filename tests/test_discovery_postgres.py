@@ -36,6 +36,7 @@ class DiscoveryPostgresTests(unittest.TestCase):
             pg_password="",
             feature_services=True,
             feature_discovery_search=True,
+            feature_editorial_collections=True,
             session_secret_key="discovery-postgres-test-secret-at-least-32-characters",
         )
         configure_settings(cls.settings)
@@ -49,6 +50,7 @@ class DiscoveryPostgresTests(unittest.TestCase):
 
     @classmethod
     def _seed(cls):
+        cls.entity_ids = {}
         rows = [
             (
                 "Рыбалка",
@@ -137,6 +139,7 @@ class DiscoveryPostgresTests(unittest.TestCase):
                     ),
                 )
                 entity_id = int(cur.fetchone()["id"])
+                cls.entity_ids[slug] = entity_id
                 if slug == "fishing-exact":
                     cur.execute(
                         """
@@ -146,6 +149,126 @@ class DiscoveryPostgresTests(unittest.TestCase):
                         (entity_id,),
                     )
             conn.commit()
+
+    def test_collections_manual_rules_publication_and_optimistic_locking(self):
+        public_ids = [
+            self.entity_ids["fishing-exact"],
+            self.entity_ids["glamping-baikal"],
+            self.entity_ids["sauna-shore"],
+        ]
+        collection = discovery_repo.upsert_superadmin_collection(
+            collection_id=None,
+            actor_id=None,
+            payload={
+                "slug": "weekend-discovery",
+                "title": "Идеи для выходных",
+                "short_description": "Три проверенные идеи для короткой поездки.",
+                "description": "Рыбалка, глэмпинг и спокойный отдых.",
+                "cover_url": "/static/brand/turistika-logo-stacked.svg",
+                "collection_type": "manual",
+                "status": "published",
+                "region": None,
+                "city": None,
+                "season": "all",
+                "audience": "weekend",
+                "editorial_weight": 20,
+                "editorial_exception": False,
+                "seo_title": "Идеи для выходных — Туристика",
+                "seo_description": "Куда отправиться на выходные.",
+                "content_version": None,
+                "items": [
+                    {
+                        "entity_id": entity_id,
+                        "position": position,
+                        "editorial_note": "Выбор редакции" if position == 0 else None,
+                        "custom_title": None,
+                        "custom_description": None,
+                    }
+                    for position, entity_id in enumerate(public_ids)
+                ]
+                + [
+                    {
+                        "entity_id": self.entity_ids["fishing-draft"],
+                        "position": 3,
+                        "editorial_note": None,
+                        "custom_title": None,
+                        "custom_description": None,
+                    }
+                ],
+                "rules": [],
+            },
+        )
+        self.assertEqual(collection["content_version"], 1)
+        public = discovery_repo.get_public_collection("weekend-discovery")
+        self.assertEqual(public["item_count"], 3)
+        self.assertNotIn(
+            "fishing-draft",
+            [item["slug"] for item in public["items"]],
+        )
+        self.assertEqual(public["items"][0]["match_reasons"], ["Выбор редакции"])
+
+        rule_collection = discovery_repo.upsert_superadmin_collection(
+            collection_id=None,
+            actor_id=None,
+            payload={
+                "slug": "fishing-rules",
+                "title": "Рыбалка в Карелии",
+                "short_description": "Тематическая подборка по безопасным правилам.",
+                "description": None,
+                "cover_url": "/static/brand/turistika-logo-stacked.svg",
+                "collection_type": "rule_based",
+                "status": "published",
+                "region": "Республика Карелия",
+                "city": None,
+                "season": None,
+                "audience": None,
+                "editorial_weight": 10,
+                "editorial_exception": True,
+                "seo_title": "Рыбалка в Карелии — Туристика",
+                "seo_description": "Опубликованные места для рыбалки.",
+                "content_version": None,
+                "items": [],
+                "rules": [
+                    {
+                        "conditions": {
+                            "tags": ["fishing"],
+                            "regions": ["Республика Карелия"],
+                        },
+                        "sort": "editorial",
+                        "limit": 10,
+                        "position": 0,
+                    }
+                ],
+            },
+        )
+        resolved = discovery_repo.get_public_collection("fishing-rules")
+        self.assertEqual([item["slug"] for item in resolved["items"]], ["fishing-exact"])
+        stale_payload = {
+            "slug": rule_collection["slug"],
+            "title": rule_collection["title"],
+            "short_description": rule_collection["short_description"],
+            "description": rule_collection["description"],
+            "cover_url": rule_collection["cover_url"],
+            "collection_type": rule_collection["collection_type"],
+            "status": rule_collection["status"],
+            "region": rule_collection["region"],
+            "city": rule_collection["city"],
+            "season": rule_collection["season"],
+            "audience": rule_collection["audience"],
+            "editorial_weight": rule_collection["editorial_weight"],
+            "editorial_exception": rule_collection["editorial_exception"],
+            "seo_title": rule_collection["seo_title"],
+            "seo_description": rule_collection["seo_description"],
+            "content_version": 999,
+            "items": [],
+            "rules": rule_collection["rules"],
+        }
+        with self.assertRaisesRegex(ValueError, "уже изменена"):
+            discovery_repo.upsert_superadmin_collection(
+                collection_id=rule_collection["id"],
+                actor_id=None,
+                payload=stale_payload,
+            )
 
     def test_russian_ranking_transliteration_synonyms_and_draft_exclusion(self):
         async def scenario():

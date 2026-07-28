@@ -3066,6 +3066,175 @@ MIGRATIONS = (
         VALIDATE CONSTRAINT camps_editorial_weight_range;
         """,
     ),
+    MigrationStep(
+        version="0031_editorial_collections",
+        sql="""
+        CREATE SCHEMA IF NOT EXISTS content;
+
+        CREATE TABLE IF NOT EXISTS content.collections (
+            id BIGSERIAL PRIMARY KEY,
+            slug TEXT NOT NULL,
+            title TEXT NOT NULL,
+            short_description TEXT NOT NULL,
+            description TEXT,
+            cover_url TEXT,
+            collection_type TEXT NOT NULL DEFAULT 'manual',
+            status TEXT NOT NULL DEFAULT 'draft',
+            region TEXT,
+            city TEXT,
+            season TEXT,
+            audience TEXT,
+            editorial_weight SMALLINT NOT NULL DEFAULT 0,
+            editorial_exception BOOLEAN NOT NULL DEFAULT FALSE,
+            seo_title TEXT,
+            seo_description TEXT,
+            published_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            created_by BIGINT,
+            updated_by BIGINT,
+            content_version INTEGER NOT NULL DEFAULT 1,
+            search_document TEXT GENERATED ALWAYS AS (
+                catalog.normalize_search_text(
+                    COALESCE(title, '') || ' ' ||
+                    COALESCE(short_description, '') || ' ' ||
+                    COALESCE(description, '') || ' ' ||
+                    COALESCE(region, '') || ' ' ||
+                    COALESCE(city, '') || ' ' ||
+                    COALESCE(season, '') || ' ' ||
+                    COALESCE(audience, '')
+                )
+            ) STORED,
+            search_vector TSVECTOR GENERATED ALWAYS AS (
+                setweight(
+                    to_tsvector(
+                        'russian'::regconfig,
+                        catalog.normalize_search_text(
+                            COALESCE(title, '') || ' ' || COALESCE(slug, '')
+                        )
+                    ),
+                    'A'
+                )
+                ||
+                setweight(
+                    to_tsvector(
+                        'russian'::regconfig,
+                        catalog.normalize_search_text(
+                            COALESCE(region, '') || ' ' ||
+                            COALESCE(city, '') || ' ' ||
+                            COALESCE(season, '') || ' ' ||
+                            COALESCE(audience, '')
+                        )
+                    ),
+                    'B'
+                )
+                ||
+                setweight(
+                    to_tsvector(
+                        'russian'::regconfig,
+                        catalog.normalize_search_text(COALESCE(short_description, ''))
+                    ),
+                    'C'
+                )
+                ||
+                setweight(
+                    to_tsvector(
+                        'russian'::regconfig,
+                        catalog.normalize_search_text(COALESCE(description, ''))
+                    ),
+                    'D'
+                )
+            ) STORED,
+            CONSTRAINT collections_slug_format
+                CHECK (slug ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'),
+            CONSTRAINT collections_title_present
+                CHECK (NULLIF(btrim(title), '') IS NOT NULL),
+            CONSTRAINT collections_short_description_present
+                CHECK (NULLIF(btrim(short_description), '') IS NOT NULL),
+            CONSTRAINT collections_type_valid
+                CHECK (collection_type IN ('manual', 'rule_based', 'mixed')),
+            CONSTRAINT collections_status_valid
+                CHECK (status IN ('draft', 'in_review', 'published', 'disabled', 'archived')),
+            CONSTRAINT collections_editorial_weight_range
+                CHECK (editorial_weight BETWEEN 0 AND 100),
+            CONSTRAINT collections_content_version_positive
+                CHECK (content_version > 0),
+            CONSTRAINT collections_created_by_fk
+                FOREIGN KEY (created_by) REFERENCES auth.superadmin_accounts(id)
+                ON DELETE SET NULL,
+            CONSTRAINT collections_updated_by_fk
+                FOREIGN KEY (updated_by) REFERENCES auth.superadmin_accounts(id)
+                ON DELETE SET NULL
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_collections_slug_unique
+        ON content.collections((lower(slug)));
+        CREATE INDEX IF NOT EXISTS idx_collections_public
+        ON content.collections(status, published_at DESC, editorial_weight DESC, id)
+        WHERE status = 'published';
+        CREATE INDEX IF NOT EXISTS idx_collections_location
+        ON content.collections((lower(region)), (lower(city)), status, id);
+        CREATE INDEX IF NOT EXISTS idx_collections_updated
+        ON content.collections(updated_at DESC, id);
+        CREATE INDEX IF NOT EXISTS idx_collections_search_vector
+        ON content.collections USING GIN(search_vector)
+        WHERE status = 'published';
+
+        CREATE TABLE IF NOT EXISTS content.collection_items (
+            id BIGSERIAL PRIMARY KEY,
+            collection_id BIGINT NOT NULL,
+            entity_id INTEGER NOT NULL,
+            position INTEGER NOT NULL,
+            editorial_note TEXT,
+            custom_title TEXT,
+            custom_description TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            CONSTRAINT collection_items_collection_fk
+                FOREIGN KEY (collection_id) REFERENCES content.collections(id)
+                ON DELETE CASCADE,
+            CONSTRAINT collection_items_entity_fk
+                FOREIGN KEY (entity_id) REFERENCES catalog.camps(id)
+                ON DELETE CASCADE,
+            CONSTRAINT collection_items_position_non_negative
+                CHECK (position >= 0),
+            CONSTRAINT collection_items_collection_entity_unique
+                UNIQUE (collection_id, entity_id),
+            CONSTRAINT collection_items_collection_position_unique
+                UNIQUE (collection_id, position)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_collection_items_entity_collection
+        ON content.collection_items(entity_id, collection_id);
+
+        CREATE TABLE IF NOT EXISTS content.collection_rules (
+            id BIGSERIAL PRIMARY KEY,
+            collection_id BIGINT NOT NULL,
+            conditions JSONB NOT NULL DEFAULT '{}'::jsonb,
+            sort TEXT NOT NULL DEFAULT 'editorial',
+            limit_count INTEGER NOT NULL DEFAULT 24,
+            position INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            CONSTRAINT collection_rules_collection_fk
+                FOREIGN KEY (collection_id) REFERENCES content.collections(id)
+                ON DELETE CASCADE,
+            CONSTRAINT collection_rules_conditions_object
+                CHECK (jsonb_typeof(conditions) = 'object'),
+            CONSTRAINT collection_rules_sort_valid
+                CHECK (sort IN ('editorial', 'newest', 'name')),
+            CONSTRAINT collection_rules_limit_range
+                CHECK (limit_count BETWEEN 1 AND 200),
+            CONSTRAINT collection_rules_position_non_negative
+                CHECK (position >= 0),
+            CONSTRAINT collection_rules_collection_position_unique
+                UNIQUE (collection_id, position)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_collection_rules_collection_position
+        ON content.collection_rules(collection_id, position, id);
+        """,
+    ),
 )
 
 CURRENT_MIGRATION_VERSION = MIGRATIONS[-1].version
