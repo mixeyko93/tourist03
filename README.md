@@ -106,6 +106,17 @@ client adapter, site key, SMTP и стабильного `SESSION_SECRET_KEY`; t
 [stage-4-universal-tourism-catalog.md](docs/stage-4-universal-tourism-catalog.md)
 и [entity-schemas.md](docs/entity-schemas.md).
 
+Туристический discovery-контур управляется шестью независимыми флагами:
+`FEATURE_DISCOVERY_SEARCH`, `FEATURE_EDITORIAL_COLLECTIONS`,
+`FEATURE_TOURISM_ROUTES`, `FEATURE_NEARBY_DISCOVERY`,
+`FEATURE_RELATED_ENTITIES` и `FEATURE_LOCAL_RECENT_HISTORY`. Все они по
+умолчанию выключены. Поиск использует PostgreSQL Russian FTS с безопасным
+fallback без обязательного `pg_trgm`; подборки и маршруты индексируются только
+после публикации; точные nearby-координаты не сохраняются. Архитектура и
+порядок включения: [stage-5-tourism-discovery.md](docs/stage-5-tourism-discovery.md),
+[search.md](docs/search.md), [collections.md](docs/collections.md),
+[routes.md](docs/routes.md) и [recommendations.md](docs/recommendations.md).
+
 Заявка создаёт только модерационную запись. После одобрения отдельное действие
 суперадмина создаёт `catalog.camps` с `publication_status=draft`,
 `status=disabled`, без карты и бронирований. Публикация выполняется только

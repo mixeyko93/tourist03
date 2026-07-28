@@ -15,6 +15,7 @@ from tourist03.csrf import issue_csrf_token
 from tourist03.migrations import migration_status
 from tourist03.public_catalog import safe_public_asset_url, validate_slug
 from tourist03.repositories import catalog as catalog_repo
+from tourist03.repositories import discovery as discovery_repo
 
 
 PUBLIC_TEMPLATE_ENV = Environment(
@@ -231,6 +232,13 @@ def public_place_page(request: Request, slug: str):
     if place.get("lat") is not None and place.get("lng") is not None:
         route_url = route_url or f"https://www.openstreetmap.org/?mlat={place['lat']}&mlon={place['lng']}#map=14/{place['lat']}/{place['lng']}"
     updated_label, updated_datetime = format_public_date(place.get("confirmed_at"), place.get("updated_at"))
+    related_items = []
+    if request.app.state.settings.feature_related_entities:
+        related_items = discovery_repo.list_related_entities(
+            slug=normalized_slug,
+            weights=request.app.state.settings.discovery_recommendation_weights,
+            limit=4,
+        ) or []
     template = PUBLIC_TEMPLATE_ENV.get_template("place-detail.html")
     return HTMLResponse(
         template.render(
@@ -248,8 +256,198 @@ def public_place_page(request: Request, slug: str):
             route_url=route_url,
             updated_label=updated_label,
             updated_datetime=updated_datetime,
+            related_items=related_items,
+            local_recent_history=request.app.state.settings.feature_local_recent_history,
         ),
         headers={"Cache-Control": "public, max-age=120"},
+    )
+
+
+def _discovery_page_context(request: Request) -> dict:
+    settings = request.app.state.settings
+    return {
+        "public_base_url": settings.public_base_url.rstrip("/"),
+        "features": settings.public_features,
+        "local_recent_history": settings.feature_local_recent_history,
+    }
+
+
+def public_search_page(request: Request):
+    query = (request.query_params.get("q") or "").strip()[:120]
+    public_base_url = request.app.state.settings.public_base_url.rstrip("/")
+    canonical = f"{public_base_url}/search"
+    template = PUBLIC_TEMPLATE_ENV.get_template("search.html")
+    return HTMLResponse(
+        template.render(
+            **_discovery_page_context(request),
+            query=query,
+            canonical=canonical,
+            title="Поиск мест, услуг и маршрутов — Туристика",
+            description="Ищите места, услуги, подборки и готовые маршруты по России.",
+        ),
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
+def public_collection_page(request: Request, slug: str):
+    try:
+        normalized_slug = validate_slug(slug)
+    except ValueError:
+        normalized_slug = ""
+    collection = (
+        discovery_repo.get_public_collection(normalized_slug)
+        if normalized_slug
+        else None
+    )
+    if not collection:
+        return HTMLResponse(
+            PUBLIC_TEMPLATE_ENV.get_template("discovery-404.html").render(
+                **_discovery_page_context(request),
+                content_type="Подборка",
+            ),
+            status_code=404,
+        )
+    public_base_url = request.app.state.settings.public_base_url.rstrip("/")
+    canonical = f"{public_base_url}/collections/{quote(collection['slug'])}"
+    title = _seo_text(
+        collection.get("seo_title") or f"{collection['title']} — Туристика",
+        fallback=collection["title"],
+        limit=120,
+    )
+    description = _seo_text(
+        collection.get("seo_description") or collection["short_description"],
+        fallback="Редакционная подборка Туристики.",
+        limit=160,
+    )
+    structured_data = {
+        "@context": "https://schema.org",
+        "@type": "ItemList",
+        "name": collection["title"],
+        "description": description,
+        "url": canonical,
+        "itemListElement": [
+            {
+                "@type": "ListItem",
+                "position": index,
+                "name": item["title"],
+                "url": _absolute_public_url(public_base_url, item["href"]),
+            }
+            for index, item in enumerate(collection["items"], start=1)
+        ],
+    }
+    breadcrumbs = {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+            {"@type": "ListItem", "position": 1, "name": "Туристика", "item": f"{public_base_url}/"},
+            {"@type": "ListItem", "position": 2, "name": "Подборки", "item": f"{public_base_url}/search"},
+            {"@type": "ListItem", "position": 3, "name": collection["title"], "item": canonical},
+        ],
+    }
+    return HTMLResponse(
+        PUBLIC_TEMPLATE_ENV.get_template("collection-detail.html").render(
+            **_discovery_page_context(request),
+            collection=collection,
+            canonical=canonical,
+            title=title,
+            description=description,
+            og_image=_absolute_public_url(
+                public_base_url,
+                collection.get("cover") or "/static/brand/turistika-logo-stacked.svg",
+            ),
+            structured_data=structured_data,
+            breadcrumbs_data=breadcrumbs,
+        ),
+        headers={"Cache-Control": "public, max-age=120"},
+    )
+
+
+def public_route_page(request: Request, slug: str):
+    try:
+        normalized_slug = validate_slug(slug)
+    except ValueError:
+        normalized_slug = ""
+    route = discovery_repo.get_public_route(normalized_slug) if normalized_slug else None
+    if not route:
+        return HTMLResponse(
+            PUBLIC_TEMPLATE_ENV.get_template("discovery-404.html").render(
+                **_discovery_page_context(request),
+                content_type="Маршрут",
+            ),
+            status_code=404,
+        )
+    public_base_url = request.app.state.settings.public_base_url.rstrip("/")
+    canonical = f"{public_base_url}/routes/{quote(route['slug'])}"
+    title = _seo_text(
+        route.get("seo_title") or f"{route['title']} — маршрут Туристики",
+        fallback=route["title"],
+        limit=120,
+    )
+    description = _seo_text(
+        route.get("seo_description") or route["short_description"],
+        fallback="Редакционный туристический маршрут.",
+        limit=160,
+    )
+    structured_data = {
+        "@context": "https://schema.org",
+        "@type": "TouristTrip",
+        "name": route["title"],
+        "description": description,
+        "url": canonical,
+        "itinerary": {
+            "@type": "ItemList",
+            "itemListElement": [
+                {
+                    "@type": "ListItem",
+                    "position": index,
+                    "name": point["title"],
+                    **(
+                        {"url": _absolute_public_url(public_base_url, point["href"])}
+                        if point.get("href")
+                        else {}
+                    ),
+                }
+                for index, point in enumerate(route["points"], start=1)
+            ],
+        },
+    }
+    breadcrumbs = {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+            {"@type": "ListItem", "position": 1, "name": "Туристика", "item": f"{public_base_url}/"},
+            {"@type": "ListItem", "position": 2, "name": "Маршруты", "item": f"{public_base_url}/search"},
+            {"@type": "ListItem", "position": 3, "name": route["title"], "item": canonical},
+        ],
+    }
+    return HTMLResponse(
+        PUBLIC_TEMPLATE_ENV.get_template("route-detail.html").render(
+            **_discovery_page_context(request),
+            route=route,
+            canonical=canonical,
+            title=title,
+            description=description,
+            og_image=_absolute_public_url(
+                public_base_url,
+                route.get("cover") or "/static/brand/turistika-logo-stacked.svg",
+            ),
+            structured_data=structured_data,
+            breadcrumbs_data=breadcrumbs,
+        ),
+        headers={"Cache-Control": "public, max-age=120"},
+    )
+
+
+def public_nearby_page(request: Request):
+    public_base_url = request.app.state.settings.public_base_url.rstrip("/")
+    return HTMLResponse(
+        PUBLIC_TEMPLATE_ENV.get_template("nearby.html").render(
+            **_discovery_page_context(request),
+            canonical=f"{public_base_url}/nearby",
+            title="Что находится рядом — Туристика",
+            description="Найдите места, услуги и впечатления рядом с выбранной точкой.",
+        ),
+        headers={"Cache-Control": "no-cache"},
     )
 
 
@@ -397,6 +595,45 @@ def sitemap(request: Request):
         lastmod = updated_at.date().isoformat() if hasattr(updated_at, "date") else ""
         lastmod_line = f"    <lastmod>{lastmod}</lastmod>\n" if lastmod else ""
         entries.append("  <url>\n" f"    <loc>{location}</loc>\n" + lastmod_line + "  </url>\n")
+    settings = request.app.state.settings
+    if settings.feature_editorial_collections:
+        offset = 0
+        while True:
+            page = discovery_repo.list_public_collections(limit=200, offset=offset)
+            for collection in page["items"]:
+                location = escape_html(
+                    f"{public_base_url}/collections/{quote(collection['slug'])}"
+                )
+                updated_at = collection.get("updated_at")
+                lastmod = updated_at.date().isoformat() if hasattr(updated_at, "date") else ""
+                entries.append(
+                    "  <url>\n"
+                    f"    <loc>{location}</loc>\n"
+                    + (f"    <lastmod>{lastmod}</lastmod>\n" if lastmod else "")
+                    + "  </url>\n"
+                )
+            offset += len(page["items"])
+            if not page["items"] or offset >= page["total"]:
+                break
+    if settings.feature_tourism_routes:
+        offset = 0
+        while True:
+            page = discovery_repo.list_public_routes(limit=200, offset=offset)
+            for route in page["items"]:
+                location = escape_html(
+                    f"{public_base_url}/routes/{quote(route['slug'])}"
+                )
+                updated_at = route.get("updated_at")
+                lastmod = updated_at.date().isoformat() if hasattr(updated_at, "date") else ""
+                entries.append(
+                    "  <url>\n"
+                    f"    <loc>{location}</loc>\n"
+                    + (f"    <lastmod>{lastmod}</lastmod>\n" if lastmod else "")
+                    + "  </url>\n"
+                )
+            offset += len(page["items"])
+            if not page["items"] or offset >= page["total"]:
+                break
     content = (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'

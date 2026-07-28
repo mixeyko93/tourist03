@@ -51,6 +51,25 @@ PLACEMENT_SUBMISSION_PUBLIC_PAGES = {
     "/add-place",
     "/submission-status",
 }
+DISCOVERY_SEARCH_PREFIXES = (
+    "/api/public/search",
+    "/api/public/discovery/events",
+    "/search",
+)
+EDITORIAL_COLLECTION_PREFIXES = (
+    "/api/public/collections",
+    "/api/superadmin/collections",
+    "/collections",
+)
+TOURISM_ROUTE_PREFIXES = (
+    "/api/public/routes",
+    "/api/superadmin/routes",
+    "/routes",
+)
+NEARBY_DISCOVERY_PREFIXES = (
+    "/api/public/nearby",
+    "/nearby",
+)
 
 
 class StaticAssetCompressionMiddleware:
@@ -125,6 +144,32 @@ class FeatureGateMiddleware(BaseHTTPMiddleware):
                 )
             )
             blocked = not is_authenticated_preview
+        elif not settings.feature_discovery_search and path.startswith(DISCOVERY_SEARCH_PREFIXES):
+            blocked = True
+        elif not settings.feature_editorial_collections and path.startswith(EDITORIAL_COLLECTION_PREFIXES):
+            blocked = True
+        elif not settings.feature_tourism_routes and path.startswith(TOURISM_ROUTE_PREFIXES):
+            blocked = True
+        elif not settings.feature_nearby_discovery and (
+            path.startswith(NEARBY_DISCOVERY_PREFIXES)
+            or (
+                path.startswith("/api/public/entities/")
+                and path.endswith("/nearby")
+            )
+        ):
+            blocked = True
+        elif not settings.feature_related_entities and (
+            path.startswith("/api/public/entities/")
+            and path.endswith("/related")
+        ):
+            blocked = True
+        elif not (
+            settings.feature_discovery_search
+            or settings.feature_editorial_collections
+            or settings.feature_tourism_routes
+            or settings.feature_nearby_discovery
+        ) and path == "/api/public/discovery/home":
+            blocked = True
         if blocked:
             return JSONResponse({"detail": "Not Found"}, status_code=404)
         return await call_next(request)
@@ -212,7 +257,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return "auth", settings.rate_limit_auth_per_minute
         if path in {"/api/upload", "/api/admin/upload"} and method == "POST":
             return "upload", settings.rate_limit_upload_per_minute
-        if path == "/api/public/entities" and method == "GET":
+        if (
+            path == "/api/public/entities"
+            or path.startswith("/api/public/search")
+            or path.startswith("/api/public/nearby")
+        ) and method == "GET":
             return "public-catalog", settings.rate_limit_public_search_per_minute
         if path.startswith("/api/public/") and method in UNSAFE_METHODS:
             return "public-post", settings.rate_limit_public_post_per_minute

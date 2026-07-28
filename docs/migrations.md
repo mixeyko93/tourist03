@@ -124,3 +124,23 @@ restore. Destructive downgrade отсутствует.
 Taxonomy, registry, attributes и schema snapshots при этом сохраняются.
 Используемые версии схем защищены FK; удалять их или `catalog.entities`
 автоматически запрещено.
+
+## Tourism discovery: 0029–0034
+
+Аддитивная цепочка после `0028_entity_workflows_indexes`:
+
+1. `0029_catalog_tags` — `catalog.tags`, `catalog.entity_tags`;
+2. `0030_discovery_search` — normalized search document/vector и GIN;
+3. `0031_editorial_collections` — collections/items/rules;
+4. `0032_tourism_routes` — routes/points и bounded GeoJSON;
+5. `0033_discovery_indexes` — publication/location/coordinate indexes;
+6. `0034_discovery_metrics` — дневные агрегаты без raw query и координат.
+
+Russian FTS является штатной возможностью PostgreSQL. `pg_trgm` используется
+только если extension уже доступно или может быть безопасно создано; search
+сохраняет deterministic prefix/FTS fallback без него. PostGIS не требуется.
+
+Acceptance выполняет upgrade на чистой временной PostgreSQL, повторный
+upgrade, `check`, readiness, проверку GIN/coordinate indexes и EXPLAIN. В этом
+этапе production migrations не запускаются. Rollback начинается с выключения
+шести discovery flags; additive schema и контент не удаляются.

@@ -298,6 +298,9 @@ export function initialisePublicMap({
   let requestController;
   let searchTimer;
   let inputTimer;
+  const pageParams = new URLSearchParams(window.location.search);
+  const requestedEntitySlug = pageParams.get("entity");
+  let contextSlugs = null;
 
   window.L.control.zoom({ position: "bottomright" }).addTo(map);
   tiles.on("tileerror", () => {
@@ -595,7 +598,8 @@ export function initialisePublicMap({
     try {
       const payload = await fetchAllEntities(queryParameters(), controller.signal);
       entities = asItems(payload);
-      const total = Number(payload?.total ?? entities.length);
+      if (contextSlugs?.size) entities = entities.filter((entity) => contextSlugs.has(String(entity.slug || "")));
+      const total = contextSlugs?.size ? entities.length : Number(payload?.total ?? entities.length);
       if (initialiseFilters) populateFacets(facets, entities);
       renderMarkers(total);
       if (payload.truncated && status) {
@@ -606,6 +610,10 @@ export function initialisePublicMap({
           entities.filter((entity) => markers.has(entityKey(entity))).map((entity) => [entity.lat, entity.lng]),
         );
         if (bounds.isValid()) map.fitBounds(bounds.pad(0.25), { maxZoom: 10, animate: true });
+      }
+      if (requestedEntitySlug) {
+        const requested = entities.find((entity) => String(entity.slug || "") === requestedEntitySlug);
+        if (requested) focusEntity(requested);
       }
     } catch (error) {
       if (error?.name !== "AbortError") {
@@ -619,12 +627,26 @@ export function initialisePublicMap({
   }
 
   async function bootstrap() {
-    const [kindsPayload, typesPayload, facetsPayload, amenitiesPayload] = await Promise.all([
+    const collectionSlug = pageParams.get("collection");
+    const routeSlug = pageParams.get("route");
+    const contextPromise = collectionSlug
+      ? optionalJson(`/api/public/collections/${encodeURIComponent(collectionSlug)}`)
+      : routeSlug
+        ? optionalJson(`/api/public/routes/${encodeURIComponent(routeSlug)}`)
+        : Promise.resolve(null);
+    const [kindsPayload, typesPayload, facetsPayload, amenitiesPayload, contextPayload] = await Promise.all([
       optionalJson("/api/public/entity-kinds"),
       optionalJson("/api/public/entity-types"),
       optionalJson("/api/public/catalog-facets"),
       optionalJson("/api/public/amenities"),
+      contextPromise,
     ]);
+    if (contextPayload) {
+      const slugs = collectionSlug
+        ? (contextPayload.items || []).filter((item) => item.source === "entity").map((item) => item.slug)
+        : (contextPayload.points || []).map((point) => point.entity_slug);
+      contextSlugs = new Set(slugs.filter(Boolean).map(String));
+    }
     const kinds = asItems(kindsPayload);
     entityTypes = asItems(typesPayload);
     if (!entityTypes.length) entityTypes = asItems(await optionalJson("/api/public/place-types"));
