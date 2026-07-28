@@ -55,3 +55,19 @@ Schema.org выбирается из allowlist:
 Regression tests проверяют canonical, breadcrumb, JSON-LD type, sitemap,
 escaping и отсутствие внутренних полей для accommodation, service и
 excursion.
+
+## Discovery pages
+
+- `/search` и `/nearby` всегда используют `noindex,follow`; произвольные
+  query/facet-комбинации не создают индексируемые страницы.
+- `/collections/{slug}` и `/routes/{slug}` индексируются только при
+  `status=published`.
+- Published collection получает canonical, Open Graph, `BreadcrumbList` и
+  `ItemList`; published route дополнительно использует `TouristTrip`.
+- Sitemap включает только опубликованные collection/route URL и фактический
+  `updated_at` как `lastmod`.
+- Canonical строится из `PUBLIC_BASE_URL`, а не из входного `Host`.
+
+Архивирование или выключение материала удаляет его из sitemap и публичного
+projection без удаления самой записи. Search state остаётся shareable обычной
+компактной ссылкой, но не становится SEO-страницей.

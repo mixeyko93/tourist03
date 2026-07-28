@@ -63,6 +63,26 @@ Test CAPTCHA token запрещён в production и не переносится
 Для rollback сначала выключить Change Requests, затем Owner Portal. Не удалять
 owner schema, staged media, audit и outbox.
 
+## Enablement tourism discovery
+
+1. Оставить все шесть `FEATURE_*DISCOVERY*`/collection/route/related/history
+   флагов выключенными на время upgrade.
+2. Проверить migration chain до `0034_discovery_metrics`, readiness и наличие
+   Russian FTS. Отсутствие `pg_trgm` не блокирует запуск.
+3. В preview включить поиск, затем collections/routes, nearby/related и
+   локальную историю. Проверить published-only projection, sitemap и 404 для
+   draft/archived content.
+4. Проверить artifact `tourism-discovery-review`: desktop/mobile Lighthouse,
+   initial gzip, API timings, map-first screenshots и Superadmin editors.
+5. Проверить, что analytics не принимает raw query/coordinates, а nearby
+   разрешение имеет понятный отказ и ручной fallback.
+6. После продуктовой приёмки включать флаги согласованно. Контентные флаги не
+   включать до публикации минимум одной валидной подборки/маршрута.
+
+Быстрый rollback — выключить discovery flags. Не удалять content/catalog
+таблицы, route points, теги или агрегаты и не откатывать migration destructive
+операциями.
+
 ## Catalog backfill gate
 
 После `0017_catalog_amenities` и до открытия трафика проверки должны вернуть нули:

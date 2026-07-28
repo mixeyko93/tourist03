@@ -70,3 +70,40 @@ superadmin session и CSRF для unsafe-методов. Архив — сост
 - неизвестные schema fields отклоняются;
 - URL contacts/video проходят отдельные allowlists;
 - response ordering детерминирован, limit не бывает неограниченным.
+
+## Tourism discovery
+
+Discovery endpoints появляются только при соответствующих feature flags:
+
+```text
+GET  /api/public/search
+GET  /api/public/search/suggestions
+GET  /api/public/search/popular
+GET  /api/public/collections
+GET  /api/public/collections/{slug}
+GET  /api/public/routes
+GET  /api/public/routes/{slug}
+GET  /api/public/nearby
+GET  /api/public/entities/{slug}/nearby
+GET  /api/public/entities/{slug}/related
+GET  /api/public/discovery/home
+POST /api/public/discovery/events
+```
+
+`search` принимает `q`, `source`, `entity_kind`, `type`/`subtype`, `region`,
+`district`, `city`, `tag`, `amenity`, `season`, `difficulty`, `duration_max`,
+`audience`, `sort`, `page` и ограниченный `limit`. Пустой `q` разрешён только
+как browse-сценарий опубликованных подборок или маршрутов через `source`.
+Фильтры применяются до pagination в PostgreSQL; frontend не корректирует
+`total` локальной фильтрацией.
+
+Nearby принимает валидные `lat`, `lng`, радиус из allowlist
+`5/10/25/50/100` и лёгкие type-фильтры. Координаты используются только для
+текущего запроса и не входят в analytics. Event endpoint принимает только
+allowlisted агрегируемые типы и никогда не принимает raw query, IP или
+координаты.
+
+Superadmin CRUD доступен по `/api/superadmin/collections*` и
+`/api/superadmin/routes*`, требует session/CSRF и использует
+`content_version` для optimistic locking. Draft/disabled/archived записи
+публично отвечают как отсутствующие.
