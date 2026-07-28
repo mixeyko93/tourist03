@@ -105,6 +105,7 @@ class Settings(BaseSettings):
     rate_limit_login_per_minute: int = 10
     rate_limit_upload_per_minute: int = 20
     rate_limit_public_post_per_minute: int = 20
+    rate_limit_public_search_per_minute: int = 240
     csrf_legacy_compatibility: bool = False
 
     feature_public_booking: bool = False

@@ -7,10 +7,12 @@ import { crmPath } from "../../paths";
 import { AdminCard } from "../components/AdminCard";
 import { AdminStatusBadge } from "../components/AdminStatusBadge";
 import {
+  bulkUpdateSuperadminEntities,
   fetchCatalogDictionaries,
-  fetchSuperadminBases,
+  fetchSuperadminEntities,
   fetchSuperadminEvents,
   type SuperadminBaseSummary,
+  type SuperadminEntityKind,
   type SuperadminPlaceType,
   type SuperadminSystemEvent,
 } from "../session";
@@ -65,10 +67,15 @@ export default function AdminBasesPage() {
   const [items, setItems] = useState<SuperadminBaseSummary[]>([]);
   const [events, setEvents] = useState<SuperadminSystemEvent[]>([]);
   const [search, setSearch] = useState("");
-  const [placeType, setPlaceType] = useState("");
+  const [entityKind, setEntityKind] = useState("");
+  const [subtype, setSubtype] = useState("");
   const [publicationStatus, setPublicationStatus] = useState("");
+  const [entityKinds, setEntityKinds] = useState<SuperadminEntityKind[]>([]);
   const [placeTypes, setPlaceTypes] = useState<SuperadminPlaceType[]>([]);
-  const [quickMode, setQuickMode] = useState<"all" | "active" | "rooms">("all");
+  const [quickMode, setQuickMode] = useState<"all" | "active" | "published">("all");
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
+  const [bulkStatus, setBulkStatus] = useState<"draft" | "disabled" | "published" | "archived">("published");
+  const [isBulkSaving, setIsBulkSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
@@ -79,7 +86,7 @@ export default function AdminBasesPage() {
     setErrorMessage("");
 
     Promise.all([
-      fetchSuperadminBases({ search, placeType, publicationStatus, signal: controller.signal }),
+      fetchSuperadminEntities({ search, entityKind, subtype, publicationStatus, signal: controller.signal }),
       fetchSuperadminEvents({ limit: 6, signal: controller.signal }),
       fetchCatalogDictionaries(controller.signal),
     ])
@@ -87,6 +94,8 @@ export default function AdminBasesPage() {
         setItems(bases);
         setEvents(systemEvents);
         setPlaceTypes(dictionaries.placeTypes);
+        setEntityKinds(dictionaries.entityKinds);
+        setSelectedIds(new Set());
       })
       .catch((error: unknown) => {
         if (controller.signal.aborted) {
@@ -103,7 +112,7 @@ export default function AdminBasesPage() {
       });
 
     return () => controller.abort();
-  }, [reloadKey, search, placeType, publicationStatus]);
+  }, [reloadKey, search, entityKind, subtype, publicationStatus]);
 
   const summary = useMemo(() => {
     return items.reduce(
@@ -112,10 +121,10 @@ export default function AdminBasesPage() {
         accumulator.total += 1;
         if (status === "active") accumulator.active += 1;
         if (status === "disabled") accumulator.disabled += 1;
-        accumulator.rooms += Number(item.rooms_count || 0);
+        if (item.publication_status === "published") accumulator.published += 1;
         return accumulator;
       },
-      { total: 0, active: 0, disabled: 0, rooms: 0 },
+      { total: 0, active: 0, disabled: 0, published: 0 },
     );
   }, [items]);
   const visibleItems = useMemo(() => {
@@ -123,11 +132,39 @@ export default function AdminBasesPage() {
     if (quickMode === "active") {
       return next.filter((item) => (item.status || "").toLowerCase() === "active");
     }
-    if (quickMode === "rooms") {
-      return next.sort((left, right) => Number(right.rooms_count || 0) - Number(left.rooms_count || 0));
+    if (quickMode === "published") {
+      return next.filter((item) => item.publication_status === "published");
     }
     return next;
   }, [items, quickMode]);
+  const visibleIds = visibleItems.map((item) => item.id);
+  const allVisibleSelected = Boolean(visibleIds.length) && visibleIds.every((id) => selectedIds.has(id));
+  const filteredPlaceTypes = placeTypes.filter((type) => !entityKind || type.entity_kind === entityKind);
+
+  function toggleEntity(entityId: number) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(entityId)) next.delete(entityId);
+      else next.add(entityId);
+      return next;
+    });
+  }
+
+  async function applyBulkStatus() {
+    if (!selectedIds.size) return;
+    if (!window.confirm(`Изменить статус ${selectedIds.size} карточек?`)) return;
+    try {
+      setIsBulkSaving(true);
+      setErrorMessage("");
+      await bulkUpdateSuperadminEntities([...selectedIds], bulkStatus);
+      setSelectedIds(new Set());
+      setReloadKey((value) => value + 1);
+    } catch (error: unknown) {
+      setErrorMessage(error instanceof Error ? error.message : "Не удалось изменить карточки");
+    } finally {
+      setIsBulkSaving(false);
+    }
+  }
 
   const { isPageVisible } = usePageLoadState(isLoading);
 
@@ -137,10 +174,10 @@ export default function AdminBasesPage() {
         <div className="flex flex-col gap-4 border-b border-border px-5 py-5 sm:px-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Справочник баз</p>
-              <h2 className="text-2xl font-semibold tracking-[-0.04em] text-foreground">Базы отдыха и номерной фонд</h2>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Универсальный каталог</p>
+              <h2 className="text-2xl font-semibold tracking-[-0.04em] text-foreground">Карточки</h2>
               <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
-                Живая витрина объектов с реальными статусами, координатами, ценами и последними сигналами из CRM.
+                Объекты размещения, услуги и активности с едиными статусами, поиском и модерацией.
               </p>
             </div>
 
@@ -149,27 +186,41 @@ export default function AdminBasesPage() {
                 <RefreshCcw className="h-4 w-4" />
                 Обновить
               </button>
-              <button type="button" className="admin-primary-button w-full gap-2 sm:w-auto" onClick={() => navigate(crmPath("/admin/bases/new"))}>
+              <button type="button" className="admin-primary-button w-full gap-2 sm:w-auto" onClick={() => navigate(crmPath("/admin/entities/new"))}>
                 <Plus className="h-4 w-4" />
-                Добавить базу
+                Добавить карточку
               </button>
             </div>
           </div>
 
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_repeat(2,minmax(180px,220px))]">
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_repeat(3,minmax(170px,220px))]">
             <label className="relative">
               <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 className="admin-input pl-10"
-                placeholder="Поиск по базе, озеру, владельцу или адресу"
+                aria-label="Поиск по каталогу"
+                placeholder="Поиск по названию, адресу или владельцу"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
               />
             </label>
 
-            <select className="admin-input" value={placeType} onChange={(event) => setPlaceType(event.target.value)} aria-label="Тип объекта">
-              <option value="">Все типы</option>
-              {placeTypes.map((type) => <option key={type.id} value={type.slug}>{type.name}</option>)}
+            <select
+              className="admin-input"
+              value={entityKind}
+              onChange={(event) => {
+                setEntityKind(event.target.value);
+                setSubtype("");
+              }}
+              aria-label="Категория карточки"
+            >
+              <option value="">Все категории</option>
+              {entityKinds.map((kind) => <option key={kind.id} value={kind.key}>{kind.name}</option>)}
+            </select>
+
+            <select className="admin-input" value={subtype} onChange={(event) => setSubtype(event.target.value)} aria-label="Подтип карточки">
+              <option value="">Все подтипы</option>
+              {filteredPlaceTypes.map((type) => <option key={type.id} value={type.slug}>{type.name}</option>)}
             </select>
 
             <select className="admin-input" value={publicationStatus} onChange={(event) => setPublicationStatus(event.target.value)} aria-label="Статус публикации">
@@ -182,9 +233,9 @@ export default function AdminBasesPage() {
           <div className="grid gap-3 sm:grid-cols-3">
 
             {[
-              { label: "Всего баз", value: summary.total, key: "all" as const },
+              { label: "Всего карточек", value: summary.total, key: "all" as const },
               { label: "Активных", value: summary.active, key: "active" as const },
-              { label: "Апартаментов", value: summary.rooms, key: "rooms" as const },
+              { label: "Опубликовано", value: summary.published, key: "published" as const },
             ].map((item) => (
               <button
                 key={item.label}
@@ -199,6 +250,29 @@ export default function AdminBasesPage() {
               </button>
             ))}
           </div>
+
+          <div className="flex flex-col gap-3 rounded-2xl border border-border bg-background/65 p-4 sm:flex-row sm:items-center">
+            <span className="text-sm text-muted-foreground">Выбрано: <b className="text-foreground">{selectedIds.size}</b></span>
+            <select
+              className="admin-input sm:ml-auto sm:max-w-56"
+              aria-label="Новый статус выбранных карточек"
+              value={bulkStatus}
+              onChange={(event) => setBulkStatus(event.target.value as typeof bulkStatus)}
+            >
+              <option value="published">Опубликовать</option>
+              <option value="draft">Сделать черновиками</option>
+              <option value="disabled">Скрыть</option>
+              <option value="archived">Архивировать</option>
+            </select>
+            <button
+              type="button"
+              className="admin-primary-button"
+              disabled={!selectedIds.size || isBulkSaving}
+              onClick={() => void applyBulkStatus()}
+            >
+              {isBulkSaving ? "Применяем…" : "Применить"}
+            </button>
+          </div>
         </div>
 
         {errorMessage ? (
@@ -209,11 +283,29 @@ export default function AdminBasesPage() {
           <table className="admin-table min-w-[1440px]">
             <thead>
               <tr>
+                <th>
+                  <input
+                    type="checkbox"
+                    aria-label="Выбрать все карточки на странице"
+                    checked={allVisibleSelected}
+                    onChange={() => {
+                      setSelectedIds((current) => {
+                        const next = new Set(current);
+                        visibleIds.forEach((id) => {
+                          if (allVisibleSelected) next.delete(id);
+                          else next.add(id);
+                        });
+                        return next;
+                      });
+                    }}
+                  />
+                </th>
                 <th>Статус</th>
                 <th>ID</th>
                 <th>Название</th>
                 <th>Slug</th>
-                <th>Тип</th>
+                <th>Категория</th>
+                <th>Подтип</th>
                 <th>Публикация</th>
                 <th>Озеро</th>
                 <th>Координаты</th>
@@ -227,7 +319,7 @@ export default function AdminBasesPage() {
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={13}>Загружаем объекты…</td>
+                  <td colSpan={15}>Загружаем карточки…</td>
                 </tr>
               ) : visibleItems.length ? (
                 visibleItems.map((base) => {
@@ -236,11 +328,20 @@ export default function AdminBasesPage() {
                   return (
                     <tr key={base.id}>
                       <td>
+                        <input
+                          type="checkbox"
+                          aria-label={`Выбрать карточку ${base.name || `#${base.id}`}`}
+                          checked={selectedIds.has(base.id)}
+                          onChange={() => toggleEntity(base.id)}
+                        />
+                      </td>
+                      <td>
                         <AdminStatusBadge tone={statusTones[statusKey] || "neutral"}>{formatStatus(base.status)}</AdminStatusBadge>
                       </td>
                       <td className="text-muted-foreground">#{base.id}</td>
                       <td className="crm-copy-safe font-medium text-foreground">{base.name || "Без названия"}</td>
                       <td className="crm-copy-safe text-muted-foreground">{base.slug || "—"}</td>
+                      <td>{base.entity_kind_name || base.entity_kind || "—"}</td>
                       <td>{base.place_type_name || "—"}</td>
                       <td>
                         <AdminStatusBadge tone={base.publication_status === "published" ? "success" : base.publication_status === "in_review" ? "warning" : "neutral"}>
@@ -271,7 +372,7 @@ export default function AdminBasesPage() {
                       </td>
                       <td className="font-medium text-foreground">{formatCurrency(base.min_price)}</td>
                       <td className="text-right">
-                        <button type="button" className="admin-button gap-2" onClick={() => navigate(crmPath(`/admin/bases/${base.id}`))}>
+                        <button type="button" className="admin-button gap-2" onClick={() => navigate(crmPath(`/admin/entities/${base.id}`))}>
                           <PencilLine className="h-4 w-4" />
                           Редактировать
                         </button>
@@ -281,7 +382,7 @@ export default function AdminBasesPage() {
                 })
               ) : (
                 <tr>
-                  <td colSpan={13}>По текущим фильтрам объекты не найдены.</td>
+                  <td colSpan={15}>По текущим фильтрам карточки не найдены.</td>
                 </tr>
               )}
             </tbody>

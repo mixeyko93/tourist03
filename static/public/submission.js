@@ -14,6 +14,11 @@ const photoInput = document.querySelector("[data-photo-input]");
 const uploadZone = document.querySelector("[data-upload-zone]");
 const uploadList = document.querySelector("[data-upload-list]");
 const roomsNode = document.querySelector("[data-rooms]");
+const accommodationRoomsNode = document.querySelector("[data-accommodation-rooms]");
+const nonAccommodationNote = document.querySelector("[data-non-accommodation-note]");
+const addRoomButton = document.querySelector("[data-add-room]");
+const entityFieldsNode = document.querySelector("[data-entity-fields]");
+const schemaFieldsNode = document.querySelector("[data-schema-fields]");
 const successNode = document.querySelector("[data-success]");
 let database;
 let currentStep = 1;
@@ -28,6 +33,7 @@ let syncChain = Promise.resolve();
 let dirty = false;
 let uploading = 0;
 let submitIdempotencyKey = crypto.randomUUID();
+let restoredNamedValues = {};
 
 function openDatabase() {
   return new Promise((resolve, reject) => {
@@ -132,7 +138,48 @@ function collectPublicContacts() {
     .filter((item) => item.value);
 }
 
+function selectedEntityType() {
+  const placeTypeId = nullableNumber("place_type_id");
+  return config?.place_types?.find((item) => Number(item.id) === Number(placeTypeId)) || null;
+}
+
+function selectedEntityKind() {
+  return String(selectedEntityType()?.entity_kind || "accommodation").trim().toLowerCase();
+}
+
+function collectEntityAttributes() {
+  const attributes = {};
+  schemaFieldsNode?.querySelectorAll("[data-entity-attribute]").forEach((input) => {
+    const key = input.dataset.entityAttribute;
+    const kind = input.dataset.attributeType || "string";
+    if (!key) return;
+    if (kind === "boolean") {
+      attributes[key] = Boolean(input.checked);
+      return;
+    }
+    const raw = String(input.value || "").trim();
+    if (!raw) return;
+    if (kind === "integer" || kind === "number") {
+      const value = Number(raw);
+      if (Number.isFinite(value)) attributes[key] = value;
+      return;
+    }
+    if (kind === "string_list") {
+      attributes[key] = raw.split(/[,\n]/).map((value) => value.trim()).filter(Boolean);
+      return;
+    }
+    if (kind === "enum" && Array.isArray(input.catalogOptions)) {
+      const value = input.catalogOptions.find((option) => String(option) === raw);
+      if (value !== undefined) attributes[key] = value;
+      return;
+    }
+    attributes[key] = raw;
+  });
+  return attributes;
+}
+
 function collectRooms() {
+  if (selectedEntityKind() !== "accommodation") return [];
   return Array.from(roomsNode.querySelectorAll("[data-room]")).map((roomNode) => {
     const value = (field) => roomNode.querySelector(`[data-room-field="${field}"]`)?.value?.trim() || "";
     const number = (field) => Number(value(field) || 0);
@@ -186,7 +233,7 @@ function collectPayload() {
     amenities: Array.from(document.querySelectorAll("[data-amenity]:checked")).map((input) => Number(input.value)),
     rooms_payload: collectRooms(),
     video_urls: inputValue("video_urls_text").split(/\r?\n/).map((value) => value.trim()).filter(Boolean),
-    extra_data: {},
+    extra_data: collectEntityAttributes(),
     consents: {
       publication: Boolean(form.elements.consent_publication?.checked),
       privacy: Boolean(form.elements.consent_privacy?.checked),
@@ -261,6 +308,7 @@ function scheduleServerSync() {
 }
 
 function restoreNamedValues(saved) {
+  restoredNamedValues = { ...(saved.named || {}) };
   Object.entries(saved.named || {}).forEach(([name, value]) => {
     const input = form.elements[name];
     if (!input) return;
@@ -360,10 +408,112 @@ function validateStep(step) {
 
 function renderPlaceTypes(types) {
   const select = document.querySelector("[data-place-types]");
-  const previous = select.value;
+  const previous = select.value || String(restoredNamedValues.place_type_id || "");
   select.replaceChildren(new Option("Выберите тип", ""));
-  types.forEach((item) => select.add(new Option(item.name, String(item.id))));
+  const kindLabels = new Map(
+    (config?.entity_kinds || []).map((kind) => [
+      String(kind.key || kind.slug || ""),
+      kind.plural_name || kind.name,
+    ]),
+  );
+  const groups = new Map();
+  types.forEach((item) => {
+    const kind = String(item.entity_kind || "accommodation");
+    if (!groups.has(kind)) groups.set(kind, []);
+    groups.get(kind).push(item);
+  });
+  groups.forEach((items, kind) => {
+    const parent = kindLabels.size
+      ? Object.assign(document.createElement("optgroup"), { label: kindLabels.get(kind) || "Другое" })
+      : select;
+    items.forEach((item) => {
+      const option = new Option(item.name, String(item.id));
+      option.dataset.entityKind = kind;
+      option.dataset.schemaKey = item.schema_key || "";
+      option.dataset.schemaVersion = String(item.schema_version || 1);
+      parent.append(option);
+    });
+    if (parent !== select) select.append(parent);
+  });
   if (previous) select.value = previous;
+}
+
+function selectedEntitySchema() {
+  const type = selectedEntityType();
+  if (!type) return null;
+  return (config?.entity_schemas || []).find((schema) => (
+    String(schema.key || schema.schema_key || "") === String(type.schema_key || "")
+    && Number(schema.version || 1) === Number(type.schema_version || 1)
+  )) || null;
+}
+
+function renderEntityFields() {
+  if (!schemaFieldsNode || !entityFieldsNode) return;
+  const previous = collectEntityAttributes();
+  const schema = selectedEntitySchema();
+  const fields = Array.isArray(schema?.fields) ? schema.fields : [];
+  schemaFieldsNode.replaceChildren();
+  fields.forEach((field) => {
+    if (!field || field.public === false || !field.key) return;
+    const type = String(field.type || "string");
+    const name = `attribute__${field.key}`;
+    const savedValue = previous[field.key] ?? restoredNamedValues[name];
+    const label = document.createElement("label");
+    let input;
+    if (type === "boolean") {
+      label.className = "submission-attribute-boolean submission-field--wide";
+      input = document.createElement("input");
+      input.type = "checkbox";
+      input.checked = Boolean(savedValue);
+      label.append(input, document.createTextNode(field.label || field.key));
+    } else {
+      label.className = "submission-field";
+      label.append(document.createTextNode(`${field.label || field.key}${field.unit ? `, ${field.unit}` : ""}`));
+      if (type === "enum") {
+        input = document.createElement("select");
+        input.append(new Option("Выберите", ""));
+        (field.options || []).forEach((option) => input.add(new Option(String(option), String(option))));
+        input.catalogOptions = field.options || [];
+      } else if (type === "string_list") {
+        input = document.createElement("textarea");
+        input.rows = 3;
+        input.placeholder = "По одному значению в строке";
+      } else {
+        input = document.createElement("input");
+        input.type = type === "integer" || type === "number" ? "number" : "text";
+        if (type === "number") input.step = "any";
+        if (field.min !== undefined) input.min = String(field.min);
+        if (field.max !== undefined) input.max = String(field.max);
+        if (field.max_length) input.maxLength = Number(field.max_length);
+      }
+      if (savedValue !== undefined && savedValue !== null) {
+        input.value = Array.isArray(savedValue) ? savedValue.join("\n") : String(savedValue);
+      }
+      label.append(input);
+    }
+    input.name = name;
+    input.dataset.entityAttribute = field.key;
+    input.dataset.attributeType = type;
+    if (field.required) input.required = true;
+    schemaFieldsNode.append(label);
+  });
+  entityFieldsNode.hidden = schemaFieldsNode.childElementCount === 0;
+}
+
+function updateEntityTypeUI({ discardIncompatible = false } = {}) {
+  const accommodation = selectedEntityKind() === "accommodation";
+  if (accommodationRoomsNode) accommodationRoomsNode.hidden = !accommodation;
+  if (nonAccommodationNote) nonAccommodationNote.hidden = accommodation;
+  if (!accommodation && discardIncompatible) {
+    roomItems = [];
+    roomsNode.replaceChildren();
+    mediaItems.filter((item) => item.scope === "room").forEach((item) => {
+      void deleteMedia(item.id);
+    });
+  } else if (accommodation) {
+    renderRooms();
+  }
+  renderEntityFields();
 }
 
 function renderAmenities(amenities) {
@@ -607,6 +757,7 @@ function syncCoordinateMarkerFromInputs() {
 function renderPreview() {
   const payload = collectPayload();
   const type = config?.place_types?.find((item) => Number(item.id) === Number(payload.place_type_id));
+  const accommodation = selectedEntityKind() === "accommodation";
   const preview = document.querySelector("[data-preview]");
   preview.replaceChildren();
   const sections = [
@@ -615,7 +766,11 @@ function renderPreview() {
     ["Описание", payload.short_description || "Не указано", payload.description || ""],
     ["Публичные контакты", `${payload.public_contacts.length} контактов`, "Контакты заявителя хранятся отдельно"],
     ["Характеристики", `${payload.amenities.length} удобств`, payload.min_price !== null ? `от ${payload.min_price.toLocaleString("ru-RU")} ₽` : "Цена не указана"],
-    ["Размещение и медиа", `${payload.rooms_payload.length} вариантов`, `${mediaItems.length} фотографий · ${payload.video_urls.length} видео-ссылок`],
+    [
+      accommodation ? "Размещение и медиа" : "Медиа",
+      accommodation ? `${payload.rooms_payload.length} вариантов` : `${Object.keys(payload.extra_data).length} дополнительных полей`,
+      `${mediaItems.length} фотографий · ${payload.video_urls.length} видео-ссылок`,
+    ],
   ];
   sections.forEach(([label, title, text]) => {
     const article = document.createElement("article");
@@ -724,10 +879,13 @@ form.addEventListener("input", (event) => {
 });
 form.addEventListener("change", scheduleSave);
 form.addEventListener("submit", submitForm);
+document.querySelector("[data-place-types]")?.addEventListener("change", () => {
+  updateEntityTypeUI({ discardIncompatible: true });
+});
 nextButton.addEventListener("click", () => { if (validateStep(currentStep)) showStep(currentStep + 1); });
 previousButton.addEventListener("click", () => showStep(currentStep - 1));
 document.querySelector("[data-clear-draft]").addEventListener("click", () => void clearDraft());
-document.querySelector("[data-add-room]").addEventListener("click", () => {
+addRoomButton?.addEventListener("click", () => {
   roomItems = collectRooms();
   roomItems.push({ client_id:makeRoomId(), floors:1, floor:1 });
   renderRooms();
@@ -759,6 +917,9 @@ async function initialise() {
     config = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(config.detail || "Форма временно недоступна");
     renderPlaceTypes(config.place_types || []);
+    if (saved?.formatVersion === 1) restoreNamedValues(saved);
+    updateEntityTypeUI({ discardIncompatible: true });
+    restoredNamedValues = {};
     renderAmenities(config.amenities || []);
     if (saved?.formatVersion === 1) {
       restoreAmenities(saved);

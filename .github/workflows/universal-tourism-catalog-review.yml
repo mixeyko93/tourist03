@@ -1,0 +1,50 @@
+name: Universal tourism catalog review
+
+"on":
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: universal-tourism-catalog-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  universal-tourism-catalog-review:
+    if: github.head_ref == 'feature/universal-tourism-catalog'
+    name: Capture universal tourism catalog review
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python -m playwright install --with-deps chromium
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run test:unit
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+      - name: Capture screenshots, Lighthouse and bundle report
+        env:
+          UNIVERSAL_CATALOG_REVIEW_DIR: artifacts/universal-tourism-catalog-review
+        run: python scripts/capture_universal_catalog_review.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: universal-tourism-catalog-review
+          path: artifacts/universal-tourism-catalog-review
+          if-no-files-found: error
+          retention-days: 14

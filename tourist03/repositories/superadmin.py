@@ -1,5 +1,5 @@
 import json
-from typing import Optional
+from typing import Iterable, Optional
 
 from tourist03.db import _db_conn
 from tourist03.domain import crm as crm_domain
@@ -85,6 +85,7 @@ def list_camps(
     search: Optional[str] = None,
     status: Optional[str] = None,
     place_type: Optional[str] = None,
+    entity_kind: Optional[str] = None,
     publication_status: Optional[str] = None,
 ):
     conditions = []
@@ -105,6 +106,11 @@ def list_camps(
         conditions.append("lower(pt.slug) = %s")
         params.append(normalized_place_type)
 
+    normalized_entity_kind = (entity_kind or "").strip().lower()
+    if normalized_entity_kind:
+        conditions.append("lower(ek.slug) = %s")
+        params.append(normalized_entity_kind)
+
     normalized_publication_status = (publication_status or "").strip().lower()
     if normalized_publication_status:
         conditions.append("c.publication_status = %s")
@@ -117,14 +123,23 @@ def list_camps(
             """
             (
                 COALESCE(c.name, '') ILIKE %s OR
+                COALESCE(c.slug, '') ILIKE %s OR
+                COALESCE(c.short_description, '') ILIKE %s OR
+                COALESCE(c.description, '') ILIKE %s OR
                 COALESCE(c.lake_name, '') ILIKE %s OR
                 COALESCE(c.address, '') ILIKE %s OR
+                COALESCE(c.region, '') ILIKE %s OR
+                COALESCE(c.district, '') ILIKE %s OR
+                COALESCE(c.city, '') ILIKE %s OR
                 COALESCE(c.owner, '') ILIKE %s OR
-                COALESCE(c.manager, '') ILIKE %s
+                COALESCE(c.manager, '') ILIKE %s OR
+                COALESCE(pt.name, '') ILIKE %s OR
+                COALESCE(ek.name, '') ILIKE %s OR
+                COALESCE(c.attributes, '{}'::jsonb)::text ILIKE %s
             )
             """
         )
-        params.extend([pattern, pattern, pattern, pattern, pattern])
+        params.extend([pattern] * 14)
 
     where_sql = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
@@ -152,6 +167,12 @@ def list_camps(
                 pt.id AS place_type_id,
                 pt.slug AS place_type_slug,
                 pt.name AS place_type_name,
+                ek.slug AS entity_kind,
+                ek.name AS entity_kind_name,
+                c.schema_key,
+                c.schema_version,
+                c.visibility,
+                c.price_mode,
                 COALESCE(
                     json_agg(
                         json_build_object(
@@ -166,6 +187,7 @@ def list_camps(
                 ) AS linked_admins
             FROM catalog.camps c
             JOIN catalog.place_types pt ON pt.id = c.place_type_id
+            JOIN catalog.entity_kinds ek ON ek.id = pt.entity_kind_id
             LEFT JOIN (
                 SELECT
                     camp_id,
@@ -177,7 +199,7 @@ def list_camps(
             LEFT JOIN crm.camp_admin_links l ON l.camp_id = c.id
             LEFT JOIN auth.camp_admin_accounts a ON a.id = l.admin_id
             {where_sql}
-            GROUP BY c.id, pt.id, room_stats.rooms_count, room_stats.beds_count
+            GROUP BY c.id, pt.id, ek.id, room_stats.rooms_count, room_stats.beds_count
             ORDER BY c.archived_at DESC NULLS LAST, c.id DESC
             """,
             tuple(params),
@@ -204,7 +226,9 @@ def get_camp_editor_context(camp_id: int):
     photos = catalog_repo.list_camp_photos(camp_id)
     media = catalog_repo.list_camp_media(camp_id)
     room_context = catalog_repo.get_camp_room_listing_context(camp_id)
-    place_types = catalog_repo.list_place_types(include_inactive=True)
+    place_types = catalog_repo.list_entity_types(include_inactive=True)
+    entity_kinds = catalog_repo.list_entity_kinds(include_inactive=True)
+    entity_schemas = catalog_repo.list_entity_schemas(include_inactive=True)
     amenities = catalog_repo.list_amenities(include_inactive=True)
     contacts = catalog_repo.list_place_contacts(camp_id)
     selected_amenities = catalog_repo.list_camp_amenities(camp_id)
@@ -238,10 +262,54 @@ def get_camp_editor_context(camp_id: int):
         "rooms": rooms,
         "linked_accounts": linked_accounts,
         "place_types": place_types,
+        "entity_types": place_types,
+        "entity_kinds": entity_kinds,
+        "entity_schemas": entity_schemas,
         "amenities": amenities,
         "contacts": contacts,
         "selected_amenities": selected_amenities,
     }
+
+
+def bulk_update_entities(entity_ids: Iterable[int], publication_status: str) -> list[dict]:
+    normalized_ids = sorted({int(entity_id) for entity_id in entity_ids if int(entity_id) > 0})
+    if not normalized_ids:
+        return []
+    status = str(publication_status or "").strip().lower()
+    assignments = {
+        "draft": "publication_status = 'draft', status = 'disabled', archived_at = NULL",
+        "disabled": "publication_status = 'disabled', status = 'disabled', archived_at = NULL",
+        "published": (
+            "publication_status = 'published', status = 'active', archived_at = NULL, "
+            "visibility = CASE WHEN visibility = 'hidden' THEN 'public' ELSE visibility END, "
+            "is_visible_on_map = (lat IS NOT NULL AND lng IS NOT NULL), "
+            "published_at = COALESCE(published_at, NOW())"
+        ),
+        "archived": "publication_status = 'archived', status = 'archived', archived_at = NOW()",
+    }
+    if status not in assignments:
+        raise ValueError("Недоступный статус карточки")
+    with _db_conn("catalog") as conn:
+        cur = conn.cursor()
+        if status == "published":
+            catalog_repo.ensure_entities_ready_for_publication(
+                cur,
+                normalized_ids,
+                block_owner_storage_drafts=True,
+                skip_already_published=True,
+            )
+        cur.execute(
+            f"""
+            UPDATE catalog.camps
+            SET {assignments[status]}
+            WHERE id = ANY(%s)
+            RETURNING id, name, slug, publication_status, status, archived_at
+            """,
+            (normalized_ids,),
+        )
+        rows = [dict(row) for row in cur.fetchall()]
+        conn.commit()
+        return rows
 
 
 def list_users(search: Optional[str] = None):

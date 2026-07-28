@@ -39,6 +39,38 @@ class OwnerChangePatchRequest(BaseModel):
     proposed_payload: dict[str, Any] = Field(default_factory=dict)
 
 
+class OwnerChangeSubmitRequest(OwnerChangePatchRequest):
+    pass
+
+
+class OwnerEntityCreateRequest(BaseModel):
+    entity_kind: Literal[
+        "accommodation",
+        "service",
+        "activity",
+        "food",
+        "transport",
+        "rental",
+        "guide",
+        "event",
+        "sight",
+        "excursion",
+    ]
+    subtype: str = Field(min_length=1, max_length=80, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    name: str = Field(min_length=1, max_length=240)
+    short_description: str | None = Field(default=None, max_length=2000)
+    region: str | None = Field(default=None, max_length=160)
+    district: str | None = Field(default=None, max_length=160)
+    city: str | None = Field(default=None, max_length=160)
+    address: str | None = Field(default=None, max_length=500)
+    lat: float | None = None
+    lng: float | None = None
+    attributes: dict[str, Any] = Field(default_factory=dict)
+    min_price: int | None = Field(default=None, ge=0, le=1_000_000_000)
+    price_mode: Literal["from", "fixed", "request", "free", "none"] = "none"
+    currency: str = Field(default="RUB", min_length=3, max_length=3, pattern=r"^[A-Za-z]{3}$")
+
+
 class OwnerChangeDecisionRequest(BaseModel):
     status: Literal["in_review", "needs_changes", "approved", "rejected", "archived"]
     comment: str | None = Field(default=None, max_length=4000)

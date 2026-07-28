@@ -1,7 +1,7 @@
 import { ArrowLeft, Check, PencilLine, X } from "lucide-react";
 import { lazy, Suspense, useEffect, useState } from "react";
 
-import { ownerApi, type OwnerCamp, type OwnerChange } from "./api";
+import { ownerApi, type EntitySchema, type OwnerCamp, type OwnerChange } from "./api";
 import { OwnerBadge, OwnerRouteLoading, QualityRing } from "./components";
 
 const OwnerEditor = lazy(() => import("./OwnerEditor"));
@@ -11,6 +11,7 @@ type CampDetailData = {
   quality: OwnerCamp["quality"];
   changes: OwnerChange[];
   amenity_catalog: Array<{ id: number; name: string; category: string }>;
+  entity_schema?: EntitySchema | null;
 };
 
 export default function CampPage({
@@ -34,8 +35,15 @@ export default function CampPage({
   useEffect(() => {
     let active = true;
     ownerApi.camp(campId)
-      .then((response) => {
-        if (active) setDetail(response);
+      .then(async (response) => {
+        if (!active) return;
+        setDetail(response);
+        const editable = response.changes.find((item) =>
+          ["draft", "needs_changes", "withdrawn"].includes(item.status));
+        if (editable) {
+          const full = await ownerApi.getChange(editable.id);
+          if (active) setChange(full.change);
+        }
       })
       .catch((reason) => {
         if (active) setError(reason instanceof Error ? reason.message : "Ошибка загрузки");
@@ -77,6 +85,11 @@ export default function CampPage({
     name: String(detail.camp.name || "Объект"),
     slug: typeof detail.camp.slug === "string" ? detail.camp.slug : null,
     place_type_name: typeof detail.camp.place_type_name === "string" ? detail.camp.place_type_name : null,
+    subtype: typeof detail.camp.subtype === "string" ? detail.camp.subtype : null,
+    entity_kind: typeof detail.camp.entity_kind === "string" ? detail.camp.entity_kind as OwnerCamp["entity_kind"] : null,
+    entity_kind_name: null,
+    schema_key: typeof detail.camp.schema_key === "string" ? detail.camp.schema_key : null,
+    schema_version: typeof detail.camp.schema_version === "number" ? detail.camp.schema_version : null,
     publication_status: String(detail.camp.publication_status || "draft"),
     role_key: "owner",
     is_primary: true,
@@ -88,7 +101,11 @@ export default function CampPage({
     <section>
       <button className="owner-back" onClick={onBack}><ArrowLeft /> К списку объектов</button>
       <div className="owner-detail-heading">
-        <div><p className="owner-eyebrow">Управление объектом</p><h1>{currentCamp.name}</h1><p>{detail.camp.address ? String(detail.camp.address) : "Адрес не указан"}</p></div>
+        <div>
+          <p className="owner-eyebrow">{currentCamp.entity_kind_name || currentCamp.place_type_name || "Управление карточкой"}</p>
+          <h1>{currentCamp.name}</h1>
+          <p>{detail.camp.address ? String(detail.camp.address) : "Адрес не указан"}</p>
+        </div>
         {!change && changeRequestsEnabled ? <div className="owner-heading-actions"><button className="owner-primary" onClick={() => void beginEdit()}><PencilLine /> Предложить изменения</button>{currentCamp.publication_status !== "published" ? <button className="owner-secondary" onClick={() => void requestPublication()}>Запросить публикацию</button> : null}</div> : change && changeRequestsEnabled ? <OwnerBadge change={change} /> : null}
       </div>
       {error ? <p className="owner-alert danger" role="alert">{error}</p> : null}
@@ -105,6 +122,7 @@ export default function CampPage({
         <Suspense fallback={<OwnerRouteLoading label="Открываем редактор…" />}>
           <OwnerEditor
             detail={detail}
+            schema={detail.entity_schema}
             initialChange={change}
             onChange={setChange}
             onSubmitted={onReload}

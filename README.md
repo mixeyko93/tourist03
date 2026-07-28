@@ -51,6 +51,17 @@ RUN_PG_INTEGRATION=1 ./.venv/bin/python -m unittest tests.test_catalog_migration
 RUN_UI_SMOKE=1 ./.venv/bin/python -m unittest tests.test_submission_browser -v
 ```
 
+Профиль универсального каталога Этапа 4:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 ./.venv/bin/python -m unittest \
+  tests.test_catalog_entities tests.test_public_catalog -v
+RUN_PG_INTEGRATION=1 ./.venv/bin/python -m unittest \
+  tests.test_catalog_migrations tests.test_universal_catalog_postgres -v
+RUN_UI_SMOKE=1 ./.venv/bin/python -m unittest \
+  tests.test_universal_catalog_browser -v
+```
+
 ## Configuration и безопасность
 
 Переменные приложения типизированы в `tourist03.settings.Settings`. В production обязательно задать стабильный `SESSION_SECRET_KEY` (не короче 32 символов), не-placeholder `PG_PASSWORD`, `SESSION_COOKIE_SECURE=true` и список `CORS_ORIGINS` без `*`. Production не запустится с `SIM_VERIFY_CODE`, `ALLOW_SIMULATED_AUTH=true`, `SUPERADMIN_LOCAL_BYPASS=true` или compatibility CSRF bypass.
@@ -87,6 +98,14 @@ production включение требует реального HTTPS CAPTCHA ve
 client adapter, site key, SMTP и стабильного `SESSION_SECRET_KEY`; test CAPTCHA
 в production запрещена.
 
+`FEATURE_SERVICES` включает универсальные сущности — услуги, активности,
+питание, транспорт, прокат, гидов, события, достопримечательности и экскурсии.
+Они используют те же карту, поиск, карточку и модерацию, что и размещение.
+При выключенном флаге accommodation compatibility продолжает работать.
+Архитектура и schema registry описаны в
+[stage-4-universal-tourism-catalog.md](docs/stage-4-universal-tourism-catalog.md)
+и [entity-schemas.md](docs/entity-schemas.md).
+
 Заявка создаёт только модерационную запись. После одобрения отдельное действие
 суперадмина создаёт `catalog.camps` с `publication_status=draft`,
 `status=disabled`, без карты и бронирований. Публикация выполняется только
@@ -97,6 +116,12 @@ client adapter, site key, SMTP и стабильного `SESSION_SECRET_KEY`; t
 Новый публичный каталог использует отдельные DTO и маршруты:
 
 ```text
+GET /api/public/entity-kinds
+GET /api/public/entity-types
+GET /api/public/entity-schemas
+GET /api/public/catalog-facets
+GET /api/public/entities?q=&type=&subtype=&region=&district=&city=&amenity=&bbox=&limit=&offset=
+GET /api/public/entities/{slug}
 GET /api/public/place-types
 GET /api/public/amenities
 GET /api/public/places?q=&place_type=&region=&city=&amenity=&bbox=&limit=&offset=
@@ -106,7 +131,10 @@ GET /places/{slug}
 
 List endpoint отдаёт только лёгкие данные карты и только записи с `publication_status=published` плюс legacy `status=active|published`. Detail содержит публичные contacts/media/rooms. Owner, manager, admin phones, moderation и audit data в public DTO не входят. `/api/camps` сохранён как deprecated compatibility API; CRM/superadmin остаются на защищённых internal routes.
 
-`/health` проверяет процесс, а `/ready` дополнительно проверяет доступ к DB и version `0025_owner_integrity_outbox`. Публичный каталог и форма заявки не зависят от Telegram SDK. Booking, public auth, owner portal, services и paid placement продолжают управляться отдельными feature flags.
+`/health` проверяет процесс, а `/ready` дополнительно проверяет доступ к DB и
+version `0028_entity_workflows_indexes`. Публичный каталог и форма заявки не
+зависят от Telegram SDK. Booking, public auth, owner portal, services и paid
+placement продолжают управляться отдельными feature flags.
 
 Production и CI используют Python 3.11. Dependency audit в CI всегда получает метаданные и пакеты из публичного PyPI (`https://pypi.org/simple`). Если production устанавливает зависимости через внутренний mirror, mirror обязан синхронизировать безопасные версии с PyPI; credentials такого mirror не хранятся в репозитории и не используются security-аудитом.
 
@@ -120,6 +148,12 @@ Production и CI используют Python 3.11. Dependency audit в CI все
 ./.venv/bin/python -m tourist03.migrations upgrade
 ```
 
-Операционные инструкции находятся в [backup-restore.md](docs/backup-restore.md), [deployment.md](docs/deployment.md) и [migrations.md](docs/migrations.md). Архитектура Этапа 3.1 описана в [stage-3.1-placement-submissions.md](docs/stage-3.1-placement-submissions.md). Канонический production path — systemd `./deploy.sh`; Docker Compose оставлен для локального/альтернативного использования. Эти инструкции не являются разрешением на deploy.
+Операционные инструкции находятся в [backup-restore.md](docs/backup-restore.md),
+[deployment.md](docs/deployment.md) и [migrations.md](docs/migrations.md).
+Общая архитектура, API и SEO описаны в
+[architecture.md](docs/architecture.md), [api.md](docs/api.md) и
+[seo.md](docs/seo.md). Канонический production path — systemd `./deploy.sh`;
+Docker Compose оставлен для локального/альтернативного использования. Эти
+инструкции не являются разрешением на deploy.
 
 Tracked legacy dumps и existing uploads в Этапе 1.1 намеренно не удаляются. Порядок ротации, проверки backup/restore и отдельного согласования history cleanup описан в [security-incident-response.md](docs/security-incident-response.md).

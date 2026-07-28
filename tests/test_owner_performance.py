@@ -103,10 +103,19 @@ class OwnerPerformanceContractTests(unittest.TestCase):
                 self.assertFalse(payload["object_pagination"]["has_more"])
                 self.assertLess(len(response.content), 20_000)
                 self.assertEqual(response.headers["cache-control"], "no-store")
-                camps.assert_called_once_with(7, limit=20, offset=0)
+                camps.assert_called_once_with(
+                    7,
+                    limit=20,
+                    offset=0,
+                    entity_kind="accommodation",
+                )
                 snapshots.assert_called_once()
                 changes.assert_called_once()
-                activity.assert_called_once_with(7, limit=7)
+                activity.assert_called_once_with(
+                    7,
+                    limit=7,
+                    entity_kind="accommodation",
+                )
 
         asyncio.run(scenario())
 

@@ -61,6 +61,12 @@ a { color:inherit; text-decoration:none; }
 .amenity-options span { display:block; padding:9px 12px; border:1px solid var(--line); border-radius:999px; background:#fafbf9; color:var(--muted); font-size:11px; font-weight:700; }
 .amenity-options input:checked + span { border-color:var(--aqua); background:var(--aqua-light); color:#096d79; }
 .amenity-options input:focus-visible + span { outline:3px solid rgba(19,143,159,.28); }
+.submission-entity-fields { display:grid; gap:18px; margin:24px 0; padding:22px; border:1px solid var(--line); border-radius:17px; background:#f8faf7; }
+.submission-entity-fields h3 { margin:0; font-size:17px; }
+.submission-entity-fields > div:first-child p { margin:5px 0 0; color:var(--muted); font-size:11px; line-height:1.55; }
+.submission-attribute-boolean { display:flex; align-items:center; gap:9px; min-height:48px; padding:0 13px; border:1px solid var(--line); border-radius:13px; background:#fbfcfa; color:var(--ink); font-size:13px; font-weight:700; }
+.submission-attribute-boolean input { width:18px; height:18px; accent-color:var(--aqua); }
+.submission-context-note { padding:20px; border:1px solid var(--line); border-radius:15px; background:#f8faf7; color:var(--muted); font-size:13px; font-weight:600; line-height:1.6; }
 .submission-room { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:14px; padding:20px; border:1px solid var(--line); border-radius:17px; background:#f8faf7; }
 .submission-room__heading { grid-column:1/-1; display:flex; align-items:center; justify-content:space-between; }
 .submission-room__heading h3 { margin:0; font-size:17px; }

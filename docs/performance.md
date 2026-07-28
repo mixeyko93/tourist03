@@ -106,3 +106,30 @@ payload, published snapshot, diff и 30 событий, хотя первый э
 Значения времени зависят от машины, поэтому CI сохраняет свежий
 `dashboard-api-profile.json` в artifact, а контракт и максимальное число
 запросов защищены regression test.
+
+## Бюджет универсального public catalog
+
+Этап 4 сохраняет существующий SSR/browser-first entry и Leaflet вместо
+создания отдельного frontend-приложения для каждого вида. Schema metadata и
+facets загружаются компактными JSON endpoint-ами, detail payload не
+prefetch-ится для всех маркеров, изображения вне viewport используют lazy
+loading.
+
+Лёгкий `map_only` список загружается страницами по 200 записей и
+ограниченными параллельными пакетами (до 10 000 результатов), поэтому
+сущности после первой сотни не исчезают. Поиск по тексту карточки использует
+`idx_camps_public_search` и `websearch_to_tsquery`; endpoint защищён отдельным
+`RATE_LIMIT_PUBLIC_SEARCH_PER_MINUTE`.
+
+Review workflow сравнивает gzip-размер initial public CSS/JS с baseline Этапа
+3.2. Допустимый рост — не более 10% (baseline 68 019 bytes с Leaflet, предел
+74 821 bytes). Lighthouse thresholds:
+
+- mobile Performance ≥ 90;
+- desktop Performance ≥ 95;
+- Accessibility = 100;
+- CLS ≤ 0,05.
+
+Точные размеры и результаты сохраняются в artifact
+`universal-tourism-catalog-review`: `bundle-report.json`,
+`review-metrics.json`, `lighthouse-mobile.*`, `lighthouse-desktop.*`.

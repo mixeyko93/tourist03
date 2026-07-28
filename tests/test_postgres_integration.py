@@ -456,6 +456,21 @@ class PostgresIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(editor.json()["contacts"][0]["contact_type"], "max")
         self.assertEqual({item["slug"] for item in editor.json()["selected_amenities"]}, {"wifi", "parking"})
         self.assertEqual(len(editor.json()["place_types"]), 12)
+        self.assertEqual(
+            {item["entity_kind"] for item in editor.json()["place_types"]},
+            {"accommodation"},
+        )
+
+        universal_editor = await self.client.get(
+            f"/api/superadmin/entities/{published_id}",
+            headers={"x-superadmin-key": os.environ["SUPERADMIN_API_KEY"]},
+        )
+        self.assertEqual(universal_editor.status_code, 200, universal_editor.text)
+        self.assertEqual(len(universal_editor.json()["place_types"]), 31)
+        self.assertIn(
+            "service",
+            {item["entity_kind"] for item in universal_editor.json()["place_types"]},
+        )
 
         explain = self._fetch_one(
             """

@@ -8,6 +8,7 @@ from tourist03.dto.owners import (
     OwnerChangeApplyRequest,
     OwnerChangeDecisionRequest,
     OwnerChangePatchRequest,
+    OwnerEntityCreateRequest,
     OwnerForgotPasswordRequest,
     OwnerLoginRequest,
     OwnerPasswordPatchRequest,
@@ -35,11 +36,15 @@ router.add_api_route("/api/owner/dashboard", owner_service.owner_dashboard, meth
 router.add_api_route("/api/owner/camps", owner_service.owner_list_camps, methods=["GET"], dependencies=owner_guard, responses=error_responses(401, 500))
 router.add_api_route("/api/owner/camps/{camp_id}", owner_service.owner_camp_detail, methods=["GET"], dependencies=owner_guard, responses=error_responses(401, 404, 500))
 router.add_api_route("/api/owner/camps/{camp_id}/unpublish", owner_service.owner_unpublish_camp, methods=["POST"], dependencies=owner_guard, responses=error_responses(401, 404, 500))
+router.add_api_route("/api/owner/entities", owner_service.owner_list_entities, methods=["GET"], dependencies=owner_guard, responses=error_responses(401, 500))
+router.add_api_route("/api/owner/entities", owner_service.owner_create_entity, methods=["POST"], dependencies=owner_guard, responses=error_responses(401, 404, 422, 500))
+router.add_api_route("/api/owner/entities/{entity_id}", owner_service.owner_entity_detail, methods=["GET"], dependencies=owner_guard, responses=error_responses(401, 404, 500))
+router.add_api_route("/api/owner/entities/{camp_id}/changes", owner_service.owner_create_change, methods=["POST"], dependencies=owner_guard, responses=error_responses(401, 404, 500))
 router.add_api_route("/api/owner/changes", owner_service.owner_list_changes, methods=["GET"], dependencies=owner_guard, responses=error_responses(401, 500))
 router.add_api_route("/api/owner/changes/{change_id}", owner_service.owner_get_change, methods=["GET"], dependencies=owner_guard, responses=error_responses(401, 404, 500))
 router.add_api_route("/api/owner/camps/{camp_id}/changes", owner_service.owner_create_change, methods=["POST"], dependencies=owner_guard, responses=error_responses(401, 404, 500))
 router.add_api_route("/api/owner/changes/{change_id}", owner_service.owner_save_change, methods=["PATCH"], dependencies=owner_guard, responses=error_responses(401, 404, 409, 422, 500))
-router.add_api_route("/api/owner/changes/{change_id}/submit", owner_service.owner_submit_change, methods=["POST"], dependencies=owner_guard, responses=error_responses(401, 404, 409, 500))
+router.add_api_route("/api/owner/changes/{change_id}/submit", owner_service.owner_submit_change, methods=["POST"], dependencies=owner_guard, responses=error_responses(401, 404, 409, 422, 500))
 router.add_api_route("/api/owner/changes/{change_id}/withdraw", owner_service.owner_withdraw_change, methods=["POST"], dependencies=owner_guard, responses=error_responses(401, 404, 409, 500))
 router.add_api_route("/api/owner/changes/{change_id}/media", owner_service.owner_upload_change_media, methods=["POST"], dependencies=owner_guard, responses=error_responses(400, 401, 404, 409, 422, 500))
 router.add_api_route("/api/owner/changes/{change_id}/media/{media_id}", owner_service.owner_delete_change_media, methods=["DELETE"], dependencies=owner_guard, responses=error_responses(401, 404, 500))

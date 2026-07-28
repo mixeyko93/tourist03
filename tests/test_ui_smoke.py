@@ -428,6 +428,31 @@ class UiSmokeTests(unittest.TestCase):
             "limit": 100,
             "offset": 0,
         }
+        entity_kinds = [
+            {
+                "key": "accommodation",
+                "slug": "accommodation",
+                "name": "Проживание",
+                "icon_key": "accommodation",
+                "sort_order": 10,
+            }
+        ]
+        entity_types = [
+            {**place_type, "entity_kind": "accommodation"}
+            for place_type in fixture["place_types"]
+        ]
+        catalog_facets = {
+            "entity_kinds": [{"value": "accommodation", "label": "Проживание", "count": len(fixture["places"])}],
+            "subtypes": [
+                {"value": place_type["slug"], "label": place_type["name"], "count": 1}
+                for place_type in fixture["place_types"]
+            ],
+            "regions": [],
+            "districts": [],
+            "cities": [],
+            "seasonality": [],
+            "amenities": fixture["amenities"],
+        }
 
         def fulfil_json(route, payload):
             route.fulfill(
@@ -442,6 +467,10 @@ class UiSmokeTests(unittest.TestCase):
                 with self.subTest(viewport=f"{width}x{height}"):
                     page = browser.new_page(viewport={"width": width, "height": height})
                     errors, responses = self._collect_client_issues(page)
+                    page.route("**/api/public/entity-kinds", lambda route: fulfil_json(route, entity_kinds))
+                    page.route("**/api/public/entity-types", lambda route: fulfil_json(route, entity_types))
+                    page.route("**/api/public/catalog-facets", lambda route: fulfil_json(route, catalog_facets))
+                    page.route("**/api/public/entities?*", lambda route: fulfil_json(route, list_payload))
                     page.route("**/api/public/place-types", lambda route: fulfil_json(route, fixture["place_types"]))
                     page.route("**/api/public/amenities", lambda route: fulfil_json(route, fixture["amenities"]))
                     page.route("**/api/public/places?*", lambda route: fulfil_json(route, list_payload))

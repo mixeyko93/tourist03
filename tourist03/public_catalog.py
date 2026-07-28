@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 
 
 PUBLICATION_STATUSES = frozenset({"draft", "in_review", "published", "disabled", "archived", "rejected"})
-CONTACT_TYPES = frozenset({"phone", "email", "website", "telegram", "whatsapp", "max", "vk", "other"})
+CONTACT_TYPES = frozenset({"phone", "email", "website", "telegram", "whatsapp", "max", "vk", "route", "other"})
 SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 PHONE_RE = re.compile(r"^\+?[0-9]{7,15}$")
@@ -84,7 +84,7 @@ def normalize_contact(contact_type: str, value: str, public_url: Optional[str] =
     safe = _http_url(candidate, allowed_hosts=allowed_hosts)
     if kind in {"website", "telegram", "whatsapp", "max", "vk"} and not safe:
         return None
-    if kind == "other" and not safe:
+    if kind in {"route", "other"} and not safe:
         return None
     return {"value": raw, "normalized_value": raw.lower(), "url": safe}
 
@@ -120,3 +120,20 @@ def normalize_bbox(value: Optional[str]) -> Optional[tuple[float, float, float, 
     if min_lng >= max_lng or min_lat >= max_lat:
         raise ValueError("Минимальные координаты bbox должны быть меньше максимальных")
     return min_lng, min_lat, max_lng, max_lat
+
+
+def normalize_filter_values(value: Optional[str], *, maximum: int = 30) -> list[str]:
+    """Normalize a comma-separated public filter without accepting SQL-like input."""
+
+    values: list[str] = []
+    for raw in (value or "").split(","):
+        item = raw.strip().lower()
+        if not item:
+            continue
+        if not SLUG_RE.fullmatch(item):
+            raise ValueError("Фильтр содержит недопустимое значение")
+        if item not in values:
+            values.append(item)
+        if len(values) > maximum:
+            raise ValueError("Слишком много значений фильтра")
+    return values

@@ -36,6 +36,7 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
+      - run: npm run test:unit
       - run: npm run build
       - run: npm audit --omit=dev --audit-level=high
 
@@ -74,6 +75,7 @@ jobs:
       - run: python -m tourist03.migrations check
       - run: RUN_PG_INTEGRATION=1 PG_INTEGRATION_USE_EXISTING=1 python -m unittest tests.test_submission_postgres -v
       - run: RUN_PG_INTEGRATION=1 PG_INTEGRATION_USE_EXISTING=1 python -m unittest tests.test_owner_postgres -v
+      - run: RUN_PG_INTEGRATION=1 PG_INTEGRATION_USE_EXISTING=1 python -m unittest tests.test_universal_catalog_postgres -v
 
   secrets:
     name: Secret scan

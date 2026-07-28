@@ -78,7 +78,7 @@ class CatalogMigrationUpgradeTests(unittest.TestCase):
 
         with closing(self._connect()) as conn, conn.cursor() as cur:
             cur.execute("SELECT COUNT(*) AS count FROM catalog.place_types")
-            self.assertEqual(cur.fetchone()["count"], 12)
+            self.assertEqual(cur.fetchone()["count"], 31)
             cur.execute("SELECT COUNT(*) AS count FROM catalog.amenities")
             self.assertEqual(cur.fetchone()["count"], 16)
             cur.execute(
@@ -296,6 +296,297 @@ class SubmissionMigrationUpgradeTests(unittest.TestCase):
                 """
             )
             self.assertEqual(cur.fetchall(), [])
+
+
+@unittest.skipUnless(RUN_PG_INTEGRATION, "requires RUN_PG_INTEGRATION=1")
+class UniversalCatalogMigrationUpgradeTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls._env_backup = {
+            key: os.environ.get(key)
+            for key in (
+                "PG_HOST",
+                "PG_PORT",
+                "PG_DB",
+                "PG_USER",
+                "PG_PASSWORD",
+                "ENVIRONMENT",
+            )
+        }
+        cls.pg = TemporaryPostgres()
+        cls.pg.start()
+        os.environ.update(cls.pg.as_environ())
+        os.environ["ENVIRONMENT"] = "test"
+        clear_settings_override()
+
+    @classmethod
+    def tearDownClass(cls):
+        try:
+            cls.pg.stop()
+        finally:
+            clear_settings_override()
+            for key, value in cls._env_backup.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+
+    @classmethod
+    def _connect(cls):
+        return psycopg2.connect(
+            host=os.environ["PG_HOST"],
+            port=int(os.environ["PG_PORT"]),
+            dbname=os.environ["PG_DB"],
+            user=os.environ["PG_USER"],
+            password=os.environ["PG_PASSWORD"],
+            cursor_factory=RealDictCursor,
+        )
+
+    def test_upgrade_from_0025_preserves_legacy_and_freezes_workflow_schema(self):
+        from tourist03 import migrations
+
+        with closing(self._connect()) as conn, conn.cursor() as cur:
+            cur.execute(
+                "CREATE TABLE public.schema_migrations "
+                "(version TEXT PRIMARY KEY, "
+                "applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW())"
+            )
+            for step in migrations.MIGRATIONS:
+                if step.version > "0025_owner_integrity_outbox":
+                    break
+                cur.execute(step.sql)
+                cur.execute(
+                    "INSERT INTO public.schema_migrations(version) VALUES(%s)",
+                    (step.version,),
+                )
+            cur.execute(
+                """
+                INSERT INTO catalog.camps (
+                    name, slug, place_type_id, publication_status, status,
+                    short_description, min_price
+                )
+                VALUES (
+                    'Legacy hotel',
+                    'legacy-hotel',
+                    (
+                        SELECT id FROM catalog.place_types
+                        WHERE slug = 'recreation-base'
+                    ),
+                    'published',
+                    'active',
+                    'Preserve this description',
+                    3500
+                )
+                RETURNING id
+                """
+            )
+            camp_id = int(cur.fetchone()["id"])
+            cur.execute(
+                """
+                INSERT INTO auth.owner_accounts (
+                    email, password_hash, display_name
+                )
+                VALUES (
+                    'stage4-owner@example.test',
+                    'test-only-hash',
+                    'Stage 4 owner'
+                )
+                RETURNING id
+                """
+            )
+            owner_id = int(cur.fetchone()["id"])
+            cur.execute(
+                """
+                INSERT INTO catalog.camp_owner_links (
+                    camp_id, owner_account_id, is_primary
+                )
+                VALUES (%s, %s, TRUE)
+                """,
+                (camp_id, owner_id),
+            )
+            cur.execute(
+                """
+                INSERT INTO moderation.owner_change_requests (
+                    public_number, camp_id, owner_account_id,
+                    proposed_payload, published_snapshot,
+                    base_content_version
+                )
+                VALUES (
+                    'CHG-STAGE4-0001', %s, %s,
+                    '{"name":"Legacy hotel updated"}'::jsonb,
+                    '{"name":"Legacy hotel"}'::jsonb,
+                    1
+                )
+                RETURNING id
+                """,
+                (camp_id, owner_id),
+            )
+            change_request_id = int(cur.fetchone()["id"])
+            cur.execute(
+                """
+                INSERT INTO moderation.placement_submissions (
+                    public_number, draft_token_hash, place_type_id,
+                    draft_expires_at
+                )
+                VALUES (
+                    'TUR-STAGE4-0001',
+                    repeat('4', 64),
+                    (
+                        SELECT id FROM catalog.place_types
+                        WHERE slug = 'recreation-base'
+                    ),
+                    NOW() + INTERVAL '1 day'
+                )
+                RETURNING id
+                """
+            )
+            submission_id = int(cur.fetchone()["id"])
+            conn.commit()
+
+        migrations.run_migrations()
+        migrations.run_migrations()
+
+        with closing(self._connect()) as conn, conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) AS count FROM catalog.entity_kinds")
+            self.assertEqual(cur.fetchone()["count"], 10)
+            cur.execute("SELECT COUNT(*) AS count FROM catalog.entity_schemas")
+            self.assertEqual(cur.fetchone()["count"], 5)
+            cur.execute("SELECT COUNT(*) AS count FROM catalog.place_types")
+            self.assertEqual(cur.fetchone()["count"], 31)
+            cur.execute(
+                """
+                SELECT
+                    entity_type, subtype, schema_key, schema_version,
+                    visibility, price_mode, currency, short_description
+                FROM catalog.entities
+                WHERE entity_id = %s
+                """,
+                (camp_id,),
+            )
+            self.assertEqual(
+                dict(cur.fetchone()),
+                {
+                    "entity_type": "accommodation",
+                    "subtype": "recreation-base",
+                    "schema_key": "accommodation",
+                    "schema_version": 1,
+                    "visibility": "public",
+                    "price_mode": "from",
+                    "currency": "RUB",
+                    "short_description": "Preserve this description",
+                },
+            )
+            cur.execute(
+                """
+                SELECT schema_key, schema_version
+                FROM moderation.owner_change_requests
+                WHERE id = %s
+                """,
+                (change_request_id,),
+            )
+            self.assertEqual(
+                dict(cur.fetchone()),
+                {"schema_key": "accommodation", "schema_version": 1},
+            )
+            cur.execute(
+                """
+                SELECT schema_key, schema_version
+                FROM moderation.placement_submissions
+                WHERE id = %s
+                """,
+                (submission_id,),
+            )
+            self.assertEqual(
+                dict(cur.fetchone()),
+                {"schema_key": "accommodation", "schema_version": 1},
+            )
+            cur.execute(
+                """
+                INSERT INTO catalog.camps (
+                    name, slug, place_type_id, publication_status, status
+                )
+                VALUES (
+                    'Boat service',
+                    'boat-service',
+                    (
+                        SELECT id FROM catalog.place_types
+                        WHERE slug = 'boat-rental'
+                    ),
+                    'draft',
+                    'active'
+                )
+                RETURNING schema_key, schema_version
+                """
+            )
+            self.assertEqual(
+                dict(cur.fetchone()),
+                {"schema_key": "service", "schema_version": 1},
+            )
+            cur.execute(
+                """
+                SELECT indexname
+                FROM pg_indexes
+                WHERE schemaname = 'catalog'
+                  AND indexname IN (
+                      'idx_camps_universal_map',
+                      'idx_camps_public_search',
+                      'idx_camps_attributes_gin'
+                  )
+                ORDER BY indexname
+                """
+            )
+            self.assertEqual(
+                [row["indexname"] for row in cur.fetchall()],
+                [
+                    "idx_camps_attributes_gin",
+                    "idx_camps_public_search",
+                    "idx_camps_universal_map",
+                ],
+            )
+            cur.execute(
+                """
+                SELECT
+                    catalog.entity_is_open_now(
+                        'schedule',
+                        '{"daily":"09:00–18:00"}'::jsonb,
+                        '2026-07-27 02:30:00+00'::timestamptz
+                    ) AS daytime_open,
+                    catalog.entity_is_open_now(
+                        'schedule',
+                        '{"daily":"09:00–18:00"}'::jsonb,
+                        '2026-07-27 13:00:00+00'::timestamptz
+                    ) AS evening_closed,
+                    catalog.entity_is_open_now(
+                        'schedule',
+                        '{"daily":"22:00–02:00"}'::jsonb,
+                        '2026-07-27 15:00:00+00'::timestamptz
+                    ) AS overnight_open,
+                    catalog.entity_is_open_now(
+                        'always_open',
+                        '{}'::jsonb,
+                        '2026-07-27 13:00:00+00'::timestamptz
+                    ) AS always_open
+                """
+            )
+            self.assertEqual(
+                dict(cur.fetchone()),
+                {
+                    "daytime_open": True,
+                    "evening_closed": False,
+                    "overnight_open": True,
+                    "always_open": True,
+                },
+            )
+            cur.execute(
+                """
+                SELECT version, COUNT(*) AS count
+                FROM public.schema_migrations
+                GROUP BY version
+                HAVING COUNT(*) <> 1
+                """
+            )
+            self.assertEqual(cur.fetchall(), [])
+            conn.rollback()
 
 
 if __name__ == "__main__":

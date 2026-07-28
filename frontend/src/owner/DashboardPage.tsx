@@ -7,6 +7,7 @@ import {
   Clock3,
   Sparkles,
 } from "./initialIcons";
+import { Plus } from "lucide-react";
 
 import type { OwnerCamp, OwnerDashboard } from "./api";
 import { formatDate, OwnerBadge, QualityRing } from "./components";
@@ -15,10 +16,14 @@ export default function DashboardPage({
   data,
   onCamp,
   onChanges,
+  onCreate,
+  canCreate,
 }: {
   data: OwnerDashboard;
   onCamp: (camp: OwnerCamp) => void;
   onChanges: () => void;
+  onCreate: () => void;
+  canCreate: boolean;
 }) {
   const firstName = data.owner.display_name.split(" ")[0] || "владелец";
   return (
@@ -29,7 +34,10 @@ export default function DashboardPage({
           <h1>Здравствуйте, {firstName}</h1>
           <p>Здесь сразу видно, что происходит с карточками и что требует внимания.</p>
         </div>
-        <div className="owner-summary-pill"><Clock3 /><span><b>{data.profile_statistics.pending_changes}</b> ожидают проверки</span></div>
+        <div className="owner-welcome-actions">
+          <div className="owner-summary-pill"><Clock3 /><span><b>{data.profile_statistics.pending_changes}</b> ожидают проверки</span></div>
+          {canCreate ? <button type="button" className="owner-primary" onClick={onCreate}><Plus /> Добавить карточку</button> : null}
+        </div>
       </section>
       <section className="owner-metric-grid">
         <article><Building2 /><span>Ваши объекты</span><strong>{data.profile_statistics.objects_count}</strong></article>
@@ -44,11 +52,20 @@ export default function DashboardPage({
             {data.camps.map((camp) => (
               <button key={camp.id} className="owner-object-row" onClick={() => onCamp(camp)}>
                 <QualityRing score={camp.quality.score} compact />
-                <span className="owner-object-copy"><b>{camp.name}</b><small>{camp.publication_status === "published" ? "Опубликован" : "Не опубликован"} · {camp.pending_changes} на проверке</small></span>
+                <span className="owner-object-copy">
+                  <b>{camp.name}</b>
+                  <small>{camp.entity_kind_name || "Туристический объект"} · {camp.place_type_name || camp.subtype || "Тип не указан"}</small>
+                  <small>{camp.publication_status === "published" ? "Опубликован" : "Не опубликован"} · {camp.pending_changes} на проверке</small>
+                </span>
                 <ChevronRight />
               </button>
             ))}
-            {!data.camps.length ? <p className="owner-empty">С аккаунтом пока не связан ни один объект.</p> : null}
+            {!data.camps.length ? (
+              <div className="owner-empty-action">
+                <p className="owner-empty">С аккаунтом пока не связана ни одна карточка.</p>
+                {canCreate ? <button type="button" className="owner-secondary" onClick={onCreate}><Plus /> Добавить первую</button> : null}
+              </div>
+            ) : null}
           </div>
         </section>
         <section className="owner-card owner-attention">

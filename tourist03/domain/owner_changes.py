@@ -8,6 +8,10 @@ import secrets
 from datetime import datetime, timezone
 from typing import Any, Mapping
 
+from tourist03.domain.catalog_entities import (
+    CatalogEntityValidationError,
+    applicable_quality_weights,
+)
 from tourist03.public_catalog import normalize_contact, safe_video_url
 
 
@@ -59,9 +63,15 @@ OWNER_EDITABLE_FIELDS = frozenset(
         "lat",
         "lng",
         "min_price",
+        "price_mode",
+        "currency",
         "seasonality",
+        "seasonality_key",
         "working_hours",
+        "working_hours_mode",
         "surroundings",
+        "attributes",
+        "seo",
         "contacts",
         "amenities",
         "rooms",
@@ -81,9 +91,15 @@ FIELD_LABELS = {
     "lat": "Широта",
     "lng": "Долгота",
     "min_price": "Минимальная цена",
+    "price_mode": "Формат цены",
+    "currency": "Валюта",
     "seasonality": "Сезонность",
+    "seasonality_key": "Тип сезонности",
     "working_hours": "Режим работы",
+    "working_hours_mode": "Формат режима работы",
     "surroundings": "Окрестности",
+    "attributes": "Характеристики",
+    "seo": "Поисковое представление",
     "contacts": "Контакты",
     "amenities": "Удобства",
     "rooms": "Варианты размещения",
@@ -138,6 +154,46 @@ def _clean_coordinates(payload: dict[str, Any]) -> tuple[float | None, float | N
     if not -90 <= latitude <= 90 or not -180 <= longitude <= 180:
         raise OwnerChangeValidationError("Координаты выходят за допустимый диапазон")
     return latitude, longitude
+
+
+WORKING_HOURS_KEYS = frozenset(
+    {
+        "text",
+        "daily",
+        "reception",
+        "weekdays",
+        "weekends",
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+    }
+)
+
+
+def _normalize_working_hours(value: Any) -> dict[str, str]:
+    if value in (None, ""):
+        return {}
+    if not isinstance(value, Mapping):
+        raise OwnerChangeValidationError(
+            "Режим работы должен быть заполнен через поля расписания"
+        )
+    unknown = set(value).difference(WORKING_HOURS_KEYS)
+    if unknown:
+        raise OwnerChangeValidationError("Режим работы содержит недоступные поля")
+    result: dict[str, str] = {}
+    for key, raw in value.items():
+        if not isinstance(raw, str):
+            raise OwnerChangeValidationError("Значения режима работы должны быть текстом")
+        text = re.sub(r"\s+", " ", raw).strip()
+        if len(text) > 500:
+            raise OwnerChangeValidationError("Описание режима работы слишком длинное")
+        if text:
+            result[str(key)] = text
+    return result
 
 
 def _normalize_contacts(value: Any) -> list[dict[str, Any]]:
@@ -213,6 +269,101 @@ def _normalize_rooms(value: Any) -> list[dict[str, Any]]:
     return normalized
 
 
+def resolve_owner_room_media_target(
+    change: Mapping[str, Any],
+    room_client_id: object,
+) -> str:
+    """Resolve an upload target to one canonical room key.
+
+    Proposed rooms replace the published snapshot for the current change. Both
+    an existing numeric ``id`` and a new ``client_id`` may identify a room, but
+    accepted aliases collapse to one stored key so per-room quotas cannot be
+    bypassed with alternate spellings.
+    """
+
+    if str(change.get("entity_kind") or "").strip().lower() != "accommodation":
+        raise OwnerChangeValidationError(
+            "Фото вариантов размещения доступны только объектам проживания"
+        )
+    requested = str(room_client_id or "").strip()
+    if not requested:
+        raise OwnerChangeValidationError(
+            "Выберите вариант размещения для фотографии"
+        )
+    if len(requested) > 80 or any(ord(character) < 32 for character in requested):
+        raise OwnerChangeValidationError(
+            "Идентификатор варианта размещения указан некорректно"
+        )
+
+    proposed = change.get("proposed_payload")
+    snapshot = change.get("published_snapshot")
+    proposed = proposed if isinstance(proposed, Mapping) else {}
+    snapshot = snapshot if isinstance(snapshot, Mapping) else {}
+    raw_rooms = (
+        proposed.get("rooms")
+        if "rooms" in proposed
+        else snapshot.get("rooms", [])
+    )
+    if not isinstance(raw_rooms, list):
+        raise OwnerChangeValidationError(
+            "Варианты размещения текущего черновика недоступны"
+        )
+
+    aliases: dict[str, str] = {}
+    canonical_keys: set[str] = set()
+    for raw_room in raw_rooms:
+        if not isinstance(raw_room, Mapping):
+            raise OwnerChangeValidationError(
+                "Варианты размещения текущего черновика недоступны"
+            )
+        client_key = str(raw_room.get("client_id") or "").strip()
+        if client_key.isdigit():
+            client_key = str(int(client_key))
+        raw_id = raw_room.get("id")
+        database_key = ""
+        if raw_id not in (None, ""):
+            try:
+                numeric_id = int(raw_id)
+            except (TypeError, ValueError) as exc:
+                raise OwnerChangeValidationError(
+                    "Идентификатор варианта размещения указан некорректно"
+                ) from exc
+            if numeric_id < 1:
+                raise OwnerChangeValidationError(
+                    "Идентификатор варианта размещения указан некорректно"
+                )
+            database_key = str(numeric_id)
+        canonical = client_key or database_key
+        if (
+            not canonical
+            or len(canonical) > 80
+            or any(ord(character) < 32 for character in canonical)
+        ):
+            raise OwnerChangeValidationError(
+                "У каждого варианта размещения должен быть идентификатор"
+            )
+        if canonical in canonical_keys:
+            raise OwnerChangeValidationError(
+                "Идентификаторы вариантов размещения должны быть уникальными"
+            )
+        canonical_keys.add(canonical)
+        for alias in filter(None, (client_key, database_key)):
+            existing = aliases.get(alias)
+            if existing is not None and existing != canonical:
+                raise OwnerChangeValidationError(
+                    "Идентификаторы вариантов размещения должны быть уникальными"
+                )
+            aliases[alias] = canonical
+
+    lookup = str(int(requested)) if requested.isdigit() else requested
+    canonical = aliases.get(lookup)
+    if canonical is None:
+        raise OwnerChangeValidationError(
+            "Выбранный вариант размещения отсутствует в текущем черновике"
+        )
+    return canonical
+
+
 def sanitize_owner_payload(value: Mapping[str, Any]) -> dict[str, Any]:
     if not isinstance(value, Mapping):
         raise OwnerChangeValidationError("Изменения имеют некорректный формат")
@@ -250,9 +401,60 @@ def sanitize_owner_payload(value: Mapping[str, Any]) -> dict[str, Any]:
         if price is not None and not 0 <= price <= 1_000_000_000:
             raise OwnerChangeValidationError("Цена выходит за допустимый диапазон")
         payload["min_price"] = price
+    if "price_mode" in payload:
+        mode = str(payload["price_mode"] or "none").strip().lower()
+        if mode not in {"from", "fixed", "request", "free", "none"}:
+            raise OwnerChangeValidationError("Формат цены указан некорректно")
+        payload["price_mode"] = mode
+    if "currency" in payload:
+        currency = str(payload["currency"] or "RUB").strip().upper()
+        if not re.fullmatch(r"[A-Z]{3}", currency):
+            raise OwnerChangeValidationError("Код валюты указан некорректно")
+        payload["currency"] = currency
+    if "seasonality_key" in payload:
+        seasonality_key = str(payload["seasonality_key"] or "").strip().lower() or None
+        if seasonality_key and not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", seasonality_key):
+            raise OwnerChangeValidationError("Тип сезонности указан некорректно")
+        payload["seasonality_key"] = seasonality_key
     if "working_hours" in payload:
-        if not isinstance(payload["working_hours"], (dict, list, str)) and payload["working_hours"] is not None:
-            raise OwnerChangeValidationError("Режим работы имеет некорректный формат")
+        payload["working_hours"] = _normalize_working_hours(payload["working_hours"])
+    if "working_hours_mode" in payload:
+        mode = str(payload["working_hours_mode"] or "schedule").strip().lower()
+        if mode not in {"schedule", "always_open", "by_appointment", "seasonal", "closed"}:
+            raise OwnerChangeValidationError("Формат режима работы указан некорректно")
+        payload["working_hours_mode"] = mode
+    if "attributes" in payload:
+        if not isinstance(payload["attributes"], Mapping):
+            raise OwnerChangeValidationError("Характеристики имеют некорректный формат")
+        if len(payload["attributes"]) > 100:
+            raise OwnerChangeValidationError("Слишком много характеристик")
+        attributes: dict[str, Any] = {}
+        for key, raw in payload["attributes"].items():
+            normalized_key = str(key or "").strip().lower()
+            if not re.fullmatch(r"[a-z][a-z0-9_]{0,63}", normalized_key):
+                raise OwnerChangeValidationError("Характеристика имеет некорректное имя")
+            if isinstance(raw, str) and len(raw) > 10_000:
+                raise OwnerChangeValidationError("Значение характеристики слишком длинное")
+            if isinstance(raw, (dict, list)) and len(raw) > 100:
+                raise OwnerChangeValidationError("Значение характеристики слишком большое")
+            if not isinstance(raw, (str, int, float, bool, list, dict, type(None))):
+                raise OwnerChangeValidationError("Характеристика имеет некорректное значение")
+            attributes[normalized_key] = copy.deepcopy(raw)
+        payload["attributes"] = attributes
+    if "seo" in payload:
+        if not isinstance(payload["seo"], Mapping):
+            raise OwnerChangeValidationError("SEO-данные имеют некорректный формат")
+        allowed_seo = {"title", "description", "og_title", "og_description", "og_image", "noindex"}
+        if set(payload["seo"]).difference(allowed_seo):
+            raise OwnerChangeValidationError("SEO-данные содержат недоступные поля")
+        seo: dict[str, Any] = {}
+        for key, raw in payload["seo"].items():
+            if key == "noindex":
+                seo[key] = bool(raw)
+                continue
+            maximum = 1_000 if key == "og_image" else 500
+            seo[key] = _clean_text(raw, maximum=maximum)
+        payload["seo"] = seo
     if "contacts" in payload:
         payload["contacts"] = _normalize_contacts(payload["contacts"])
     if "amenities" in payload:
@@ -338,6 +540,9 @@ def calculate_card_quality(
     ]
     rooms = [room for room in snapshot.get("rooms", []) if isinstance(room, dict)]
     contacts = _contact_types(snapshot)
+    entity_kind = str(snapshot.get("entity_kind") or "accommodation").strip().lower()
+    attributes = snapshot.get("attributes") if isinstance(snapshot.get("attributes"), Mapping) else {}
+    is_accommodation = entity_kind == "accommodation"
     checks = {
         "name": _present(snapshot.get("name")),
         "short_description": _present(snapshot.get("short_description")),
@@ -348,14 +553,36 @@ def calculate_card_quality(
         "amenities": len(snapshot.get("amenities") or []) >= 3,
         "rooms": bool(rooms),
         "room_descriptions": bool(rooms) and all(_present(room.get("description")) for room in rooms),
-        "prices": _present(snapshot.get("min_price")) or any(_present(room.get("price")) for room in rooms),
+        "prices": (
+            str(snapshot.get("price_mode") or "") in {"request", "free"}
+            or _present(snapshot.get("min_price"))
+            or _present(attributes.get("price"))
+            or any(_present(room.get("price")) for room in rooms)
+        ),
         "videos": bool(videos),
         "coordinates": snapshot.get("lat") is not None and snapshot.get("lng") is not None,
         "working_hours": _present(snapshot.get("working_hours")),
         "seasonality": _present(snapshot.get("seasonality")),
         "surroundings": _present(snapshot.get("surroundings")),
     }
-    active_weights = {key: int(weight) for key, weight in weights.items() if key in checks and int(weight) > 0}
+    accommodation_only = {"rooms", "room_descriptions"}
+    schema_key = str(snapshot.get("schema_key") or ("accommodation" if is_accommodation else "service"))
+    schema_version = int(snapshot.get("schema_version") or 1)
+    try:
+        configured_weights = applicable_quality_weights(
+            weights,
+            schema_key=schema_key,
+            schema_version=schema_version,
+        )
+    except CatalogEntityValidationError:
+        configured_weights = dict(weights)
+    active_weights = {
+        key: int(weight)
+        for key, weight in configured_weights.items()
+        if key in checks
+        and int(weight) > 0
+        and (is_accommodation or key not in accommodation_only)
+    }
     total = sum(active_weights.values())
     earned = sum(weight for key, weight in active_weights.items() if checks[key])
     score = round(earned * 100 / total) if total else 0
@@ -421,12 +648,15 @@ def calculate_card_quality(
             "level": "good" if checks["prices"] else "warning",
             "label": "Цены заполнены" if checks["prices"] else "Не заполнены цены",
         },
-        {
-            "key": "rooms",
-            "level": "good" if checks["room_descriptions"] else "danger",
-            "label": "Варианты размещения описаны" if checks["room_descriptions"] else "Нет описания комнат",
-        },
     ]
+    if is_accommodation:
+        health.append(
+            {
+                "key": "rooms",
+                "level": "good" if checks["room_descriptions"] else "danger",
+                "label": "Варианты размещения описаны" if checks["room_descriptions"] else "Нет описания комнат",
+            }
+        )
     return {
         "score": score,
         "earned_weight": earned,

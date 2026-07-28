@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Any, List, Optional
+from typing import Any, List, Literal, Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -46,6 +46,12 @@ class SuperAdminCampSummaryDTO(BaseModel):
     place_type_id: Optional[int] = None
     place_type_slug: Optional[str] = None
     place_type_name: Optional[str] = None
+    entity_kind: Optional[str] = None
+    entity_kind_name: Optional[str] = None
+    schema_key: Optional[str] = None
+    schema_version: Optional[int] = None
+    visibility: Optional[str] = None
+    price_mode: Optional[str] = None
     address: Optional[str] = None
     lake_name: Optional[str] = None
     status: Optional[str] = None
@@ -58,6 +64,15 @@ class SuperAdminCampSummaryDTO(BaseModel):
     lng: Optional[float] = None
     archived_at: Optional[datetime] = None
     linked_admins: List[dict] = Field(default_factory=list)
+
+
+class SuperAdminEntityBulkRequest(BaseModel):
+    entity_ids: List[int] = Field(min_length=1, max_length=200)
+    publication_status: Literal["draft", "disabled", "published", "archived"]
+
+
+class SuperAdminEntityBulkResponseDTO(OkResponseDTO):
+    items: List[dict] = Field(default_factory=list)
 
 
 class SuperAdminUserSummaryDTO(BaseModel):

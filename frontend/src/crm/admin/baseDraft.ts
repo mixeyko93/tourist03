@@ -1,3 +1,6 @@
+import type { AdminPriceMode } from "./entityEditorDraft";
+import type { SuperadminPlaceContact } from "./session";
+
 export type AdminBaseStatus = "Активный" | "Отключен" | "В архиве";
 export type AdminPublicationStatus = "draft" | "in_review" | "published" | "disabled" | "archived" | "rejected";
 
@@ -33,6 +36,7 @@ export type AdminBaseDraft = {
   placeTypeId: string;
   publicationStatus: AdminPublicationStatus;
   shortDescription: string;
+  attributes: Record<string, unknown>;
   region: string;
   district: string;
   city: string;
@@ -48,6 +52,8 @@ export type AdminBaseDraft = {
   whatsappUrl: string;
   maxUrl: string;
   vkUrl: string;
+  routeUrl: string;
+  contactsSnapshot: SuperadminPlaceContact[];
   videoLinks: string;
   amenitySlugs: string[];
   coverPlaceholderConfirmed: boolean;
@@ -73,6 +79,8 @@ export type AdminBaseDraft = {
   markerIcon: "tent" | "house" | "trees" | "waves" | "ship";
   description: string;
   minPrice: string;
+  priceMode: AdminPriceMode;
+  currency: string;
   gallery: string[];
   videoUrl: string;
   videoPosterUrl: string;
@@ -115,6 +123,7 @@ export function createEmptyAdminBaseDraft(): AdminBaseDraft {
     placeTypeId: "",
     publicationStatus: "draft",
     shortDescription: "",
+    attributes: {},
     region: "",
     district: "",
     city: "",
@@ -130,6 +139,8 @@ export function createEmptyAdminBaseDraft(): AdminBaseDraft {
     whatsappUrl: "",
     maxUrl: "",
     vkUrl: "",
+    routeUrl: "",
+    contactsSnapshot: [],
     videoLinks: "",
     amenitySlugs: [],
     coverPlaceholderConfirmed: false,
@@ -154,7 +165,9 @@ export function createEmptyAdminBaseDraft(): AdminBaseDraft {
     markerSize: "Стандарт",
     markerIcon: "tent",
     description: "",
-    minPrice: "0 ₽",
+    minPrice: "",
+    priceMode: "none",
+    currency: "RUB",
     gallery: [],
     videoUrl: "",
     videoPosterUrl: "",

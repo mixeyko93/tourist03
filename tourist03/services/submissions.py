@@ -18,6 +18,7 @@ from tourist03.domain.submissions import (
     idempotency_hash_for,
     new_secret_token,
     tracking_token_for,
+    validate_submission_entity_data,
     validate_submission_payload,
 )
 from tourist03.dto.submissions import (
@@ -63,8 +64,88 @@ def _client_hashes(request: Request) -> tuple[str | None, str | None]:
     )
 
 
+def _submission_entity_context(
+    request: Request,
+    place_type_id: int | None,
+    *,
+    schema_key: str | None = None,
+    schema_version: int | None = None,
+) -> dict:
+    if not place_type_id:
+        raise SubmissionValidationError("Выберите тип объекта")
+    settings = request.app.state.settings
+    types = (
+        catalog_repo.list_entity_types()
+        if settings.feature_services
+        else catalog_repo.list_place_types()
+    )
+    entity_type = next(
+        (item for item in types if int(item.get("id") or 0) == int(place_type_id)),
+        None,
+    )
+    if not entity_type:
+        raise SubmissionValidationError("Выбранный тип объекта недоступен")
+    entity_kind = str(entity_type.get("entity_kind") or "accommodation").strip().lower()
+    if not settings.feature_services and entity_kind != "accommodation":
+        raise SubmissionValidationError("Выбранный тип объекта недоступен")
+    frozen_key = str(
+        schema_key
+        or entity_type.get("schema_key")
+        or entity_type.get("default_schema_key")
+        or ""
+    ).strip().lower()
+    try:
+        frozen_version = int(
+            schema_version
+            or entity_type.get("schema_version")
+            or entity_type.get("default_schema_version")
+            or 1
+        )
+    except (TypeError, ValueError) as exc:
+        raise SubmissionValidationError("Версия схемы карточки некорректна") from exc
+    if not frozen_key:
+        raise SubmissionValidationError("Для выбранного типа не настроена схема карточки")
+    schema_definition = None
+    if settings.feature_services:
+        schemas = catalog_repo.list_entity_schemas(schema_key=frozen_key)
+        schema_row = next(
+            (
+                item
+                for item in schemas
+                if int(item.get("version") or 0) == frozen_version
+            ),
+            None,
+        )
+        if not schema_row:
+            raise SubmissionValidationError("Замороженная схема заявки недоступна")
+        schema_definition = {
+            "schema_key": schema_row.get("schema_key") or schema_row.get("key"),
+            "version": schema_row.get("version"),
+            "title": schema_row.get("title") or schema_row.get("name"),
+            "applicable_kinds": schema_row.get("applicable_kinds"),
+            "fields": schema_row.get("fields"),
+            "sections": schema_row.get("sections"),
+            "validation": schema_row.get("validation"),
+            "display": schema_row.get("display"),
+            "schema_org_type": schema_row.get("schema_org_type"),
+            "quality_keys": schema_row.get("quality_keys"),
+        }
+    return {
+        "entity_type": entity_type,
+        "entity_kind": entity_kind,
+        "schema_key": frozen_key,
+        "schema_version": frozen_version,
+        "schema_definition": schema_definition,
+    }
+
+
 def public_submission_config(request: Request) -> dict:
     settings = request.app.state.settings
+    place_types = (
+        catalog_repo.list_entity_types()
+        if settings.feature_services
+        else catalog_repo.list_place_types()
+    )
     return {
         "ok": True,
         "format_version": 1,
@@ -74,7 +155,9 @@ def public_submission_config(request: Request) -> dict:
             "room_photos": settings.submission_max_room_photos,
             "image_bytes": settings.submission_max_image_bytes,
         },
-        "place_types": catalog_repo.list_place_types(),
+        "place_types": place_types,
+        "entity_kinds": catalog_repo.list_entity_kinds() if settings.feature_services else [],
+        "entity_schemas": catalog_repo.list_entity_schemas() if settings.feature_services else [],
         "amenities": catalog_repo.list_public_amenities(),
     }
 
@@ -109,13 +192,48 @@ def create_public_draft(request: Request, payload: SubmissionDraftCreateRequest)
 
 
 def patch_public_draft(
+    request: Request,
     draft_token: str,
     payload: SubmissionDraftPatchRequest,
 ) -> dict:
     changes = payload.model_dump(exclude_unset=True)
     expected_version = changes.pop("content_version", None)
+    draft_hash = hash_token(draft_token)
+    current = submission_repo.get_draft_by_token_hash(draft_hash)
+    if not current:
+        raise HTTPException(status_code=404, detail="Черновик не найден или истёк")
+    merged = {**current, **changes}
+    selected_type_id = merged.get("place_type_id")
+    if selected_type_id:
+        type_changed = (
+            "place_type_id" in changes
+            and int(changes["place_type_id"] or 0) != int(current.get("place_type_id") or 0)
+        )
+        try:
+            context = _submission_entity_context(
+                request,
+                selected_type_id,
+                schema_key=None if type_changed else current.get("schema_key"),
+                schema_version=None if type_changed else current.get("schema_version"),
+            )
+            entity_data = validate_submission_entity_data(
+                merged,
+                entity_kind=context["entity_kind"],
+                schema_key=context["schema_key"],
+                schema_version=context["schema_version"],
+                schema_definition=context["schema_definition"],
+            )
+        except SubmissionValidationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        changes["extra_data"] = entity_data["extra_data"]
+        changes["rooms_payload"] = entity_data["rooms_payload"]
+    elif merged.get("extra_data") or merged.get("rooms_payload"):
+        raise HTTPException(
+            status_code=422,
+            detail="Сначала выберите тип объекта",
+        )
     row = submission_repo.patch_draft(
-        hash_token(draft_token),
+        draft_hash,
         changes,
         expected_version=expected_version,
     )
@@ -157,6 +275,20 @@ async def upload_public_draft_media(
     else:
         if not normalized_room or len(normalized_room) > 80:
             raise HTTPException(status_code=400, detail="Не указан вариант размещения")
+        try:
+            context = _submission_entity_context(
+                request,
+                draft.get("place_type_id"),
+                schema_key=draft.get("schema_key"),
+                schema_version=draft.get("schema_version"),
+            )
+        except SubmissionValidationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if context["entity_kind"] != "accommodation":
+            raise HTTPException(
+                status_code=400,
+                detail="Фото вариантов размещения доступны только для объектов проживания",
+            )
         limit = settings.submission_max_room_photos
     if submission_repo.count_media(
         draft["id"],
@@ -278,7 +410,25 @@ async def submit_public_submission(
     if recent >= settings.submission_rate_per_hour:
         raise HTTPException(status_code=429, detail="Слишком много заявок. Повторите позже")
     try:
-        cleaned = validate_submission_payload(draft)
+        context = _submission_entity_context(
+            request,
+            draft.get("place_type_id"),
+            schema_key=draft.get("schema_key"),
+            schema_version=draft.get("schema_version"),
+        )
+        if context["entity_kind"] != "accommodation":
+            media = submission_repo.list_submission_media(int(draft["id"]))
+            if any(item.get("scope") == "room" for item in media):
+                raise SubmissionValidationError(
+                    "Фото вариантов размещения доступны только для объектов проживания"
+                )
+        cleaned = validate_submission_payload(
+            draft,
+            entity_kind=context["entity_kind"],
+            schema_key=context["schema_key"],
+            schema_version=context["schema_version"],
+            schema_definition=context["schema_definition"],
+        )
     except SubmissionValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 

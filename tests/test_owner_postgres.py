@@ -2,15 +2,18 @@ import asyncio
 import os
 import unittest
 from contextlib import contextmanager
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 import httpx
 
 import app as app_module
 from tourist03.db import _db_conn
+from tourist03.domain.owner_changes import OwnerChangeValidationError
 from tourist03.migrations import run_migrations
 from tourist03.owner_security import hash_owner_password
 from tourist03 import owner_security
+from tourist03.repositories import catalog as catalog_repo
 from tourist03.repositories import owners as owner_repo
 from tourist03.security import hash_password
 from tourist03.settings import Settings, configure_settings
@@ -169,6 +172,140 @@ class OwnerPortalPostgresTests(unittest.TestCase):
         self.assertFalse(repeated_apply)
         self.assertEqual(repeated["status"], "applied")
 
+    def test_submit_atomically_persists_the_current_unsaved_proposal(self):
+        change, _ = owner_repo.create_owner_change(self.owner["id"], self.camp_id)
+        latest_proposal = {
+            "name": "Карточка из текущей формы",
+            "region": "Республика Бурятия",
+            "district": "Прибайкальский район",
+            "city": "Турка",
+            "address": "Набережная, 7",
+            "lat": 52.9542,
+            "lng": 108.2184,
+            "working_hours": {"text": "Ежедневно 09:00–21:00"},
+            "working_hours_mode": "schedule",
+            "price_mode": "from",
+            "currency": "RUB",
+            "min_price": 7200,
+        }
+        submitted = owner_repo.transition_owner_change(
+            change["id"],
+            target="submitted",
+            actor_type="owner",
+            actor_id=self.owner["id"],
+            owner_id=self.owner["id"],
+            proposed_payload=latest_proposal,
+            expected_version=change["content_version"],
+        )
+        self.assertEqual(submitted["status"], "submitted")
+        self.assertEqual(submitted["proposed_payload"], latest_proposal)
+        self.assertIn("region", {item["field"] for item in submitted["diff_payload"]})
+        self.assertIn("working_hours", {item["field"] for item in submitted["diff_payload"]})
+        self.assertEqual(
+            owner_repo.get_camp_snapshot(self.camp_id)["name"],
+            "Старая карточка",
+        )
+
+    def test_public_detail_tolerates_legacy_scalar_working_hours(self):
+        with _db_conn("catalog") as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                UPDATE catalog.camps
+                SET working_hours = '"[object Object]"'::jsonb,
+                    visibility = 'public',
+                    publication_status = 'published',
+                    status = 'active'
+                WHERE id = %s
+                RETURNING slug
+                """,
+                (self.camp_id,),
+            )
+            slug = cur.fetchone()["slug"]
+            conn.commit()
+        detail = catalog_repo.get_public_entity(slug)
+        self.assertIsNotNone(detail)
+        self.assertEqual(detail["working_hours"], {})
+
+    def test_disabled_services_hide_universal_entities_but_keep_accommodation_create(self):
+        universal_entity, universal_change = owner_repo.create_owner_entity(
+            owner_id=self.owner["id"],
+            entity_kind="excursion",
+            subtype="excursion",
+            name="Скрытая экскурсия",
+            proposed_payload={
+                "name": "Скрытая экскурсия",
+                "attributes": {},
+                "request_publication": True,
+            },
+        )
+
+        async def scenario():
+            application = app_module.create_app(self.settings)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=application),
+                base_url="http://testserver",
+            ) as client:
+                logged_in = await client.post(
+                    "/api/owner/auth/login",
+                    json={
+                        "email": self.owner["email"],
+                        "password": "OwnerPassword123",
+                    },
+                )
+                self.assertEqual(logged_in.status_code, 200, logged_in.text)
+                csrf = logged_in.json()["csrf_token"]
+                entities = await client.get("/api/owner/entities")
+                self.assertEqual(entities.status_code, 200, entities.text)
+                self.assertNotIn(
+                    universal_entity["id"],
+                    {item["id"] for item in entities.json()["entities"]},
+                )
+                hidden_detail = await client.get(
+                    f"/api/owner/entities/{universal_entity['id']}"
+                )
+                self.assertEqual(hidden_detail.status_code, 404)
+                hidden_change = await client.get(
+                    f"/api/owner/changes/{universal_change['id']}"
+                )
+                self.assertEqual(hidden_change.status_code, 404)
+                blocked_create = await client.post(
+                    "/api/owner/entities",
+                    headers={"X-CSRF-Token": csrf},
+                    json={
+                        "entity_kind": "excursion",
+                        "subtype": "excursion",
+                        "name": "Новая экскурсия",
+                        "attributes": {},
+                    },
+                )
+                self.assertEqual(blocked_create.status_code, 404)
+                accommodation = await client.post(
+                    "/api/owner/entities",
+                    headers={"X-CSRF-Token": csrf},
+                    json={
+                        "entity_kind": "accommodation",
+                        "subtype": "recreation-base",
+                        "name": "Новая база",
+                        "region": "Республика Бурятия",
+                        "district": "Прибайкальский район",
+                        "city": "Турка",
+                        "address": "Береговая улица, 4",
+                        "lat": 52.95,
+                        "lng": 108.22,
+                        "attributes": {},
+                        "price_mode": "request",
+                        "currency": "RUB",
+                    },
+                )
+                self.assertEqual(accommodation.status_code, 200, accommodation.text)
+                proposal = accommodation.json()["change"]["proposed_payload"]
+                self.assertEqual(proposal["region"], "Республика Бурятия")
+                self.assertEqual(proposal["lat"], 52.95)
+                self.assertEqual(proposal["lng"], 108.22)
+
+        asyncio.run(scenario())
+
     def test_password_reset_stores_only_hash_and_outbox_reference(self):
         reset, raw_token = owner_repo.create_owner_reset(
             owner_id=self.owner["id"],
@@ -298,6 +435,81 @@ class OwnerPortalPostgresTests(unittest.TestCase):
             cur = conn.cursor()
             cur.execute("SELECT COUNT(*)::int AS count FROM catalog.camp_media WHERE id = %s", (media_id,))
             self.assertEqual(cur.fetchone()["count"], 0)
+
+    def test_staged_room_media_requires_current_accommodation_room_and_shared_quota(self):
+        change, created = owner_repo.create_owner_change(
+            self.owner["id"],
+            self.camp_id,
+        )
+        self.assertTrue(created)
+        owner_repo.save_owner_change(
+            change["id"],
+            self.owner["id"],
+            {
+                "rooms": [
+                    {
+                        "id": 808,
+                        "client_id": "room-current",
+                        "name": "Текущий номер",
+                    }
+                ]
+            },
+            expected_version=change["content_version"],
+        )
+
+        def stage(room_client_id: str, suffix: str):
+            return owner_repo.create_owner_change_media(
+                change_id=change["id"],
+                owner_id=self.owner["id"],
+                scope="room",
+                room_client_id=room_client_id,
+                storage_key=f"owner-changes/staged/{suffix}.webp",
+                thumbnail_storage_key=(
+                    f"owner-changes/staged/{suffix}-thumb.webp"
+                ),
+                preview_token=f"preview-{suffix}".ljust(40, "x"),
+                public_preview_url=f"/preview/{suffix}",
+                original_filename=f"{suffix}.jpg",
+                safe_filename=f"{suffix}.webp",
+                mime_type="image/webp",
+                size_bytes=120,
+                width=20,
+                height=20,
+                sort_order=0,
+                is_cover=True,
+                expires_at=datetime.now(timezone.utc)
+                + timedelta(days=1),
+                max_count=1,
+            )
+
+        with self.assertRaisesRegex(
+            OwnerChangeValidationError,
+            "отсутствует в текущем черновике",
+        ):
+            stage("forged-room", "forged")
+
+        staged = stage("room-current", "valid")
+        self.assertEqual(staged["room_client_id"], "room-current")
+
+        with self.assertRaisesRegex(ValueError, "лимит фотографий"):
+            stage("000808", "numeric-alias")
+
+        with _db_conn("moderation") as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT COUNT(*)::int AS count,
+                       MIN(room_client_id) AS room_client_id
+                FROM moderation.owner_change_request_media
+                WHERE change_request_id = %s
+                  AND scope = 'room'
+                  AND deleted_at IS NULL
+                """,
+                (change["id"],),
+            )
+            stored = cur.fetchone()
+        self.assertEqual(stored["count"], 1)
+        self.assertEqual(stored["room_client_id"], "room-current")
 
     def test_owner_can_unpublish_but_cannot_directly_republish(self):
         row = owner_repo.unpublish_owner_camp(self.owner["id"], self.camp_id)

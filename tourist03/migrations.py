@@ -17,6 +17,18 @@ PAYMENT_STATUS_SQL = _sql_literals(booking_domain.ALLOWED_PAYMENT_STATUSES)
 IGNORED_STATUS_SQL = _sql_literals(booking_domain.CONFLICT_IGNORED_STATUSES)
 
 
+# Historical migration data is intentionally literal. Runtime registry changes
+# must be introduced as a new schema version in a new migration, never by
+# changing the meaning of 0027 for freshly installed databases.
+ENTITY_SCHEMA_SEED_VALUES = r"""
+('accommodation', 1, 'Размещение', (SELECT id FROM catalog.entity_kinds WHERE slug = 'accommodation'), '["accommodation"]'::jsonb, '[{"key":"accommodation_format","label":"Формат размещения","type":"string","section":"accommodation","public":true,"required":false,"max_length":160},{"key":"check_in_time","label":"Заезд","type":"string","section":"accommodation","public":true,"required":false,"max_length":40},{"key":"check_out_time","label":"Выезд","type":"string","section":"accommodation","public":true,"required":false,"max_length":40}]'::jsonb, '[{"key":"accommodation","title":"Размещение","component":"facts","fields":["accommodation_format","check_in_time","check_out_time"]},{"key":"rooms","title":"Варианты размещения","component":"rooms","fields":[]}]'::jsonb, '{"additional_properties":false}'::jsonb, '{"detail_layout":"accommodation","marker_style":"brand"}'::jsonb, 'LodgingBusiness', '["name","short_description","description","photos","cover","contacts","amenities","prices","videos","coordinates","working_hours","seasonality","surroundings","rooms","room_descriptions"]'::jsonb),
+('excursion', 1, 'Экскурсия', (SELECT id FROM catalog.entity_kinds WHERE slug = 'excursion'), '["excursion"]'::jsonb, '[{"key":"duration_minutes","label":"Продолжительность","type":"integer","section":"excursion","public":true,"required":false,"min":1,"max":100800,"unit":"мин"},{"key":"group_size_min","label":"Минимальная группа","type":"integer","section":"excursion","public":true,"required":false,"min":1,"max":100000,"unit":"чел."},{"key":"group_size_max","label":"Максимальная группа","type":"integer","section":"excursion","public":true,"required":false,"min":1,"max":100000,"unit":"чел."},{"key":"meeting_point","label":"Место встречи","type":"string","section":"excursion","public":true,"required":false,"max_length":500},{"key":"route_length_km","label":"Протяжённость маршрута","type":"number","section":"excursion","public":true,"required":false,"min":0,"max":100000,"unit":"км"},{"key":"languages","label":"Языки","type":"string_list","section":"excursion","public":true,"required":false,"max_items":20,"max_length":80}]'::jsonb, '[{"key":"excursion","title":"Об экскурсии","component":"facts","fields":["duration_minutes","group_size_min","group_size_max","meeting_point","route_length_km","languages"]}]'::jsonb, '{"additional_properties":false}'::jsonb, '{"detail_layout":"excursion","marker_style":"brand"}'::jsonb, 'TouristTrip', '["name","short_description","description","photos","cover","contacts","amenities","prices","videos","coordinates","working_hours","seasonality","surroundings"]'::jsonb),
+('guide', 1, 'Гид или инструктор', (SELECT id FROM catalog.entity_kinds WHERE slug = 'guide'), '["guide"]'::jsonb, '[{"key":"experience_years","label":"Опыт","type":"integer","section":"guide","public":true,"required":false,"min":0,"max":100,"unit":"лет"},{"key":"languages","label":"Языки","type":"string_list","section":"guide","public":true,"required":false,"max_items":20,"max_length":80},{"key":"categories","label":"Направления","type":"string_list","section":"guide","public":true,"required":false,"max_items":30,"max_length":120},{"key":"license_info","label":"Квалификация","type":"string","section":"guide","public":true,"required":false,"max_length":1000}]'::jsonb, '[{"key":"guide","title":"О специалисте","component":"facts","fields":["experience_years","languages","categories","license_info"]}]'::jsonb, '{"additional_properties":false}'::jsonb, '{"detail_layout":"guide","marker_style":"brand"}'::jsonb, 'ProfessionalService', '["name","short_description","description","photos","cover","contacts","amenities","prices","videos","coordinates","working_hours","seasonality","surroundings"]'::jsonb),
+('restaurant', 1, 'Питание', (SELECT id FROM catalog.entity_kinds WHERE slug = 'food'), '["food"]'::jsonb, '[{"key":"cuisine","label":"Кухня","type":"string_list","section":"restaurant","public":true,"required":false,"max_items":20,"max_length":80},{"key":"average_check","label":"Средний чек","type":"integer","section":"restaurant","public":true,"required":false,"min":0,"max":1000000000,"unit":"₽"},{"key":"reservation_required","label":"Нужно бронирование","type":"boolean","section":"restaurant","public":true,"required":false},{"key":"delivery","label":"Есть доставка","type":"boolean","section":"restaurant","public":true,"required":false}]'::jsonb, '[{"key":"restaurant","title":"О заведении","component":"facts","fields":["cuisine","average_check","reservation_required","delivery"]}]'::jsonb, '{"additional_properties":false}'::jsonb, '{"detail_layout":"restaurant","marker_style":"brand"}'::jsonb, 'Restaurant', '["name","short_description","description","photos","cover","contacts","amenities","prices","videos","coordinates","working_hours","seasonality","surroundings"]'::jsonb),
+('service', 1, 'Услуга или активность', (SELECT id FROM catalog.entity_kinds WHERE slug = 'service'), '["service","activity","transport","rental","event","sight"]'::jsonb, '[{"key":"duration_minutes","label":"Продолжительность","type":"integer","section":"service","public":true,"required":false,"min":1,"max":100800,"unit":"мин"},{"key":"capacity","label":"Вместимость","type":"integer","section":"service","public":true,"required":false,"min":1,"max":100000,"unit":"чел."},{"key":"meeting_point","label":"Место встречи","type":"string","section":"service","public":true,"required":false,"max_length":500},{"key":"pricing_note","label":"Условия стоимости","type":"string","section":"pricing","public":true,"required":false,"max_length":1000},{"key":"advance_booking","label":"Нужна предварительная запись","type":"boolean","section":"service","public":true,"required":false}]'::jsonb, '[{"key":"service","title":"Об услуге","component":"facts","fields":["duration_minutes","capacity","meeting_point","advance_booking"]},{"key":"pricing","title":"Стоимость","component":"pricing","fields":["pricing_note"]}]'::jsonb, '{"additional_properties":false}'::jsonb, '{"detail_layout":"service","marker_style":"brand"}'::jsonb, 'LocalBusiness', '["name","short_description","description","photos","cover","contacts","amenities","prices","videos","coordinates","working_hours","seasonality","surroundings"]'::jsonb)
+""".strip()
+
+
 @dataclass(frozen=True)
 class MigrationStep:
     version: str
@@ -2085,6 +2097,738 @@ MIGRATIONS = (
         ALTER TABLE moderation.owner_change_request_notes VALIDATE CONSTRAINT owner_change_notes_request_fk;
         ALTER TABLE crm.notification_events VALIDATE CONSTRAINT notification_events_owner_account_fk;
         ALTER TABLE crm.notification_events VALIDATE CONSTRAINT notification_events_owner_change_fk;
+        """,
+    ),
+    MigrationStep(
+        version="0026_entity_taxonomy",
+        sql="""
+        CREATE TABLE IF NOT EXISTS catalog.entity_kinds (
+            id SERIAL PRIMARY KEY,
+            slug TEXT NOT NULL,
+            name TEXT NOT NULL,
+            plural_name TEXT NOT NULL,
+            marker_key TEXT NOT NULL,
+            icon_key TEXT NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            config JSONB NOT NULL DEFAULT '{}'::jsonb,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            CONSTRAINT entity_kinds_slug_format
+                CHECK (slug ~ '^[a-z][a-z0-9-]{1,63}$'),
+            CONSTRAINT entity_kinds_config_object
+                CHECK (jsonb_typeof(config) = 'object')
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_entity_kinds_slug_unique
+        ON catalog.entity_kinds((lower(slug)));
+
+        INSERT INTO catalog.entity_kinds (
+            slug, name, plural_name, marker_key, icon_key, sort_order, config
+        ) VALUES
+            ('accommodation', 'Проживание', 'Объекты размещения', 'accommodation', 'hotel', 10, '{"map_filter":true}'::jsonb),
+            ('service', 'Услуга', 'Услуги', 'service', 'service', 20, '{"map_filter":true}'::jsonb),
+            ('activity', 'Активность', 'Активности', 'activity', 'activity', 30, '{"map_filter":true}'::jsonb),
+            ('food', 'Питание', 'Питание', 'food', 'restaurant', 40, '{"map_filter":true}'::jsonb),
+            ('transport', 'Транспорт', 'Транспорт', 'transport', 'transfer', 50, '{"map_filter":true}'::jsonb),
+            ('rental', 'Прокат', 'Прокат', 'rental', 'rental', 60, '{"map_filter":true}'::jsonb),
+            ('guide', 'Гид', 'Гиды и инструкторы', 'guide', 'guide', 70, '{"map_filter":true}'::jsonb),
+            ('event', 'Событие', 'События', 'event', 'event', 80, '{"map_filter":true}'::jsonb),
+            ('sight', 'Достопримечательность', 'Достопримечательности', 'sight', 'sight', 90, '{"map_filter":true}'::jsonb),
+            ('excursion', 'Экскурсия', 'Экскурсии', 'excursion', 'excursion', 100, '{"map_filter":true}'::jsonb)
+        ON CONFLICT ((lower(slug))) DO UPDATE SET
+            name = EXCLUDED.name,
+            plural_name = EXCLUDED.plural_name,
+            marker_key = EXCLUDED.marker_key,
+            icon_key = EXCLUDED.icon_key,
+            sort_order = EXCLUDED.sort_order,
+            config = catalog.entity_kinds.config || EXCLUDED.config,
+            updated_at = NOW();
+
+        ALTER TABLE catalog.place_types
+        ADD COLUMN IF NOT EXISTS entity_kind_id INTEGER;
+        ALTER TABLE catalog.place_types
+        ADD COLUMN IF NOT EXISTS default_schema_key TEXT;
+        ALTER TABLE catalog.place_types
+        ADD COLUMN IF NOT EXISTS default_schema_version INTEGER;
+
+        UPDATE catalog.place_types
+        SET entity_kind_id = (
+                SELECT id FROM catalog.entity_kinds WHERE slug = 'accommodation'
+            ),
+            default_schema_key = COALESCE(default_schema_key, 'accommodation'),
+            default_schema_version = COALESCE(default_schema_version, 1)
+        WHERE entity_kind_id IS NULL
+           OR default_schema_key IS NULL
+           OR default_schema_version IS NULL;
+
+        INSERT INTO catalog.place_types (
+            slug, name, plural_name, marker_key, icon_key, sort_order, config,
+            entity_kind_id, default_schema_key, default_schema_version
+        ) VALUES
+            (
+                'boat-rental', 'Прокат лодок и катеров', 'Прокат лодок и катеров',
+                'boat-rental', 'boat', 200,
+                '{"search_aliases":["лодка","катер","моторная лодка"]}'::jsonb,
+                (SELECT id FROM catalog.entity_kinds WHERE slug = 'rental'), 'service', 1
+            ),
+            (
+                'quad-rental', 'Прокат квадроциклов', 'Прокат квадроциклов',
+                'quad-rental', 'atv', 210,
+                '{"search_aliases":["квадроцикл","квадроциклы"]}'::jsonb,
+                (SELECT id FROM catalog.entity_kinds WHERE slug = 'rental'), 'service', 1
+            ),
+            (
+                'guide', 'Гид или инструктор', 'Гиды и инструкторы',
+                'guide', 'guide', 220,
+                '{"search_aliases":["гид","инструктор","проводник"]}'::jsonb,
+                (SELECT id FROM catalog.entity_kinds WHERE slug = 'guide'), 'guide', 1
+            ),
+            (
+                'fishing', 'Рыбалка', 'Рыбалка',
+                'fishing', 'fishing', 230,
+                '{"search_aliases":["рыбалка","рыболовный тур"]}'::jsonb,
+                (SELECT id FROM catalog.entity_kinds WHERE slug = 'activity'), 'service', 1
+            ),
+            (
+                'excursion', 'Экскурсия', 'Экскурсии',
+                'excursion', 'excursion', 240,
+                '{"search_aliases":["экскурсия","тур","маршрут"]}'::jsonb,
+                (SELECT id FROM catalog.entity_kinds WHERE slug = 'excursion'), 'excursion', 1
+            ),
+            (
+                'restaurant', 'Ресторан или кафе', 'Рестораны и кафе',
+                'restaurant', 'restaurant', 250,
+                '{"search_aliases":["ресторан","кафе","питание"]}'::jsonb,
+                (SELECT id FROM catalog.entity_kinds WHERE slug = 'food'), 'restaurant', 1
+            ),
+            (
+                'transfer', 'Трансфер', 'Трансферы',
+                'transfer', 'transfer', 260,
+                '{"search_aliases":["трансфер","такси","перевозка"]}'::jsonb,
+                (SELECT id FROM catalog.entity_kinds WHERE slug = 'transport'), 'service', 1
+            ),
+            (
+                'sauna', 'Баня или сауна', 'Бани и сауны',
+                'sauna', 'sauna', 270,
+                '{"search_aliases":["баня","сауна"]}'::jsonb,
+                (SELECT id FROM catalog.entity_kinds WHERE slug = 'service'), 'service', 1
+            ),
+            (
+                'camping-equipment', 'Прокат туристического снаряжения', 'Прокат туристического снаряжения',
+                'camping-equipment', 'camping-equipment', 280,
+                '{"search_aliases":["палатка","туристическое снаряжение","кемпинг"]}'::jsonb,
+                (SELECT id FROM catalog.entity_kinds WHERE slug = 'rental'), 'service', 1
+            ),
+            (
+                'sup', 'Прокат SUP', 'Прокат SUP',
+                'sup', 'sup', 290,
+                '{"search_aliases":["sup","сап","сапборд"]}'::jsonb,
+                (SELECT id FROM catalog.entity_kinds WHERE slug = 'rental'), 'service', 1
+            ),
+            (
+                'kayak', 'Прокат каяков', 'Прокат каяков',
+                'kayak', 'kayak', 300,
+                '{"search_aliases":["каяк","байдарка"]}'::jsonb,
+                (SELECT id FROM catalog.entity_kinds WHERE slug = 'rental'), 'service', 1
+            ),
+            (
+                'atv', 'Квадроцикл', 'Квадроциклы',
+                'atv', 'atv', 310,
+                '{"search_aliases":["atv","квадроцикл"]}'::jsonb,
+                (SELECT id FROM catalog.entity_kinds WHERE slug = 'rental'), 'service', 1
+            ),
+            (
+                'snowmobile', 'Снегоход', 'Снегоходы',
+                'snowmobile', 'snowmobile', 320,
+                '{"search_aliases":["снегоход","снегоходный тур"]}'::jsonb,
+                (SELECT id FROM catalog.entity_kinds WHERE slug = 'rental'), 'service', 1
+            ),
+            (
+                'horse-riding', 'Конная прогулка', 'Конные прогулки',
+                'horse-riding', 'horse-riding', 330,
+                '{"search_aliases":["лошадь","конная прогулка","верховая езда"]}'::jsonb,
+                (SELECT id FROM catalog.entity_kinds WHERE slug = 'activity'), 'service', 1
+            ),
+            (
+                'equipment-rental', 'Прокат оборудования', 'Прокат оборудования',
+                'equipment-rental', 'equipment-rental', 340,
+                '{"search_aliases":["прокат","аренда","оборудование"]}'::jsonb,
+                (SELECT id FROM catalog.entity_kinds WHERE slug = 'rental'), 'service', 1
+            ),
+            (
+                'event', 'Мероприятие', 'Мероприятия',
+                'event', 'event', 350,
+                '{"search_aliases":["мероприятие","событие","фестиваль"]}'::jsonb,
+                (SELECT id FROM catalog.entity_kinds WHERE slug = 'event'), 'service', 1
+            ),
+            (
+                'activity', 'Активность', 'Активности',
+                'activity', 'activity', 360,
+                '{"search_aliases":["активность","развлечение"]}'::jsonb,
+                (SELECT id FROM catalog.entity_kinds WHERE slug = 'activity'), 'service', 1
+            ),
+            (
+                'service', 'Туристическая услуга', 'Туристические услуги',
+                'service', 'service', 370,
+                '{"search_aliases":["услуга","сервис"]}'::jsonb,
+                (SELECT id FROM catalog.entity_kinds WHERE slug = 'service'), 'service', 1
+            ),
+            (
+                'sight', 'Достопримечательность', 'Достопримечательности',
+                'sight', 'sight', 380,
+                '{"search_aliases":["достопримечательность","интересное место"]}'::jsonb,
+                (SELECT id FROM catalog.entity_kinds WHERE slug = 'sight'), 'service', 1
+            )
+        ON CONFLICT ((lower(slug))) DO UPDATE SET
+            name = EXCLUDED.name,
+            plural_name = EXCLUDED.plural_name,
+            marker_key = EXCLUDED.marker_key,
+            icon_key = EXCLUDED.icon_key,
+            sort_order = EXCLUDED.sort_order,
+            config = catalog.place_types.config || EXCLUDED.config,
+            entity_kind_id = EXCLUDED.entity_kind_id,
+            default_schema_key = EXCLUDED.default_schema_key,
+            default_schema_version = EXCLUDED.default_schema_version,
+            updated_at = NOW();
+
+        ALTER TABLE catalog.place_types
+        ALTER COLUMN entity_kind_id SET NOT NULL;
+        ALTER TABLE catalog.place_types
+        ALTER COLUMN default_schema_key SET NOT NULL;
+        ALTER TABLE catalog.place_types
+        ALTER COLUMN default_schema_version SET NOT NULL;
+
+        ALTER TABLE catalog.place_types
+        DROP CONSTRAINT IF EXISTS place_types_entity_kind_fk;
+        ALTER TABLE catalog.place_types
+        ADD CONSTRAINT place_types_entity_kind_fk
+        FOREIGN KEY (entity_kind_id) REFERENCES catalog.entity_kinds(id)
+        ON DELETE RESTRICT NOT VALID;
+
+        ALTER TABLE catalog.place_types
+        DROP CONSTRAINT IF EXISTS place_types_schema_version_positive;
+        ALTER TABLE catalog.place_types
+        ADD CONSTRAINT place_types_schema_version_positive
+        CHECK (default_schema_version > 0) NOT VALID;
+
+        CREATE INDEX IF NOT EXISTS idx_place_types_entity_kind_active
+        ON catalog.place_types(entity_kind_id, is_active, sort_order, id);
+
+        ALTER TABLE catalog.place_types
+        VALIDATE CONSTRAINT place_types_entity_kind_fk;
+        ALTER TABLE catalog.place_types
+        VALIDATE CONSTRAINT place_types_schema_version_positive;
+        """,
+    ),
+    MigrationStep(
+        version="0027_entity_schemas",
+        sql=f"""
+        CREATE TABLE IF NOT EXISTS catalog.entity_schemas (
+            schema_key TEXT NOT NULL,
+            version INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            entity_kind_id INTEGER NOT NULL,
+            applicable_kinds JSONB NOT NULL DEFAULT '[]'::jsonb,
+            fields JSONB NOT NULL DEFAULT '[]'::jsonb,
+            sections JSONB NOT NULL DEFAULT '[]'::jsonb,
+            validation JSONB NOT NULL DEFAULT '{{}}'::jsonb,
+            display JSONB NOT NULL DEFAULT '{{}}'::jsonb,
+            schema_org_type TEXT NOT NULL,
+            quality_keys JSONB NOT NULL DEFAULT '[]'::jsonb,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (schema_key, version),
+            CONSTRAINT entity_schemas_key_format
+                CHECK (schema_key ~ '^[a-z][a-z0-9_-]{{1,63}}$'),
+            CONSTRAINT entity_schemas_version_positive CHECK (version > 0),
+            CONSTRAINT entity_schemas_json_shapes CHECK (
+                jsonb_typeof(applicable_kinds) = 'array'
+                AND jsonb_typeof(fields) = 'array'
+                AND jsonb_typeof(sections) = 'array'
+                AND jsonb_typeof(validation) = 'object'
+                AND jsonb_typeof(display) = 'object'
+                AND jsonb_typeof(quality_keys) = 'array'
+            )
+        );
+
+        ALTER TABLE catalog.entity_schemas
+        DROP CONSTRAINT IF EXISTS entity_schemas_entity_kind_fk;
+        ALTER TABLE catalog.entity_schemas
+        ADD CONSTRAINT entity_schemas_entity_kind_fk
+        FOREIGN KEY (entity_kind_id) REFERENCES catalog.entity_kinds(id)
+        ON DELETE RESTRICT NOT VALID;
+
+        INSERT INTO catalog.entity_schemas (
+            schema_key, version, name, entity_kind_id, applicable_kinds,
+            fields, sections, validation, display, schema_org_type, quality_keys
+        ) VALUES
+            {ENTITY_SCHEMA_SEED_VALUES}
+        ON CONFLICT (schema_key, version) DO UPDATE SET
+            name = EXCLUDED.name,
+            entity_kind_id = EXCLUDED.entity_kind_id,
+            applicable_kinds = EXCLUDED.applicable_kinds,
+            fields = EXCLUDED.fields,
+            sections = EXCLUDED.sections,
+            validation = EXCLUDED.validation,
+            display = EXCLUDED.display,
+            schema_org_type = EXCLUDED.schema_org_type,
+            quality_keys = EXCLUDED.quality_keys,
+            updated_at = NOW();
+
+        ALTER TABLE catalog.place_types
+        DROP CONSTRAINT IF EXISTS place_types_default_schema_fk;
+        ALTER TABLE catalog.place_types
+        ADD CONSTRAINT place_types_default_schema_fk
+        FOREIGN KEY (default_schema_key, default_schema_version)
+        REFERENCES catalog.entity_schemas(schema_key, version)
+        MATCH FULL ON DELETE RESTRICT NOT VALID;
+
+        ALTER TABLE catalog.camps
+        ADD COLUMN IF NOT EXISTS schema_key TEXT;
+        ALTER TABLE catalog.camps
+        ADD COLUMN IF NOT EXISTS schema_version INTEGER;
+        ALTER TABLE catalog.camps
+        ADD COLUMN IF NOT EXISTS attributes JSONB NOT NULL DEFAULT '{{}}'::jsonb;
+        ALTER TABLE catalog.camps
+        ADD COLUMN IF NOT EXISTS seo JSONB NOT NULL DEFAULT '{{}}'::jsonb;
+        ALTER TABLE catalog.camps
+        ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFAULT 'public';
+        ALTER TABLE catalog.camps
+        ADD COLUMN IF NOT EXISTS price_mode TEXT;
+        ALTER TABLE catalog.camps
+        ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'RUB';
+        ALTER TABLE catalog.camps
+        ADD COLUMN IF NOT EXISTS seasonality_key TEXT;
+        ALTER TABLE catalog.camps
+        ADD COLUMN IF NOT EXISTS working_hours_mode TEXT;
+
+        -- Schema/price backfills describe the same published revision and must
+        -- not advance optimistic-lock versions used by owner moderation.
+        ALTER TABLE catalog.camps
+        DISABLE TRIGGER trg_camps_touch_content;
+
+        UPDATE catalog.camps camps
+        SET schema_key = types.default_schema_key,
+            schema_version = types.default_schema_version
+        FROM catalog.place_types types
+        WHERE types.id = camps.place_type_id
+          AND (camps.schema_key IS NULL OR camps.schema_version IS NULL);
+
+        UPDATE catalog.camps
+        SET price_mode = CASE
+            WHEN min_price IS NULL THEN 'request'
+            ELSE 'from'
+        END
+        WHERE price_mode IS NULL;
+
+        UPDATE catalog.camps
+        SET working_hours_mode = 'schedule'
+        WHERE working_hours_mode IS NULL
+          AND working_hours IS NOT NULL
+          AND working_hours <> '{{}}'::jsonb;
+
+        ALTER TABLE catalog.camps
+        ENABLE TRIGGER trg_camps_touch_content;
+
+        ALTER TABLE catalog.camps
+        ALTER COLUMN schema_key SET NOT NULL;
+        ALTER TABLE catalog.camps
+        ALTER COLUMN schema_version SET NOT NULL;
+        ALTER TABLE catalog.camps
+        ALTER COLUMN price_mode SET NOT NULL;
+        ALTER TABLE catalog.camps
+        ALTER COLUMN price_mode SET DEFAULT 'from';
+
+        ALTER TABLE catalog.camps
+        DROP CONSTRAINT IF EXISTS camps_entity_schema_fk;
+        ALTER TABLE catalog.camps
+        ADD CONSTRAINT camps_entity_schema_fk
+        FOREIGN KEY (schema_key, schema_version)
+        REFERENCES catalog.entity_schemas(schema_key, version)
+        MATCH FULL ON DELETE RESTRICT NOT VALID;
+
+        ALTER TABLE catalog.camps
+        DROP CONSTRAINT IF EXISTS camps_attributes_object;
+        ALTER TABLE catalog.camps
+        ADD CONSTRAINT camps_attributes_object
+        CHECK (jsonb_typeof(attributes) = 'object') NOT VALID;
+
+        ALTER TABLE catalog.camps
+        DROP CONSTRAINT IF EXISTS camps_seo_object;
+        ALTER TABLE catalog.camps
+        ADD CONSTRAINT camps_seo_object
+        CHECK (jsonb_typeof(seo) = 'object') NOT VALID;
+
+        ALTER TABLE catalog.camps
+        DROP CONSTRAINT IF EXISTS camps_visibility_valid;
+        ALTER TABLE catalog.camps
+        ADD CONSTRAINT camps_visibility_valid
+        CHECK (visibility IN ('public', 'unlisted', 'hidden')) NOT VALID;
+
+        ALTER TABLE catalog.camps
+        DROP CONSTRAINT IF EXISTS camps_price_mode_valid;
+        ALTER TABLE catalog.camps
+        ADD CONSTRAINT camps_price_mode_valid
+        CHECK (price_mode IN ('from', 'fixed', 'request', 'free', 'none')) NOT VALID;
+
+        ALTER TABLE catalog.camps
+        DROP CONSTRAINT IF EXISTS camps_currency_valid;
+        ALTER TABLE catalog.camps
+        ADD CONSTRAINT camps_currency_valid
+        CHECK (currency ~ '^[A-Z]{{3}}$') NOT VALID;
+
+        ALTER TABLE catalog.camps
+        DROP CONSTRAINT IF EXISTS camps_seasonality_key_format;
+        ALTER TABLE catalog.camps
+        ADD CONSTRAINT camps_seasonality_key_format
+        CHECK (
+            seasonality_key IS NULL
+            OR seasonality_key ~ '^[a-z][a-z0-9-]{{1,63}}$'
+        ) NOT VALID;
+
+        ALTER TABLE catalog.camps
+        DROP CONSTRAINT IF EXISTS camps_working_hours_mode_valid;
+        ALTER TABLE catalog.camps
+        ADD CONSTRAINT camps_working_hours_mode_valid
+        CHECK (
+            working_hours_mode IS NULL
+            OR working_hours_mode IN (
+                'schedule', 'always_open', 'by_appointment', 'seasonal', 'closed'
+            )
+        ) NOT VALID;
+
+        CREATE OR REPLACE FUNCTION catalog.sync_entity_schema_from_subtype()
+        RETURNS TRIGGER
+        LANGUAGE plpgsql
+        AS $$
+        BEGIN
+            IF NEW.schema_key IS NULL
+               OR NEW.schema_version IS NULL
+               OR (
+                    TG_OP = 'UPDATE'
+                    AND NEW.place_type_id IS DISTINCT FROM OLD.place_type_id
+               )
+            THEN
+                SELECT default_schema_key, default_schema_version
+                INTO NEW.schema_key, NEW.schema_version
+                FROM catalog.place_types
+                WHERE id = NEW.place_type_id;
+            END IF;
+            RETURN NEW;
+        END;
+        $$;
+
+        DROP TRIGGER IF EXISTS trg_camps_sync_entity_schema ON catalog.camps;
+        CREATE TRIGGER trg_camps_sync_entity_schema
+        BEFORE INSERT OR UPDATE OF place_type_id ON catalog.camps
+        FOR EACH ROW EXECUTE FUNCTION catalog.sync_entity_schema_from_subtype();
+
+        CREATE OR REPLACE VIEW catalog.entities AS
+        SELECT
+            camps.id AS entity_id,
+            camps.slug,
+            kinds.slug AS entity_type,
+            kinds.name AS entity_type_name,
+            types.slug AS subtype,
+            types.name AS subtype_name,
+            camps.schema_key,
+            camps.schema_version,
+            camps.name,
+            camps.publication_status,
+            camps.visibility,
+            camps.is_visible_on_map,
+            camps.short_description,
+            camps.description,
+            camps.region,
+            camps.district,
+            camps.city,
+            camps.locality,
+            camps.address,
+            camps.lat,
+            camps.lng,
+            camps.seasonality,
+            camps.seasonality_key,
+            camps.working_hours,
+            camps.working_hours_mode,
+            camps.min_price,
+            camps.price_mode,
+            camps.currency,
+            camps.attributes,
+            camps.seo,
+            camps.video_urls,
+            camps.published_at,
+            camps.confirmed_at,
+            camps.created_at,
+            camps.updated_at,
+            camps.content_version
+        FROM catalog.camps camps
+        JOIN catalog.place_types types ON types.id = camps.place_type_id
+        JOIN catalog.entity_kinds kinds ON kinds.id = types.entity_kind_id;
+
+        COMMENT ON VIEW catalog.entities IS
+        'Universal read model. catalog.camps remains the physical compatibility storage; entity_id equals camps.id.';
+
+        ALTER TABLE catalog.entity_schemas
+        VALIDATE CONSTRAINT entity_schemas_entity_kind_fk;
+        ALTER TABLE catalog.place_types
+        VALIDATE CONSTRAINT place_types_default_schema_fk;
+        ALTER TABLE catalog.camps
+        VALIDATE CONSTRAINT camps_entity_schema_fk;
+        ALTER TABLE catalog.camps
+        VALIDATE CONSTRAINT camps_attributes_object;
+        ALTER TABLE catalog.camps
+        VALIDATE CONSTRAINT camps_seo_object;
+        ALTER TABLE catalog.camps
+        VALIDATE CONSTRAINT camps_visibility_valid;
+        ALTER TABLE catalog.camps
+        VALIDATE CONSTRAINT camps_price_mode_valid;
+        ALTER TABLE catalog.camps
+        VALIDATE CONSTRAINT camps_currency_valid;
+        ALTER TABLE catalog.camps
+        VALIDATE CONSTRAINT camps_seasonality_key_format;
+        ALTER TABLE catalog.camps
+        VALIDATE CONSTRAINT camps_working_hours_mode_valid;
+        """,
+    ),
+    MigrationStep(
+        version="0028_entity_workflows_indexes",
+        sql="""
+        ALTER TABLE catalog.place_contacts
+        DROP CONSTRAINT IF EXISTS place_contacts_type_valid;
+        ALTER TABLE catalog.place_contacts
+        ADD CONSTRAINT place_contacts_type_valid
+        CHECK (
+            contact_type IN (
+                'phone', 'email', 'website', 'telegram', 'whatsapp',
+                'max', 'vk', 'route', 'other'
+            )
+        ) NOT VALID;
+
+        ALTER TABLE moderation.owner_change_requests
+        ADD COLUMN IF NOT EXISTS schema_key TEXT;
+        ALTER TABLE moderation.owner_change_requests
+        ADD COLUMN IF NOT EXISTS schema_version INTEGER;
+
+        UPDATE moderation.owner_change_requests changes
+        SET schema_key = camps.schema_key,
+            schema_version = camps.schema_version
+        FROM catalog.camps camps
+        WHERE camps.id = changes.camp_id
+          AND (changes.schema_key IS NULL OR changes.schema_version IS NULL);
+
+        ALTER TABLE moderation.owner_change_requests
+        ALTER COLUMN schema_key SET NOT NULL;
+        ALTER TABLE moderation.owner_change_requests
+        ALTER COLUMN schema_version SET NOT NULL;
+
+        ALTER TABLE moderation.owner_change_requests
+        DROP CONSTRAINT IF EXISTS owner_change_entity_schema_fk;
+        ALTER TABLE moderation.owner_change_requests
+        ADD CONSTRAINT owner_change_entity_schema_fk
+        FOREIGN KEY (schema_key, schema_version)
+        REFERENCES catalog.entity_schemas(schema_key, version)
+        MATCH FULL ON DELETE RESTRICT NOT VALID;
+
+        CREATE OR REPLACE FUNCTION moderation.freeze_owner_change_schema()
+        RETURNS TRIGGER
+        LANGUAGE plpgsql
+        AS $$
+        BEGIN
+            IF NEW.schema_key IS NULL OR NEW.schema_version IS NULL THEN
+                SELECT schema_key, schema_version
+                INTO NEW.schema_key, NEW.schema_version
+                FROM catalog.camps
+                WHERE id = NEW.camp_id;
+            END IF;
+            RETURN NEW;
+        END;
+        $$;
+
+        DROP TRIGGER IF EXISTS trg_owner_change_freeze_schema
+        ON moderation.owner_change_requests;
+        CREATE TRIGGER trg_owner_change_freeze_schema
+        BEFORE INSERT ON moderation.owner_change_requests
+        FOR EACH ROW EXECUTE FUNCTION moderation.freeze_owner_change_schema();
+
+        ALTER TABLE moderation.placement_submissions
+        ADD COLUMN IF NOT EXISTS schema_key TEXT;
+        ALTER TABLE moderation.placement_submissions
+        ADD COLUMN IF NOT EXISTS schema_version INTEGER;
+
+        UPDATE moderation.placement_submissions submissions
+        SET schema_key = types.default_schema_key,
+            schema_version = types.default_schema_version
+        FROM catalog.place_types types
+        WHERE types.id = submissions.place_type_id
+          AND (
+              submissions.schema_key IS NULL
+              OR submissions.schema_version IS NULL
+          );
+
+        ALTER TABLE moderation.placement_submissions
+        DROP CONSTRAINT IF EXISTS placement_submission_schema_pair_valid;
+        ALTER TABLE moderation.placement_submissions
+        ADD CONSTRAINT placement_submission_schema_pair_valid
+        CHECK (
+            (schema_key IS NULL AND schema_version IS NULL)
+            OR (schema_key IS NOT NULL AND schema_version IS NOT NULL)
+        ) NOT VALID;
+
+        ALTER TABLE moderation.placement_submissions
+        DROP CONSTRAINT IF EXISTS placement_submission_entity_schema_fk;
+        ALTER TABLE moderation.placement_submissions
+        ADD CONSTRAINT placement_submission_entity_schema_fk
+        FOREIGN KEY (schema_key, schema_version)
+        REFERENCES catalog.entity_schemas(schema_key, version)
+        MATCH FULL ON DELETE RESTRICT NOT VALID;
+
+        CREATE OR REPLACE FUNCTION moderation.sync_submission_schema()
+        RETURNS TRIGGER
+        LANGUAGE plpgsql
+        AS $$
+        BEGIN
+            IF NEW.place_type_id IS NULL THEN
+                NEW.schema_key := NULL;
+                NEW.schema_version := NULL;
+            ELSIF NEW.schema_key IS NULL
+               OR NEW.schema_version IS NULL
+               OR (
+                    TG_OP = 'UPDATE'
+                    AND NEW.place_type_id IS DISTINCT FROM OLD.place_type_id
+               )
+            THEN
+                SELECT default_schema_key, default_schema_version
+                INTO NEW.schema_key, NEW.schema_version
+                FROM catalog.place_types
+                WHERE id = NEW.place_type_id;
+            END IF;
+            RETURN NEW;
+        END;
+        $$;
+
+        DROP TRIGGER IF EXISTS trg_submission_sync_schema
+        ON moderation.placement_submissions;
+        CREATE TRIGGER trg_submission_sync_schema
+        BEFORE INSERT OR UPDATE OF place_type_id
+        ON moderation.placement_submissions
+        FOR EACH ROW EXECUTE FUNCTION moderation.sync_submission_schema();
+
+        CREATE OR REPLACE FUNCTION catalog.entity_is_open_now(
+            mode TEXT,
+            hours JSONB,
+            at_moment TIMESTAMPTZ DEFAULT NOW()
+        )
+        RETURNS BOOLEAN
+        LANGUAGE plpgsql
+        STABLE
+        AS $$
+        DECLARE
+            local_moment TIMESTAMP := timezone('Asia/Irkutsk', at_moment);
+            iso_day INTEGER;
+            day_key TEXT;
+            schedule_text TEXT;
+            time_parts TEXT[];
+            opens_at TIME;
+            closes_at TIME;
+            local_time TIME;
+        BEGIN
+            IF mode = 'always_open' THEN
+                RETURN TRUE;
+            END IF;
+            IF mode NOT IN ('schedule', 'seasonal') OR hours IS NULL THEN
+                RETURN FALSE;
+            END IF;
+            iso_day := extract(isodow FROM local_moment)::INTEGER;
+            day_key := (ARRAY[
+                'monday', 'tuesday', 'wednesday', 'thursday',
+                'friday', 'saturday', 'sunday'
+            ])[iso_day];
+            schedule_text := COALESCE(
+                hours ->> day_key,
+                hours ->> CASE WHEN iso_day <= 5 THEN 'weekdays' ELSE 'weekends' END,
+                hours ->> 'daily',
+                hours ->> 'reception',
+                hours ->> 'text'
+            );
+            IF NULLIF(btrim(schedule_text), '') IS NULL THEN
+                RETURN FALSE;
+            END IF;
+            IF lower(schedule_text) ~ '(круглосуточ|24[[:space:]]*/[[:space:]]*7)' THEN
+                RETURN TRUE;
+            END IF;
+            time_parts := regexp_match(
+                schedule_text,
+                '([01]?[0-9]|2[0-3]):([0-5][0-9])[^0-9]+([01]?[0-9]|2[0-3]):([0-5][0-9])'
+            );
+            IF time_parts IS NULL THEN
+                RETURN FALSE;
+            END IF;
+            opens_at := make_time(time_parts[1]::INTEGER, time_parts[2]::INTEGER, 0);
+            closes_at := make_time(time_parts[3]::INTEGER, time_parts[4]::INTEGER, 0);
+            local_time := local_moment::TIME;
+            IF opens_at <= closes_at THEN
+                RETURN local_time >= opens_at AND local_time <= closes_at;
+            END IF;
+            RETURN local_time >= opens_at OR local_time <= closes_at;
+        END;
+        $$;
+
+        CREATE INDEX IF NOT EXISTS idx_camps_visibility_publication
+        ON catalog.camps(visibility, publication_status, id);
+        CREATE INDEX IF NOT EXISTS idx_camps_district_publication
+        ON catalog.camps((lower(district)), publication_status, id);
+        CREATE INDEX IF NOT EXISTS idx_camps_price_publication
+        ON catalog.camps(min_price, publication_status, id)
+        WHERE min_price IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_camps_seasonality_publication
+        ON catalog.camps(seasonality_key, publication_status, id)
+        WHERE seasonality_key IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_camps_working_hours_publication
+        ON catalog.camps(working_hours_mode, publication_status, id)
+        WHERE working_hours_mode IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_camps_universal_map
+        ON catalog.camps(place_type_id, lat, lng, id)
+        WHERE publication_status = 'published'
+          AND visibility = 'public'
+          AND is_visible_on_map = TRUE
+          AND lat IS NOT NULL
+          AND lng IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_camps_attributes_gin
+        ON catalog.camps USING GIN(attributes jsonb_path_ops);
+        CREATE INDEX IF NOT EXISTS idx_camps_public_search
+        ON catalog.camps USING GIN(
+            to_tsvector(
+                'simple'::regconfig,
+                COALESCE(name, '') || ' ' ||
+                COALESCE(short_description, '') || ' ' ||
+                COALESCE(description, '') || ' ' ||
+                COALESCE(region, '') || ' ' ||
+                COALESCE(district, '') || ' ' ||
+                COALESCE(city, '') || ' ' ||
+                COALESCE(locality, '') || ' ' ||
+                COALESCE(address, '')
+            )
+        );
+        CREATE INDEX IF NOT EXISTS idx_owner_changes_schema_status
+        ON moderation.owner_change_requests(
+            schema_key, schema_version, status, updated_at DESC, id DESC
+        );
+        CREATE INDEX IF NOT EXISTS idx_submissions_schema_status
+        ON moderation.placement_submissions(
+            schema_key, schema_version, status, created_at DESC, id DESC
+        )
+        WHERE schema_key IS NOT NULL;
+
+        ALTER TABLE catalog.place_contacts
+        VALIDATE CONSTRAINT place_contacts_type_valid;
+        ALTER TABLE moderation.owner_change_requests
+        VALIDATE CONSTRAINT owner_change_entity_schema_fk;
+        ALTER TABLE moderation.placement_submissions
+        VALIDATE CONSTRAINT placement_submission_schema_pair_valid;
+        ALTER TABLE moderation.placement_submissions
+        VALIDATE CONSTRAINT placement_submission_entity_schema_fk;
         """,
     ),
 )

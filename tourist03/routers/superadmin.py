@@ -7,6 +7,8 @@ from tourist03.dto.superadmin import (
     SuperAdminCampSummaryDTO,
     SuperAdminCreateAccountResponseDTO,
     SuperAdminCreateRootAccountResponseDTO,
+    SuperAdminEntityBulkRequest,
+    SuperAdminEntityBulkResponseDTO,
     SuperAdminMediaQueueItemDTO,
     SuperAdminRootAccountDTO,
     SuperAdminSystemEventDTO,
@@ -58,6 +60,29 @@ router.add_api_route(
     dependencies=superadmin_guard,
     response_model=list[SuperAdminCampSummaryDTO],
     responses=error_responses(401, 500),
+)
+router.add_api_route(
+    "/api/superadmin/entities",
+    superadmin_service.superadmin_list_entities,
+    methods=["GET"],
+    dependencies=superadmin_guard,
+    response_model=list[SuperAdminCampSummaryDTO],
+    responses=error_responses(401, 422, 500),
+)
+router.add_api_route(
+    "/api/superadmin/entities/bulk",
+    superadmin_service.superadmin_bulk_entities,
+    methods=["PATCH"],
+    dependencies=superadmin_guard,
+    response_model=SuperAdminEntityBulkResponseDTO,
+    responses=error_responses(401, 422, 500),
+)
+router.add_api_route(
+    "/api/superadmin/entities/{entity_id}",
+    superadmin_service.superadmin_entity_editor,
+    methods=["GET"],
+    dependencies=superadmin_guard,
+    responses=error_responses(401, 404, 422, 500),
 )
 router.add_api_route(
     "/api/superadmin/camps/{camp_id}",

@@ -13,7 +13,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from tourist03.config import STATIC_DIR, TEMPLATES
 from tourist03.csrf import issue_csrf_token
 from tourist03.migrations import migration_status
-from tourist03.public_catalog import validate_slug
+from tourist03.public_catalog import safe_public_asset_url, validate_slug
 from tourist03.repositories import catalog as catalog_repo
 
 
@@ -21,6 +21,30 @@ PUBLIC_TEMPLATE_ENV = Environment(
     loader=FileSystemLoader(TEMPLATES),
     autoescape=select_autoescape(("html", "xml")),
 )
+SCHEMA_ORG_TYPES = frozenset(
+    {
+        "LodgingBusiness",
+        "Restaurant",
+        "Event",
+        "TouristAttraction",
+        "LocalBusiness",
+        "Service",
+        "ProfessionalService",
+        "TouristTrip",
+    }
+)
+ENTITY_SCHEMA_ORG_FALLBACKS = {
+    "accommodation": "LodgingBusiness",
+    "food": "Restaurant",
+    "event": "Event",
+    "sight": "TouristAttraction",
+    "excursion": "TouristAttraction",
+    "guide": "Service",
+    "service": "Service",
+    "activity": "Service",
+    "transport": "Service",
+    "rental": "Service",
+}
 
 
 def _public_index_response(request: Request):
@@ -95,7 +119,16 @@ def public_place_page(request: Request, slug: str):
         normalized_slug = validate_slug(slug)
     except ValueError:
         normalized_slug = ""
-    place = catalog_repo.get_public_place(normalized_slug) if normalized_slug else None
+    place = catalog_repo.get_public_entity(normalized_slug) if normalized_slug else None
+    if place and not request.app.state.settings.feature_services:
+        raw_kind = place.get("entity_kind")
+        kind_key = (
+            raw_kind.get("key") or raw_kind.get("slug")
+            if isinstance(raw_kind, dict)
+            else str(raw_kind or "accommodation")
+        )
+        if kind_key != "accommodation":
+            place = None
     if not place:
         template = PUBLIC_TEMPLATE_ENV.get_template("place-404.html")
         return HTMLResponse(template.render(public_base_url=request.app.state.settings.public_base_url.rstrip("/")), status_code=404)
@@ -103,24 +136,52 @@ def public_place_page(request: Request, slug: str):
     public_base_url = request.app.state.settings.public_base_url.rstrip("/")
     location = place.get("region") or place.get("city") or place.get("locality") or "Россия"
     place_type_name = place["place_type"]["name"]
+    seo = place.get("seo") if isinstance(place.get("seo"), dict) else {}
     title = _seo_text(
-        f"{place['name']} — {place_type_name}, {location} | Туристика",
+        seo.get("title") or seo.get("meta_title") or f"{place['name']} — {place_type_name}, {location} | Туристика",
         fallback="Объект Туристики",
         limit=120,
     )
     description = _seo_text(
-        place.get("short_description") or place.get("description") or "",
+        seo.get("description") or seo.get("meta_description") or place.get("short_description") or place.get("description") or "",
         fallback=f"{place_type_name} «{place['name']}» в регионе {location}. Контакты, фотографии и детали на Туристике.",
         limit=160,
     )
+    og_title = _seo_text(
+        seo.get("og_title") or title,
+        fallback=title,
+        limit=120,
+    )
+    og_description = _seo_text(
+        seo.get("og_description") or description,
+        fallback=description,
+        limit=200,
+    )
     canonical = f"{public_base_url}/places/{quote(place['slug'])}"
+    configured_og_image = safe_public_asset_url(str(seo.get("og_image") or ""))
     og_image = _absolute_public_url(
         public_base_url,
-        place.get("cover") or "/static/brand/turistika-logo-stacked.svg",
+        configured_og_image
+        or place.get("cover")
+        or "/static/brand/turistika-logo-stacked.svg",
     )
+    robots_directive = (
+        "noindex,follow"
+        if bool(seo.get("noindex")) or place.get("visibility") == "unlisted"
+        else "index,follow"
+    )
+    raw_entity_kind = place.get("entity_kind")
+    entity_kind = (
+        (raw_entity_kind.get("key") or raw_entity_kind.get("slug"))
+        if isinstance(raw_entity_kind, dict)
+        else str(raw_entity_kind or "accommodation")
+    )
+    schema_org_type = place.get("schema_org_type")
+    if schema_org_type not in SCHEMA_ORG_TYPES:
+        schema_org_type = ENTITY_SCHEMA_ORG_FALLBACKS.get(entity_kind, "LocalBusiness")
     schema = {
         "@context": "https://schema.org",
-        "@type": "LodgingBusiness",
+        "@type": schema_org_type,
         "name": place["name"],
         "description": description,
         "url": canonical,
@@ -145,6 +206,15 @@ def public_place_page(request: Request, slug: str):
         schema["telephone"] = phone
     if email:
         schema["email"] = email
+    price_display = place.get("price_display")
+    if price_display:
+        schema["priceRange"] = price_display
+    attributes = place.get("attributes") if isinstance(place.get("attributes"), dict) else {}
+    if schema_org_type == "Event":
+        if attributes.get("start_at"):
+            schema["startDate"] = attributes["start_at"]
+        if attributes.get("end_at"):
+            schema["endDate"] = attributes["end_at"]
     breadcrumbs = {
         "@context": "https://schema.org",
         "@type": "BreadcrumbList",
@@ -154,9 +224,12 @@ def public_place_page(request: Request, slug: str):
             {"@type": "ListItem", "position": 3, "name": place["name"], "item": canonical},
         ],
     }
-    route_url = None
+    route_url = next(
+        (item.get("url") for item in place.get("contacts", []) if item.get("contact_type") == "route"),
+        None,
+    )
     if place.get("lat") is not None and place.get("lng") is not None:
-        route_url = f"https://www.openstreetmap.org/?mlat={place['lat']}&mlon={place['lng']}#map=14/{place['lat']}/{place['lng']}"
+        route_url = route_url or f"https://www.openstreetmap.org/?mlat={place['lat']}&mlon={place['lng']}#map=14/{place['lat']}/{place['lng']}"
     updated_label, updated_datetime = format_public_date(place.get("confirmed_at"), place.get("updated_at"))
     template = PUBLIC_TEMPLATE_ENV.get_template("place-detail.html")
     return HTMLResponse(
@@ -164,8 +237,11 @@ def public_place_page(request: Request, slug: str):
             place=place,
             title=title,
             description=description,
+            og_title=og_title,
+            og_description=og_description,
             canonical=canonical,
             og_image=og_image,
+            robots_directive=robots_directive,
             public_base_url=public_base_url,
             structured_data=schema,
             breadcrumbs_data=breadcrumbs,
@@ -311,7 +387,11 @@ def sitemap(request: Request):
         f"    <loc>{escape_html(f'{public_base_url}/')}</loc>\n"
         "  </url>\n"
     ]
-    for place in catalog_repo.list_published_place_sitemap():
+    for place in catalog_repo.list_published_place_sitemap(
+        entity_kinds=None
+        if request.app.state.settings.feature_services
+        else ["accommodation"]
+    ):
         location = escape_html(f"{public_base_url}/places/{quote(place['slug'])}")
         updated_at = place.get("updated_at")
         lastmod = updated_at.date().isoformat() if hasattr(updated_at, "date") else ""

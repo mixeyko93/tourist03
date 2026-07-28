@@ -37,6 +37,7 @@ const HistoryPage = lazy(() => import("./HistoryPage"));
 const ProfilePage = lazy(() => import("./ProfilePage"));
 const CampPage = lazy(() => import("./CampPage"));
 const ChangeDiffPage = lazy(() => import("./ChangeDiffPage"));
+const CreateEntityPage = lazy(() => import("./CreateEntityPage"));
 
 type View = "dashboard" | "objects" | "changes" | "profile";
 
@@ -62,6 +63,9 @@ class LazyRouteBoundary extends Component<{ children: ReactNode }, { error: Erro
 function routeFor(pathname: string) {
   const suffix = pathname.replace(/^\/owner\/?/, "");
   const segments = suffix.split("/").filter(Boolean);
+  if (segments[0] === "objects" && segments[1] === "new") {
+    return { view: "create" as const };
+  }
   if (segments[0] === "objects" && /^\d+$/.test(segments[1] || "")) {
     return { view: "camp" as const, id: Number(segments[1]) };
   }
@@ -117,6 +121,16 @@ export default function OwnerPortal() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (
+      dashboard
+      && route.view === "create"
+      && dashboard.features.entity_creation === false
+    ) {
+      navigate("/owner/objects", { replace: true });
+    }
+  }, [dashboard, navigate, route.view]);
 
   useEffect(() => {
     setMobileNav(false);
@@ -184,6 +198,8 @@ export default function OwnerPortal() {
 
   const currentView: View = route.view === "camp"
     ? "objects"
+    : route.view === "create"
+      ? "objects"
     : route.view === "diff"
       ? "changes"
       : route.view;
@@ -205,6 +221,23 @@ export default function OwnerPortal() {
     : null;
 
   function renderRoute() {
+    if (route.view === "create") {
+      if (currentDashboard.features.entity_creation === false) {
+        return <OwnerRouteLoading label="Возвращаем к объектам размещения…" />;
+      }
+      return (
+        <CreateEntityPage
+          onBack={() => navigate("/owner/objects")}
+          onCreated={(entityId) => {
+            void load();
+            navigate(`/owner/objects/${entityId}`, {
+              replace: true,
+              state: { from: "/owner/objects", created: true },
+            });
+          }}
+        />
+      );
+    }
     if (route.view === "camp") {
       return (
         <CampPage
@@ -224,6 +257,8 @@ export default function OwnerPortal() {
         <ObjectsPage
           dashboard={currentDashboard}
           onCamp={selectCamp}
+          onCreate={() => navigate("/owner/objects/new")}
+          canCreate={currentDashboard.features.entity_creation !== false}
           onCampsLoaded={(camps, pagination) => setDashboard({ ...currentDashboard, camps, object_pagination: pagination })}
         />
       );
@@ -245,7 +280,15 @@ export default function OwnerPortal() {
         />
       );
     }
-    return <DashboardPage data={currentDashboard} onCamp={selectCamp} onChanges={() => navigate("/owner/changes")} />;
+    return (
+      <DashboardPage
+        data={currentDashboard}
+        onCamp={selectCamp}
+        onChanges={() => navigate("/owner/changes")}
+        onCreate={() => navigate("/owner/objects/new")}
+        canCreate={currentDashboard.features.entity_creation !== false}
+      />
+    );
   }
 
   return (

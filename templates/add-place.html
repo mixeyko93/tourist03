@@ -10,7 +10,7 @@
   <link rel="canonical" href="{{ public_base_url }}/add-place">
   <link rel="icon" href="/static/brand/turistika-favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
-  <link rel="stylesheet" href="/static/public/submission.css?v=2026-07-17-02">
+  <link rel="stylesheet" href="/static/public/submission.css?v=2026-07-27-03">
   <script>
     window.__TOURISTIKA_SUBMISSION__ = {
       testCaptcha: {{ "true" if test_captcha else "false" }},
@@ -21,7 +21,7 @@
   </script>
   {% if captcha_client_script_url %}<script defer src="{{ captcha_client_script_url | e }}"></script>{% endif %}
   <script defer src="/static/vendor/leaflet/leaflet.js"></script>
-  <script type="module" src="/static/public/submission.js?v=2026-07-17-01"></script>
+  <script type="module" src="/static/public/submission.js?v=2026-07-27-03"></script>
 </head>
 <body>
   <a class="submission-skip" href="#submission-form">Перейти к форме</a>
@@ -39,7 +39,7 @@
     <section class="submission-intro">
       <p class="submission-eyebrow">Заявка на размещение</p>
       <h1>Добавьте место<br>на карту впечатлений</h1>
-      <p>Расскажите об объекте — мы проверим информацию и подготовим карточку. Отправка заявки не публикует объект автоматически.</p>
+      <p>Расскажите о месте, услуге или активности — мы проверим информацию и подготовим карточку. Отправка заявки не публикует её автоматически.</p>
     </section>
 
     <div class="submission-save" role="status" aria-live="polite" data-save-status>Подготавливаем защищённый черновик…</div>
@@ -116,13 +116,20 @@
       <section class="submission-step" data-step="4" aria-labelledby="step-4-title" hidden>
         <div class="submission-step__heading"><span>04</span><div><h2 id="step-4-title">Характеристики</h2><p>Отметьте только то, что действительно доступно гостям.</p></div></div>
         <div class="amenity-groups" data-amenities><p>Загружаем список удобств…</p></div>
+        <section class="submission-entity-fields" data-entity-fields hidden>
+          <div><h3>Детали выбранного типа</h3><p>Поля меняются автоматически в зависимости от выбранной категории.</p></div>
+          <div class="submission-grid" data-schema-fields></div>
+        </section>
         <label class="submission-field">Минимальная цена, ₽<input name="min_price" type="number" min="0" max="1000000000"></label>
       </section>
 
       <section class="submission-step" data-step="5" aria-labelledby="step-5-title" hidden>
         <div class="submission-step__heading"><span>05</span><div><h2 id="step-5-title">Варианты размещения</h2><p>Если у объекта есть номера, домики или апартаменты, добавьте их здесь.</p></div></div>
-        <div data-rooms></div>
-        <button class="submission-secondary" type="button" data-add-room>Добавить вариант</button>
+        <div data-accommodation-rooms>
+          <div data-rooms></div>
+          <button class="submission-secondary" type="button" data-add-room>Добавить вариант</button>
+        </div>
+        <p class="submission-context-note" data-non-accommodation-note hidden>Для выбранного типа варианты размещения не используются. Продолжите к фото и видео.</p>
       </section>
 
       <section class="submission-step" data-step="6" aria-labelledby="step-6-title" hidden>
