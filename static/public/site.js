@@ -1,5 +1,5 @@
 import { publicFeatures } from "./feature-flags.js";
-import { initialisePublicMap } from "./map.js?v=2026-07-16-03";
+import { initialisePublicMap } from "./map.js?v=2026-07-27-04";
 import { initialiseTelegramWebApp } from "./telegram.js";
 
 const features = publicFeatures();
@@ -19,10 +19,23 @@ const mapStatus = document.querySelector("[data-map-status]");
 const mapResults = document.querySelector("[data-map-results]");
 const mapFilterPanel = document.querySelector("[data-map-filters]");
 const mapFilterToggle = document.querySelector("[data-map-filter-toggle]");
-const mapFilterType = document.querySelector("[data-filter-type]");
+const mapFilterClose = document.querySelector("[data-map-filter-close]");
+const mapFilterKinds = [...document.querySelectorAll("[data-filter-kind]")];
+const mapFilterSubtype = document.querySelector("[data-filter-subtype]");
 const mapFilterRegion = document.querySelector("[data-filter-region]");
+const mapFilterDistrict = document.querySelector("[data-filter-district]");
 const mapFilterCity = document.querySelector("[data-filter-city]");
-const mapFilterAmenity = document.querySelector("[data-filter-amenity]");
+const mapFilterSeasonality = document.querySelector("[data-filter-seasonality]");
+const mapFilterAmenities = document.querySelector("[data-filter-amenities]");
+const mapFilterAmenityOptions = document.querySelector("[data-filter-amenity-options]");
+const mapFilterLegacyAmenity = document.querySelector("[data-filter-amenity]");
+const mapFilterPriceMin = document.querySelector("[data-filter-price-min]");
+const mapFilterPriceMax = document.querySelector("[data-filter-price-max]");
+const mapFilterOpenNow = document.querySelector("[data-filter-open-now]");
+const mapFilterChildren = document.querySelector("[data-filter-children]");
+const mapFilterPets = document.querySelector("[data-filter-pets]");
+const mapFilterParking = document.querySelector("[data-filter-parking]");
+const mapFilterWifi = document.querySelector("[data-filter-wifi]");
 const mapFilterReset = document.querySelector("[data-filter-reset]");
 const mapCount = document.querySelector("[data-map-count]");
 const mapLegend = document.querySelector("[data-map-legend]");
@@ -59,10 +72,23 @@ function ensureMap() {
     results: mapResults,
     filterPanel: mapFilterPanel,
     filterToggle: mapFilterToggle,
-    filterType: mapFilterType,
+    filterClose: mapFilterClose,
+    filterKinds: mapFilterKinds,
+    filterSubtype: mapFilterSubtype,
     filterRegion: mapFilterRegion,
+    filterDistrict: mapFilterDistrict,
     filterCity: mapFilterCity,
-    filterAmenity: mapFilterAmenity,
+    filterSeasonality: mapFilterSeasonality,
+    filterAmenities: mapFilterAmenities,
+    filterAmenityOptions: mapFilterAmenityOptions,
+    filterLegacyAmenity: mapFilterLegacyAmenity,
+    filterPriceMin: mapFilterPriceMin,
+    filterPriceMax: mapFilterPriceMax,
+    filterOpenNow: mapFilterOpenNow,
+    filterChildren: mapFilterChildren,
+    filterPets: mapFilterPets,
+    filterParking: mapFilterParking,
+    filterWifi: mapFilterWifi,
     filterReset: mapFilterReset,
     count: mapCount,
     legend: mapLegend,

@@ -6,25 +6,37 @@
   <meta name="theme-color" content="#f5f7f2">
   <title>{{ title }}</title>
   <meta name="description" content="{{ description }}">
-  <meta name="robots" content="index,follow">
+  <meta name="robots" content="{{ robots_directive }}">
   <link rel="canonical" href="{{ canonical }}">
   <meta property="og:type" content="website">
   <meta property="og:locale" content="ru_RU">
   <meta property="og:site_name" content="Туристика">
-  <meta property="og:title" content="{{ title }}">
-  <meta property="og:description" content="{{ description }}">
+  <meta property="og:title" content="{{ og_title }}">
+  <meta property="og:description" content="{{ og_description }}">
   <meta property="og:url" content="{{ canonical }}">
   <meta property="og:image" content="{{ og_image }}">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" href="/static/brand/turistika-favicon.svg" type="image/svg+xml">
   <link rel="preload" href="/static/fonts/manrope/manrope-regular.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/static/fonts/manrope/manrope-extrabold.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="/static/public/place.css?v=2026-07-16-02">
-  <script defer src="/static/public/place.js?v=2026-07-16-02"></script>
+  <link rel="stylesheet" href="/static/public/place.css?v=2026-07-27-03">
+  <script defer src="/static/public/place.js?v=2026-07-27-01"></script>
   <script type="application/ld+json">{{ structured_data | tojson }}</script>
   <script type="application/ld+json">{{ breadcrumbs_data | tojson }}</script>
 </head>
 <body>
+  {% from "_entity_sections.html" import render_entity_sections %}
+  {% set entity_kind = place.entity_kind or {} %}
+  {% if entity_kind is string %}
+    {% set entity_kind_key = entity_kind %}
+  {% else %}
+    {% set entity_kind_key = entity_kind.key or entity_kind.slug or "accommodation" %}
+  {% endif %}
+  {% if place.subtype is mapping %}
+    {% set entity_subtype = place.subtype %}
+  {% else %}
+    {% set entity_subtype = place.place_type or place.entity_type or {} %}
+  {% endif %}
   <a class="skip-link" href="#place-content">Перейти к объекту</a>
   <header class="place-header">
     <div class="place-frame place-header__inner">
@@ -36,7 +48,12 @@
     </div>
   </header>
 
-  <main id="place-content">
+  <main
+    id="place-content"
+    data-entity-kind="{{ entity_kind_key }}"
+    data-entity-schema="{{ place.schema_key or '' }}"
+    data-entity-visibility="{{ place.visibility or 'public' }}"
+  >
     <nav class="place-frame breadcrumbs" aria-label="Хлебные крошки">
       <a href="/">Главная</a><span aria-hidden="true">/</span>
       <a href="/#map-section">Карта</a><span aria-hidden="true">/</span>
@@ -46,12 +63,12 @@
     <section class="place-hero">
       <div class="place-frame place-hero__grid">
         <div class="place-hero__copy">
-          <p class="place-eyebrow">{{ place.place_type.name }}{% if place.region %} · {{ place.region }}{% endif %}</p>
+          <p class="place-eyebrow">{{ entity_subtype.name or entity_kind.name or "Туристический объект" }}{% if place.region %} · {{ place.region }}{% endif %}</p>
           <h1>{{ place.name }}</h1>
           {% if place.short_description %}<p class="place-hero__lead">{{ place.short_description }}</p>{% endif %}
           <div class="place-hero__meta">
             {% if place.city or place.locality %}<span>{{ place.city or place.locality }}</span>{% endif %}
-            {% if place.min_price %}<strong>от {{ "{:,}".format(place.min_price).replace(",", " ") }} ₽</strong>{% endif %}
+            {% if place.price_display or place.price_label %}<strong>{{ place.price_display or place.price_label }}</strong>{% elif place.min_price and (not place.price_mode or place.price_mode in ["from", "fixed"]) %}<strong>{% if place.price_mode != "fixed" %}от {% endif %}{{ "{:,}".format(place.min_price).replace(",", " ") }} ₽</strong>{% endif %}
           </div>
         </div>
         <div class="place-hero__visual">
@@ -74,7 +91,7 @@
           <dl class="place-facts">
             {% if place.address %}<div><dt>Адрес</dt><dd>{{ place.address }}</dd></div>{% endif %}
             {% if place.seasonality %}<div><dt>Сезонность</dt><dd>{{ place.seasonality }}</dd></div>{% endif %}
-            {% if place.working_hours %}<div><dt>Режим работы</dt><dd>{{ place.working_hours.get("text") or "Уточняйте у объекта" }}</dd></div>{% endif %}
+            {% if place.working_hours %}<div><dt>Режим работы</dt><dd>{{ place.working_hours.get("text") or place.working_hours.get("daily") or place.working_hours.get("reception") or "Уточняйте у объекта" }}</dd></div>{% endif %}
           </dl>
         </section>
       </div>
@@ -96,6 +113,7 @@
       </aside>
 
       <div class="place-main place-main--secondary">
+        {{ render_entity_sections(place.display_sections or []) }}
 
         {% if gallery_images %}
         <section class="place-section place-gallery-section" aria-labelledby="gallery-title" data-place-gallery>
@@ -146,7 +164,7 @@
         </section>
         {% endif %}
 
-        {% if place.rooms %}
+        {% if entity_kind_key == "accommodation" and place.rooms %}
         <section class="place-section" aria-labelledby="rooms-title">
           <p class="place-eyebrow">Размещение</p>
           <h2 id="rooms-title">Варианты проживания</h2>
@@ -176,7 +194,7 @@
   </main>
 
   <footer class="place-footer">
-    <div class="place-frame"><a class="place-brand place-brand--footer" href="/"><img src="/static/brand/turistika-icon.svg" width="44" height="44" alt=""><span><strong>Туристика</strong><small>Твоя карта впечатлений.</small></span></a><p>Публичный каталог туристических объектов России.</p></div>
+    <div class="place-frame"><a class="place-brand place-brand--footer" href="/"><img src="/static/brand/turistika-icon.svg" width="44" height="44" alt=""><span><strong>Туристика</strong><small>Твоя карта впечатлений.</small></span></a><p>Публичный каталог мест, услуг и впечатлений России.</p></div>
   </footer>
 </body>
 </html>

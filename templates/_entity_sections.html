@@ -1,0 +1,24 @@
+{% macro render_entity_sections(sections) -%}
+  {% for section in sections %}
+    {% if section["items"] %}
+      <section
+        class="place-section entity-section"
+        aria-labelledby="entity-section-title-{{ loop.index }}"
+        data-entity-section="{{ section.key or 'details' }}"
+      >
+        <p class="place-eyebrow">{{ section.eyebrow or "Подробности" }}</p>
+        <h2 id="entity-section-title-{{ loop.index }}">{{ section.title or "Что важно знать" }}</h2>
+        <dl class="entity-attribute-grid">
+          {% for item in section["items"] %}
+            {% if item.display_value %}
+              <div class="entity-attribute" data-entity-attribute="{{ item.key }}" data-attribute-kind="{{ item.kind or 'text' }}">
+                <dt>{{ item.label }}</dt>
+                <dd>{{ item.display_value }}</dd>
+              </div>
+            {% endif %}
+          {% endfor %}
+        </dl>
+      </section>
+    {% endif %}
+  {% endfor %}
+{%- endmacro %}
