@@ -164,6 +164,12 @@ function createClusterLayer() {
     maxClusterRadius: 56,
     showCoverageOnHover: false,
     spiderfyOnMaxZoom: true,
+    // Keep the first mobile frame responsive when the catalog returns a large
+    // mixed set. MarkerCluster yields between chunks instead of recalculating
+    // clusters for every marker in one blocking task.
+    chunkedLoading: true,
+    chunkInterval: 16,
+    chunkDelay: 0,
     iconCreateFunction(cluster) {
       const count = cluster.getChildCount();
       return window.L.divIcon({
@@ -447,6 +453,7 @@ export function initialisePublicMap({
   function renderMarkers(total) {
     markerLayer.clearLayers();
     markers.clear();
+    const layers = [];
     entities.filter((entity) => isCoordinate(entity.lat) && isCoordinate(entity.lng)).forEach((entity) => {
       const marker = window.L.marker([entity.lat, entity.lng], {
         icon: markerIcon(entity),
@@ -468,9 +475,9 @@ export function initialisePublicMap({
         if (status) status.textContent = entity.name ? `Выбрано: ${entity.name}` : "Выбран объект";
       });
       markers.set(entityKey(entity), marker);
-      markerLayer.addLayer(marker);
-      decorateMarker(marker, entity);
+      layers.push(marker);
     });
+    if (layers.length) markerLayer.addLayers(layers);
     renderResults();
     renderLegend();
     const mappedCount = markers.size;
