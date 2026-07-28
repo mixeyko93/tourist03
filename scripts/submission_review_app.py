@@ -8,12 +8,25 @@ from tourist03.settings import Settings
 
 
 catalog_repo.list_place_types = lambda: []
+catalog_repo.list_entity_kinds = lambda **_kwargs: []
+catalog_repo.list_entity_types = lambda **_kwargs: []
+catalog_repo.list_entity_schemas = lambda **_kwargs: []
 catalog_repo.list_public_amenities = lambda: []
 catalog_repo.list_public_places = lambda **kwargs: {
     "items": [],
     "total": 0,
     "limit": kwargs.get("limit", 50),
     "offset": kwargs.get("offset", 0),
+}
+catalog_repo.list_public_entities = catalog_repo.list_public_places
+catalog_repo.list_public_catalog_facets = lambda **_kwargs: {
+    "entity_kinds": [],
+    "subtypes": [],
+    "regions": [],
+    "districts": [],
+    "cities": [],
+    "seasonality": [],
+    "amenities": [],
 }
 submission_repo.create_draft = lambda **_kwargs: {
     "public_number": "TUR-REVIEW-SHELL",

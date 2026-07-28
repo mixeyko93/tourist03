@@ -7,6 +7,35 @@ from tourist03.services import superadmin
 
 
 class SuperAdminServiceTests(unittest.TestCase):
+    @patch("tourist03.services.superadmin.superadmin_repo.list_camps", return_value=[])
+    def test_legacy_camp_list_is_always_accommodation_only(self, list_camps):
+        superadmin.superadmin_list_camps(entity_kind="service", search="лодка")
+
+        list_camps.assert_called_once_with(
+            status=None,
+            archived_only=False,
+            search="лодка",
+            place_type=None,
+            entity_kind="accommodation",
+            publication_status=None,
+        )
+
+    @patch("tourist03.services.superadmin.superadmin_repo.get_camp_editor_context")
+    def test_legacy_camp_editor_rejects_universal_service(self, get_context):
+        get_context.return_value = {
+            "camp": {"id": 9, "place_type_id": 22},
+            "entity_types": [
+                {"id": 2, "entity_kind": "accommodation"},
+                {"id": 22, "entity_kind": "service"},
+            ],
+            "entity_kinds": [],
+            "entity_schemas": [],
+        }
+
+        with self.assertRaises(Exception) as context:
+            superadmin.superadmin_camp_editor(9)
+        self.assertEqual(getattr(context.exception, "status_code", None), 404)
+
     @patch("tourist03.services.superadmin.superadmin_repo.update_admin_account")
     @patch("tourist03.services.superadmin.hash_password", return_value="hashed-pass")
     @patch("tourist03.services.superadmin.superadmin_repo.admin_login_exists", return_value=False)

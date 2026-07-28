@@ -31,6 +31,10 @@ CAMP = {
     "name": "Эко-отель «Сосны Байкала»",
     "slug": "sosny-baikala",
     "place_type_id": 2,
+    "entity_kind": "accommodation",
+    "schema_key": "accommodation",
+    "schema_version": 1,
+    "attributes": {},
     "short_description": "Тихий эко-отель на первой линии Байкала.",
     "description": "Домики среди сосен, собственный пляж и маршруты для прогулок. " * 3,
     "region": "Республика Бурятия",
@@ -42,7 +46,8 @@ CAMP = {
     "lng": 108.221,
     "min_price": 6500,
     "seasonality": "Круглый год",
-    "working_hours": "Ежедневно, 09:00–21:00",
+    "working_hours": {"text": "Ежедневно, 09:00–21:00"},
+    "working_hours_mode": "schedule",
     "surroundings": "Сосновый лес, берег Байкала и экотропа рядом.",
     "video_urls": [],
     "publication_status": "published",
@@ -73,6 +78,19 @@ AMENITIES = [
     {"id": 10, "name": "Баня", "category": "Отдых"},
     {"id": 16, "name": "Детская площадка", "category": "Семья"},
 ]
+ACCOMMODATION_SCHEMA = {
+    "key": "accommodation",
+    "version": 1,
+    "name": "Размещение",
+    "entity_kind": "accommodation",
+    "applicable_kinds": ["accommodation"],
+    "fields": [],
+    "sections": [],
+    "validation": {"additional_properties": False},
+    "display": {"detail_layout": "accommodation"},
+    "schema_org_type": "LodgingBusiness",
+    "quality_keys": ["name", "coordinates", "rooms"],
+}
 CHANGE = {
     "id": 170,
     "public_number": "CHG-2026-BA1KA1",
@@ -86,6 +104,8 @@ CHANGE = {
     "status_label": "На проверке",
     "content_version": 3,
     "base_content_version": 7,
+    "schema_key": "accommodation",
+    "schema_version": 1,
     "proposed_payload": {
         "short_description": "Эко-отель для семейного отдыха на первой линии Байкала.",
         "min_price": 6900,
@@ -151,10 +171,20 @@ def _quality():
     }
 
 
-def _change_summaries(_owner_id, *, camp_id=None, statuses=None, limit=30, offset=0):
+def _change_summaries(
+    _owner_id,
+    *,
+    camp_id=None,
+    statuses=None,
+    entity_kind=None,
+    limit=30,
+    offset=0,
+):
     items = [CHANGE, APPLIED_CHANGE]
     if camp_id is not None:
         items = [item for item in items if item["camp_id"] == camp_id]
+    if entity_kind:
+        items = [item for item in items if item.get("entity_kind") == entity_kind]
     if statuses:
         items = [item for item in items if item["status"] in statuses]
     summaries = [
@@ -194,7 +224,7 @@ owner_repo.list_owner_camps = lambda _owner_id, **_kwargs: [
 owner_repo.get_camp_snapshots = lambda _ids: {CAMP["id"]: CAMP}
 owner_repo.get_camp_quality_snapshots = lambda _ids: {CAMP["id"]: CAMP}
 owner_repo.get_camp_snapshot = lambda _camp_id: CAMP
-owner_repo.owner_profile_statistics = lambda _owner_id: {
+owner_repo.owner_profile_statistics = lambda _owner_id, **_kwargs: {
     "objects_count": 1,
     "approved_changes": 7,
     "pending_changes": 1,
@@ -225,9 +255,22 @@ owner_repo.save_owner_change = lambda change_id, owner_id, proposed_payload, exp
     "staged_media": [],
 }
 owner_repo.get_owner_change = lambda change_id, owner_id=None: {**CHANGE, "id": change_id}
+owner_repo.transition_owner_change = lambda change_id, **kwargs: {
+    **CHANGE,
+    "id": change_id,
+    "status": kwargs["target"],
+    "status_label": "Отправлено" if kwargs["target"] == "submitted" else CHANGE["status_label"],
+    "proposed_payload": kwargs.get("proposed_payload") or CHANGE["proposed_payload"],
+    "content_version": int(kwargs.get("expected_version") or CHANGE["content_version"]) + 1,
+}
 owner_repo.list_moderation_changes = lambda **_kwargs: [CHANGE, APPLIED_CHANGE]
 owner_repo.list_owner_accounts = lambda: [{**OWNER, "is_active": True, "camps": [{"camp_id": 81, "camp_name": CAMP["name"], "role_key": "primary_owner", "is_primary": True}]}]
 catalog_repo.list_public_amenities = lambda: AMENITIES
+catalog_repo.list_entity_schemas = lambda *, schema_key=None, **_kwargs: (
+    [ACCOMMODATION_SCHEMA]
+    if schema_key in (None, "accommodation")
+    else []
+)
 
 
 app = create_app(
@@ -235,6 +278,7 @@ app = create_app(
         environment="test",
         feature_owner_portal=True,
         feature_owner_change_requests=True,
+        feature_services=True,
         public_base_url="https://review.turistika.example",
         session_secret_key="owner-review-session-secret-at-least-32-characters",
     )

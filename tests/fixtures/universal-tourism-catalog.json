@@ -1,0 +1,1004 @@
+{
+  "entity_kinds": [
+    {
+      "slug": "accommodation",
+      "name": "Проживание",
+      "plural_name": "Проживание",
+      "icon_key": "hotel",
+      "sort_order": 10
+    },
+    {
+      "slug": "service",
+      "name": "Услуга",
+      "plural_name": "Услуги",
+      "icon_key": "compass",
+      "sort_order": 20
+    },
+    {
+      "slug": "activity",
+      "name": "Активность",
+      "plural_name": "Активности",
+      "icon_key": "paddle",
+      "sort_order": 30
+    },
+    {
+      "slug": "food",
+      "name": "Питание",
+      "plural_name": "Питание",
+      "icon_key": "restaurant",
+      "sort_order": 40
+    },
+    {
+      "slug": "transport",
+      "name": "Транспорт",
+      "plural_name": "Транспорт",
+      "icon_key": "car",
+      "sort_order": 50
+    },
+    {
+      "slug": "excursion",
+      "name": "Экскурсия",
+      "plural_name": "Экскурсии",
+      "icon_key": "route",
+      "sort_order": 60
+    }
+  ],
+  "entity_types": [
+    {
+      "id": 1,
+      "slug": "eco-hotel",
+      "kind": "accommodation",
+      "entity_kind": "accommodation",
+      "name": "Эко-отель",
+      "plural_name": "Эко-отели",
+      "marker_key": "accommodation",
+      "icon_key": "hotel",
+      "schema_key": "accommodation",
+      "sort_order": 10,
+      "config": {
+        "accent": "#2d7d5b"
+      }
+    },
+    {
+      "id": 2,
+      "slug": "boat-rental",
+      "kind": "service",
+      "entity_kind": "service",
+      "name": "Прокат лодок",
+      "plural_name": "Прокат лодок",
+      "marker_key": "water-service",
+      "icon_key": "boat",
+      "schema_key": "service",
+      "sort_order": 20,
+      "config": {
+        "accent": "#287d9c"
+      }
+    },
+    {
+      "id": 3,
+      "slug": "guided-excursion",
+      "kind": "excursion",
+      "entity_kind": "excursion",
+      "name": "Экскурсия с гидом",
+      "plural_name": "Экскурсии с гидом",
+      "marker_key": "excursion",
+      "icon_key": "route",
+      "schema_key": "excursion",
+      "sort_order": 30,
+      "config": {
+        "accent": "#a05e35"
+      }
+    },
+    {
+      "id": 4,
+      "slug": "fishing",
+      "kind": "activity",
+      "entity_kind": "activity",
+      "name": "Рыбалка",
+      "plural_name": "Рыбалка",
+      "marker_key": "fishing",
+      "icon_key": "fish",
+      "schema_key": "activity",
+      "sort_order": 40,
+      "config": {
+        "accent": "#446f82"
+      }
+    },
+    {
+      "id": 5,
+      "slug": "restaurant",
+      "kind": "food",
+      "entity_kind": "food",
+      "name": "Ресторан",
+      "plural_name": "Рестораны",
+      "marker_key": "food",
+      "icon_key": "restaurant",
+      "schema_key": "restaurant",
+      "sort_order": 50,
+      "config": {
+        "accent": "#9a563e"
+      }
+    },
+    {
+      "id": 6,
+      "slug": "transfer",
+      "kind": "transport",
+      "entity_kind": "transport",
+      "name": "Трансфер",
+      "plural_name": "Трансферы",
+      "marker_key": "transport",
+      "icon_key": "car",
+      "schema_key": "transport",
+      "sort_order": 60,
+      "config": {
+        "accent": "#5e668c"
+      }
+    }
+  ],
+  "entity_schemas": [
+    {
+      "key": "accommodation",
+      "kind": "accommodation",
+      "version": 1,
+      "title": "Проживание",
+      "fields": [
+        "description",
+        "rooms",
+        "amenities",
+        "price",
+        "contacts"
+      ],
+      "sections": [
+        "about",
+        "gallery",
+        "amenities",
+        "rooms",
+        "contacts"
+      ]
+    },
+    {
+      "key": "service",
+      "kind": "service",
+      "version": 1,
+      "title": "Услуга",
+      "fields": [
+        "description",
+        "price",
+        "duration",
+        "capacity",
+        "contacts"
+      ],
+      "sections": [
+        "about",
+        "service_details",
+        "gallery",
+        "contacts"
+      ]
+    },
+    {
+      "key": "activity",
+      "kind": "activity",
+      "version": 1,
+      "title": "Активность",
+      "fields": [
+        "description",
+        "price",
+        "duration",
+        "requirements",
+        "contacts"
+      ],
+      "sections": [
+        "about",
+        "activity_details",
+        "gallery",
+        "contacts"
+      ]
+    },
+    {
+      "key": "restaurant",
+      "kind": "food",
+      "version": 1,
+      "title": "Питание",
+      "fields": [
+        "description",
+        "cuisine",
+        "average_bill",
+        "working_hours",
+        "contacts"
+      ],
+      "sections": [
+        "about",
+        "food_details",
+        "gallery",
+        "contacts"
+      ]
+    },
+    {
+      "key": "transport",
+      "kind": "transport",
+      "version": 1,
+      "title": "Транспорт",
+      "fields": [
+        "description",
+        "price",
+        "capacity",
+        "service_area",
+        "contacts"
+      ],
+      "sections": [
+        "about",
+        "transport_details",
+        "gallery",
+        "contacts"
+      ]
+    },
+    {
+      "key": "excursion",
+      "kind": "excursion",
+      "version": 1,
+      "title": "Экскурсия",
+      "fields": [
+        "description",
+        "price",
+        "duration",
+        "group_size",
+        "languages",
+        "contacts"
+      ],
+      "sections": [
+        "about",
+        "excursion_details",
+        "gallery",
+        "contacts"
+      ]
+    }
+  ],
+  "amenities": [
+    {
+      "id": 1,
+      "slug": "wifi",
+      "name": "Wi-Fi",
+      "category": "connectivity",
+      "icon_key": "wifi",
+      "sort_order": 10
+    },
+    {
+      "id": 2,
+      "slug": "parking",
+      "name": "Парковка",
+      "category": "transport",
+      "icon_key": "parking",
+      "sort_order": 20
+    },
+    {
+      "id": 3,
+      "slug": "children",
+      "name": "Можно с детьми",
+      "category": "rules",
+      "icon_key": "children",
+      "sort_order": 30
+    },
+    {
+      "id": 4,
+      "slug": "pets",
+      "name": "Можно с животными",
+      "category": "rules",
+      "icon_key": "pets",
+      "sort_order": 40
+    },
+    {
+      "id": 5,
+      "slug": "equipment",
+      "name": "Снаряжение включено",
+      "category": "service",
+      "icon_key": "equipment",
+      "sort_order": 50
+    }
+  ],
+  "entities": [
+    {
+      "id": 1001,
+      "slug": "sosny-baykala",
+      "name": "Эко-отель «Сосны Байкала»",
+      "kind": "accommodation",
+      "entity_kind": "accommodation",
+      "type": "eco-hotel",
+      "subtype": "eco-hotel",
+      "schema_key": "accommodation",
+      "entity_type": {
+        "id": 1,
+        "slug": "eco-hotel",
+        "kind": "accommodation",
+        "entity_kind": "accommodation",
+        "name": "Эко-отель",
+        "plural_name": "Эко-отели",
+        "marker_key": "accommodation",
+        "icon_key": "hotel",
+        "schema_key": "accommodation",
+        "sort_order": 10,
+        "config": {
+          "accent": "#2d7d5b"
+        }
+      },
+      "place_type": {
+        "id": 1,
+        "slug": "eco-hotel",
+        "name": "Эко-отель",
+        "plural_name": "Эко-отели",
+        "marker_key": "accommodation",
+        "icon_key": "hotel",
+        "sort_order": 10,
+        "config": {
+          "accent": "#2d7d5b"
+        }
+      },
+      "publication_status": "published",
+      "visibility": "public",
+      "short_description": "Домики среди сосен на первой линии Байкала.",
+      "description": "Спокойное проживание у воды, собственный пляж и маршруты для прогулок.",
+      "region": "Республика Бурятия",
+      "district": "Прибайкальский район",
+      "city": "Гремячинск",
+      "locality": "Турка",
+      "address": "Береговая улица, 12",
+      "lat": 52.9532,
+      "lng": 108.221,
+      "cover": "/static/uploads/1_angir/20260104-205653363172.jpg",
+      "min_price": 6500,
+      "price_label": "от 6 500 ₽",
+      "seasonality": "Круглый год",
+      "working_hours": {
+        "text": "Ежедневно, круглосуточно"
+      },
+      "confirmed_at": "2026-07-22T10:00:00Z",
+      "updated_at": "2026-07-25T12:15:00Z",
+      "primary_contacts": [
+        {
+          "contact_type": "phone",
+          "label": "Телефон",
+          "value": "+7 999 120-34-56",
+          "url": "tel:+79991203456",
+          "sort_order": 10
+        }
+      ],
+      "contacts": [
+        {
+          "contact_type": "phone",
+          "label": "Телефон",
+          "value": "+7 999 120-34-56",
+          "url": "tel:+79991203456",
+          "sort_order": 10
+        },
+        {
+          "contact_type": "telegram",
+          "label": "Telegram",
+          "value": "Telegram",
+          "url": "https://t.me/baikal_story",
+          "sort_order": 20
+        }
+      ],
+      "key_amenities": [
+        {
+          "id": 1,
+          "slug": "wifi",
+          "name": "Wi-Fi",
+          "category": "connectivity",
+          "icon_key": "wifi",
+          "sort_order": 10
+        },
+        {
+          "id": 2,
+          "slug": "parking",
+          "name": "Парковка",
+          "category": "transport",
+          "icon_key": "parking",
+          "sort_order": 20
+        }
+      ],
+      "amenities": [
+        {
+          "id": 1,
+          "slug": "wifi",
+          "name": "Wi-Fi",
+          "category": "connectivity",
+          "icon_key": "wifi",
+          "sort_order": 10
+        },
+        {
+          "id": 2,
+          "slug": "parking",
+          "name": "Парковка",
+          "category": "transport",
+          "icon_key": "parking",
+          "sort_order": 20
+        },
+        {
+          "id": 3,
+          "slug": "children",
+          "name": "Можно с детьми",
+          "category": "rules",
+          "icon_key": "children",
+          "sort_order": 30
+        }
+      ],
+      "gallery": [
+        {
+          "id": 1,
+          "media_type": "image",
+          "url": "/static/uploads/1_angir/20260104-205653363172.jpg",
+          "alt_text": "Эко-отель у Байкала",
+          "caption": "Территория отеля",
+          "cover": true,
+          "sort_order": 0
+        },
+        {
+          "id": 2,
+          "media_type": "image",
+          "url": "/static/uploads/1_angir/20251101-010251370896.jpg",
+          "alt_text": "Домики среди сосен",
+          "caption": "Домики",
+          "cover": false,
+          "sort_order": 1
+        }
+      ],
+      "rooms": [
+        {
+          "id": 101,
+          "name": "Семейный дом",
+          "room_type": "Дом",
+          "capacity": 4,
+          "price": 9500,
+          "description": "Две спальни, терраса и вид на озеро.",
+          "cover": "/static/uploads/1_angir/1-120_standart/20251101-010318486811.jpg",
+          "media": []
+        }
+      ],
+      "videos": [],
+      "attributes": {
+        "children": true,
+        "pets": false,
+        "parking": true,
+        "wifi": true
+      }
+    },
+    {
+      "id": 1002,
+      "slug": "lodki-na-ladoge",
+      "name": "Лодки на Ладоге",
+      "kind": "service",
+      "entity_kind": "service",
+      "type": "boat-rental",
+      "subtype": "boat-rental",
+      "schema_key": "service",
+      "entity_type": {
+        "id": 2,
+        "slug": "boat-rental",
+        "kind": "service",
+        "entity_kind": "service",
+        "name": "Прокат лодок",
+        "plural_name": "Прокат лодок",
+        "marker_key": "water-service",
+        "icon_key": "boat",
+        "schema_key": "service",
+        "sort_order": 20,
+        "config": {
+          "accent": "#287d9c"
+        }
+      },
+      "place_type": {
+        "id": 2,
+        "slug": "boat-rental",
+        "name": "Прокат лодок",
+        "plural_name": "Прокат лодок",
+        "marker_key": "water-service",
+        "icon_key": "boat",
+        "sort_order": 20,
+        "config": {
+          "accent": "#287d9c"
+        }
+      },
+      "publication_status": "published",
+      "visibility": "public",
+      "short_description": "Аренда лодок и катеров для самостоятельных маршрутов.",
+      "description": "Подберём лодку, спасательные жилеты и безопасный маршрут по Ладоге.",
+      "region": "Республика Карелия",
+      "district": "Сортавальский район",
+      "city": "Сортавала",
+      "locality": "Хелюля",
+      "address": "Ладожская набережная, 4",
+      "lat": 61.704,
+      "lng": 30.691,
+      "cover": "/static/uploads/1_angir/20251101-010251378895.jpg",
+      "min_price": 2500,
+      "price_label": "от 2 500 ₽",
+      "seasonality": "Май — октябрь",
+      "working_hours": {
+        "text": "Ежедневно, 08:00–20:00"
+      },
+      "confirmed_at": "2026-07-21T10:00:00Z",
+      "updated_at": "2026-07-25T09:00:00Z",
+      "primary_contacts": [
+        {
+          "contact_type": "phone",
+          "label": "Телефон",
+          "value": "+7 921 555-20-20",
+          "url": "tel:+79215552020",
+          "sort_order": 10
+        }
+      ],
+      "contacts": [
+        {
+          "contact_type": "phone",
+          "label": "Телефон",
+          "value": "+7 921 555-20-20",
+          "url": "tel:+79215552020",
+          "sort_order": 10
+        },
+        {
+          "contact_type": "whatsapp",
+          "label": "WhatsApp",
+          "value": "WhatsApp",
+          "url": "https://wa.me/79215552020",
+          "sort_order": 20
+        }
+      ],
+      "key_amenities": [
+        {
+          "id": 2,
+          "slug": "parking",
+          "name": "Парковка",
+          "category": "transport",
+          "icon_key": "parking",
+          "sort_order": 20
+        },
+        {
+          "id": 5,
+          "slug": "equipment",
+          "name": "Снаряжение включено",
+          "category": "service",
+          "icon_key": "equipment",
+          "sort_order": 50
+        }
+      ],
+      "amenities": [
+        {
+          "id": 2,
+          "slug": "parking",
+          "name": "Парковка",
+          "category": "transport",
+          "icon_key": "parking",
+          "sort_order": 20
+        },
+        {
+          "id": 5,
+          "slug": "equipment",
+          "name": "Снаряжение включено",
+          "category": "service",
+          "icon_key": "equipment",
+          "sort_order": 50
+        }
+      ],
+      "gallery": [
+        {
+          "id": 3,
+          "media_type": "image",
+          "url": "/static/uploads/1_angir/20251101-010251378895.jpg",
+          "alt_text": "Лодки у причала",
+          "caption": "Причал",
+          "cover": true,
+          "sort_order": 0
+        }
+      ],
+      "rooms": [],
+      "videos": [
+        "https://rutube.ru/video/1234567890abcdef/"
+      ],
+      "attributes": {
+        "duration": "от 1 часа",
+        "capacity": "до 6 человек",
+        "equipment": "Лодка, вёсла и спасательные жилеты",
+        "children": true,
+        "pets": false,
+        "parking": true,
+        "wifi": false
+      }
+    },
+    {
+      "id": 1003,
+      "slug": "staraya-sortavala",
+      "name": "Экскурсия «Старая Сортавала»",
+      "kind": "excursion",
+      "entity_kind": "excursion",
+      "type": "guided-excursion",
+      "subtype": "guided-excursion",
+      "schema_key": "excursion",
+      "entity_type": {
+        "id": 3,
+        "slug": "guided-excursion",
+        "kind": "excursion",
+        "entity_kind": "excursion",
+        "name": "Экскурсия с гидом",
+        "plural_name": "Экскурсии с гидом",
+        "marker_key": "excursion",
+        "icon_key": "route",
+        "schema_key": "excursion",
+        "sort_order": 30,
+        "config": {
+          "accent": "#a05e35"
+        }
+      },
+      "place_type": {
+        "id": 3,
+        "slug": "guided-excursion",
+        "name": "Экскурсия с гидом",
+        "plural_name": "Экскурсии с гидом",
+        "marker_key": "excursion",
+        "icon_key": "route",
+        "sort_order": 30,
+        "config": {
+          "accent": "#a05e35"
+        }
+      },
+      "publication_status": "published",
+      "visibility": "public",
+      "short_description": "Пешеходный маршрут по архитектуре и истории города.",
+      "description": "Неспешная прогулка с местным гидом и остановками у главных памятников.",
+      "region": "Республика Карелия",
+      "district": "Сортавальский район",
+      "city": "Сортавала",
+      "locality": "Сортавала",
+      "address": "Площадь Кирова",
+      "lat": 61.7027,
+      "lng": 30.6919,
+      "cover": "/static/uploads/3_gostinyy-dvor/20251101-010719668768.jpg",
+      "min_price": 1800,
+      "price_label": "1 800 ₽ с человека",
+      "seasonality": "Круглый год",
+      "working_hours": {
+        "text": "По расписанию"
+      },
+      "confirmed_at": "2026-07-20T10:00:00Z",
+      "updated_at": "2026-07-24T09:00:00Z",
+      "primary_contacts": [
+        {
+          "contact_type": "telegram",
+          "label": "Telegram",
+          "value": "Telegram",
+          "url": "https://t.me/sortavala_guide",
+          "sort_order": 10
+        }
+      ],
+      "contacts": [
+        {
+          "contact_type": "telegram",
+          "label": "Telegram",
+          "value": "Telegram",
+          "url": "https://t.me/sortavala_guide",
+          "sort_order": 10
+        }
+      ],
+      "key_amenities": [
+        {
+          "id": 3,
+          "slug": "children",
+          "name": "Можно с детьми",
+          "category": "rules",
+          "icon_key": "children",
+          "sort_order": 30
+        }
+      ],
+      "amenities": [
+        {
+          "id": 3,
+          "slug": "children",
+          "name": "Можно с детьми",
+          "category": "rules",
+          "icon_key": "children",
+          "sort_order": 30
+        }
+      ],
+      "gallery": [
+        {
+          "id": 4,
+          "media_type": "image",
+          "url": "/static/uploads/3_gostinyy-dvor/20251101-010719668768.jpg",
+          "alt_text": "Старая Сортавала",
+          "caption": "Исторический центр",
+          "cover": true,
+          "sort_order": 0
+        }
+      ],
+      "rooms": [],
+      "videos": [],
+      "attributes": {
+        "duration": "2 часа",
+        "group_size": "до 12 человек",
+        "languages": [
+          "Русский",
+          "Английский"
+        ],
+        "meeting_point": "Площадь Кирова",
+        "children": true,
+        "pets": true,
+        "parking": false,
+        "wifi": false
+      }
+    },
+    {
+      "id": 1004,
+      "slug": "rybalka-na-onego",
+      "name": "Рыбалка на Онего",
+      "kind": "activity",
+      "entity_kind": "activity",
+      "type": "fishing",
+      "subtype": "fishing",
+      "schema_key": "activity",
+      "entity_type": {
+        "id": 4,
+        "slug": "fishing",
+        "kind": "activity",
+        "entity_kind": "activity",
+        "name": "Рыбалка",
+        "plural_name": "Рыбалка",
+        "marker_key": "fishing",
+        "icon_key": "fish",
+        "schema_key": "activity",
+        "sort_order": 40,
+        "config": {
+          "accent": "#446f82"
+        }
+      },
+      "place_type": {
+        "id": 4,
+        "slug": "fishing",
+        "name": "Рыбалка",
+        "plural_name": "Рыбалка",
+        "marker_key": "fishing",
+        "icon_key": "fish",
+        "sort_order": 40,
+        "config": {
+          "accent": "#446f82"
+        }
+      },
+      "publication_status": "published",
+      "visibility": "public",
+      "short_description": "Выезд на рыбалку с инструктором и снаряжением.",
+      "description": "Маршрут подбирается по погоде и опыту участников.",
+      "region": "Республика Карелия",
+      "district": "Прионежский район",
+      "city": "Петрозаводск",
+      "locality": "Шуя",
+      "address": "Причал Шуя",
+      "lat": 61.958,
+      "lng": 34.232,
+      "cover": "/static/uploads/2_hayany/2-100_standart/20251101-010636401002.jpg",
+      "min_price": 5000,
+      "price_label": "от 5 000 ₽",
+      "seasonality": "Круглый год",
+      "working_hours": {
+        "text": "По предварительной записи"
+      },
+      "confirmed_at": "2026-07-19T10:00:00Z",
+      "updated_at": "2026-07-23T09:00:00Z",
+      "primary_contacts": [],
+      "contacts": [],
+      "key_amenities": [
+        {
+          "id": 5,
+          "slug": "equipment",
+          "name": "Снаряжение включено",
+          "category": "service",
+          "icon_key": "equipment",
+          "sort_order": 50
+        }
+      ],
+      "amenities": [
+        {
+          "id": 5,
+          "slug": "equipment",
+          "name": "Снаряжение включено",
+          "category": "service",
+          "icon_key": "equipment",
+          "sort_order": 50
+        }
+      ],
+      "gallery": [],
+      "rooms": [],
+      "videos": [],
+      "attributes": {
+        "duration": "6 часов",
+        "requirements": "Тёплая непромокаемая одежда",
+        "children": false,
+        "pets": false,
+        "parking": true,
+        "wifi": false
+      }
+    },
+    {
+      "id": 1005,
+      "slug": "severnaya-kuhnya",
+      "name": "Ресторан «Северная кухня»",
+      "kind": "food",
+      "entity_kind": "food",
+      "type": "restaurant",
+      "subtype": "restaurant",
+      "schema_key": "restaurant",
+      "entity_type": {
+        "id": 5,
+        "slug": "restaurant",
+        "kind": "food",
+        "entity_kind": "food",
+        "name": "Ресторан",
+        "plural_name": "Рестораны",
+        "marker_key": "food",
+        "icon_key": "restaurant",
+        "schema_key": "restaurant",
+        "sort_order": 50,
+        "config": {
+          "accent": "#9a563e"
+        }
+      },
+      "place_type": {
+        "id": 5,
+        "slug": "restaurant",
+        "name": "Ресторан",
+        "plural_name": "Рестораны",
+        "marker_key": "food",
+        "icon_key": "restaurant",
+        "sort_order": 50,
+        "config": {
+          "accent": "#9a563e"
+        }
+      },
+      "publication_status": "published",
+      "visibility": "public",
+      "short_description": "Карельская кухня и локальные продукты.",
+      "description": "Рыба, ягоды и сезонное меню с видом на Ладогу.",
+      "region": "Республика Карелия",
+      "district": "Сортавальский район",
+      "city": "Сортавала",
+      "locality": "Сортавала",
+      "address": "Набережная, 8",
+      "lat": 61.7012,
+      "lng": 30.6895,
+      "cover": "/static/uploads/1_angir/20251101-010251395580.jpg",
+      "min_price": 1200,
+      "price_label": "средний чек 1 200 ₽",
+      "seasonality": "Круглый год",
+      "working_hours": {
+        "text": "Ежедневно, 10:00–23:00"
+      },
+      "confirmed_at": "2026-07-18T10:00:00Z",
+      "updated_at": "2026-07-22T09:00:00Z",
+      "primary_contacts": [],
+      "contacts": [],
+      "key_amenities": [
+        {
+          "id": 1,
+          "slug": "wifi",
+          "name": "Wi-Fi",
+          "category": "connectivity",
+          "icon_key": "wifi",
+          "sort_order": 10
+        }
+      ],
+      "amenities": [
+        {
+          "id": 1,
+          "slug": "wifi",
+          "name": "Wi-Fi",
+          "category": "connectivity",
+          "icon_key": "wifi",
+          "sort_order": 10
+        }
+      ],
+      "gallery": [],
+      "rooms": [],
+      "videos": [],
+      "attributes": {
+        "cuisine": "Карельская",
+        "average_bill": 1200,
+        "children": true,
+        "pets": false,
+        "parking": true,
+        "wifi": true
+      }
+    },
+    {
+      "id": 1006,
+      "slug": "transfer-ladoga",
+      "name": "Трансфер «Ладога»",
+      "kind": "transport",
+      "entity_kind": "transport",
+      "type": "transfer",
+      "subtype": "transfer",
+      "schema_key": "transport",
+      "entity_type": {
+        "id": 6,
+        "slug": "transfer",
+        "kind": "transport",
+        "entity_kind": "transport",
+        "name": "Трансфер",
+        "plural_name": "Трансферы",
+        "marker_key": "transport",
+        "icon_key": "car",
+        "schema_key": "transport",
+        "sort_order": 60,
+        "config": {
+          "accent": "#5e668c"
+        }
+      },
+      "place_type": {
+        "id": 6,
+        "slug": "transfer",
+        "name": "Трансфер",
+        "plural_name": "Трансферы",
+        "marker_key": "transport",
+        "icon_key": "car",
+        "sort_order": 60,
+        "config": {
+          "accent": "#5e668c"
+        }
+      },
+      "publication_status": "published",
+      "visibility": "public",
+      "short_description": "Трансфер из аэропорта и между туристическими объектами.",
+      "description": "Легковые автомобили и минивэны по предварительной заявке.",
+      "region": "Республика Карелия",
+      "district": "Сортавальский район",
+      "city": "Сортавала",
+      "locality": "Сортавала",
+      "address": "Железнодорожный вокзал",
+      "lat": 61.7084,
+      "lng": 30.6927,
+      "cover": null,
+      "min_price": null,
+      "price_label": "Стоимость по запросу",
+      "seasonality": "Круглый год",
+      "working_hours": {
+        "text": "Круглосуточно"
+      },
+      "confirmed_at": "2026-07-17T10:00:00Z",
+      "updated_at": "2026-07-21T09:00:00Z",
+      "primary_contacts": [],
+      "contacts": [],
+      "key_amenities": [],
+      "amenities": [],
+      "gallery": [],
+      "rooms": [],
+      "videos": [],
+      "attributes": {
+        "capacity": "до 7 человек",
+        "service_area": "Сортавала и Северное Приладожье",
+        "children": true,
+        "pets": true,
+        "parking": false,
+        "wifi": false
+      }
+    }
+  ],
+  "hidden_entities": [
+    {
+      "id": 1901,
+      "slug": "draft-sauna",
+      "name": "Черновик бани",
+      "kind": "service",
+      "type": "sauna",
+      "publication_status": "draft",
+      "visibility": "private",
+      "lat": 61.72,
+      "lng": 30.71
+    },
+    {
+      "id": 1902,
+      "slug": "archived-guide",
+      "name": "Архивный гид",
+      "kind": "service",
+      "type": "guide",
+      "publication_status": "archived",
+      "visibility": "private",
+      "lat": 61.73,
+      "lng": 30.72
+    }
+  ]
+}

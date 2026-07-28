@@ -6,7 +6,7 @@ from pydantic import ValidationError
 
 import app as app_module
 from tourist03.csrf import CSRF_HEADER, csrf_token_matches, issue_csrf_token
-from tourist03.http_middleware import InMemoryRateLimiter
+from tourist03.http_middleware import InMemoryRateLimiter, RateLimitMiddleware
 from tourist03.services import pages as pages_service
 from tourist03.settings import Settings
 
@@ -69,6 +69,19 @@ class FoundationSecurityTests(unittest.TestCase):
         limiter.allow("login:127.0.0.3", 10)
 
         self.assertLessEqual(len(limiter._hits), 2)
+
+    def test_public_catalog_reads_have_a_separate_bounded_rate(self):
+        settings = Settings(environment="test")
+        request = SimpleNamespace(
+            app=SimpleNamespace(state=SimpleNamespace(settings=settings)),
+            url=SimpleNamespace(path="/api/public/entities"),
+            method="GET",
+        )
+
+        self.assertEqual(
+            RateLimitMiddleware._rule(request),
+            ("public-catalog", settings.rate_limit_public_search_per_minute),
+        )
 
     def test_ready_uses_bounded_migration_status_check(self):
         with patch(

@@ -232,9 +232,33 @@ def capture_owner_flow(browser, base_url: str, output_dir: Path, *, mobile: bool
             raise AssertionError("Editor lost entered data")
         page.screenshot(path=str(output_dir / f"{prefix}-editor.png"), full_page=True)
         page.get_by_role("button", name="Сохранить черновик").click()
+        page.get_by_text(
+            "Черновик сохранён. Проверьте сравнение перед отправкой.",
+            exact=True,
+        ).wait_for()
         page.wait_for_selector(".owner-diff-row")
+        region_input = page.get_by_label("Регион")
+        region_input.fill("Республика Бурятия · новое значение")
+        page.get_by_text("Республика Бурятия · новое значение", exact=True).wait_for()
         metrics["editor"] = assert_accessible_page(page, mobile=mobile)
         page.locator(".owner-diff").screenshot(path=str(output_dir / f"{prefix}-diff.png"))
+        with page.expect_request(
+            lambda request: request.url.endswith("/api/owner/changes/170/submit")
+        ) as submitted_request:
+            page.get_by_role("button", name="Отправить на проверку").click()
+        submitted_payload = submitted_request.value.post_data_json
+        if (
+            submitted_payload.get("proposed_payload", {}).get("region")
+            != "Республика Бурятия · новое значение"
+        ):
+            raise AssertionError("Submit request lost the current unsaved region")
+        if (
+            submitted_payload.get("proposed_payload", {}).get("name")
+            != "Эко-отель «Сосны Байкала и лес»"
+        ):
+            raise AssertionError("Submit request lost the previously saved name")
+        metrics["editor"]["atomic_submit_current_proposal"] = True
+        page.wait_for_selector(".owner-editor", state="detached")
 
         if mobile:
             page.get_by_role("button", name="Открыть меню").click()

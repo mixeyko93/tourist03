@@ -84,6 +84,22 @@ DELETE /api/owner/changes/{change_id}/media/{media_id}
 DELETE /api/owner/changes/{change_id}/published-media/{media_id}
 ```
 
+С включённым `FEATURE_SERVICES` Owner Portal использует универсальные
+маршруты:
+
+```text
+GET  /api/owner/entities
+POST /api/owner/entities
+GET  /api/owner/entities/{entity_id}
+POST /api/owner/entities/{entity_id}/changes
+```
+
+Создание услуги, активности, экскурсии или проката формирует связанный с
+владельцем непубличный черновик. Вид/подтип/schema проверяются backend.
+Дальнейший Proposed → moderation → Published workflow, owner isolation,
+staged media, audit и outbox не дублируются. Schema version фиксируется в
+Change Request и не меняется задним числом.
+
 Superadmin:
 
 ```text
@@ -165,3 +181,6 @@ Trace, bundle sizes, API contract и команды воспроизведени
 
 Никакие команды этапа не применяют production migrations и не выполняют
 deploy.
+
+Универсальное расширение Owner Portal описано в
+[stage-4-universal-tourism-catalog.md](stage-4-universal-tourism-catalog.md).

@@ -1,6 +1,7 @@
 # Этап 2.2 — универсальный публичный каталог
 
-Статус: реализовано локально в `feature/universal-public-catalog`; production migrations, deploy и merge не выполнялись.
+Статус: этап завершён и merged. Его accommodation API остаётся compatibility
+слоем универсального каталога Этапа 4.
 
 ## Исходное состояние
 
@@ -105,6 +106,14 @@ Slug создаётся один раз из транслитерации име
 - Public API, SSR detail, dynamic sitemap и superadmin editor используют отдельные public/internal контракты.
 - Карта загружает `/api/public/places?limit=100`, отправляет type/region/city/amenity/q filters на backend и не префетчит detail payload для маркеров.
 - Compatibility `/api/camps`, CRM, booking, legacy photos и canonical approved media fallback сохранены.
+
+## Продолжение в Этапе 4
+
+`/api/public/places*` не удаляется, но новые mixed clients используют
+`/api/public/entities*`. `place_types` связан с `entity_kinds` и versioned
+schema registry; detail URL `/places/{slug}` и единый media/contact pipeline
+остаются прежними. Полный контракт:
+[stage-4-universal-tourism-catalog.md](stage-4-universal-tourism-catalog.md).
 
 Пример:
 
