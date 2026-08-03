@@ -77,6 +77,14 @@ html, body.map-page { height: 100%; overflow: hidden; background: #dce7e2; }
   .map-app__help { width: 40px; height: 40px; }
   .map-app__controls { top: 10px; right: 10px; left: 10px; align-items: start; }
   .map-app__controls .map-search { min-height: 48px; }
+  .map-app__controls .map-search input {
+    font-size: 16px;
+    line-height: 1.25;
+    text-decoration: none;
+    text-shadow: none;
+    transform: none;
+    -webkit-text-fill-color: currentColor;
+  }
   .map-app__controls .map-tools button { width: 42px; height: 42px; }
   .map-app__controls .map-tools button[data-map-reset] { display: none; }
   .public-map--app .map-filters { z-index: 730; inset: 0; width: auto; max-height: none; padding: 22px 16px calc(92px + env(safe-area-inset-bottom)); border: 0; border-radius: 0; background: rgba(250, 252, 249, .99); }
@@ -115,7 +123,7 @@ html, body.map-page { height: 100%; overflow: hidden; background: #dce7e2; }
 }
 
 @media (max-width: 360px) {
-  .map-app__controls .map-search input { font-size: 11px; }
+  .map-app__controls .map-search input { font-size: 16px; }
   .map-app__controls .map-tools button { width: 40px; }
   .map-onboarding__card { gap: 10px; padding: 24px 18px 18px; }
   .map-onboarding__card h2 { font-size: 29px; }

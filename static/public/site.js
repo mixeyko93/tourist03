@@ -64,7 +64,22 @@ function installPlacementDialog() {
   const dialog = document.querySelector("[data-placement-dialog]");
   if (!dialog) return;
   const status = dialog.querySelector("[data-placement-status]");
+  const supportModal = dialog.querySelector("[data-support-modal]");
+  const supportCard = supportModal?.querySelector(".placement-support-modal__card");
+  const supportOpen = dialog.querySelector("[data-support-open]");
   let restoreFocus = null;
+  let supportRestoreFocus = null;
+  const closeSupport = () => {
+    if (!supportModal || supportModal.hidden) return;
+    supportModal.hidden = true;
+    supportRestoreFocus?.focus?.();
+  };
+  const openSupport = () => {
+    if (!supportModal) return;
+    supportRestoreFocus = document.activeElement;
+    supportModal.hidden = false;
+    window.setTimeout(() => supportCard?.querySelector("a[href], button:not([tabindex='-1'])")?.focus(), 0);
+  };
   const open = (trigger) => {
     restoreFocus = trigger || document.activeElement;
     setMenuState(false);
@@ -74,6 +89,7 @@ function installPlacementDialog() {
     window.setTimeout(() => dialog.querySelector("[data-placement-close]")?.focus(), 0);
   };
   const close = () => {
+    closeSupport();
     if (typeof dialog.close === "function" && dialog.open) dialog.close();
     else dialog.removeAttribute("open");
   };
@@ -92,7 +108,30 @@ function installPlacementDialog() {
     restoreFocus?.focus?.();
   });
   dialog.addEventListener("cancel", () => {
+    closeSupport();
     document.body.classList.remove("placement-dialog-open");
+  });
+  supportOpen?.addEventListener("click", openSupport);
+  supportModal?.querySelectorAll("[data-support-close]").forEach((button) => button.addEventListener("click", closeSupport));
+  supportModal?.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      closeSupport();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const focusable = [...supportModal.querySelectorAll("a[href], button:not([tabindex='-1'])")];
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
   });
   dialog.querySelectorAll("[data-placement-message]").forEach((link) => {
     link.addEventListener("click", () => {
@@ -146,7 +185,7 @@ async function loadMapController() {
     loadStylesheet("/static/vendor/leaflet-markercluster/MarkerCluster.css");
     await loadScript("/static/vendor/leaflet/leaflet.js");
     await loadScript("/static/vendor/leaflet-markercluster/leaflet.markercluster.js");
-    const { initialisePublicMap } = await import("./map.js?v=2026-08-03-02");
+    const { initialisePublicMap } = await import("./map.js?v=2026-08-03-03");
     mapController = initialisePublicMap({
     shell: mapShell,
     canvas: mapCanvas,
@@ -217,7 +256,7 @@ document.querySelector("[data-open-search]")?.addEventListener("click", () => {
 
 searchInput?.addEventListener("input", () => {
   searchClear.hidden = !searchInput.value;
-  void loadMapController().then((controller) => controller.search(searchInput.value));
+  if (!searchInput.value) void loadMapController().then((controller) => controller.clearSearch());
 });
 searchInput?.addEventListener("keydown", (event) => {
   if (event.key !== "Enter" || searchInput.hasAttribute("aria-activedescendant")) return;
@@ -238,7 +277,7 @@ searchInput?.addEventListener("focus", () => {
           return;
         }
         searchInput.value = item.value || item.title || "";
-        void loadMapController().then((controller) => controller.search(searchInput.value));
+        void loadMapController().then((controller) => controller.search(searchInput.value, { immediate: true }));
         searchInput.blur();
       },
     });

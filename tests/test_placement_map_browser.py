@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import unittest
@@ -53,7 +54,20 @@ class PlacementMapBrowserTests(unittest.TestCase):
             dialog = page.locator("[data-placement-dialog]")
             self.assertTrue(dialog.evaluate("node => node.open"))
             self.assertEqual(dialog.locator(".placement-option").count(), 4)
+            for index in range(4):
+                self.assertEqual(dialog.locator(".placement-option").nth(index).locator(".button").count(), 1)
             self.assertTrue(dialog.get_by_text("Премиум-продвижение").is_visible())
+            self.assertEqual(dialog.locator(".placement-premium").count(), 1)
+            support_open = dialog.get_by_role("button", name="Связаться с нами")
+            if support_open.is_visible():
+                support_open.click()
+                support = dialog.locator("[data-support-modal]")
+                self.assertFalse(support.evaluate("node => node.hidden"))
+                self.assertTrue(support.get_by_role("link", name="Задать вопрос").get_attribute("href").startswith("https://t.me/"))
+                self.assertTrue(support.get_by_role("link", name="Сообщить об ошибке").get_attribute("href").startswith("https://t.me/"))
+                self.assertTrue(support.get_by_role("link", name="Предложить улучшение").get_attribute("href").startswith("https://t.me/"))
+                support.get_by_role("button", name="Закрыть окно поддержки").last.click()
+                self.assertTrue(support.evaluate("node => node.hidden"))
             page.keyboard.press("Escape")
             self.assertFalse(dialog.evaluate("node => node.open"))
             self.assertTrue(trigger.evaluate("node => document.activeElement === node"))
@@ -75,24 +89,79 @@ class PlacementMapBrowserTests(unittest.TestCase):
                 "() => ({center: window.__TOURISTIKA_TEST_MAP__.getCenter(), zoom: window.__TOURISTIKA_TEST_MAP__.getZoom()})"
             )
             search = page.locator("[data-map-search]")
+            self.assertGreaterEqual(float(search.evaluate("node => parseFloat(getComputedStyle(node).fontSize)")), 16)
             decoration = search.evaluate(
                 "node => getComputedStyle(node).textDecorationLine"
             )
             self.assertEqual(decoration, "none")
 
+            typed_area = page.evaluate(
+                "() => ({center: window.__TOURISTIKA_TEST_MAP__.getCenter(), zoom: window.__TOURISTIKA_TEST_MAP__.getZoom()})"
+            )
             before = len(catalog_requests)
-            search.fill("рыб")
+            search.fill("Байкал")
+            page.wait_for_timeout(650)
+            after_typing = page.evaluate(
+                "() => ({center: window.__TOURISTIKA_TEST_MAP__.getCenter(), zoom: window.__TOURISTIKA_TEST_MAP__.getZoom()})"
+            )
+            self.assertEqual(len(catalog_requests), before)
+            self.assertEqual(after_typing["zoom"], typed_area["zoom"])
+            self.assertAlmostEqual(after_typing["center"]["lat"], typed_area["center"]["lat"], places=4)
+            self.assertAlmostEqual(after_typing["center"]["lng"], typed_area["center"]["lng"], places=4)
+
+            def empty_catalog(route):
+                if "q=" in route.request.url:
+                    route.fulfill(status=200, content_type="application/json", body='{"items":[],"total":0,"limit":200,"offset":0}')
+                else:
+                    route.continue_()
+
+            page.route("**/api/public/entities?*", empty_catalog)
+            page.route(
+                "https://nominatim.openstreetmap.org/search?*",
+                lambda route: route.fulfill(
+                    status=200,
+                    content_type="application/json",
+                    body=json.dumps([{
+                        "lat": "53.5587",
+                        "lon": "108.1650",
+                        "display_name": "озеро Байкал, Россия",
+                        "boundingbox": ["51.45", "55.77", "103.70", "110.12"],
+                    }]),
+                ),
+            )
             search.press("Enter")
             page.wait_for_function(
                 "document.querySelector('[data-map-loading]')?.hidden === true"
             )
             page.wait_for_timeout(700)
-            searched = [url for url in catalog_requests[before:] if "q=%D1%80%D1%8B%D0%B1" in url]
+            searched = [url for url in catalog_requests[before:] if "q=%D0%91%D0%B0%D0%B9%D0%BA%D0%B0%D0%BB" in url]
             self.assertEqual(len(searched), 1)
             self.assertFalse(search.evaluate("node => document.activeElement === node"))
             self.assertLessEqual(
                 page.evaluate("window.__TOURISTIKA_TEST_MAP__.getZoom()"), 9
             )
+            self.assertIn("Байкал", page.locator("[data-map-results]").inner_text())
+
+            successful_area = page.evaluate(
+                "() => ({center: window.__TOURISTIKA_TEST_MAP__.getCenter(), zoom: window.__TOURISTIKA_TEST_MAP__.getZoom()})"
+            )
+            page.unroute("https://nominatim.openstreetmap.org/search?*")
+            page.route(
+                "https://nominatim.openstreetmap.org/search?*",
+                lambda route: route.fulfill(status=200, content_type="application/json", body="[]"),
+            )
+            search.fill("несуществующее место")
+            page.wait_for_timeout(500)
+            search.press("Enter")
+            page.wait_for_function("document.querySelector('[data-map-loading]')?.hidden === true")
+            page.wait_for_timeout(500)
+            no_result_area = page.evaluate(
+                "() => ({center: window.__TOURISTIKA_TEST_MAP__.getCenter(), zoom: window.__TOURISTIKA_TEST_MAP__.getZoom()})"
+            )
+            self.assertEqual(no_result_area["zoom"], successful_area["zoom"])
+            self.assertAlmostEqual(no_result_area["center"]["lat"], successful_area["center"]["lat"], places=3)
+            self.assertAlmostEqual(no_result_area["center"]["lng"], successful_area["center"]["lng"], places=3)
+            self.assertIn("Карта осталась", page.locator("[data-map-results]").inner_text())
 
             page.locator("[data-search-clear]").click()
             page.wait_for_timeout(800)

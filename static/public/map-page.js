@@ -1,5 +1,5 @@
 import { publicFeatures } from "./feature-flags.js";
-import { initialisePublicMap } from "./map.js?v=2026-08-03-02";
+import { initialisePublicMap } from "./map.js?v=2026-08-03-03";
 
 const ONBOARDING_KEY = "touristika:map-onboarding:v1";
 const features = publicFeatures();
@@ -101,16 +101,16 @@ function attachSearch() {
   searchClear.hidden = !searchInput.value;
   searchInput.addEventListener("input", () => {
     searchClear.hidden = !searchInput.value;
-    controller?.search(searchInput.value);
+    if (!searchInput.value) controller?.clearSearch();
   });
   searchInput.addEventListener("keydown", (event) => {
     if (event.key !== "Enter" || searchInput.hasAttribute("aria-activedescendant")) return;
     event.preventDefault();
     controller?.search(searchInput.value, { immediate: true });
     searchInput.blur();
-    window.setTimeout(() => controller?.invalidate(), 160);
   });
   searchInput.addEventListener("focus", () => {
+    controller?.setKeyboardOpen(true);
     if (!features.discovery_search || autocompleteAttached || !autocomplete) return;
     autocompleteAttached = true;
     loadStylesheet("/static/public/autocomplete.css?v=2026-08-03-02");
@@ -126,12 +126,17 @@ function attachSearch() {
             return;
           }
           searchInput.value = item.value || item.title || "";
-          controller?.search(searchInput.value);
+          controller?.search(searchInput.value, { immediate: true });
           searchInput.blur();
-          window.setTimeout(() => controller?.invalidate(), 160);
         },
       });
     }).catch(() => {});
+  });
+  searchInput.addEventListener("blur", () => {
+    window.setTimeout(() => {
+      controller?.setKeyboardOpen(false);
+      controller?.invalidate();
+    }, 220);
   });
   searchClear.addEventListener("click", () => {
     searchInput.value = "";
@@ -217,5 +222,6 @@ waitForLeaflet().then(() => {
 });
 
 window.visualViewport?.addEventListener("resize", () => {
+  if (document.activeElement === searchInput) return;
   window.setTimeout(() => controller?.invalidate(), 180);
 }, { passive: true });

@@ -1,10 +1,11 @@
 import { catalogIconSvg } from "./catalog-icons.js?v=2026-07-27-03";
 
-const RUSSIA_VIEW = [61, 99];
-const RUSSIA_ZOOM = 3;
+const DEFAULT_REGION_VIEW = [55.75, 37.62];
+const DEFAULT_REGION_ZOOM = 5;
 const OBJECT_ZOOM = 11;
 const SEARCH_MAX_ZOOM = 9;
 const SEARCH_DEBOUNCE_MS = 400;
+const GEOCODER_URL = "https://nominatim.openstreetmap.org/search";
 const MAP_PAGE_SIZE = 200;
 const MAP_MAX_RESULTS = 10000;
 const MAP_REQUEST_CONCURRENCY = 4;
@@ -312,7 +313,7 @@ export function initialisePublicMap({
     zoomControl: false,
     attributionControl: false,
     scrollWheelZoom: false,
-  }).setView(RUSSIA_VIEW, RUSSIA_ZOOM);
+  }).setView(DEFAULT_REGION_VIEW, DEFAULT_REGION_ZOOM);
   if (window.__TOURISTIKA_TEST_HOOKS__) window.__TOURISTIKA_TEST_MAP__ = map;
   const tiles = window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 18,
@@ -340,8 +341,14 @@ export function initialisePublicMap({
   let areaPromptReady = false;
   let programmaticMove = false;
   let userMovedMap = false;
-  let previousArea = null;
-  let currentArea = { center: [...RUSSIA_VIEW], zoom: RUSSIA_ZOOM };
+  let keyboardOpen = false;
+  let searchPending = false;
+  let stableCenter = [...DEFAULT_REGION_VIEW];
+  let stableZoom = DEFAULT_REGION_ZOOM;
+  let searchResultCenter = null;
+  let searchResultZoom = null;
+  let currentArea = { center: [...stableCenter], zoom: stableZoom };
+  let geocodeResult = null;
   let lastLoadedSearch = null;
   const deepLinkSelectValues = [
     [filterSubtype, pageParams.get("subtype")],
@@ -374,6 +381,35 @@ export function initialisePublicMap({
       programmaticMove = false;
       currentArea = snapshotArea();
     }, 900);
+  }
+
+  function rememberStableArea(area = snapshotArea()) {
+    stableCenter = [...area.center];
+    stableZoom = area.zoom;
+  }
+
+  function fitInitialEntities() {
+    const points = entities
+      .filter((entity) => markers.has(entityKey(entity)))
+      .map((entity) => [entity.lat, entity.lng]);
+    if (!points.length) {
+      moveProgrammatically(() => map.setView(DEFAULT_REGION_VIEW, DEFAULT_REGION_ZOOM, { animate: false }));
+      currentArea = snapshotArea();
+      rememberStableArea(currentArea);
+      return;
+    }
+    if (points.length === 1) {
+      moveProgrammatically(() => map.setView(points[0], 8, { animate: false }));
+    } else {
+      const bounds = window.L.latLngBounds(points);
+      moveProgrammatically(() => map.fitBounds(bounds.pad(0.16), {
+        maxZoom: 8,
+        animate: false,
+        padding: [36, 36],
+      }));
+    }
+    currentArea = snapshotArea();
+    rememberStableArea(currentArea);
   }
 
   function closeSelectedEntity() {
@@ -582,7 +618,13 @@ export function initialisePublicMap({
     if (!searchQuery.trim()) return;
     const summary = document.createElement("p");
     summary.className = "public-map__result-summary";
-    summary.textContent = entities.length ? `Найдено: ${entities.length}` : "Ничего не нашли. Попробуйте другой запрос.";
+    summary.textContent = entities.length
+      ? `Найдено: ${entities.length}`
+      : geocodeResult
+        ? `Показали на карте: ${geocodeResult.label}`
+        : searchPending
+          ? "Ищем место…"
+          : "Ничего не нашли. Карта осталась в прежней области.";
     results.append(summary);
     entities.slice(0, 4).forEach((entity) => {
       const button = document.createElement("button");
@@ -763,20 +805,69 @@ function decorateMarker(marker, entity, onActivate) {
     if (!points.length) return;
     const compact = window.matchMedia("(max-width: 720px)").matches;
     if (points.length === 1) {
-      moveProgrammatically(() => map.flyTo(points[0], SEARCH_MAX_ZOOM, { duration: 0.55 }));
+      moveProgrammatically(() => map.setView(points[0], SEARCH_MAX_ZOOM, { animate: false }));
       return;
     }
     const bounds = window.L.latLngBounds(points);
     if (!bounds.isValid()) return;
     moveProgrammatically(() => map.fitBounds(bounds.pad(0.18), {
       maxZoom: SEARCH_MAX_ZOOM,
-      animate: true,
+      animate: false,
       paddingTopLeft: compact ? [24, 88] : [54, 74],
       paddingBottomRight: compact ? [24, 190] : [54, 74],
     }));
   }
 
-  async function loadEntities({ initialiseFilters = false, facets = null, fitResults = false } = {}) {
+  async function geocodeSearch(value, signal) {
+    const url = new URL(GEOCODER_URL);
+    url.search = new URLSearchParams({
+      q: value,
+      format: "jsonv2",
+      limit: "1",
+      countrycodes: "ru",
+      "accept-language": "ru",
+    });
+    const payload = await fetchJson(url, {
+      signal,
+      headers: { Accept: "application/json" },
+      credentials: "omit",
+    });
+    const item = Array.isArray(payload) ? payload[0] : null;
+    const lat = Number(item?.lat);
+    const lng = Number(item?.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    const box = Array.isArray(item.boundingbox) && item.boundingbox.length === 4
+      ? item.boundingbox.map(Number)
+      : null;
+    return {
+      center: [lat, lng],
+      bounds: box?.every(Number.isFinite)
+        ? [[box[0], box[2]], [box[1], box[3]]]
+        : null,
+      label: String(item.display_name || value).split(",").slice(0, 3).join(","),
+    };
+  }
+
+  function showGeocodeResult(result) {
+    geocodeResult = result;
+    const compact = window.matchMedia("(max-width: 720px)").matches;
+    if (result.bounds) {
+      moveProgrammatically(() => map.fitBounds(result.bounds, {
+        maxZoom: SEARCH_MAX_ZOOM,
+        animate: false,
+        paddingTopLeft: compact ? [24, 88] : [54, 74],
+        paddingBottomRight: compact ? [24, 190] : [54, 74],
+      }));
+    } else {
+      moveProgrammatically(() => map.setView(result.center, SEARCH_MAX_ZOOM, { animate: false }));
+    }
+    searchResultCenter = [...result.center];
+    searchResultZoom = map.getZoom();
+    renderResults();
+    if (status) status.textContent = `Показали географическое место: ${result.label}`;
+  }
+
+  async function loadEntities({ initialiseFilters = false, facets = null, fitResults = false, initialiseMap = false } = {}) {
     const minimumPrice = Number(filterPriceMin?.value);
     const maximumPrice = Number(filterPriceMax?.value);
     if (
@@ -810,7 +901,26 @@ function decorateMarker(marker, entity, onActivate) {
       if (payload.truncated && status) {
         status.textContent = `Показаны первые ${entities.length} из ${total}. Уточните фильтры, чтобы увидеть остальные.`;
       }
-      if (fitResults && markers.size && !userMovedMap) fitSearchResults();
+      if (initialiseMap) fitInitialEntities();
+      if (fitResults && markers.size && !userMovedMap) {
+        fitSearchResults();
+        searchResultCenter = [map.getCenter().lat, map.getCenter().lng];
+        searchResultZoom = map.getZoom();
+      } else if (fitResults && searchQuery.trim() && !markers.size && !userMovedMap) {
+        const queryAtRequest = searchQuery.trim();
+        let location = null;
+        try {
+          location = await geocodeSearch(queryAtRequest, controller.signal);
+        } catch (error) {
+          if (error?.name === "AbortError") throw error;
+        }
+        if (queryAtRequest === searchQuery.trim() && location) showGeocodeResult(location);
+        else if (queryAtRequest === searchQuery.trim()) {
+          geocodeResult = null;
+          renderResults();
+          if (status) status.textContent = "Ничего не нашли. Карта осталась в прежней области.";
+        }
+      }
       if (requestedEntityPending && requestedEntitySlug) {
         const requested = entities.find((entity) => (
           String(entity.slug || "") === requestedEntitySlug
@@ -826,6 +936,10 @@ function decorateMarker(marker, entity, onActivate) {
         if (status) status.textContent = "Не удалось загрузить каталог. Попробуйте обновить страницу.";
       }
     } finally {
+      if (!controller.signal.aborted && requestController === controller) {
+        searchPending = false;
+        renderResults();
+      }
       if (!controller.signal.aborted && requestController === controller && loading) loading.hidden = true;
     }
   }
@@ -879,6 +993,7 @@ function decorateMarker(marker, entity, onActivate) {
       initialiseFilters: true,
       facets,
       fitResults: Boolean(searchQuery.trim()) && !requestedEntitySlug,
+      initialiseMap: !searchQuery.trim() && !requestedEntitySlug,
     });
     if (deepLinkSelectValues.some(([, value]) => value)) await loadEntities({ fitResults: true });
     areaPromptReady = true;
@@ -899,8 +1014,13 @@ function decorateMarker(marker, entity, onActivate) {
   function clearSearch({ resetFilters = false, restoreDefault = false } = {}) {
     window.clearTimeout(searchTimer);
     searchTimer = 0;
+    requestController?.abort();
     searchQuery = "";
     lastLoadedSearch = null;
+    geocodeResult = null;
+    searchPending = false;
+    searchResultCenter = null;
+    searchResultZoom = null;
     boundsQuery = null;
     if (searchArea) searchArea.hidden = true;
     selectedEntity = null;
@@ -925,8 +1045,7 @@ function decorateMarker(marker, entity, onActivate) {
       ].filter(Boolean).forEach((input) => { input.checked = false; });
       updateSubtypeOptions();
     }
-    const target = restoreDefault ? { center: RUSSIA_VIEW, zoom: RUSSIA_ZOOM } : (previousArea || { center: RUSSIA_VIEW, zoom: RUSSIA_ZOOM });
-    previousArea = null;
+    const target = { center: [...stableCenter], zoom: stableZoom };
     userMovedMap = false;
     moveProgrammatically(() => map.flyTo(target.center, target.zoom, { duration: 0.55 }));
     void loadEntities();
@@ -1008,10 +1127,14 @@ function decorateMarker(marker, entity, onActivate) {
   }
 
   if ("ResizeObserver" in window) {
-    const resizeObserver = new ResizeObserver(() => map.invalidateSize({ animate: false }));
+    const resizeObserver = new ResizeObserver(() => {
+      if (!keyboardOpen) map.invalidateSize({ animate: false });
+    });
     resizeObserver.observe(shell);
   } else {
-    window.addEventListener("resize", () => map.invalidateSize({ animate: false }), { passive: true });
+    window.addEventListener("resize", () => {
+      if (!keyboardOpen) map.invalidateSize({ animate: false });
+    }, { passive: true });
   }
   map.on("moveend", () => {
     currentArea = snapshotArea();
@@ -1035,7 +1158,6 @@ function decorateMarker(marker, entity, onActivate) {
   return {
     search(value, { immediate = false } = {}) {
       const next = String(value || "").trim();
-      const previous = searchQuery.trim();
       window.clearTimeout(searchTimer);
       searchTimer = 0;
       searchQuery = value || "";
@@ -1049,10 +1171,14 @@ function decorateMarker(marker, entity, onActivate) {
         if (status) status.textContent = "Введите минимум два символа.";
         return;
       }
-      if (!previous || previous.length < 2) previousArea = currentArea;
+      if (!immediate) return;
+      if (!lastLoadedSearch) rememberStableArea(currentArea);
       boundsQuery = null;
       userMovedMap = false;
       if (next === lastLoadedSearch) return;
+      geocodeResult = null;
+      searchPending = true;
+      renderResults();
       searchTimer = window.setTimeout(() => {
         searchTimer = 0;
         void loadEntities({ fitResults: true });
@@ -1063,7 +1189,21 @@ function decorateMarker(marker, entity, onActivate) {
     locate,
     refreshList: renderList,
     invalidate() {
-      map.invalidateSize({ animate: false });
+      if (!keyboardOpen) map.invalidateSize({ animate: false });
+    },
+    setKeyboardOpen(value) {
+      keyboardOpen = Boolean(value);
+    },
+    getState() {
+      return {
+        stableCenter: [...stableCenter],
+        stableZoom,
+        searchResultCenter: searchResultCenter ? [...searchResultCenter] : null,
+        searchResultZoom,
+        userMovedMap,
+        keyboardOpen,
+        searchPending,
+      };
     },
     selectById(value) {
       const entity = entities.find((item) => String(entityKey(item)) === String(value) || String(item.slug || "") === String(value));

@@ -413,6 +413,7 @@ class UiSmokeTests(unittest.TestCase):
 
             page.get_by_role("button", name="Открыть поиск по карте").click()
             page.locator("#map-search").fill("место")
+            page.locator("#map-search").press("Enter")
             page.wait_for_selector(".public-map__result-summary", timeout=10000)
             browser.close()
 
@@ -466,6 +467,9 @@ class UiSmokeTests(unittest.TestCase):
             for width, height in ((320, 568), (390, 844)):
                 with self.subTest(viewport=f"{width}x{height}"):
                     page = browser.new_page(viewport={"width": width, "height": height})
+                    page.add_init_script(
+                        "localStorage.setItem('touristika:map-onboarding:v1', 'seen'); window.__TOURISTIKA_TEST_HOOKS__ = true"
+                    )
                     errors, responses = self._collect_client_issues(page)
                     page.route("**/api/public/entity-kinds", lambda route: fulfil_json(route, entity_kinds))
                     page.route("**/api/public/entity-types", lambda route: fulfil_json(route, entity_types))
@@ -474,10 +478,17 @@ class UiSmokeTests(unittest.TestCase):
                     page.route("**/api/public/place-types", lambda route: fulfil_json(route, fixture["place_types"]))
                     page.route("**/api/public/amenities", lambda route: fulfil_json(route, fixture["amenities"]))
                     page.route("**/api/public/places?*", lambda route: fulfil_json(route, list_payload))
-                    page.goto(f"{self.base_url}/", wait_until="domcontentloaded", timeout=20000)
-                    self._open_first_public_map_popup(page)
+                    page.goto(f"{self.base_url}/map", wait_until="domcontentloaded", timeout=20000)
+                    page.wait_for_selector("#map-canvas.leaflet-container", timeout=15000)
+                    page.wait_for_function("document.querySelector('[data-map-loading]')?.hidden === true")
+                    page.wait_for_function("Boolean(window.__TOURISTIKA_TEST_MAP_CONTROLLER__)")
+                    page.evaluate(
+                        "value => window.__TOURISTIKA_TEST_MAP_CONTROLLER__.selectById(value)",
+                        fixture["places"][0]["id"],
+                    )
+                    page.wait_for_selector("[data-map-sheet]:not([hidden])", timeout=10000)
 
-                    popup_bounds = page.locator(".leaflet-popup").evaluate(
+                    popup_bounds = page.locator("[data-map-sheet]").evaluate(
                         """node => { const r=node.getBoundingClientRect(); return {left:r.left,top:r.top,right:r.right,bottom:r.bottom}; }"""
                     )
                     self.assertGreaterEqual(popup_bounds["left"], -1)
@@ -485,25 +496,25 @@ class UiSmokeTests(unittest.TestCase):
                     self.assertLessEqual(popup_bounds["right"], width + 1)
                     self.assertLessEqual(popup_bounds["bottom"], height + 1)
 
-                    close_bounds = page.locator(".leaflet-popup-close-button").bounding_box()
+                    close_bounds = page.locator("[data-sheet-close]").bounding_box()
                     self.assertGreaterEqual(close_bounds["width"], 34)
                     self.assertGreaterEqual(close_bounds["height"], 34)
                     self.assertGreaterEqual(close_bounds["x"], 0)
                     self.assertLessEqual(close_bounds["x"] + close_bounds["width"], width)
                     self.assertEqual(
-                        page.locator(".public-map-popup__actions").evaluate("node => node.scrollWidth <= node.clientWidth + 1"),
+                        page.locator(".map-sheet-card__actions").evaluate("node => node.scrollWidth <= node.clientWidth + 1"),
                         True,
                     )
                     self.assertEqual(
-                        page.locator(".public-map-popup").evaluate("node => node.scrollWidth <= node.clientWidth + 1"),
+                        page.locator(".map-sheet-card").evaluate("node => node.scrollWidth <= node.clientWidth + 1"),
                         True,
                     )
                     legend_icons = page.locator(".map-legend i svg")
                     self.assertGreater(legend_icons.count(), 0)
                     if legend_icons.count() > 1:
                         self.assertGreater(len(set(legend_icons.evaluate_all("nodes => nodes.map(node => node.innerHTML)"))), 1)
-                    page.locator(".leaflet-popup-close-button").click()
-                    page.wait_for_selector(".leaflet-popup", state="detached", timeout=5000)
+                    page.locator("[data-sheet-close]").click()
+                    page.wait_for_selector("[data-map-sheet]", state="hidden", timeout=5000)
 
                     local_errors = [(status, url) for status, url in responses if status >= 400 and url.startswith(self.base_url)]
                     self.assertEqual(local_errors, [], f"Unexpected compact popup responses: {local_errors}")
@@ -516,6 +527,14 @@ class UiSmokeTests(unittest.TestCase):
             browser = playwright.chromium.launch(headless=True)
             page = browser.new_page(viewport={"width": 390, "height": 844})
             errors, responses = self._collect_client_issues(page)
+            page.route(
+                "**/api/public/discovery/home",
+                lambda route: route.fulfill(
+                    status=200,
+                    content_type="application/json",
+                    body='{"counts":{},"items":[],"pulse":[]}',
+                ),
+            )
 
             page.goto(f"{self.base_url}/", wait_until="domcontentloaded", timeout=20000)
             menu_button = page.get_by_role("button", name="Открыть меню")
@@ -523,8 +542,8 @@ class UiSmokeTests(unittest.TestCase):
             page.wait_for_selector("#mobile-menu:not([hidden])", timeout=5000)
             self.assertGreater(page.locator("#mobile-menu a").count(), 2)
             page.locator("#mobile-menu").get_by_role("link", name="Карта").click()
-            page.wait_for_timeout(250)
-            self.assertTrue(page.locator("#mobile-menu").evaluate("node => node.hidden"))
+            page.wait_for_url(f"{self.base_url}/map", timeout=10000)
+            self.assertEqual(page.locator("#map-canvas").count(), 1)
             browser.close()
 
         local_errors = [(status, url) for status, url in responses if status >= 400 and url.startswith(self.base_url)]
