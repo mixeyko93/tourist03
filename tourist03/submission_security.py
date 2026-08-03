@@ -123,18 +123,19 @@ class HttpCaptchaVerifier(CaptchaVerifier):
         if expected_action and str(payload.get("action") or "").strip() != expected_action:
             return False
 
-        challenge_ts = str(payload.get("challenge_ts") or "").strip()
-        try:
-            challenged_at = datetime.fromisoformat(challenge_ts.replace("Z", "+00:00"))
-            if challenged_at.tzinfo is None:
-                challenged_at = challenged_at.replace(tzinfo=timezone.utc)
-            age_seconds = (
-                datetime.now(timezone.utc) - challenged_at.astimezone(timezone.utc)
-            ).total_seconds()
-        except (TypeError, ValueError):
-            return False
-        if age_seconds < -60 or age_seconds > self.max_age_seconds:
-            return False
+        if expected_hostname or expected_action:
+            challenge_ts = str(payload.get("challenge_ts") or "").strip()
+            try:
+                challenged_at = datetime.fromisoformat(challenge_ts.replace("Z", "+00:00"))
+                if challenged_at.tzinfo is None:
+                    challenged_at = challenged_at.replace(tzinfo=timezone.utc)
+                age_seconds = (
+                    datetime.now(timezone.utc) - challenged_at.astimezone(timezone.utc)
+                ).total_seconds()
+            except (TypeError, ValueError):
+                return False
+            if age_seconds < -60 or age_seconds > self.max_age_seconds:
+                return False
         return True
 
     async def verify(self, token: str, *, remote_ip: str | None = None) -> bool:

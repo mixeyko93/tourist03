@@ -417,6 +417,9 @@ class SubmissionProductionSettingsTests(unittest.TestCase):
             submission_captcha_secret="captcha-secret-value",
             submission_captcha_client_script_url="https://captcha.test/client-adapter.js",
             submission_captcha_site_key="public-site-key",
+            submission_captcha_expected_hostname="turistika.test",
+            submission_captcha_expected_action="placement_submission",
+            feature_email_delivery=True,
             smtp_host="smtp.test",
             smtp_from="robot@turistika.test",
         )
@@ -432,21 +435,24 @@ class SubmissionNotificationTests(unittest.TestCase):
             "title": "Заявка принята",
             "body": "Мы получили информацию.",
             "attempts": 2,
+            "claim_token": "email-claim-41",
         }
         settings = Settings(
             environment="test",
+            feature_email_delivery=True,
             smtp_host="smtp.example",
             smtp_from="robot@example.org",
             superadmin_base_url="https://superadmin.example.org",
         )
         with patch(
-            "tourist03.services.notification_delivery.notification_repo.list_pending_email_notifications",
+            "tourist03.services.notification_delivery.notification_repo.claim_pending_email_notifications",
             return_value=[event],
         ), patch(
             "tourist03.services.notification_delivery._send_email",
             side_effect=OSError("smtp unavailable"),
         ), patch(
-            "tourist03.services.notification_delivery.notification_repo.mark_notification_failed"
+            "tourist03.services.notification_delivery.notification_repo.mark_claimed_email_notification_failed",
+            return_value=True,
         ) as mark_failed, patch(
             "tourist03.services.notification_delivery.submission_repo.get_submission_detail",
             return_value={"public_number": "TUR-2026-NOTIFY01"},
@@ -457,7 +463,7 @@ class SubmissionNotificationTests(unittest.TestCase):
                 deliver_pending_email_notifications(settings=settings),
                 0,
             )
-        mark_failed.assert_called_once_with(41, "smtp unavailable")
+        mark_failed.assert_called_once_with(41, "email-claim-41", "smtp unavailable")
         self.assertEqual(enqueue.call_args.kwargs["severity"], "warning")
         self.assertIn("TUR-2026-NOTIFY01", enqueue.call_args.kwargs["title"])
         self.assertIn("submission=71", enqueue.call_args.kwargs["admin_action_url"])
