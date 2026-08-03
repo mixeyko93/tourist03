@@ -15,16 +15,10 @@ Group=turistika
 WorkingDirectory=/opt/turistika/current
 EnvironmentFile=/etc/turistika/production.env
 EnvironmentFile=/etc/turistika/telegram.env
-# Telegram delivery is deliberately independent from SMTP, Turnstile and the
-# Owner Portal.  Keep those validation gates out of this least-secret process.
-Environment=FEATURE_EMAIL_DELIVERY=false
-Environment=FEATURE_PLACEMENT_SUBMISSIONS=false
-Environment=FEATURE_OWNER_PORTAL=false
-Environment=FEATURE_OWNER_CHANGE_REQUESTS=false
-Environment=FEATURE_OWNER_PASSWORD_RESET=false
 Environment=PYTHONDONTWRITEBYTECODE=1
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/opt/turistika/current/.venv/bin/python -m tourist03.workers.telegram_support
+# Apply least-secret worker gates after EnvironmentFile values.
+ExecStart=/usr/bin/env FEATURE_EMAIL_DELIVERY=false FEATURE_PLACEMENT_SUBMISSIONS=false FEATURE_OWNER_PORTAL=false FEATURE_OWNER_CHANGE_REQUESTS=false FEATURE_OWNER_PASSWORD_RESET=false /opt/turistika/current/.venv/bin/python -m tourist03.workers.telegram_support
 Restart=on-failure
 RestartSec=10s
 TimeoutStopSec=30s
