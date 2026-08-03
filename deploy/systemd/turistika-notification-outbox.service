@@ -15,18 +15,12 @@ Group=turistika
 WorkingDirectory=/opt/turistika/current
 EnvironmentFile=/etc/turistika/production.env
 EnvironmentFile=/etc/turistika/smtp.env
-# This worker only delivers the already-created email outbox.  Public feature
-# gates from production.env must not make it require Telegram, Turnstile or
-# Owner Portal runtime secrets.
-Environment=FEATURE_TELEGRAM_CONTACT=false
-Environment=FEATURE_PLACEMENT_SUBMISSIONS=false
-Environment=FEATURE_OWNER_PORTAL=false
-Environment=FEATURE_OWNER_CHANGE_REQUESTS=false
-Environment=FEATURE_OWNER_PASSWORD_RESET=false
-Environment=SUBMISSION_CLEANUP_ENABLED=false
+# EnvironmentFile entries are applied after Environment entries by systemd.
+# Apply worker-only feature gates at exec time so production.env cannot make
+# this least-secret delivery process require unrelated runtime secrets.
 Environment=PYTHONDONTWRITEBYTECODE=1
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/opt/turistika/current/.venv/bin/python -m tourist03.workers.notification_outbox
+ExecStart=/usr/bin/env FEATURE_TELEGRAM_CONTACT=false FEATURE_PLACEMENT_SUBMISSIONS=false FEATURE_OWNER_PORTAL=false FEATURE_OWNER_CHANGE_REQUESTS=false FEATURE_OWNER_PASSWORD_RESET=false SUBMISSION_CLEANUP_ENABLED=false /opt/turistika/current/.venv/bin/python -m tourist03.workers.notification_outbox
 Restart=on-failure
 RestartSec=10s
 TimeoutStopSec=30s
