@@ -1,0 +1,55 @@
+[Unit]
+Description=Turistika R2 notification outbox worker
+Wants=network-online.target
+After=network-online.target turistika.service
+PartOf=turistika.service
+RequiresMountsFor=/opt/turistika/current
+ConditionPathIsSymbolicLink=/opt/turistika/current
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=turistika
+Group=turistika
+WorkingDirectory=/opt/turistika/current
+EnvironmentFile=/etc/turistika/production.env
+EnvironmentFile=/etc/turistika/smtp.env
+# This worker only delivers the already-created email outbox.  Public feature
+# gates from production.env must not make it require Telegram, Turnstile or
+# Owner Portal runtime secrets.
+Environment=FEATURE_TELEGRAM_CONTACT=false
+Environment=FEATURE_PLACEMENT_SUBMISSIONS=false
+Environment=FEATURE_OWNER_PORTAL=false
+Environment=FEATURE_OWNER_CHANGE_REQUESTS=false
+Environment=FEATURE_OWNER_PASSWORD_RESET=false
+Environment=SUBMISSION_CLEANUP_ENABLED=false
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/turistika/current/.venv/bin/python -m tourist03.workers.notification_outbox
+Restart=on-failure
+RestartSec=10s
+TimeoutStopSec=30s
+UMask=0027
+
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHome=true
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=strict
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target

@@ -1,3 +1,4 @@
+import secrets
 from typing import Optional
 
 from tourist03.db import _db_conn
@@ -465,6 +466,116 @@ def list_pending_email_notifications(*, limit: int = 100) -> list[dict]:
             (safe_limit,),
         )
         return [dict(row) for row in cur.fetchall()]
+
+
+def claim_pending_email_notifications(
+    *,
+    limit: int = 100,
+    lease_seconds: int = 120,
+) -> list[dict]:
+    """Atomically lease due email events across concurrent/restarted workers."""
+
+    safe_limit = max(1, min(int(limit or 100), 500))
+    safe_lease = max(30, min(int(lease_seconds or 120), 900))
+    batch_token = secrets.token_urlsafe(32)
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            WITH eligible AS (
+                SELECT id
+                FROM crm.notification_events
+                WHERE channel = 'email'
+                  AND status = 'new'
+                  AND next_attempt_at <= NOW()
+                  AND NULLIF(trim(recipient_address), '') IS NOT NULL
+                  AND (
+                        claim_token IS NULL
+                        OR lease_until IS NULL
+                        OR lease_until < NOW()
+                  )
+                ORDER BY created_at, id
+                FOR UPDATE SKIP LOCKED
+                LIMIT %s
+            )
+            UPDATE crm.notification_events events
+            SET claim_token = %s || ':' || events.id::text,
+                claimed_at = NOW(),
+                lease_until = NOW() + (%s * INTERVAL '1 second')
+            FROM eligible
+            WHERE events.id = eligible.id
+            RETURNING events.*
+            """,
+            (safe_limit, batch_token, safe_lease),
+        )
+        rows = [dict(row) for row in cur.fetchall()]
+        conn.commit()
+    return sorted(rows, key=lambda row: (row.get("created_at"), int(row["id"])))
+
+
+def mark_claimed_email_notification_sent(
+    event_id: int,
+    claim_token: str,
+    *,
+    delivered_message_id: str | None = None,
+) -> bool:
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE crm.notification_events
+            SET status = 'closed',
+                read_at = COALESCE(read_at, NOW()),
+                closed_at = COALESCE(closed_at, NOW()),
+                sent_at = COALESCE(sent_at, NOW()),
+                attempts = attempts + 1,
+                last_error = NULL,
+                delivered_message_id = COALESCE(%s, delivered_message_id),
+                claim_token = NULL,
+                claimed_at = NULL,
+                lease_until = NULL
+            WHERE id = %s
+              AND channel = 'email'
+              AND status = 'new'
+              AND claim_token = %s
+            """,
+            (delivered_message_id, int(event_id), claim_token),
+        )
+        changed = cur.rowcount > 0
+        conn.commit()
+        return changed
+
+
+def mark_claimed_email_notification_failed(
+    event_id: int,
+    claim_token: str,
+    error_message: str,
+) -> bool:
+    with _db_conn("crm") as conn:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE crm.notification_events
+            SET attempts = attempts + 1,
+                last_error = left(%s, 1000),
+                next_attempt_at = NOW() + (
+                    LEAST(3600, GREATEST(30, power(2, LEAST(attempts, 7))::integer * 30))
+                    * INTERVAL '1 second'
+                ),
+                status = CASE WHEN attempts >= 9 THEN 'failed' ELSE 'new' END,
+                claim_token = NULL,
+                claimed_at = NULL,
+                lease_until = NULL
+            WHERE id = %s
+              AND channel = 'email'
+              AND status = 'new'
+              AND claim_token = %s
+            """,
+            ((error_message or "delivery failed")[:1000], int(event_id), claim_token),
+        )
+        changed = cur.rowcount > 0
+        conn.commit()
+        return changed
 
 
 def mark_email_notification_sent(event_id: int) -> bool:

@@ -2,6 +2,7 @@ const defaults = Object.freeze({
   public_booking: false,
   public_user_auth: false,
   telegram_webapp: false,
+  telegram_contact: false,
   placement_submissions: false,
 });
 

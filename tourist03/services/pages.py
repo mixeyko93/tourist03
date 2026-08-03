@@ -12,6 +12,10 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from tourist03.config import STATIC_DIR, TEMPLATES
 from tourist03.csrf import issue_csrf_token
+from tourist03.domain.telegram_support import (
+    build_telegram_deep_link,
+    telegram_contact_public_config,
+)
 from tourist03.migrations import migration_status
 from tourist03.public_catalog import safe_public_asset_url, validate_slug
 from tourist03.repositories import catalog as catalog_repo
@@ -61,6 +65,10 @@ def _public_index_response(request: Request):
         runtime_config += '<script src="https://telegram.org/js/telegram-web-app.js"></script>'
     html = html.replace("<!-- TOURISTIKA_RUNTIME_CONFIG -->", runtime_config, 1)
     html = html.replace("__TOURISTIKA_PUBLIC_BASE_URL__", escape_html(public_base_url, quote=True))
+    html = html.replace(
+        "__TOURISTIKA_TELEGRAM_CONTACT_URL__",
+        escape_html(build_telegram_deep_link(settings) or "#contacts", quote=True),
+    )
     return HTMLResponse(content=html, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
 
@@ -274,6 +282,11 @@ def public_place_page(request: Request, slug: str):
             updated_datetime=updated_datetime,
             related_items=related_items,
             local_recent_history=request.app.state.settings.feature_local_recent_history,
+            telegram_contact_url=build_telegram_deep_link(
+                request.app.state.settings,
+                "entity",
+                int(place["id"]),
+            ),
         ),
         headers={"Cache-Control": "public, max-age=120"},
     )
@@ -285,6 +298,7 @@ def _discovery_page_context(request: Request) -> dict:
         "public_base_url": settings.public_base_url.rstrip("/"),
         "features": settings.public_features,
         "local_recent_history": settings.feature_local_recent_history,
+        "telegram_contact_url": build_telegram_deep_link(settings),
     }
 
 
@@ -360,9 +374,15 @@ def public_collection_page(request: Request, slug: str):
             {"@type": "ListItem", "position": 3, "name": collection["title"], "item": canonical},
         ],
     }
+    page_context = _discovery_page_context(request)
+    page_context["telegram_contact_url"] = build_telegram_deep_link(
+        request.app.state.settings,
+        "collection",
+        int(collection["id"]),
+    )
     return HTMLResponse(
         PUBLIC_TEMPLATE_ENV.get_template("collection-detail.html").render(
-            **_discovery_page_context(request),
+            **page_context,
             collection=collection,
             canonical=canonical,
             title=title,
@@ -436,9 +456,15 @@ def public_route_page(request: Request, slug: str):
             {"@type": "ListItem", "position": 3, "name": route["title"], "item": canonical},
         ],
     }
+    page_context = _discovery_page_context(request)
+    page_context["telegram_contact_url"] = build_telegram_deep_link(
+        request.app.state.settings,
+        "route",
+        int(route["id"]),
+    )
     return HTMLResponse(
         PUBLIC_TEMPLATE_ENV.get_template("route-detail.html").render(
-            **_discovery_page_context(request),
+            **page_context,
             route=route,
             canonical=canonical,
             title=title,
@@ -482,6 +508,8 @@ def _standalone_public_page(request: Request, template_name: str) -> HTMLRespons
             captcha_provider=settings.submission_captcha_provider,
             captcha_client_script_url=settings.submission_captcha_client_script_url,
             captcha_site_key=settings.submission_captcha_site_key,
+            captcha_action=settings.submission_captcha_expected_action,
+            telegram_contact_url=build_telegram_deep_link(settings),
         ),
         headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
     )
@@ -500,7 +528,12 @@ def api_version(request: Request):
 
 
 def api_public_config(request: Request):
-    return {"ok": True, "features": request.app.state.settings.public_features}
+    settings = request.app.state.settings
+    return {
+        "ok": True,
+        "features": settings.public_features,
+        "telegram_contact": telegram_contact_public_config(settings),
+    }
 
 
 def api_csrf_token(request: Request):

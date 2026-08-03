@@ -14,7 +14,19 @@ from tourist03.http_middleware import (
     RateLimitMiddleware,
     StaticAssetCompressionMiddleware,
 )
-from tourist03.routers import admin, auth, bookings, bot_webhook, catalog, discovery, owners, pages, submissions, superadmin
+from tourist03.routers import (
+    admin,
+    auth,
+    bookings,
+    bot_webhook,
+    catalog,
+    discovery,
+    owners,
+    pages,
+    submissions,
+    superadmin,
+    telegram_support,
+)
 from tourist03.settings import Settings, configure_settings, get_settings
 
 
@@ -68,6 +80,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     application.include_router(pages.router)
     application.include_router(auth.router)
     application.include_router(bot_webhook.router)
+    application.include_router(telegram_support.router)
     application.include_router(bookings.router)
     application.include_router(superadmin.router)
     application.include_router(catalog.router)

@@ -27,6 +27,7 @@ from tourist03.dto.submissions import (
     SubmissionClarificationRequest,
     SubmissionSubmitRequest,
 )
+from tourist03.domain.telegram_support import build_telegram_deep_link
 from tourist03.repositories import catalog as catalog_repo
 from tourist03.repositories import submissions as submission_repo
 from tourist03.security import log_crm_audit_event
@@ -399,7 +400,10 @@ async def submit_public_submission(
         raise HTTPException(status_code=404, detail="Черновик не найден")
 
     try:
-        captcha_ok = await build_captcha_verifier(settings).verify(payload.captcha_token)
+        captcha_ok = await build_captcha_verifier(settings).verify(
+            payload.captcha_token,
+            remote_ip=request.client.host if request.client else None,
+        )
     except CaptchaUnavailableError as exc:
         raise HTTPException(status_code=503, detail="Проверка CAPTCHA временно недоступна") from exc
     if not captcha_ok:
@@ -520,6 +524,11 @@ async def submit_public_submission(
         "tracking_url": tracking_url,
         "status": finalized["status"],
         "preferred_contact_type": finalized.get("preferred_contact_type"),
+        "telegram_contact_url": build_telegram_deep_link(
+            settings,
+            "submission",
+            int(finalized["id"]),
+        ),
     }
 
 

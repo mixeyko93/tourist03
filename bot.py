@@ -41,7 +41,7 @@ WEBAPP_URL = settings.telegram_webapp_url.strip()
 
 if not BOT_TOKEN and not STAFF_BOT_TOKEN:
     raise RuntimeError("Укажите токен клиентского бота или бота уведомлений CRM в переменных окружения.")
-if BOT_TOKEN and not WEBAPP_URL:
+if BOT_TOKEN and not settings.feature_telegram_contact and not WEBAPP_URL:
     raise RuntimeError("Укажите URL мини-приложения в переменной окружения WEBAPP_URL.")
 
 logging.basicConfig(
@@ -515,11 +515,17 @@ async def _run_staff_bot() -> None:
 
 async def main() -> None:
     tasks: list[asyncio.Task] = []
-    if BOT_TOKEN:
+    if BOT_TOKEN and not settings.feature_telegram_contact:
         tasks.append(asyncio.create_task(_run_user_bot()))
+    elif BOT_TOKEN:
+        logger.info(
+            "Клиентский BOT_TOKEN зарезервирован webhook-поддержкой; polling и deleteWebhook отключены."
+        )
     if STAFF_BOT_TOKEN:
         tasks.append(asyncio.create_task(_run_staff_bot()))
     if not tasks:
+        if settings.feature_telegram_contact and BOT_TOKEN:
+            return
         raise RuntimeError("Не найден ни один токен бота для запуска.")
     await asyncio.gather(*tasks)
 
