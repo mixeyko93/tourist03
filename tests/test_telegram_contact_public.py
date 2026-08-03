@@ -1,4 +1,6 @@
 import unittest
+from html.parser import HTMLParser
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
@@ -9,6 +11,27 @@ from tourist03.domain.telegram_support import (
     verify_deep_link_payload,
 )
 from tourist03.settings import Settings, clear_settings_override
+
+
+class _TelegramLinkParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self._anchor = None
+        self.links = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "a":
+            self._anchor = {"attrs": dict(attrs), "text": ""}
+
+    def handle_data(self, data):
+        if self._anchor is not None:
+            self._anchor["text"] += data
+
+    def handle_endtag(self, tag):
+        if tag == "a" and self._anchor is not None:
+            self._anchor["text"] = self._anchor["text"].strip()
+            self.links.append(self._anchor)
+            self._anchor = None
 
 
 class TelegramContactPublicTests(unittest.TestCase):
@@ -50,6 +73,75 @@ class TelegramContactPublicTests(unittest.TestCase):
         serialized = config.text.lower()
         self.assertNotIn("token", serialized)
         self.assertNotIn("secret", serialized)
+
+    def test_every_home_cta_uses_the_expected_signed_context_without_hash(self):
+        settings = self.settings()
+        with TestClient(create_app(settings)) as client:
+            home = client.get("/")
+
+        parser = _TelegramLinkParser()
+        parser.feed(home.text)
+        expected = {
+            "Заказать помощь": "placement",
+            "Заказать фотосъёмку": "placement",
+            "Заказать карточку под ключ": "placement",
+            "Оставить заявку": "premium",
+            "Написать в Telegram": "general",
+            "Сообщить об ошибке": "bug",
+            "Предложить улучшение": "suggestion",
+            "Написать нам в Telegram": "general",
+        }
+        links = {link["text"]: link["attrs"] for link in parser.links}
+        for label, source_type in expected.items():
+            with self.subTest(label=label):
+                href = links[label].get("href", "")
+                self.assertTrue(href.startswith("https://t.me/turistikaBot?start="))
+                self.assertNotIn("#", href)
+                payload = href.rsplit("=", 1)[-1]
+                self.assertLessEqual(len(payload), 64)
+                self.assertEqual(
+                    verify_deep_link_payload(
+                        payload,
+                        settings.telegram_deep_link_secret,
+                    ),
+                    (source_type, None),
+                )
+
+    def test_disabled_home_ctas_have_no_hash_or_active_href(self):
+        settings = Settings(environment="test", feature_telegram_contact=False)
+        with TestClient(create_app(settings)) as client:
+            home = client.get("/")
+
+        self.assertNotIn('href="#contacts"', home.text)
+        self.assertNotIn('__TOURISTIKA_TELEGRAM_', home.text)
+        parser = _TelegramLinkParser()
+        parser.feed(home.text)
+        labels = {
+            "Заказать помощь",
+            "Заказать фотосъёмку",
+            "Заказать карточку под ключ",
+            "Оставить заявку",
+            "Написать в Telegram",
+            "Сообщить об ошибке",
+            "Предложить улучшение",
+            "Написать нам в Telegram",
+        }
+        for link in parser.links:
+            if link["text"] in labels:
+                self.assertNotIn("href", link["attrs"])
+                self.assertEqual(link["attrs"].get("aria-disabled"), "true")
+                self.assertEqual(link["attrs"].get("tabindex"), "-1")
+
+    def test_telegram_cta_script_does_not_write_location_hash(self):
+        source = (Path(__file__).parents[1] / "static/public/site.js").read_text(
+            encoding="utf-8"
+        )
+        placement_handler = source[
+            source.index('dialog.querySelectorAll("[data-placement-message]")'):
+            source.index("function loadStylesheet")
+        ]
+        self.assertNotIn("location.hash", placement_handler)
+        self.assertNotIn("preventDefault", placement_handler)
 
     def test_entity_context_is_signed_and_tamper_evident(self):
         settings = self.settings()

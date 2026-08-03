@@ -73,7 +73,18 @@ def _public_index_response(request: Request):
         "__TOURISTIKA_TELEGRAM_SUGGESTION_URL__": build_telegram_deep_link(settings, "suggestion"),
     }
     for placeholder, url in telegram_urls.items():
-        html = html.replace(placeholder, escape_html(url or "#contacts", quote=True))
+        if url:
+            html = html.replace(placeholder, escape_html(url, quote=True))
+            continue
+        # A hidden/disabled Telegram CTA must not remain a live hash link while
+        # the public feature is off.  In particular, ``#contacts`` is a real
+        # footer anchor and would make the browser persist an unintended scroll
+        # position across reloads.
+        html = html.replace(
+            f'href="{placeholder}"',
+            'aria-disabled="true" tabindex="-1"',
+        )
+        html = html.replace(placeholder, "")
     return HTMLResponse(content=html, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
 
