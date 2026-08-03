@@ -153,7 +153,6 @@ async def _run(
                     validation.support_chat_ok,
                     validation.support_chat_is_forum,
                     validation.bot_is_chat_admin,
-                    validation.bot_can_manage_topics,
                     validation.operators_configured > 0,
                     validation.operators_validated
                     == validation.operators_configured,

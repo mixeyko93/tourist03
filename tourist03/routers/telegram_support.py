@@ -23,7 +23,10 @@ logger = logging.getLogger("tourist03.telegram_support_webhook")
 @router.post("/api/telegram/support/webhook", include_in_schema=False)
 async def telegram_support_webhook(request: Request):
     settings = request.app.state.settings
-    if not bool(getattr(settings, "feature_telegram_contact", False)):
+    # The public feature flag only controls whether contact entry points are
+    # exposed.  Keep the authenticated receiver available during the safe
+    # webhook/E2E preflight so the flag does not need to be enabled early.
+    if not str(getattr(settings, "telegram_webhook_secret", "") or ""):
         raise HTTPException(status_code=404, detail="Not Found")
 
     provided_secret = request.headers.get(

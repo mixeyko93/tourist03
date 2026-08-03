@@ -345,6 +345,40 @@ def get_ticket_by_topic(
     return dict(row) if row else None
 
 
+def get_ticket_by_relay_destination(
+    conn,
+    *,
+    support_chat_id: int,
+    message_thread_id: int,
+    destination_message_id: int,
+    for_update: bool = False,
+) -> Optional[dict]:
+    """Resolve a shared-topic reply to the exact ticket message it answers."""
+
+    cur = conn.cursor()
+    suffix = " FOR UPDATE OF tickets" if for_update else ""
+    cur.execute(
+        f"""
+        SELECT tickets.*
+        FROM support.telegram_messages messages
+        JOIN support.telegram_tickets tickets ON tickets.id = messages.ticket_id
+        WHERE messages.destination_chat_id = %s
+          AND messages.destination_thread_id = %s
+          AND messages.destination_message_id = %s
+        ORDER BY messages.id DESC
+        LIMIT 1
+        {suffix}
+        """,
+        (
+            int(support_chat_id),
+            int(message_thread_id),
+            int(destination_message_id),
+        ),
+    )
+    row = cur.fetchone()
+    return dict(row) if row else None
+
+
 def get_ticket(conn, ticket_id: int, *, for_update: bool = False) -> Optional[dict]:
     cur = conn.cursor()
     suffix = " FOR UPDATE" if for_update else ""
@@ -371,25 +405,31 @@ def ensure_open_ticket(
     source_type: str = "general",
     source_id: Optional[str] = None,
     source_snapshot: Optional[Mapping[str, Any]] = None,
+    message_thread_id: Optional[int] = None,
 ) -> tuple[dict, bool]:
     lock_user(conn, telegram_user_id)
     existing = get_open_ticket_for_user(conn, telegram_user_id, for_update=True)
     if existing:
-        if source_type != "general" and existing.get("source_type") == "general":
+        incoming_snapshot = dict(source_snapshot or {})
+        if source_type != "general" or incoming_snapshot.get("topic_key"):
             cur = conn.cursor()
             cur.execute(
                 """
                 UPDATE support.telegram_tickets
                 SET source_type = %s,
                     source_id = %s,
-                    source_snapshot = %s::jsonb
+                    source_snapshot = %s::jsonb,
+                    message_thread_id = COALESCE(%s, message_thread_id),
+                    status = CASE WHEN %s IS NULL THEN status ELSE 'open' END
                 WHERE id = %s
                 RETURNING *
                 """,
                 (
                     source_type,
                     source_id,
-                    json.dumps(dict(source_snapshot or {}), ensure_ascii=False),
+                    json.dumps(incoming_snapshot, ensure_ascii=False),
+                    int(message_thread_id) if message_thread_id is not None else None,
+                    int(message_thread_id) if message_thread_id is not None else None,
                     int(existing["id"]),
                 ),
             )
@@ -408,11 +448,13 @@ def ensure_open_ticket(
             telegram_user_id,
             private_chat_id,
             support_chat_id,
+            message_thread_id,
+            status,
             source_type,
             source_id,
             source_snapshot
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
         RETURNING *
         """,
         (
@@ -420,6 +462,8 @@ def ensure_open_ticket(
             int(telegram_user_id),
             int(private_chat_id),
             int(support_chat_id),
+            int(message_thread_id) if message_thread_id is not None else None,
+            "open" if message_thread_id is not None else "opening",
             source_type,
             source_id,
             json.dumps(dict(source_snapshot or {}), ensure_ascii=False),

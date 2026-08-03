@@ -176,7 +176,8 @@ class TelegramMigrationUpgradeTests(unittest.TestCase):
                   AND indexname IN (
                         'idx_telegram_outbox_claim_token_unique',
                         'idx_telegram_tickets_one_open_user',
-                        'idx_telegram_tickets_topic_unique'
+                        'idx_telegram_tickets_topic_lookup',
+                        'idx_telegram_messages_relay_destination'
                   )
                 ORDER BY indexname
                 """
@@ -184,9 +185,10 @@ class TelegramMigrationUpgradeTests(unittest.TestCase):
             self.assertEqual(
                 [row["indexname"] for row in cur.fetchall()],
                 [
+                    "idx_telegram_messages_relay_destination",
                     "idx_telegram_outbox_claim_token_unique",
                     "idx_telegram_tickets_one_open_user",
-                    "idx_telegram_tickets_topic_unique",
+                    "idx_telegram_tickets_topic_lookup",
                 ],
             )
             cur.execute(
@@ -214,7 +216,7 @@ class TelegramMigrationUpgradeTests(unittest.TestCase):
             cur.execute(
                 "SELECT version FROM public.schema_migrations ORDER BY applied_at DESC LIMIT 1"
             )
-            self.assertEqual(cur.fetchone()["version"], "0035_telegram_support")
+            self.assertEqual(cur.fetchone()["version"], "0036_telegram_static_topics")
 
 
 if __name__ == "__main__":

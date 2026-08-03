@@ -65,10 +65,15 @@ def _public_index_response(request: Request):
         runtime_config += '<script src="https://telegram.org/js/telegram-web-app.js"></script>'
     html = html.replace("<!-- TOURISTIKA_RUNTIME_CONFIG -->", runtime_config, 1)
     html = html.replace("__TOURISTIKA_PUBLIC_BASE_URL__", escape_html(public_base_url, quote=True))
-    html = html.replace(
-        "__TOURISTIKA_TELEGRAM_CONTACT_URL__",
-        escape_html(build_telegram_deep_link(settings) or "#contacts", quote=True),
-    )
+    telegram_urls = {
+        "__TOURISTIKA_TELEGRAM_CONTACT_URL__": build_telegram_deep_link(settings),
+        "__TOURISTIKA_TELEGRAM_PLACEMENT_URL__": build_telegram_deep_link(settings, "placement"),
+        "__TOURISTIKA_TELEGRAM_PREMIUM_URL__": build_telegram_deep_link(settings, "premium"),
+        "__TOURISTIKA_TELEGRAM_BUG_URL__": build_telegram_deep_link(settings, "bug"),
+        "__TOURISTIKA_TELEGRAM_SUGGESTION_URL__": build_telegram_deep_link(settings, "suggestion"),
+    }
+    for placeholder, url in telegram_urls.items():
+        html = html.replace(placeholder, escape_html(url or "#contacts", quote=True))
     return HTMLResponse(content=html, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
 

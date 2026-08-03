@@ -36,11 +36,22 @@ class TelegramSupportWebhookTests(unittest.IsolatedAsyncioTestCase):
                 headers=merged,
             )
 
-    async def test_disabled_webhook_is_not_routable(self):
-        response = await self._post(
-            self._app(enabled=False),
-            secret="test-webhook-secret-with-safe-length",
-        )
+    async def test_public_feature_off_keeps_authenticated_webhook_available(self):
+        with patch.object(
+            webhook_router,
+            "process_telegram_update",
+            return_value=TelegramUpdateResult(accepted=True),
+        ):
+            response = await self._post(
+                self._app(enabled=False),
+                secret="test-webhook-secret-with-safe-length",
+            )
+        self.assertEqual(response.status_code, 200)
+
+    async def test_webhook_without_configured_secret_is_not_routable(self):
+        app = self._app(enabled=False)
+        app.state.settings.telegram_webhook_secret = ""
+        response = await self._post(app, secret="any-secret")
         self.assertEqual(response.status_code, 404)
 
     async def test_missing_or_forged_secret_is_rejected_before_processing(self):

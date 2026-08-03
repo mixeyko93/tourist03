@@ -25,6 +25,11 @@ class TelegramContactPublicTests(unittest.TestCase):
             telegram_webhook_secret="w" * 48,
             telegram_deep_link_secret="d" * 48,
             telegram_support_chat_id=-1001234567890,
+            telegram_support_topic_general=5,
+            telegram_support_topic_placement=8,
+            telegram_support_topic_premium=10,
+            telegram_support_topic_bug=12,
+            telegram_support_topic_suggestion=14,
             telegram_support_operator_ids="1001",
             **overrides,
         )
@@ -66,7 +71,15 @@ class TelegramContactPublicTests(unittest.TestCase):
         self.assertIsNone(build_telegram_deep_link(settings))
         self.assertEqual(
             telegram_contact_public_config(settings),
-            {"enabled": False, "bot_username": None, "general_url": None},
+            {
+                "enabled": False,
+                "bot_username": None,
+                "general_url": None,
+                "placement_url": None,
+                "premium_url": None,
+                "bug_url": None,
+                "suggestion_url": None,
+            },
         )
 
 

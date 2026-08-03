@@ -13,12 +13,17 @@ from typing import Any, Mapping, Optional
 SUPPORTED_COMMANDS = frozenset({"start", "help", "status", "close", "reopen"})
 SOURCE_TYPE_CODES = {
     "general": "g",
+    "placement": "p",
+    "premium": "m",
+    "bug": "b",
+    "suggestion": "f",
     "entity": "e",
     "route": "r",
     "collection": "c",
     "submission": "s",
 }
 SOURCE_CODE_TYPES = {value: key for key, value in SOURCE_TYPE_CODES.items()}
+CONTACT_SOURCE_TYPES = frozenset({"general", "placement", "premium", "bug", "suggestion"})
 BOT_USERNAME_RE = re.compile(r"^[A-Za-z0-9_]{5,32}$")
 COMMAND_RE = re.compile(
     r"^/([A-Za-z]+)(?:@([A-Za-z0-9_]{5,32}))?(?:\s+(.+))?$"
@@ -99,8 +104,8 @@ def sign_deep_link_payload(
     code = SOURCE_TYPE_CODES.get(normalized_type)
     if not code:
         raise ValueError("unsupported Telegram source type")
-    normalized_id = 0 if normalized_type == "general" else int(source_id or 0)
-    if normalized_type != "general" and normalized_id <= 0:
+    normalized_id = 0 if normalized_type in CONTACT_SOURCE_TYPES else int(source_id or 0)
+    if normalized_type not in CONTACT_SOURCE_TYPES and normalized_id <= 0:
         raise ValueError("positive source_id is required")
     # Telegram's ``start`` parameter accepts only ``[A-Za-z0-9_-]``.
     # Keep the complete payload inside that alphabet (a dot-separated payload
@@ -130,9 +135,9 @@ def verify_deep_link_payload(payload: str, secret: str) -> tuple[str, Optional[i
     if not hmac.compare_digest(_signature(unsigned, secret), parts[3]):
         raise ValueError("invalid Telegram deep-link signature")
     source_id = _base36_decode(parts[2])
-    if source_type == "general":
+    if source_type in CONTACT_SOURCE_TYPES:
         if source_id != 0:
-            raise ValueError("general Telegram context cannot have a source id")
+            raise ValueError("Telegram contact context cannot have a source id")
         return source_type, None
     if source_id <= 0:
         raise ValueError("Telegram source id must be positive")
@@ -172,6 +177,10 @@ def telegram_contact_public_config(settings: Any) -> dict[str, Any]:
         "enabled": bool(general_url),
         "bot_username": username if general_url else None,
         "general_url": general_url,
+        "placement_url": build_telegram_deep_link(settings, "placement"),
+        "premium_url": build_telegram_deep_link(settings, "premium"),
+        "bug_url": build_telegram_deep_link(settings, "bug"),
+        "suggestion_url": build_telegram_deep_link(settings, "suggestion"),
     }
 
 

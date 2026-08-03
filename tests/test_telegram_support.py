@@ -20,6 +20,10 @@ class TelegramDeepLinkTests(unittest.TestCase):
     def test_all_context_types_round_trip_with_short_url_safe_payloads(self):
         cases = {
             "general": None,
+            "placement": None,
+            "premium": None,
+            "bug": None,
+            "suggestion": None,
             "entity": 123,
             "route": 456,
             "collection": 789,
@@ -174,6 +178,13 @@ class TelegramMigrationContractTests(unittest.TestCase):
             "idx_telegram_outbox_claim_token_unique",
         ):
             self.assertIn(expected, migration)
+
+    def test_0036_replaces_unique_topic_index_for_shared_topics(self):
+        source = Path("tourist03/migrations.py").read_text(encoding="utf-8")
+        migration = source[source.index('version="0036_telegram_static_topics"'):]
+        self.assertIn("DROP INDEX IF EXISTS support.idx_telegram_tickets_topic_unique", migration)
+        self.assertIn("idx_telegram_tickets_topic_lookup", migration)
+        self.assertIn("idx_telegram_messages_relay_destination", migration)
 
 
 if __name__ == "__main__":

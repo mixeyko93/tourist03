@@ -10,6 +10,11 @@ from tourist03.services import telegram_support as service
 SETTINGS = SimpleNamespace(
     feature_telegram_contact=True,
     telegram_support_chat_id=-1004422437758,
+    telegram_support_topic_general=5,
+    telegram_support_topic_placement=8,
+    telegram_support_topic_premium=10,
+    telegram_support_topic_bug=12,
+    telegram_support_topic_suggestion=14,
     telegram_webhook_secret="webhook-secret-value-with-32-characters",
     telegram_deep_link_secret="deep-link-secret-value-with-32-characters",
     telegram_support_rate_per_minute=12,
@@ -39,13 +44,14 @@ def operator_update(update_id=2, text="Ответ", chat_id=-1004422437758):
         "update_id": update_id,
         "message": {
             "message_id": update_id + 200,
-            "message_thread_id": 55,
+            "message_thread_id": 5,
             "chat": {"id": chat_id, "type": "supergroup"},
             "from": {
                 "id": 202,
                 "is_bot": False,
                 "first_name": "Оператор",
             },
+            "reply_to_message": {"message_id": 900},
             "text": text,
         },
     }
@@ -113,7 +119,7 @@ class TelegramSupportServiceTests(unittest.TestCase):
             patch.object(service.support_repo, "is_user_blocked", return_value=False),
             patch.object(service.support_repo, "count_recent_user_updates", return_value=1),
             patch.object(service.support_repo, "get_open_ticket_for_user", return_value=None),
-            patch.object(service.support_repo, "ensure_open_ticket", return_value=(ticket, True)),
+            patch.object(service.support_repo, "ensure_open_ticket", return_value=(ticket, True)) as ensure,
             patch.object(service.support_repo, "append_audit"),
             patch.object(service.support_repo, "enqueue_outbox") as enqueue,
             patch.object(
@@ -131,8 +137,59 @@ class TelegramSupportServiceTests(unittest.TestCase):
         )
         self.assertEqual(
             [call.kwargs["action"] for call in enqueue.call_args_list],
-            ["create_topic", "send_text_topic", "copy_user_to_topic"],
+            ["send_text_topic", "copy_user_to_topic"],
         )
+        self.assertEqual(
+            ensure.call_args.kwargs["message_thread_id"],
+            5,
+        )
+
+    def test_contact_deep_links_route_to_configured_static_topics(self):
+        for offset, (source_type, expected_topic) in enumerate(
+            {
+                "general": 5,
+                "placement": 8,
+                "premium": 10,
+                "bug": 12,
+                "suggestion": 14,
+            }.items(),
+            start=1,
+        ):
+            with self.subTest(source_type=source_type):
+                self._base_patches()
+                payload = sign_deep_link_payload(
+                    source_type,
+                    None,
+                    SETTINGS.telegram_deep_link_secret,
+                )
+                ticket = {
+                    "id": 100 + offset,
+                    "public_number": f"TG-{source_type}",
+                    "source_snapshot": {"topic_key": source_type},
+                }
+                with (
+                    patch.object(service.support_repo, "is_user_blocked", return_value=False),
+                    patch.object(service.support_repo, "count_recent_user_updates", return_value=1),
+                    patch.object(service.support_repo, "ensure_open_ticket", return_value=(ticket, True)) as ensure,
+                    patch.object(service.support_repo, "append_audit"),
+                    patch.object(service.support_repo, "enqueue_outbox"),
+                ):
+                    result = service.process_telegram_update(
+                        private_update(
+                            update_id=1000 + offset,
+                            text=f"/start {payload}",
+                        ),
+                        SETTINGS,
+                    )
+                self.assertEqual(result.ticket_id, 100 + offset)
+                self.assertEqual(
+                    ensure.call_args.kwargs["message_thread_id"],
+                    expected_topic,
+                )
+                self.assertEqual(
+                    ensure.call_args.kwargs["source_snapshot"]["topic_key"],
+                    source_type,
+                )
 
     def test_signed_entity_start_resolves_public_context(self):
         self._base_patches()
@@ -259,7 +316,7 @@ class TelegramSupportServiceTests(unittest.TestCase):
             "can_manage_topics": True,
         }
         with (
-            patch.object(service.support_repo, "get_ticket_by_topic", return_value=ticket),
+            patch.object(service.support_repo, "get_ticket_by_relay_destination", return_value=ticket) as resolve,
             patch.object(service.support_repo, "get_operator", return_value=operator),
             patch.object(
                 service.support_repo,
@@ -270,13 +327,20 @@ class TelegramSupportServiceTests(unittest.TestCase):
         ):
             result = service.process_telegram_update(operator_update(), SETTINGS)
         self.assertEqual(result.ticket_id, 12)
+        resolve.assert_called_once_with(
+            self.conn,
+            support_chat_id=-1004422437758,
+            message_thread_id=5,
+            destination_message_id=900,
+            for_update=True,
+        )
         create.assert_called_once()
         self.assertEqual(create.call_args.kwargs["direction"], "support_to_user")
         self.assertEqual(enqueue.call_args.kwargs["action"], "copy_operator_to_user")
 
         self._base_patches()
         with (
-            patch.object(service.support_repo, "get_ticket_by_topic", return_value=ticket),
+            patch.object(service.support_repo, "get_ticket_by_relay_destination", return_value=ticket),
             patch.object(service.support_repo, "get_operator", return_value=operator),
             patch.object(service.support_repo, "create_message") as command_create,
             patch.object(service.support_repo, "enqueue_outbox") as command_enqueue,
@@ -311,9 +375,9 @@ class TelegramSupportServiceTests(unittest.TestCase):
             )
         self.assertEqual(closed.ticket_id, 14)
         close.assert_called_once_with(self.conn, 14)
-        self.assertIn(
-            "close_topic",
+        self.assertEqual(
             [call.kwargs["action"] for call in close_enqueue.call_args_list],
+            ["send_text_user"],
         )
 
         self._base_patches()
@@ -333,9 +397,9 @@ class TelegramSupportServiceTests(unittest.TestCase):
             )
         self.assertEqual(reopened.ticket_id, 14)
         reopen.assert_called_once_with(self.conn, 14)
-        self.assertIn(
-            "reopen_topic",
+        self.assertEqual(
             [call.kwargs["action"] for call in reopen_enqueue.call_args_list],
+            ["send_text_user"],
         )
 
     def test_webhook_secret_is_constant_time_contract(self):

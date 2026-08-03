@@ -32,11 +32,22 @@ def _token(settings) -> str:
 
 async def run_worker() -> None:
     settings = get_settings()
-    if not bool(getattr(settings, "feature_telegram_contact", False)):
-        raise RuntimeError("FEATURE_TELEGRAM_CONTACT is disabled")
     token = _token(settings)
     if not token:
         raise RuntimeError("Telegram support bot token is not configured")
+    topic_names = (
+        "general",
+        "placement",
+        "premium",
+        "bug",
+        "suggestion",
+    )
+    topic_ids = [
+        int(getattr(settings, f"telegram_support_topic_{name}", 0) or 0)
+        for name in topic_names
+    ]
+    if any(topic_id <= 0 for topic_id in topic_ids) or len(set(topic_ids)) != len(topic_ids):
+        raise RuntimeError("Telegram support topic ids are not configured")
 
     interval = max(
         1,

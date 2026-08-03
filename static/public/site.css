@@ -123,6 +123,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .placement-help { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 22px 24px; border-radius: 20px; background: var(--ink); color: #fff; }
 .placement-help p { margin: 6px 0 0; color: rgba(255,255,255,.7); font-size: 12px; }
 .placement-help .button { flex: 0 0 auto; border-color: rgba(255,255,255,.28); color: #fff; }
+.placement-help__actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px 14px; }
+.placement-help__actions > a:not(.button) { color: rgba(255,255,255,.82); font-size: 11px; font-weight: 750; text-decoration: underline; text-underline-offset: 3px; }
 .placement-dialog__status { min-height: 18px; margin: -12px 0 0; color: var(--aqua-dark); font-size: 11px; font-weight: 800; }
 
 @media (max-width: 720px) {
@@ -134,6 +136,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .placement-premium { grid-template-columns: 1fr; gap: 16px; }
   .placement-help { align-items: start; flex-direction: column; }
   .placement-help .button { width: 100%; }
+  .placement-help__actions { width: 100%; justify-content: flex-start; }
 }
 .discovery-preview { display: none; }
 .map-section { padding: 12px 0 clamp(74px, 8vw, 108px); background: #fff; }

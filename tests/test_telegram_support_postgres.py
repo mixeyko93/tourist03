@@ -341,6 +341,60 @@ class TelegramSupportPostgresTests(unittest.TestCase):
         self.assertEqual(repeated["id"], first["id"])
         self.assertEqual(same["message_thread_id"], 55)
 
+    def test_shared_static_topic_keeps_operator_replies_ticket_scoped(self):
+        with support_repo.transaction() as conn:
+            first, first_created = support_repo.ensure_open_ticket(
+                conn,
+                telegram_user_id=401,
+                private_chat_id=401,
+                support_chat_id=-1004422437758,
+                message_thread_id=8,
+                source_snapshot={"topic_key": "placement"},
+            )
+            second, second_created = support_repo.ensure_open_ticket(
+                conn,
+                telegram_user_id=402,
+                private_chat_id=402,
+                support_chat_id=-1004422437758,
+                message_thread_id=8,
+                source_snapshot={"topic_key": "placement"},
+            )
+            relayed = support_repo.create_message(
+                conn,
+                ticket_id=int(second["id"]),
+                direction="user_to_support",
+                telegram_update_id=None,
+                source_chat_id=402,
+                source_message_id=700,
+                sender_user_id=402,
+                reply_to_source_message_id=None,
+                message_kind="text",
+                text="Второе обращение",
+            )
+            cur = conn.cursor()
+            cur.execute(
+                """
+                UPDATE support.telegram_messages
+                SET destination_chat_id = %s,
+                    destination_thread_id = %s,
+                    destination_message_id = %s,
+                    delivery_status = 'sent'
+                WHERE id = %s
+                """,
+                (-1004422437758, 8, 901, int(relayed["id"])),
+            )
+            resolved = support_repo.get_ticket_by_relay_destination(
+                conn,
+                support_chat_id=-1004422437758,
+                message_thread_id=8,
+                destination_message_id=901,
+                for_update=True,
+            )
+        self.assertTrue(first_created)
+        self.assertTrue(second_created)
+        self.assertNotEqual(first["id"], second["id"])
+        self.assertEqual(resolved["id"], second["id"])
+
     def test_blocklist_and_manual_topic_reconciliation_are_audited(self):
         blocked = support_repo.block_user(303, reason="Integration abuse check")
         self.assertEqual(blocked["telegram_user_id"], 303)

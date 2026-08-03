@@ -87,6 +87,11 @@ class Settings(BaseSettings):
     telegram_webhook_secret: str = ""
     telegram_deep_link_secret: str = ""
     telegram_support_chat_id: int = 0
+    telegram_support_topic_general: int = 0
+    telegram_support_topic_placement: int = 0
+    telegram_support_topic_premium: int = 0
+    telegram_support_topic_bug: int = 0
+    telegram_support_topic_suggestion: int = 0
     telegram_support_operator_ids: str = ""
     telegram_support_worker_interval: int = Field(default=2, ge=1, le=60)
     telegram_support_worker_batch_size: int = Field(default=50, ge=1, le=200)
@@ -432,6 +437,15 @@ class Settings(BaseSettings):
                 )
             if self.telegram_support_chat_id >= 0:
                 raise ValueError("TELEGRAM_SUPPORT_CHAT_ID must be a negative supergroup ID")
+            topic_ids = [
+                self.telegram_support_topic_general,
+                self.telegram_support_topic_placement,
+                self.telegram_support_topic_premium,
+                self.telegram_support_topic_bug,
+                self.telegram_support_topic_suggestion,
+            ]
+            if any(topic_id <= 0 for topic_id in topic_ids) or len(set(topic_ids)) != len(topic_ids):
+                raise ValueError("Telegram support topic ids must be positive and distinct")
             if not self.telegram_support_operator_id_list:
                 raise ValueError("TELEGRAM_SUPPORT_OPERATOR_IDS must contain at least one positive ID")
             if not self.public_base_url.startswith("https://"):

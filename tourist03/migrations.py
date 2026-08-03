@@ -3801,6 +3801,30 @@ MIGRATIONS = (
         FOR EACH ROW EXECUTE FUNCTION support.touch_telegram_operator();
         """,
     ),
+    MigrationStep(
+        version="0036_telegram_static_topics",
+        sql="""
+        DROP INDEX IF EXISTS support.idx_telegram_tickets_topic_unique;
+
+        CREATE INDEX IF NOT EXISTS idx_telegram_tickets_topic_lookup
+        ON support.telegram_tickets(
+            support_chat_id,
+            message_thread_id,
+            updated_at DESC,
+            id DESC
+        )
+        WHERE message_thread_id IS NOT NULL;
+
+        CREATE INDEX IF NOT EXISTS idx_telegram_messages_relay_destination
+        ON support.telegram_messages(
+            destination_chat_id,
+            destination_thread_id,
+            destination_message_id,
+            id DESC
+        )
+        WHERE destination_message_id IS NOT NULL;
+        """,
+    ),
 )
 
 CURRENT_MIGRATION_VERSION = MIGRATIONS[-1].version

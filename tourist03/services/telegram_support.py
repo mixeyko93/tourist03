@@ -11,7 +11,6 @@ from tourist03.domain.telegram_support import (
     NormalizedTelegramMessage,
     canonical_payload_hash,
     normalize_update,
-    safe_topic_name,
     telegram_contact_public_config,
     verify_deep_link_payload,
 )
@@ -27,13 +26,21 @@ HELP_TEXT = (
     "/help — помощь"
 )
 OPERATOR_HELP_TEXT = (
-    "Команды темы:\n"
+    "Ответьте на конкретное сообщение пользователя.\n\n"
+    "Команды в ответе на сообщение:\n"
     "/status — показать статус\n"
     "/close — закрыть обращение\n"
     "/reopen — снова открыть обращение\n"
     "/help — помощь\n\n"
     "Обычный текст, фотография или документ будут отправлены пользователю."
 )
+CONTACT_TOPIC_LABELS = {
+    "general": "Общие вопросы",
+    "placement": "Размещение объектов",
+    "premium": "Премиум",
+    "bug": "Ошибки",
+    "suggestion": "Предложения",
+}
 
 
 @dataclass(frozen=True)
@@ -65,6 +72,14 @@ def _support_chat_id(settings: Any) -> int:
     value = int(_setting(settings, "telegram_support_chat_id", 0) or 0)
     if value >= 0:
         raise RuntimeError("TELEGRAM_SUPPORT_CHAT_ID must be a supergroup id")
+    return value
+
+
+def _topic_id(settings: Any, topic_key: str) -> int:
+    normalized = topic_key if topic_key in CONTACT_TOPIC_LABELS else "general"
+    value = int(_setting(settings, f"telegram_support_topic_{normalized}", 0) or 0)
+    if value <= 0:
+        raise RuntimeError(f"Telegram support topic is not configured: {normalized}")
     return value
 
 
@@ -118,18 +133,6 @@ def _enqueue_ticket_opening(conn, ticket: Mapping[str, Any], *, created: bool) -
     if not created:
         return
     ticket_id = int(ticket["id"])
-    support_repo.enqueue_outbox(
-        conn,
-        ticket_id=ticket_id,
-        action="create_topic",
-        dedupe_key=f"ticket:{ticket_id}:create-topic",
-        payload={
-            "topic_name": safe_topic_name(
-                str(ticket["public_number"]),
-                ticket.get("source_snapshot") or {},
-            )
-        },
-    )
     support_repo.enqueue_outbox(
         conn,
         ticket_id=ticket_id,
@@ -216,6 +219,18 @@ def _start_context(
         except ValueError:
             invalid = True
             source_type, source_id = "general", None
+    if source_type in CONTACT_TOPIC_LABELS:
+        return (
+            "general",
+            None,
+            {
+                "source_type": "general",
+                "kind": CONTACT_TOPIC_LABELS[source_type],
+                "title": CONTACT_TOPIC_LABELS[source_type],
+                "topic_key": source_type,
+            },
+            invalid,
+        )
     snapshot = support_repo.resolve_source_context(
         conn,
         source_type=source_type,
@@ -237,6 +252,8 @@ def _ensure_private_ticket(
     source_id: Optional[int] = None,
     source_snapshot: Optional[Mapping[str, Any]] = None,
 ) -> tuple[dict, bool]:
+    snapshot = dict(source_snapshot or {})
+    topic_key = str(snapshot.get("topic_key") or "general")
     ticket, created = support_repo.ensure_open_ticket(
         conn,
         telegram_user_id=message.from_user_id,
@@ -244,7 +261,8 @@ def _ensure_private_ticket(
         support_chat_id=_support_chat_id(settings),
         source_type=source_type,
         source_id=str(source_id) if source_id is not None else None,
-        source_snapshot=source_snapshot,
+        source_snapshot=snapshot,
+        message_thread_id=_topic_id(settings, topic_key),
     )
     _enqueue_ticket_opening(conn, ticket, created=created)
     return ticket, created
@@ -378,12 +396,6 @@ def _handle_private_message(
         )
         if closed:
             ticket_id = int(closed["id"])
-            support_repo.enqueue_outbox(
-                conn,
-                ticket_id=ticket_id,
-                action="close_topic",
-                dedupe_key=f"update:{message.update_id}:close-topic",
-            )
             support_repo.append_audit(
                 conn,
                 action_type="telegram_ticket_closed",
@@ -425,12 +437,6 @@ def _handle_private_message(
             changed = reopened is not None
         ticket_id = int(reopened["id"]) if reopened else None
         if reopened and changed:
-            support_repo.enqueue_outbox(
-                conn,
-                ticket_id=ticket_id,
-                action="reopen_topic",
-                dedupe_key=f"update:{message.update_id}:reopen-topic",
-            )
             support_repo.append_audit(
                 conn,
                 action_type="telegram_ticket_reopened",
@@ -546,11 +552,16 @@ def _handle_operator_message(
         )
         return TelegramUpdateResult(True, ignored=True, reason="wrong_support_scope")
 
-    ticket = support_repo.get_ticket_by_topic(
-        conn,
-        support_chat_id=support_chat_id,
-        message_thread_id=message.thread_id,
-        for_update=True,
+    ticket = (
+        support_repo.get_ticket_by_relay_destination(
+            conn,
+            support_chat_id=support_chat_id,
+            message_thread_id=message.thread_id,
+            destination_message_id=message.reply_to_message_id,
+            for_update=True,
+        )
+        if message.reply_to_message_id
+        else None
     )
     operator = support_repo.get_operator(conn, message.from_user_id)
     if not ticket or not operator:
@@ -598,12 +609,6 @@ def _handle_operator_message(
                     "text": f"Обращение {ticket['public_number']} закрыто оператором.",
                 },
             )
-            support_repo.enqueue_outbox(
-                conn,
-                ticket_id=ticket_id,
-                action="close_topic",
-                dedupe_key=f"update:{message.update_id}:operator-close-topic",
-            )
             support_repo.append_audit(
                 conn,
                 actor_type="telegram_operator",
@@ -620,12 +625,6 @@ def _handle_operator_message(
             return TelegramUpdateResult(True, ignored=True, reason="operator_cannot_manage")
         reopened = support_repo.reopen_ticket(conn, ticket_id)
         if reopened:
-            support_repo.enqueue_outbox(
-                conn,
-                ticket_id=ticket_id,
-                action="reopen_topic",
-                dedupe_key=f"update:{message.update_id}:operator-reopen-topic",
-            )
             support_repo.enqueue_outbox(
                 conn,
                 ticket_id=ticket_id,

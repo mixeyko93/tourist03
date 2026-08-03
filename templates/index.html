@@ -303,7 +303,7 @@
             <li>Подготовка объекта к публикации.</li>
             <li>Выполнение в течение одного рабочего дня после получения данных.</li>
           </ul>
-          <a class="button button--quiet" href="__TOURISTIKA_TELEGRAM_CONTACT_URL__" target="_blank" rel="noopener noreferrer" data-feature-link="telegram_contact" data-placement-message="Здравствуйте! Нужна помощь с заполнением карточки объекта." hidden>Заказать помощь</a>
+          <a class="button button--quiet" href="__TOURISTIKA_TELEGRAM_PLACEMENT_URL__" target="_blank" rel="noopener noreferrer" data-feature-link="telegram_contact" data-placement-message="Здравствуйте! Нужна помощь с заполнением карточки объекта." hidden>Заказать помощь</a>
           <button class="button button--quiet" type="button" data-telegram-unavailable disabled hidden>Заказать помощь</button>
         </article>
 
@@ -315,7 +315,7 @@
             <li>Помощь в заполнении и подготовка фотографий.</li>
             <li>Модерация и публикация объекта.</li>
           </ul>
-          <a class="button button--quiet" href="__TOURISTIKA_TELEGRAM_CONTACT_URL__" target="_blank" rel="noopener noreferrer" data-feature-link="telegram_contact" data-placement-message="Здравствуйте! Хочу заказать размещение объекта с выездом на фотосъёмку." hidden>Заказать фотосъёмку</a>
+          <a class="button button--quiet" href="__TOURISTIKA_TELEGRAM_PLACEMENT_URL__" target="_blank" rel="noopener noreferrer" data-feature-link="telegram_contact" data-placement-message="Здравствуйте! Хочу заказать размещение объекта с выездом на фотосъёмку." hidden>Заказать фотосъёмку</a>
           <button class="button button--quiet" type="button" data-telegram-unavailable disabled hidden>Заказать фотосъёмку</button>
         </article>
 
@@ -329,7 +329,7 @@
             <li>Рекомендации по стоимости и позиционированию.</li>
             <li>Маркетинговые формулировки и публикация после согласования.</li>
           </ul>
-          <a class="button button--quiet" href="__TOURISTIKA_TELEGRAM_CONTACT_URL__" target="_blank" rel="noopener noreferrer" data-feature-link="telegram_contact" data-placement-message="Здравствуйте! Хочу заказать подготовку карточки объекта под ключ." hidden>Заказать карточку под ключ</a>
+          <a class="button button--quiet" href="__TOURISTIKA_TELEGRAM_PLACEMENT_URL__" target="_blank" rel="noopener noreferrer" data-feature-link="telegram_contact" data-placement-message="Здравствуйте! Хочу заказать подготовку карточки объекта под ключ." hidden>Заказать карточку под ключ</a>
           <button class="button button--quiet" type="button" data-telegram-unavailable disabled hidden>Заказать карточку под ключ</button>
         </article>
       </div>
@@ -347,7 +347,7 @@
           <li>Возможность дальнейшего продвижения в соцсетях и рекламных каналах.</li>
         </ul>
         <div>
-          <a class="button button--primary" href="__TOURISTIKA_TELEGRAM_CONTACT_URL__" target="_blank" rel="noopener noreferrer" data-feature-link="telegram_contact" data-placement-message="Здравствуйте! Хочу подключить премиум-продвижение для объекта." hidden>Оставить заявку</a>
+          <a class="button button--primary" href="__TOURISTIKA_TELEGRAM_PREMIUM_URL__" target="_blank" rel="noopener noreferrer" data-feature-link="telegram_contact" data-placement-message="Здравствуйте! Хочу подключить премиум-продвижение для объекта." hidden>Оставить заявку</a>
           <button class="button button--primary" type="button" data-telegram-unavailable disabled hidden>Оставить заявку</button>
           <small>Оплата на сайте пока недоступна. Стоимость уточнит команда.</small>
         </div>
@@ -355,7 +355,11 @@
 
       <aside class="placement-help">
         <div><h3>Остались вопросы?</h3><p>Напишите нам — поможем выбрать подходящий вариант размещения.</p></div>
-        <a class="button button--quiet" href="__TOURISTIKA_TELEGRAM_CONTACT_URL__" target="_blank" rel="noopener noreferrer" data-feature-link="telegram_contact" hidden>Написать в Telegram</a>
+        <div class="placement-help__actions" data-feature-link="telegram_contact" hidden>
+          <a class="button button--quiet" href="__TOURISTIKA_TELEGRAM_CONTACT_URL__" target="_blank" rel="noopener noreferrer">Написать в Telegram</a>
+          <a href="__TOURISTIKA_TELEGRAM_BUG_URL__" target="_blank" rel="noopener noreferrer">Сообщить об ошибке</a>
+          <a href="__TOURISTIKA_TELEGRAM_SUGGESTION_URL__" target="_blank" rel="noopener noreferrer">Предложить улучшение</a>
+        </div>
         <p class="placement-help__unavailable" data-telegram-unavailable hidden>Онлайн-помощь временно недоступна.</p>
       </aside>
       <p class="placement-dialog__status" role="status" aria-live="polite" data-placement-status></p>
