@@ -3,6 +3,7 @@ from typing import Optional
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from tourist03.config import STATIC_DIR, logger
@@ -27,7 +28,6 @@ from tourist03.routers import (
     telegram_support,
 )
 from tourist03.settings import Settings, configure_settings, get_settings
-from tourist03.static_files import ProtectedStaticFiles
 
 
 def create_app(settings: Optional[Settings] = None) -> FastAPI:
@@ -75,11 +75,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         domain=resolved_settings.session_cookie_domain,
     )
 
-    application.mount(
-        "/static",
-        ProtectedStaticFiles(directory=STATIC_DIR),
-        name="static",
-    )
+    application.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
     application.include_router(pages.router)
     application.include_router(auth.router)

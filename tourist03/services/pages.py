@@ -288,14 +288,7 @@ def public_place_page(request: Request, slug: str):
                 int(place["id"]),
             ),
         ),
-        headers={
-            "Cache-Control": "public, max-age=120",
-            **(
-                {"X-Robots-Tag": "noindex, follow"}
-                if robots_directive.startswith("noindex")
-                else {}
-            ),
-        },
+        headers={"Cache-Control": "public, max-age=120"},
     )
 
 
@@ -356,11 +349,6 @@ def public_collection_page(request: Request, slug: str):
         fallback="Редакционная подборка Туристики.",
         limit=160,
     )
-    robots_directive = (
-        "noindex,follow"
-        if bool(collection.get("seo_noindex"))
-        else "index,follow"
-    )
     structured_data = {
         "@context": "https://schema.org",
         "@type": "ItemList",
@@ -399,7 +387,6 @@ def public_collection_page(request: Request, slug: str):
             canonical=canonical,
             title=title,
             description=description,
-            robots_directive=robots_directive,
             og_image=_absolute_public_url(
                 public_base_url,
                 collection.get("cover") or "/static/brand/turistika-logo-stacked.svg",
@@ -407,14 +394,7 @@ def public_collection_page(request: Request, slug: str):
             structured_data=structured_data,
             breadcrumbs_data=breadcrumbs,
         ),
-        headers={
-            "Cache-Control": "public, max-age=120",
-            **(
-                {"X-Robots-Tag": "noindex, follow"}
-                if bool(collection.get("seo_noindex"))
-                else {}
-            ),
-        },
+        headers={"Cache-Control": "public, max-age=120"},
     )
 
 
@@ -443,11 +423,6 @@ def public_route_page(request: Request, slug: str):
         route.get("seo_description") or route["short_description"],
         fallback="Редакционный туристический маршрут.",
         limit=160,
-    )
-    robots_directive = (
-        "noindex,follow"
-        if bool(route.get("seo_noindex"))
-        else "index,follow"
     )
     structured_data = {
         "@context": "https://schema.org",
@@ -494,7 +469,6 @@ def public_route_page(request: Request, slug: str):
             canonical=canonical,
             title=title,
             description=description,
-            robots_directive=robots_directive,
             og_image=_absolute_public_url(
                 public_base_url,
                 route.get("cover") or "/static/brand/turistika-logo-stacked.svg",
@@ -502,14 +476,7 @@ def public_route_page(request: Request, slug: str):
             structured_data=structured_data,
             breadcrumbs_data=breadcrumbs,
         ),
-        headers={
-            "Cache-Control": "public, max-age=120",
-            **(
-                {"X-Robots-Tag": "noindex, follow"}
-                if bool(route.get("seo_noindex"))
-                else {}
-            ),
-        },
+        headers={"Cache-Control": "public, max-age=120"},
     )
 
 
@@ -686,8 +653,6 @@ def sitemap(request: Request):
         while True:
             page = discovery_repo.list_public_collections(limit=200, offset=offset)
             for collection in page["items"]:
-                if bool(collection.get("seo_noindex")):
-                    continue
                 location = escape_html(
                     f"{public_base_url}/collections/{quote(collection['slug'])}"
                 )
@@ -707,8 +672,6 @@ def sitemap(request: Request):
         while True:
             page = discovery_repo.list_public_routes(limit=200, offset=offset)
             for route in page["items"]:
-                if bool(route.get("seo_noindex")):
-                    continue
                 location = escape_html(
                     f"{public_base_url}/routes/{quote(route['slug'])}"
                 )

@@ -3801,24 +3801,6 @@ MIGRATIONS = (
         FOR EACH ROW EXECUTE FUNCTION support.touch_telegram_operator();
         """,
     ),
-    MigrationStep(
-        version="0036_content_noindex",
-        sql="""
-        ALTER TABLE content.collections
-        ADD COLUMN IF NOT EXISTS seo_noindex BOOLEAN NOT NULL DEFAULT FALSE;
-
-        ALTER TABLE content.routes
-        ADD COLUMN IF NOT EXISTS seo_noindex BOOLEAN NOT NULL DEFAULT FALSE;
-
-        CREATE INDEX IF NOT EXISTS idx_collections_sitemap
-        ON content.collections(updated_at DESC, id)
-        WHERE status = 'published' AND seo_noindex = FALSE;
-
-        CREATE INDEX IF NOT EXISTS idx_routes_sitemap
-        ON content.routes(updated_at DESC, id)
-        WHERE status = 'published' AND seo_noindex = FALSE;
-        """,
-    ),
 )
 
 CURRENT_MIGRATION_VERSION = MIGRATIONS[-1].version

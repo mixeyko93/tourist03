@@ -202,64 +202,19 @@ class TelegramMigrationUpgradeTests(unittest.TestCase):
                 """
                 SELECT version, COUNT(*) AS count
                 FROM public.schema_migrations
-                WHERE version IN ('0035_telegram_support', '0036_content_noindex')
+                WHERE version = '0035_telegram_support'
                 GROUP BY version
                 ORDER BY version
                 """
             )
             self.assertEqual(
                 [dict(row) for row in cur.fetchall()],
-                [
-                    {"version": "0035_telegram_support", "count": 1},
-                    {"version": "0036_content_noindex", "count": 1},
-                ],
-            )
-            cur.execute(
-                """
-                SELECT
-                    (SELECT seo_noindex FROM content.collections WHERE id = %s)
-                        AS collection_noindex,
-                    (SELECT seo_noindex FROM content.routes WHERE id = %s)
-                        AS route_noindex
-                """,
-                (collection_id, route_id),
-            )
-            self.assertEqual(
-                dict(cur.fetchone()),
-                {
-                    "collection_noindex": False,
-                    "route_noindex": False,
-                },
-            )
-            cur.execute(
-                """
-                SELECT table_name, column_default, is_nullable
-                FROM information_schema.columns
-                WHERE table_schema = 'content'
-                  AND table_name IN ('collections', 'routes')
-                  AND column_name = 'seo_noindex'
-                ORDER BY table_name
-                """
-            )
-            self.assertEqual(
-                [dict(row) for row in cur.fetchall()],
-                [
-                    {
-                        "table_name": "collections",
-                        "column_default": "false",
-                        "is_nullable": "NO",
-                    },
-                    {
-                        "table_name": "routes",
-                        "column_default": "false",
-                        "is_nullable": "NO",
-                    },
-                ],
+                [{"version": "0035_telegram_support", "count": 1}],
             )
             cur.execute(
                 "SELECT version FROM public.schema_migrations ORDER BY applied_at DESC LIMIT 1"
             )
-            self.assertEqual(cur.fetchone()["version"], "0036_content_noindex")
+            self.assertEqual(cur.fetchone()["version"], "0035_telegram_support")
 
 
 if __name__ == "__main__":
