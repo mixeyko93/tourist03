@@ -111,6 +111,7 @@
           {% else %}<p class="contact-card__empty">Публичные контакты уточняются.</p>{% endif %}
         </section>
         {% if route_url %}<a class="route-card" href="{{ route_url }}" target="_blank" rel="noopener noreferrer"><span>Показать маршрут</span><strong>{{ place.lat }}, {{ place.lng }}</strong></a>{% endif %}
+        {% if telegram_contact_url %}<a class="telegram-support-card" href="{{ telegram_contact_url }}" target="_blank" rel="noopener noreferrer"><span>Есть вопрос о карточке?</span><strong>Написать нам в Telegram</strong></a>{% endif %}
         {% if updated_label %}<p class="place-updated"><time datetime="{{ updated_datetime }}">{{ updated_label }}</time>{% if place.confirmed_at %} · объект подтверждён{% endif %}</p>{% endif %}
       </aside>
 
@@ -214,7 +215,7 @@
   <p class="place-share-feedback" role="status" aria-live="polite" data-share-feedback></p>
 
   <footer class="place-footer">
-    <div class="place-frame"><a class="place-brand place-brand--footer" href="/"><img src="/static/brand/turistika-icon.svg" width="44" height="44" alt=""><span><strong>Туристика</strong><small>Твоя карта впечатлений.</small></span></a><p>Публичный каталог мест, услуг и впечатлений России.</p></div>
+    <div class="place-frame"><a class="place-brand place-brand--footer" href="/"><img src="/static/brand/turistika-icon.svg" width="44" height="44" alt=""><span><strong>Туристика</strong><small>Твоя карта впечатлений.</small></span></a><p>Публичный каталог мест, услуг и впечатлений России.{% if telegram_contact_url %} <a href="{{ telegram_contact_url }}" target="_blank" rel="noopener noreferrer">Написать нам в Telegram</a>{% endif %}</p></div>
   </footer>
 </body>
 </html>

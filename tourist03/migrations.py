@@ -3504,6 +3504,321 @@ MIGRATIONS = (
         ON content.discovery_daily_metrics(day DESC, event_type);
         """,
     ),
+    MigrationStep(
+        version="0035_telegram_support",
+        sql="""
+        ALTER TABLE crm.notification_events
+        ADD COLUMN IF NOT EXISTS claim_token TEXT;
+        ALTER TABLE crm.notification_events
+        ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ;
+        ALTER TABLE crm.notification_events
+        ADD COLUMN IF NOT EXISTS lease_until TIMESTAMPTZ;
+        ALTER TABLE crm.notification_events
+        ADD COLUMN IF NOT EXISTS delivered_message_id TEXT;
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_notification_events_claim_token_unique
+        ON crm.notification_events(claim_token)
+        WHERE claim_token IS NOT NULL;
+
+        CREATE INDEX IF NOT EXISTS idx_notification_events_pending_lease
+        ON crm.notification_events(channel, next_attempt_at, lease_until, id)
+        WHERE status = 'new';
+
+        CREATE SCHEMA IF NOT EXISTS support;
+
+        CREATE TABLE IF NOT EXISTS support.telegram_updates (
+            update_id BIGINT PRIMARY KEY,
+            update_type TEXT NOT NULL,
+            payload_sha256 TEXT NOT NULL,
+            telegram_user_id BIGINT,
+            source_chat_id BIGINT,
+            status TEXT NOT NULL DEFAULT 'received',
+            last_error TEXT,
+            received_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            processed_at TIMESTAMPTZ,
+            CONSTRAINT telegram_updates_id_non_negative
+                CHECK (update_id >= 0),
+            CONSTRAINT telegram_updates_hash_valid
+                CHECK (payload_sha256 ~ '^[0-9a-f]{64}$'),
+            CONSTRAINT telegram_updates_status_valid
+                CHECK (status IN ('received', 'processed', 'ignored', 'failed'))
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_telegram_updates_status_received
+        ON support.telegram_updates(status, received_at, update_id);
+
+        CREATE INDEX IF NOT EXISTS idx_telegram_updates_user_received
+        ON support.telegram_updates(telegram_user_id, received_at DESC, update_id DESC)
+        WHERE telegram_user_id IS NOT NULL;
+
+        CREATE TABLE IF NOT EXISTS support.telegram_operators (
+            id BIGSERIAL PRIMARY KEY,
+            telegram_user_id BIGINT NOT NULL,
+            display_name TEXT,
+            can_reply BOOLEAN NOT NULL DEFAULT TRUE,
+            can_manage_topics BOOLEAN NOT NULL DEFAULT TRUE,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            validated_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            CONSTRAINT telegram_operators_user_positive
+                CHECK (telegram_user_id > 0),
+            CONSTRAINT telegram_operators_user_unique
+                UNIQUE (telegram_user_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_telegram_operators_active
+        ON support.telegram_operators(is_active, telegram_user_id)
+        WHERE is_active = TRUE;
+
+        CREATE TABLE IF NOT EXISTS support.telegram_blocklist (
+            telegram_user_id BIGINT PRIMARY KEY,
+            reason TEXT,
+            blocked_by_operator_id BIGINT,
+            blocked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            expires_at TIMESTAMPTZ,
+            unblocked_at TIMESTAMPTZ,
+            CONSTRAINT telegram_blocklist_user_positive
+                CHECK (telegram_user_id > 0),
+            CONSTRAINT telegram_blocklist_operator_fk
+                FOREIGN KEY (blocked_by_operator_id)
+                REFERENCES support.telegram_operators(id)
+                ON DELETE SET NULL,
+            CONSTRAINT telegram_blocklist_expiry_valid
+                CHECK (expires_at IS NULL OR expires_at > blocked_at)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_telegram_blocklist_active
+        ON support.telegram_blocklist(telegram_user_id, expires_at)
+        WHERE unblocked_at IS NULL;
+
+        CREATE TABLE IF NOT EXISTS support.telegram_tickets (
+            id BIGSERIAL PRIMARY KEY,
+            public_number TEXT NOT NULL,
+            telegram_user_id BIGINT NOT NULL,
+            private_chat_id BIGINT NOT NULL,
+            support_chat_id BIGINT NOT NULL,
+            message_thread_id BIGINT,
+            status TEXT NOT NULL DEFAULT 'opening',
+            source_type TEXT NOT NULL DEFAULT 'general',
+            source_id TEXT,
+            source_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
+            opened_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            closed_at TIMESTAMPTZ,
+            reopened_at TIMESTAMPTZ,
+            last_user_message_at TIMESTAMPTZ,
+            last_operator_message_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            CONSTRAINT telegram_tickets_public_number_unique
+                UNIQUE (public_number),
+            CONSTRAINT telegram_tickets_user_positive
+                CHECK (telegram_user_id > 0),
+            CONSTRAINT telegram_tickets_private_chat_positive
+                CHECK (private_chat_id > 0),
+            CONSTRAINT telegram_tickets_support_chat_negative
+                CHECK (support_chat_id < 0),
+            CONSTRAINT telegram_tickets_thread_positive
+                CHECK (message_thread_id IS NULL OR message_thread_id > 0),
+            CONSTRAINT telegram_tickets_status_valid
+                CHECK (status IN ('opening', 'open', 'closed', 'blocked')),
+            CONSTRAINT telegram_tickets_source_type_valid
+                CHECK (source_type IN ('general', 'entity', 'route', 'collection', 'submission')),
+            CONSTRAINT telegram_tickets_source_snapshot_object
+                CHECK (jsonb_typeof(source_snapshot) = 'object')
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_telegram_tickets_one_open_user
+        ON support.telegram_tickets(telegram_user_id)
+        WHERE status IN ('opening', 'open');
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_telegram_tickets_topic_unique
+        ON support.telegram_tickets(support_chat_id, message_thread_id)
+        WHERE message_thread_id IS NOT NULL;
+
+        CREATE INDEX IF NOT EXISTS idx_telegram_tickets_user_recent
+        ON support.telegram_tickets(telegram_user_id, created_at DESC, id DESC);
+
+        CREATE INDEX IF NOT EXISTS idx_telegram_tickets_status_recent
+        ON support.telegram_tickets(status, updated_at DESC, id DESC);
+
+        CREATE TABLE IF NOT EXISTS support.telegram_messages (
+            id BIGSERIAL PRIMARY KEY,
+            ticket_id BIGINT NOT NULL,
+            direction TEXT NOT NULL,
+            telegram_update_id BIGINT,
+            source_chat_id BIGINT,
+            source_message_id BIGINT,
+            sender_user_id BIGINT,
+            reply_to_source_message_id BIGINT,
+            message_kind TEXT NOT NULL,
+            text TEXT,
+            caption TEXT,
+            file_id TEXT,
+            file_unique_id TEXT,
+            file_name TEXT,
+            mime_type TEXT,
+            file_size BIGINT,
+            destination_chat_id BIGINT,
+            destination_thread_id BIGINT,
+            destination_message_id BIGINT,
+            delivery_status TEXT NOT NULL DEFAULT 'pending',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            delivered_at TIMESTAMPTZ,
+            CONSTRAINT telegram_messages_ticket_fk
+                FOREIGN KEY (ticket_id)
+                REFERENCES support.telegram_tickets(id)
+                ON DELETE CASCADE,
+            CONSTRAINT telegram_messages_update_fk
+                FOREIGN KEY (telegram_update_id)
+                REFERENCES support.telegram_updates(update_id)
+                ON DELETE RESTRICT,
+            CONSTRAINT telegram_messages_direction_valid
+                CHECK (direction IN ('user_to_support', 'support_to_user', 'system')),
+            CONSTRAINT telegram_messages_kind_valid
+                CHECK (message_kind IN ('text', 'photo', 'document', 'service')),
+            CONSTRAINT telegram_messages_delivery_status_valid
+                CHECK (
+                    delivery_status IN (
+                        'pending', 'processing', 'sent', 'retry',
+                        'dead_letter', 'ignored'
+                    )
+                ),
+            CONSTRAINT telegram_messages_file_size_valid
+                CHECK (file_size IS NULL OR file_size >= 0)
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_telegram_messages_update_unique
+        ON support.telegram_messages(telegram_update_id)
+        WHERE telegram_update_id IS NOT NULL;
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_telegram_messages_source_unique
+        ON support.telegram_messages(direction, source_chat_id, source_message_id)
+        WHERE source_chat_id IS NOT NULL AND source_message_id IS NOT NULL;
+
+        CREATE INDEX IF NOT EXISTS idx_telegram_messages_ticket_created
+        ON support.telegram_messages(ticket_id, created_at, id);
+
+        CREATE INDEX IF NOT EXISTS idx_telegram_messages_destination
+        ON support.telegram_messages(destination_chat_id, destination_message_id)
+        WHERE destination_message_id IS NOT NULL;
+
+        CREATE INDEX IF NOT EXISTS idx_telegram_messages_sender_recent
+        ON support.telegram_messages(sender_user_id, created_at DESC, id DESC)
+        WHERE sender_user_id IS NOT NULL;
+
+        CREATE TABLE IF NOT EXISTS support.telegram_outbox (
+            id BIGSERIAL PRIMARY KEY,
+            ticket_id BIGINT,
+            message_id BIGINT,
+            action TEXT NOT NULL,
+            dedupe_key TEXT NOT NULL,
+            payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+            status TEXT NOT NULL DEFAULT 'pending',
+            attempts INTEGER NOT NULL DEFAULT 0,
+            next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            claim_token TEXT,
+            lease_until TIMESTAMPTZ,
+            last_error TEXT,
+            telegram_result JSONB,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            sent_at TIMESTAMPTZ,
+            CONSTRAINT telegram_outbox_ticket_fk
+                FOREIGN KEY (ticket_id)
+                REFERENCES support.telegram_tickets(id)
+                ON DELETE CASCADE,
+            CONSTRAINT telegram_outbox_message_fk
+                FOREIGN KEY (message_id)
+                REFERENCES support.telegram_messages(id)
+                ON DELETE SET NULL,
+            CONSTRAINT telegram_outbox_action_valid
+                CHECK (
+                    action IN (
+                        'create_topic', 'copy_user_to_topic',
+                        'copy_operator_to_user', 'send_text_user',
+                        'send_text_topic', 'close_topic', 'reopen_topic'
+                    )
+                ),
+            CONSTRAINT telegram_outbox_dedupe_unique
+                UNIQUE (dedupe_key),
+            CONSTRAINT telegram_outbox_payload_object
+                CHECK (jsonb_typeof(payload) = 'object'),
+            CONSTRAINT telegram_outbox_result_object
+                CHECK (telegram_result IS NULL OR jsonb_typeof(telegram_result) = 'object'),
+            CONSTRAINT telegram_outbox_status_valid
+                CHECK (status IN ('pending', 'processing', 'retry', 'sent', 'dead_letter')),
+            CONSTRAINT telegram_outbox_attempts_non_negative
+                CHECK (attempts >= 0)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_telegram_outbox_delivery_queue
+        ON support.telegram_outbox(next_attempt_at, id)
+        WHERE status IN ('pending', 'retry');
+
+        CREATE INDEX IF NOT EXISTS idx_telegram_outbox_processing_lease
+        ON support.telegram_outbox(lease_until, id)
+        WHERE status = 'processing';
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_telegram_outbox_claim_token_unique
+        ON support.telegram_outbox(claim_token)
+        WHERE claim_token IS NOT NULL;
+
+        CREATE INDEX IF NOT EXISTS idx_telegram_outbox_ticket_created
+        ON support.telegram_outbox(ticket_id, created_at, id)
+        WHERE ticket_id IS NOT NULL;
+
+        CREATE OR REPLACE FUNCTION support.touch_telegram_ticket()
+        RETURNS TRIGGER
+        LANGUAGE plpgsql
+        AS $$
+        BEGIN
+            NEW.updated_at := NOW();
+            RETURN NEW;
+        END;
+        $$;
+
+        DROP TRIGGER IF EXISTS trg_telegram_tickets_touch
+        ON support.telegram_tickets;
+        CREATE TRIGGER trg_telegram_tickets_touch
+        BEFORE UPDATE ON support.telegram_tickets
+        FOR EACH ROW EXECUTE FUNCTION support.touch_telegram_ticket();
+
+        CREATE OR REPLACE FUNCTION support.touch_telegram_operator()
+        RETURNS TRIGGER
+        LANGUAGE plpgsql
+        AS $$
+        BEGIN
+            NEW.updated_at := NOW();
+            RETURN NEW;
+        END;
+        $$;
+
+        DROP TRIGGER IF EXISTS trg_telegram_operators_touch
+        ON support.telegram_operators;
+        CREATE TRIGGER trg_telegram_operators_touch
+        BEFORE UPDATE ON support.telegram_operators
+        FOR EACH ROW EXECUTE FUNCTION support.touch_telegram_operator();
+        """,
+    ),
+    MigrationStep(
+        version="0036_content_noindex",
+        sql="""
+        ALTER TABLE content.collections
+        ADD COLUMN IF NOT EXISTS seo_noindex BOOLEAN NOT NULL DEFAULT FALSE;
+
+        ALTER TABLE content.routes
+        ADD COLUMN IF NOT EXISTS seo_noindex BOOLEAN NOT NULL DEFAULT FALSE;
+
+        CREATE INDEX IF NOT EXISTS idx_collections_sitemap
+        ON content.collections(updated_at DESC, id)
+        WHERE status = 'published' AND seo_noindex = FALSE;
+
+        CREATE INDEX IF NOT EXISTS idx_routes_sitemap
+        ON content.routes(updated_at DESC, id)
+        WHERE status = 'published' AND seo_noindex = FALSE;
+        """,
+    ),
 )
 
 CURRENT_MIGRATION_VERSION = MIGRATIONS[-1].version
