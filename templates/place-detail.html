@@ -45,7 +45,7 @@
         <img src="/static/brand/turistika-icon.svg" width="44" height="44" alt="">
         <span><strong>Туристика</strong><small>Твоя карта впечатлений.</small></span>
       </a>
-      <a class="place-header__map" href="/#map-section">← Вернуться к карте</a>
+      <a class="place-header__map" href="/map?id={{ place.slug | urlencode }}">← Вернуться к карте</a>
     </div>
   </header>
 
@@ -57,7 +57,7 @@
   >
     <nav class="place-frame breadcrumbs" aria-label="Хлебные крошки">
       <a href="/">Главная</a><span aria-hidden="true">/</span>
-      <a href="/#map-section">Карта</a><span aria-hidden="true">/</span>
+      <a href="/map?id={{ place.slug | urlencode }}">Карта</a><span aria-hidden="true">/</span>
       <span aria-current="page">{{ place.name }}</span>
     </nav>
 

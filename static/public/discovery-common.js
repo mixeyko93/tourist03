@@ -50,7 +50,7 @@ export function resultCard(item, { distance = false } = {}) {
   footer.append(createElement("span", "", distance && item.distance_km !== undefined ? `${item.distance_km} км · ${place}` : place));
   if (item.source === "entity" && item.slug) {
     const mapLink = createElement("a", "", "На карте");
-    mapLink.href = `/?entity=${encodeURIComponent(item.slug)}#map-section`;
+    mapLink.href = `/map?id=${encodeURIComponent(item.slug)}`;
     footer.append(mapLink);
   }
   body.append(footer);

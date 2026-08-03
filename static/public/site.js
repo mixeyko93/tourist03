@@ -1,5 +1,4 @@
 import { publicFeatures } from "./feature-flags.js";
-import { initialisePublicMap } from "./map.js?v=2026-07-27-04";
 
 const features = publicFeatures();
 if (features.telegram_webapp) {
@@ -47,9 +46,11 @@ const mapCount = document.querySelector("[data-map-count]");
 const mapLegend = document.querySelector("[data-map-legend]");
 const mapAutocomplete = document.querySelector("[data-map-autocomplete]");
 const discoveryHome = document.querySelector("[data-discovery-home]");
+const discoveryPreview = document.querySelector("[data-discovery-preview]");
 const belowFold = document.querySelector("#about");
+const mobileHome = window.matchMedia("(max-width: 520px)");
 let mapController;
-let mapInitialisationScheduled = false;
+let mapPromise;
 let autocompleteAttached = false;
 const pendingMapController = Object.freeze({ search() {}, reset() {}, locate() {} });
 
@@ -61,6 +62,21 @@ function loadStylesheet(href) {
   document.head.append(link);
 }
 
+function loadScript(src) {
+  const existing = document.querySelector(`script[src="${src}"]`);
+  if (existing?.dataset.loaded === "true") return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const script = existing || document.createElement("script");
+    script.addEventListener("load", () => { script.dataset.loaded = "true"; resolve(); }, { once: true });
+    script.addEventListener("error", reject, { once: true });
+    if (!existing) {
+      script.src = src;
+      script.defer = true;
+      document.head.append(script);
+    }
+  });
+}
+
 function setMenuState(isOpen) {
   if (!menuToggle || !menu) return;
   menuToggle.setAttribute("aria-expanded", String(isOpen));
@@ -70,19 +86,17 @@ function setMenuState(isOpen) {
   if (isOpen) menu.querySelector("a")?.focus();
 }
 
-function ensureMap() {
+async function loadMapController() {
   if (mapController) return mapController;
-  if (!window.L) {
-    if (!mapInitialisationScheduled) {
-      mapInitialisationScheduled = true;
-      window.setTimeout(() => {
-        mapInitialisationScheduled = false;
-        ensureMap();
-      }, 40);
-    }
-    return pendingMapController;
-  }
-  mapController = initialisePublicMap({
+  if (mobileHome.matches) return pendingMapController;
+  if (mapPromise) return mapPromise;
+  mapPromise = (async () => {
+    loadStylesheet("/static/vendor/leaflet/leaflet.css");
+    loadStylesheet("/static/vendor/leaflet-markercluster/MarkerCluster.css");
+    await loadScript("/static/vendor/leaflet/leaflet.js");
+    await loadScript("/static/vendor/leaflet-markercluster/leaflet.markercluster.js");
+    const { initialisePublicMap } = await import("./map.js?v=2026-08-03-01");
+    mapController = initialisePublicMap({
     shell: mapShell,
     canvas: mapCanvas,
     loading: mapLoading,
@@ -110,8 +124,19 @@ function ensureMap() {
     filterReset: mapFilterReset,
     count: mapCount,
     legend: mapLegend,
+    });
+    return mapController;
+  })().catch(() => {
+    if (mapLoading) mapLoading.hidden = true;
+    if (mapStatus) mapStatus.textContent = "Карта временно недоступна. Откройте отдельный режим карты.";
+    return pendingMapController;
   });
-  return mapController;
+  return mapPromise;
+}
+
+function ensureMap() {
+  void loadMapController();
+  return mapController || pendingMapController;
 }
 
 menuToggle?.addEventListener("click", () => setMenuState(menu?.hidden));
@@ -120,25 +145,30 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && menu && !menu.hidden) setMenuState(false);
 });
 
-document.querySelectorAll("[data-scroll-to]").forEach((button) => {
-  button.addEventListener("click", () => {
-    document.getElementById(button.dataset.scrollTo)?.scrollIntoView({ behavior: "smooth", block: "start" });
-    ensureMap();
+document.querySelectorAll("[data-map-entry]").forEach((entry) => {
+  entry.addEventListener("click", (event) => {
+    if (mobileHome.matches) return;
+    event.preventDefault();
+    document.getElementById("map-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    void loadMapController();
   });
 });
 
 document.querySelector("[data-open-search]")?.addEventListener("click", () => {
+  if (mobileHome.matches) {
+    location.assign("/map?focus=search");
+    return;
+  }
   document.getElementById("map-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  ensureMap();
-  window.setTimeout(() => searchInput?.focus(), 500);
+  void loadMapController().then(() => window.setTimeout(() => searchInput?.focus(), 250));
 });
 
 searchInput?.addEventListener("input", () => {
   searchClear.hidden = !searchInput.value;
-  ensureMap().search(searchInput.value);
+  void loadMapController().then((controller) => controller.search(searchInput.value));
 });
 searchInput?.addEventListener("focus", () => {
-  ensureMap();
+  void loadMapController();
   if (!features.discovery_search || autocompleteAttached || !mapAutocomplete) return;
   autocompleteAttached = true;
   loadStylesheet("/static/public/autocomplete.css?v=2026-07-28-01");
@@ -150,7 +180,7 @@ searchInput?.addEventListener("focus", () => {
           return;
         }
         searchInput.value = item.value || item.title || "";
-        ensureMap().search(searchInput.value);
+        void loadMapController().then((controller) => controller.search(searchInput.value));
       },
     });
   }).catch(() => {});
@@ -159,10 +189,10 @@ searchClear?.addEventListener("click", () => {
   if (!searchInput) return;
   searchInput.value = "";
   searchClear.hidden = true;
-  ensureMap().search("");
+  void loadMapController().then((controller) => controller.search(""));
   searchInput.focus();
 });
-document.querySelector("[data-map-locate]")?.addEventListener("click", () => ensureMap().locate());
+document.querySelector("[data-map-locate]")?.addEventListener("click", () => void loadMapController().then((controller) => controller.locate()));
 mapFilterReset?.addEventListener("click", () => {
   if (searchInput) searchInput.value = "";
   if (searchClear) searchClear.hidden = true;
@@ -170,23 +200,40 @@ mapFilterReset?.addEventListener("click", () => {
 document.querySelector("[data-map-reset]")?.addEventListener("click", () => {
   if (searchInput) searchInput.value = "";
   if (searchClear) searchClear.hidden = true;
-  ensureMap().reset();
+  void loadMapController().then((controller) => controller.reset());
 });
 
 document.querySelectorAll("[data-current-year]").forEach((node) => {
   node.textContent = String(new Date().getFullYear());
 });
 
-if ("IntersectionObserver" in window && mapShell) {
+if (!mobileHome.matches && "IntersectionObserver" in window && mapShell) {
   const observer = new IntersectionObserver((entries) => {
     if (entries.some((entry) => entry.isIntersecting)) {
-      ensureMap();
+      void loadMapController();
       observer.disconnect();
     }
   }, { rootMargin: "0px 0px -300px" });
   observer.observe(mapShell);
-} else {
-  ensureMap();
+} else if (!mobileHome.matches) {
+  void loadMapController();
+}
+
+if (mobileHome.matches && discoveryPreview) {
+  const loadPreview = () => import("./discovery-preview.js?v=2026-08-03-01")
+    .then(({ initialiseDiscoveryPreview }) => initialiseDiscoveryPreview(discoveryPreview))
+    .catch(() => {});
+  if ("IntersectionObserver" in window) {
+    const previewObserver = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        previewObserver.disconnect();
+        void loadPreview();
+      }
+    }, { rootMargin: "240px" });
+    previewObserver.observe(discoveryPreview);
+  } else {
+    void loadPreview();
+  }
 }
 
 if (
@@ -195,7 +242,7 @@ if (
 ) {
   discoveryHome.hidden = false;
   const loadDiscovery = () => {
-    loadStylesheet("/static/public/discovery-home.css?v=2026-07-28-01");
+    loadStylesheet("/static/public/discovery-home.css?v=2026-08-03-01");
     return import("./discovery-home.js?v=2026-07-28-01")
       .then(({ loadDiscoveryHome }) => loadDiscoveryHome(discoveryHome))
       .catch(() => { discoveryHome.hidden = true; });

@@ -36,6 +36,10 @@ LAZY_PUBLIC_ASSETS = {
     "public/discovery-common.js",
     "public/discovery-home.css",
     "public/discovery-home.js",
+    "public/discovery-preview.js",
+    "public/map-page.css",
+    "public/map-page.js",
+    "public/map.js",
     "public/site-below-fold.css",
     "public/telegram.js",
 }
@@ -209,7 +213,7 @@ def assert_accessible(page: Page, *, mobile: bool = False) -> dict[str, Any]:
 
 def wait_map(page: Page) -> None:
     page.locator("[data-map-shell]").scroll_into_view_if_needed()
-    page.wait_for_selector("#map.leaflet-container", timeout=20_000)
+    page.wait_for_selector(".public-map__canvas.leaflet-container", timeout=20_000)
     page.wait_for_function("document.querySelector('[data-map-loading]')?.hidden === true", timeout=20_000)
 
 
@@ -386,33 +390,42 @@ def home_layout_metrics(page: Page, *, width: int, height: int) -> dict[str, int
             header: box(".site-header"),
             hero: box(".hero"),
             map: box("#map"),
+            preview: box("[data-discovery-preview]"),
           };
         }"""
     )
     header = layout["header"]
     hero = layout["hero"]
     map_box = layout["map"]
+    preview_box = layout["preview"]
     if header["bottom"] > hero["top"] + 1:
         raise AssertionError(f"Header overlaps hero: {layout}")
-    visible_map = max(0, round(height - map_box["top"]))
     if width >= 1000:
+        visible_map = max(0, round(height - map_box["top"]))
         if map_box["top"] > 650 or visible_map < 350:
             raise AssertionError(f"Desktop map-first regression: {layout}")
-    elif width >= 390:
-        if visible_map < 200:
-            raise AssertionError(f"Mobile map-first regression: {layout}")
+        map_metrics = {
+            "map_canvas_top": round(map_box["top"]),
+            "visible_map_pixels": visible_map,
+        }
+    else:
+        if preview_box["top"] >= height or preview_box["height"] < 300:
+            raise AssertionError(f"Mobile discovery preview regression: {layout}")
+        map_metrics = {
+            "preview_top": round(preview_box["top"]),
+            "preview_height": round(preview_box["height"]),
+        }
     return {
         "viewport_width": width,
         "viewport_height": height,
         "header_height": round(header["height"]),
         "hero_top": round(hero["top"]),
-        "map_canvas_top": round(map_box["top"]),
-        "visible_map_pixels": visible_map,
         "document_width": round(state["scroll_width"]),
+        **map_metrics,
     }
 
 
-def assert_compact_mobile_header(browser: Browser, base_url: str) -> dict[str, int]:
+def assert_compact_mobile_header(browser: Browser, base_url: str, output: Path) -> dict[str, int]:
     ctx = context(browser, width=320, height=568, mobile=True)
     page = ctx.new_page()
     try:
@@ -427,6 +440,13 @@ def assert_compact_mobile_header(browser: Browser, base_url: str) -> dict[str, i
         page.wait_for_selector("[data-menu]:not([hidden])")
         page.keyboard.press("Escape")
         page.wait_for_function("document.querySelector('[data-menu]')?.hidden === true")
+        page.evaluate("localStorage.removeItem('touristika:map-onboarding:v1')")
+        page.goto(f"{base_url}/map?search=рыб", wait_until="domcontentloaded")
+        page.wait_for_selector(".public-map__canvas.leaflet-container", timeout=20_000)
+        page.wait_for_function("document.querySelector('[data-map-loading]')?.hidden === true", timeout=20_000)
+        if page.evaluate("document.documentElement.scrollWidth > innerWidth + 1"):
+            raise AssertionError("320px map has horizontal overflow")
+        screenshot(page, output, "mobile-compact-map.png")
         return {
             "viewport_width": 320,
             "viewport_height": 568,
@@ -489,7 +509,13 @@ def capture_public(browser: Browser, base_url: str, output: Path, *, mobile: boo
         skip_link = assert_skip_link(page, mobile=mobile)
         if not page.evaluate("matchMedia('(prefers-reduced-motion: reduce)').matches"):
             raise AssertionError("Reduced-motion preference is not active")
-        wait_map(page)
+        if mobile:
+            page.wait_for_function(
+                "document.querySelector('[data-preview-count=accommodation]')?.textContent !== '—'",
+                timeout=20_000,
+            )
+        else:
+            wait_map(page)
         layout = home_layout_metrics(
             page,
             width=390 if mobile else 1440,
@@ -515,6 +541,28 @@ def capture_public(browser: Browser, base_url: str, output: Path, *, mobile: boo
         )
         if page.evaluate("typeof window.Telegram !== 'undefined'"):
             raise AssertionError("Telegram leaked into browser-first review")
+        if mobile:
+            if any("leaflet" in resource.lower() for resource in resources):
+                raise AssertionError(f"Leaflet loaded on mobile homepage: {resources}")
+            screenshot(page, output, "mobile-discovery-preview.png", selector="[data-discovery-preview]")
+            page.evaluate("localStorage.removeItem('touristika:map-onboarding:v1')")
+            page.goto(f"{base_url}/map", wait_until="domcontentloaded")
+            page.wait_for_selector("[data-map-onboarding]:not([hidden])")
+            screenshot(page, output, "mobile-map-onboarding.png")
+            page.keyboard.press("Escape")
+            page.wait_for_function("document.querySelector('[data-map-onboarding]')?.hidden === true")
+            page.reload(wait_until="domcontentloaded")
+            page.wait_for_function("document.querySelector('[data-map-onboarding]')?.hidden === true")
+            page.locator("[data-map-help]").click()
+            page.wait_for_selector("[data-map-onboarding]:not([hidden])")
+            page.locator("[data-map-onboarding-start]").click()
+            page.evaluate("localStorage.removeItem('touristika:map-onboarding:v1')")
+            page.goto(f"{base_url}/map?search=рыб", wait_until="domcontentloaded")
+            page.wait_for_selector("[data-map-tip]:not([hidden])")
+            if not page.locator("[data-map-onboarding]").is_hidden():
+                raise AssertionError("Direct map link was covered by onboarding")
+            wait_map(page)
+            scenarios.extend(["mobile homepage without Leaflet", "map onboarding once", "map help", "direct map tip"])
         screenshot(page, output, f"{prefix}-map.png", selector="[data-map-shell]")
 
         search = page.locator("[data-map-search]")
@@ -550,6 +598,20 @@ def capture_public(browser: Browser, base_url: str, output: Path, *, mobile: boo
             )
         screenshot(page, output, f"{prefix}-autocomplete.png", selector="[data-map-shell]")
         scenarios.extend(["autocomplete", "keyboard"])
+
+        if mobile:
+            page.locator(".leaflet-control-zoom-in").click()
+            page.wait_for_selector("[data-map-search-area]:not([hidden])")
+            with page.expect_request(lambda request: "bbox=" in request.url):
+                page.locator("[data-map-search-area]").click()
+            page.locator('[data-map-view="list"]').click()
+            page.wait_for_selector("[data-map-list]:not([hidden])")
+            if page.locator(".map-list-card").count():
+                page.locator(".map-list-card").first.click()
+                page.locator('[data-map-view="map"]').click()
+                page.wait_for_selector("[data-map-sheet]:not([hidden])")
+                screenshot(page, output, "mobile-map-sheet.png")
+            scenarios.extend(["search this area", "map/list sync", "bottom sheet"])
 
         page.goto(f"{base_url}/search?q=рыбалка", wait_until="domcontentloaded")
         page.wait_for_selector("[data-search-results] .discovery-card")
@@ -928,9 +990,9 @@ def main() -> int:
     with local_server() as base_url, sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         try:
-            desktop, resources = capture_public(browser, base_url, output, mobile=False)
-            mobile, _ = capture_public(browser, base_url, output, mobile=True)
-            compact_mobile = assert_compact_mobile_header(browser, base_url)
+            desktop, _ = capture_public(browser, base_url, output, mobile=False)
+            mobile, resources = capture_public(browser, base_url, output, mobile=True)
+            compact_mobile = assert_compact_mobile_header(browser, base_url, output)
             admin = capture_superadmin(browser, base_url, output)
             api = api_metrics(base_url)
         finally:

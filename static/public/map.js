@@ -158,6 +158,20 @@ function popupContent(entity) {
     </article>`;
 }
 
+function locationLabel(entity) {
+  return [entity.city, entity.locality, entity.region].filter(Boolean).join(", ") || "Россия";
+}
+
+function distanceKm(from, entity) {
+  if (!from || !isCoordinate(entity.lat) || !isCoordinate(entity.lng)) return null;
+  const radians = (value) => value * Math.PI / 180;
+  const latDelta = radians(entity.lat - from.lat);
+  const lngDelta = radians(entity.lng - from.lng);
+  const a = Math.sin(latDelta / 2) ** 2
+    + Math.cos(radians(from.lat)) * Math.cos(radians(entity.lat)) * Math.sin(lngDelta / 2) ** 2;
+  return Math.round(6371.0088 * 2 * Math.asin(Math.sqrt(a)) * 10) / 10;
+}
+
 function createClusterLayer() {
   if (typeof window.L.markerClusterGroup !== "function") return window.L.featureGroup();
   return window.L.markerClusterGroup({
@@ -273,6 +287,15 @@ export function initialisePublicMap({
   count,
   legend,
   onMapReady,
+  list,
+  listItems,
+  listCount,
+  sheet,
+  sheetContent,
+  sheetToggle,
+  searchArea,
+  appMode = false,
+  onShowList,
 }) {
   if (!window.L || !canvas) {
     if (status) status.textContent = "Карта временно недоступна. Попробуйте обновить страницу.";
@@ -299,8 +322,20 @@ export function initialisePublicMap({
   let searchTimer;
   let inputTimer;
   const pageParams = new URLSearchParams(window.location.search);
-  const requestedEntitySlug = pageParams.get("entity");
+  const requestedEntitySlug = pageParams.get("id") || pageParams.get("entity");
+  searchQuery = pageParams.get("search") || pageParams.get("q") || "";
   let contextSlugs = null;
+  let selectedEntity = null;
+  let userLocation = null;
+  let boundsQuery = null;
+  let areaPromptReady = false;
+  const deepLinkSelectValues = [
+    [filterSubtype, pageParams.get("subtype")],
+    [filterRegion, pageParams.get("region")],
+    [filterDistrict, pageParams.get("district")],
+    [filterCity, pageParams.get("city")],
+    [filterSeasonality, pageParams.get("seasonality")],
+  ];
 
   window.L.control.zoom({ position: "bottomright" }).addTo(map);
   tiles.on("tileerror", () => {
@@ -375,11 +410,130 @@ export function initialisePublicMap({
     populateAmenities(facets?.amenities || []);
   }
 
+  function setSheetState(state) {
+    if (!sheet) return;
+    sheet.dataset.sheetState = state;
+    if (sheetToggle) {
+      sheetToggle.setAttribute("aria-label", state === "expanded" ? "Свернуть карточку" : "Развернуть карточку");
+    }
+  }
+
+  async function shareEntity(entity) {
+    const url = new URL(`/places/${encodeURIComponent(String(entity.slug || ""))}`, window.location.origin).href;
+    try {
+      if (navigator.share) await navigator.share({ title: entity.name || "Туристика", url });
+      else await navigator.clipboard.writeText(url);
+      if (status) status.textContent = navigator.share ? "Ссылка отправлена." : "Ссылка скопирована.";
+    } catch (error) {
+      if (error?.name !== "AbortError" && status) status.textContent = "Не удалось поделиться ссылкой.";
+    }
+  }
+
+  function renderSheet(entity) {
+    if (!sheet || !sheetContent) return;
+    const cover = safeImageUrl(entity.cover);
+    const slug = encodeURIComponent(String(entity.slug || ""));
+    const type = subtype(entity).name || entityKind(entity).name || "Туристический объект";
+    const distance = distanceKm(userLocation, entity);
+    const telegram = (entity.primary_contacts || []).find((contact) => contact.contact_type === "telegram");
+    const telegramUrl = telegram ? safeContactUrl(telegram.url) : null;
+    const routeUrl = isCoordinate(entity.lat) && isCoordinate(entity.lng)
+      ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${entity.lat},${entity.lng}`)}`
+      : null;
+    sheetContent.innerHTML = `
+      <article class="map-sheet-card">
+        ${cover ? `<img class="map-sheet-card__cover" src="${escapeHtml(cover)}" alt="" width="224" height="236" loading="lazy" decoding="async">` : '<div class="map-sheet-card__placeholder" aria-hidden="true">Т</div>'}
+        <div class="map-sheet-card__body">
+          <small>${escapeHtml(type)}${distance !== null ? ` · ${distance} км` : ""}</small>
+          <h2 id="map-sheet-title">${escapeHtml(entity.name || "Туристический объект")}</h2>
+          <p>${escapeHtml(locationLabel(entity))}</p>
+          <p>${escapeHtml(entity.short_description || "Откройте карточку, чтобы узнать подробности.")}</p>
+        </div>
+        <div class="map-sheet-card__actions">
+          <a href="/places/${slug}">Подробнее</a>
+          ${routeUrl ? `<a href="${routeUrl}" target="_blank" rel="noopener noreferrer">Маршрут</a>` : ""}
+          ${telegramUrl ? `<a href="${escapeHtml(telegramUrl)}" target="_blank" rel="noopener noreferrer">Telegram</a>` : ""}
+          <button type="button" data-sheet-share>Поделиться</button>
+          <button type="button" data-sheet-list>Показать в списке</button>
+        </div>
+      </article>`;
+    sheetContent.querySelector("[data-sheet-share]")?.addEventListener("click", () => void shareEntity(entity));
+    sheetContent.querySelector("[data-sheet-list]")?.addEventListener("click", () => onShowList?.(entity));
+    sheet.hidden = false;
+    setSheetState("medium");
+  }
+
+  function selectEntity(entity, { move = true } = {}) {
+    selectedEntity = entity;
+    const tip = document.querySelector("[data-map-tip]");
+    if (tip) tip.hidden = true;
+    if (move) map.flyTo([entity.lat, entity.lng], Math.max(map.getZoom(), 10), { duration: 0.65 });
+    if (appMode) renderSheet(entity);
+    else window.setTimeout(() => markers.get(entityKey(entity))?.openPopup(), move ? 450 : 0);
+    renderList();
+    if (status) status.textContent = entity.name ? `Выбрано: ${entity.name}` : "Выбран объект";
+  }
+
   function focusEntity(entity) {
     const marker = markers.get(entityKey(entity));
     if (!marker) return;
-    map.flyTo([entity.lat, entity.lng], Math.max(map.getZoom(), 10), { duration: 0.65 });
-    window.setTimeout(() => marker.openPopup(), 450);
+    selectEntity(entity);
+  }
+
+  function entitiesInView() {
+    const bounds = map.getBounds();
+    return entities.filter((entity) => (
+      isCoordinate(entity.lat) && isCoordinate(entity.lng) && bounds.contains([entity.lat, entity.lng])
+    ));
+  }
+
+  function renderList() {
+    if (!listItems) return;
+    const visible = entitiesInView();
+    listItems.replaceChildren();
+    if (listCount) listCount.textContent = resultCountLabel(visible.length);
+    if (!visible.length) {
+      const empty = document.createElement("p");
+      empty.className = "map-list-empty";
+      empty.textContent = "В этой области пока ничего нет. Переместите карту или измените фильтры.";
+      listItems.append(empty);
+      return;
+    }
+    visible.forEach((entity) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "map-list-card";
+      button.dataset.entityId = String(entityKey(entity));
+      button.setAttribute("aria-current", String(entityKey(selectedEntity) === entityKey(entity)));
+      const cover = safeImageUrl(entity.cover);
+      if (cover) {
+        const image = document.createElement("img");
+        image.src = cover;
+        image.alt = "";
+        image.width = 184;
+        image.height = 176;
+        image.loading = "lazy";
+        image.decoding = "async";
+        button.append(image);
+      } else {
+        const placeholder = document.createElement("span");
+        placeholder.className = "map-list-card__placeholder";
+        placeholder.setAttribute("aria-hidden", "true");
+        placeholder.textContent = "Т";
+        button.append(placeholder);
+      }
+      const copy = document.createElement("span");
+      const type = document.createElement("small");
+      type.textContent = subtype(entity).name || entityKind(entity).name || "Туристический объект";
+      const name = document.createElement("strong");
+      name.textContent = entity.name || "Туристический объект";
+      const place = document.createElement("em");
+      place.textContent = locationLabel(entity);
+      copy.append(type, name, place);
+      button.append(copy);
+      button.addEventListener("click", () => selectEntity(entity));
+      listItems.append(button);
+    });
   }
 
   function renderResults() {
@@ -440,7 +594,7 @@ export function initialisePublicMap({
     legend.hidden = visibleTypes.size === 0;
   }
 
-  function decorateMarker(marker, entity) {
+function decorateMarker(marker, entity, onActivate) {
     const element = marker.getElement?.();
     if (!element || element.dataset.catalogKeyboardReady) return;
     element.dataset.catalogKeyboardReady = "true";
@@ -449,7 +603,8 @@ export function initialisePublicMap({
     element.addEventListener("keydown", (event) => {
       if (event.key !== " " && event.key !== "Enter") return;
       event.preventDefault();
-      marker.openPopup();
+      if (onActivate) onActivate();
+      else marker.openPopup();
     });
   }
 
@@ -465,17 +620,19 @@ export function initialisePublicMap({
         keyboard: true,
       });
       const compactPopup = window.matchMedia("(max-width: 360px)").matches;
-      marker.bindPopup(popupContent(entity), {
-        closeButton: true,
-        maxWidth: compactPopup ? 252 : 310,
-        minWidth: compactPopup ? 210 : 240,
-        offset: [0, -2],
-        autoPanPaddingTopLeft: [12, 82],
-        autoPanPaddingBottomRight: [12, 12],
-      });
-      marker.on("add", () => decorateMarker(marker, entity));
+      if (!appMode) {
+        marker.bindPopup(popupContent(entity), {
+          closeButton: true,
+          maxWidth: compactPopup ? 252 : 310,
+          minWidth: compactPopup ? 210 : 240,
+          offset: [0, -2],
+          autoPanPaddingTopLeft: [12, 82],
+          autoPanPaddingBottomRight: [12, 12],
+        });
+      }
+      marker.on("add", () => decorateMarker(marker, entity, appMode ? () => selectEntity(entity, { move: false }) : null));
       marker.on("click", () => {
-        if (status) status.textContent = entity.name ? `Выбрано: ${entity.name}` : "Выбран объект";
+        selectEntity(entity, { move: false });
       });
       markers.set(entityKey(entity), marker);
       layers.push(marker);
@@ -483,6 +640,7 @@ export function initialisePublicMap({
     if (layers.length) markerLayer.addLayers(layers);
     renderResults();
     renderLegend();
+    renderList();
     const mappedCount = markers.size;
     if (count) count.textContent = resultCountLabel(total);
     if (status) status.textContent = mappedCount
@@ -529,6 +687,7 @@ export function initialisePublicMap({
     if (filterWifi?.checked) query.set("wifi", "true");
     if (filterPriceMin?.value) query.set("price_min", filterPriceMin.value);
     if (filterPriceMax?.value) query.set("price_max", filterPriceMax.value);
+    if (boundsQuery) query.set("bbox", boundsQuery);
     return query;
   }
 
@@ -600,7 +759,12 @@ export function initialisePublicMap({
       entities = asItems(payload);
       if (contextSlugs?.size) entities = entities.filter((entity) => contextSlugs.has(String(entity.slug || "")));
       const total = contextSlugs?.size ? entities.length : Number(payload?.total ?? entities.length);
-      if (initialiseFilters) populateFacets(facets, entities);
+      if (initialiseFilters) {
+        populateFacets(facets, entities);
+        deepLinkSelectValues.forEach(([select, value]) => {
+          if (select && value && [...select.options].some((option) => option.value === value)) select.value = value;
+        });
+      }
       renderMarkers(total);
       if (payload.truncated && status) {
         status.textContent = `Показаны первые ${entities.length} из ${total}. Уточните фильтры, чтобы увидеть остальные.`;
@@ -612,7 +776,10 @@ export function initialisePublicMap({
         if (bounds.isValid()) map.fitBounds(bounds.pad(0.25), { maxZoom: 10, animate: true });
       }
       if (requestedEntitySlug) {
-        const requested = entities.find((entity) => String(entity.slug || "") === requestedEntitySlug);
+        const requested = entities.find((entity) => (
+          String(entity.slug || "") === requestedEntitySlug
+          || String(entityKey(entity)) === requestedEntitySlug
+        ));
         if (requested) focusEntity(requested);
       }
     } catch (error) {
@@ -665,8 +832,15 @@ export function initialisePublicMap({
         input.closest("label")?.classList.toggle("is-unavailable", unavailable);
       });
     }
+    const deepKinds = new Set((pageParams.get("entity_kind") || pageParams.get("type") || "").split(",").filter(Boolean));
+    filterKinds.forEach((input) => {
+      const aliases = String(input.dataset.kindValues || input.value || "").split(",");
+      if (aliases.some((alias) => deepKinds.has(alias))) input.checked = true;
+    });
     updateSubtypeOptions();
     await loadEntities({ initialiseFilters: true, facets });
+    if (deepLinkSelectValues.some(([, value]) => value)) await loadEntities();
+    areaPromptReady = true;
   }
 
   function setFiltersOpen(open, { restoreFocus = true } = {}) {
@@ -683,6 +857,8 @@ export function initialisePublicMap({
 
   function reset() {
     searchQuery = "";
+    boundsQuery = null;
+    if (searchArea) searchArea.hidden = true;
     [filterSubtype, filterRegion, filterDistrict, filterCity, filterSeasonality, filterLegacyAmenity].forEach((select) => {
       if (select) select.value = "";
     });
@@ -713,6 +889,7 @@ export function initialisePublicMap({
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
         const point = [coords.latitude, coords.longitude];
+        userLocation = { lat: coords.latitude, lng: coords.longitude };
         window.L.circleMarker(point, {
           radius: 7,
           color: "#ffffff",
@@ -721,7 +898,11 @@ export function initialisePublicMap({
           fillOpacity: 1,
         }).addTo(map);
         map.flyTo(point, 10, { duration: 0.75 });
-        if (status) status.textContent = "Показали ваше местоположение.";
+        if (status) status.textContent = "Показали ваше местоположение. Нажмите «Искать рядом».";
+        if (searchArea) {
+          searchArea.textContent = "Искать рядом";
+          searchArea.hidden = false;
+        }
       },
       () => {
         if (status) status.textContent = "Не удалось определить местоположение. Разрешите доступ в настройках браузера.";
@@ -749,6 +930,18 @@ export function initialisePublicMap({
   filterReset?.addEventListener("click", reset);
   filterToggle?.addEventListener("click", () => setFiltersOpen(Boolean(filterPanel?.hidden)));
   filterClose?.addEventListener("click", () => setFiltersOpen(false));
+  searchArea?.addEventListener("click", () => {
+    const bounds = map.getBounds();
+    boundsQuery = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()]
+      .map((value) => Number(value.toFixed(5))).join(",");
+    searchArea.hidden = true;
+    searchArea.textContent = "Искать в этой области";
+    void loadEntities();
+  });
+  sheetToggle?.addEventListener("click", () => {
+    const current = sheet?.dataset.sheetState || "collapsed";
+    setSheetState(current === "collapsed" ? "medium" : current === "medium" ? "expanded" : "collapsed");
+  });
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && filterPanel && !filterPanel.hidden) setFiltersOpen(false);
   });
@@ -764,6 +957,12 @@ export function initialisePublicMap({
   } else {
     window.addEventListener("resize", () => map.invalidateSize({ animate: false }), { passive: true });
   }
+  map.on("moveend", renderList);
+  map.on("dragend zoomend", () => {
+    if (!areaPromptReady || !searchArea) return;
+    searchArea.textContent = "Искать в этой области";
+    searchArea.hidden = false;
+  });
   map.once("load", () => onMapReady?.());
   window.requestAnimationFrame(() => map.invalidateSize({ animate: false }));
   void bootstrap();
@@ -776,5 +975,13 @@ export function initialisePublicMap({
     },
     reset,
     locate,
+    refreshList: renderList,
+    invalidate() {
+      map.invalidateSize({ animate: false });
+    },
+    selectById(value) {
+      const entity = entities.find((item) => String(entityKey(item)) === String(value) || String(item.slug || "") === String(value));
+      if (entity) selectEntity(entity);
+    },
   };
 }

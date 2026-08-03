@@ -329,4 +329,6 @@ class DiscoveryHomeResponseDTO(BaseModel):
     collections: list[PublicCollectionSummaryDTO] = Field(default_factory=list)
     routes: list[PublicRouteSummaryDTO] = Field(default_factory=list)
     recently_updated: list[DiscoverySearchResultDTO] = Field(default_factory=list)
+    preview_items: list[DiscoverySearchResultDTO] = Field(default_factory=list)
+    counts: dict[str, int] = Field(default_factory=dict)
     popular: list[DiscoveryPopularItemDTO] = Field(default_factory=list)

@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f5f7f2">
+  <meta name="color-scheme" content="light">
+  <title>Исследовать Россию на карте — Туристика</title>
+  <meta name="description" content="Интерактивная карта туристических мест, услуг, экскурсий и маршрутов России.">
+  <link rel="canonical" href="{{ public_base_url }}/map">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="ru_RU">
+  <meta property="og:site_name" content="Туристика">
+  <meta property="og:title" content="Исследовать Россию на карте — Туристика">
+  <meta property="og:description" content="Находите места, услуги и впечатления на одной интерактивной карте.">
+  <meta property="og:url" content="{{ public_base_url }}/map">
+  <meta property="og:image" content="{{ public_base_url }}/static/brand/turistika-logo-stacked.svg">
+  <link rel="icon" href="/static/brand/turistika-favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="/static/fonts/manrope/manrope-regular.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/static/fonts/manrope/manrope-extrabold.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="/static/vendor/leaflet-markercluster/MarkerCluster.css">
+  <link rel="stylesheet" href="/static/public/site.css?v=2026-08-03-01">
+  <link rel="stylesheet" href="/static/public/map-page.css?v=2026-08-03-01">
+  <script>window.__TOURISTIKA_FEATURES__={{ features_json | safe }};</script>
+  {% if telegram_webapp %}<script src="https://telegram.org/js/telegram-web-app.js"></script>{% endif %}
+  <script defer src="/static/vendor/leaflet/leaflet.js"></script>
+  <script defer src="/static/vendor/leaflet-markercluster/leaflet.markercluster.js"></script>
+  <script type="module" src="/static/public/map-page.js?v=2026-08-03-01"></script>
+</head>
+<body class="map-page">
+  <a class="skip-link" href="#map-canvas">Перейти к карте</a>
+  <main class="map-app" id="main-content">
+    <header class="map-app__header">
+      <a class="map-app__back" href="/" aria-label="Вернуться на главную">
+        <span aria-hidden="true">←</span><span>Назад</span>
+      </a>
+      <a class="map-app__brand" href="/" aria-label="Туристика — главная">
+        <img src="/static/brand/turistika-icon.svg" width="38" height="38" alt="">
+        <span><strong>Исследование</strong><small>Туристика</small></span>
+      </a>
+      <button class="map-app__help" type="button" data-map-help aria-label="Открыть подсказки по карте">?</button>
+    </header>
+
+    <section class="public-map public-map--app" data-map-shell aria-label="Режим исследования карты">
+      <div class="public-map__topbar map-app__controls">
+        <label class="map-search" for="map-search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="5.8"></circle><path d="m16 16 4.1 4.1"></path></svg>
+          <span class="visually-hidden">Поиск по карте</span>
+          <input id="map-search" type="search" placeholder="Места, услуги, впечатления" autocomplete="off" aria-controls="map-search-results" data-map-search>
+          <button type="button" class="map-search__clear" data-search-clear aria-label="Очистить поиск" hidden>×</button>
+        </label>
+        <div class="map-autocomplete" id="map-autocomplete" role="listbox" data-map-autocomplete hidden></div>
+        <div class="map-tools" aria-label="Управление картой">
+          <button type="button" data-map-filter-toggle aria-label="Открыть фильтры каталога" aria-expanded="false" aria-controls="map-filters" title="Фильтры">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"></path></svg>
+          </button>
+          <button type="button" data-map-locate aria-label="Показать моё местоположение" title="Моё местоположение">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 6.6 18-6.6-3.7L5.4 21 12 3Z"></path></svg>
+          </button>
+          <button type="button" data-map-reset aria-label="Показать всю карту" title="Показать всю карту">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66L20 9"></path><path d="M20 4v5h-5"></path></svg>
+          </button>
+        </div>
+      </div>
+
+      <aside class="map-filters" id="map-filters" data-map-filters aria-label="Фильтры единого каталога" hidden>
+        <div class="map-filters__heading">
+          <div><span>Фильтры</span><strong data-map-count>0 результатов</strong></div>
+          <div class="map-filters__heading-actions"><button type="button" data-filter-reset>Сбросить</button><button class="map-filters__close" type="button" data-map-filter-close aria-label="Закрыть фильтры">×</button></div>
+        </div>
+        <fieldset class="map-filter-fieldset map-filter-kinds">
+          <legend>Показывать</legend>
+          <div class="map-filter-chip-grid map-filter-chip-grid--kinds">
+            <label><input type="checkbox" value="accommodation" data-kind-values="accommodation" data-filter-kind><span>Проживание</span></label>
+            <label><input type="checkbox" value="service" data-kind-values="service,rental" data-filter-kind><span>Услуги</span></label>
+            <label><input type="checkbox" value="activity" data-kind-values="activity,event" data-filter-kind><span>Активности</span></label>
+            <label><input type="checkbox" value="food" data-kind-values="food" data-filter-kind><span>Питание</span></label>
+            <label><input type="checkbox" value="transport" data-kind-values="transport" data-filter-kind><span>Транспорт</span></label>
+            <label><input type="checkbox" value="excursion" data-kind-values="excursion,guide,sight" data-filter-kind><span>Экскурсии</span></label>
+          </div>
+        </fieldset>
+        <div class="map-filter-grid">
+          <label>Подтип<select data-filter-subtype data-filter-type><option value="">Все подтипы</option></select></label>
+          <label>Регион<select data-filter-region><option value="">Все регионы</option></select></label>
+          <label>Район<select data-filter-district><option value="">Все районы</option></select></label>
+          <label>Город<select data-filter-city><option value="">Все города</option></select></label>
+          <label>Сезон<select data-filter-seasonality><option value="">Любой сезон</option></select></label>
+        </div>
+        <fieldset class="map-filter-fieldset"><legend>Полезные условия</legend><div class="map-filter-chip-grid">
+          <label><input type="checkbox" data-filter-open-now><span>Открыто сейчас</span></label>
+          <label><input type="checkbox" data-filter-children><span>Для детей</span></label>
+          <label><input type="checkbox" data-filter-pets><span>С животными</span></label>
+          <label><input type="checkbox" data-filter-parking><span>Парковка</span></label>
+          <label><input type="checkbox" data-filter-wifi><span>Wi-Fi</span></label>
+        </div></fieldset>
+        <fieldset class="map-filter-fieldset" data-filter-amenities hidden><legend>Дополнительно</legend><div class="map-filter-chip-grid" data-filter-amenity-options></div><select class="visually-hidden" tabindex="-1" aria-hidden="true" aria-label="Удобства" data-filter-amenity><option value="">Все удобства</option></select></fieldset>
+        <fieldset class="map-filter-fieldset"><legend>Цена от, ₽</legend><div class="map-filter-price"><label><span>Минимум</span><input type="number" min="0" step="100" inputmode="numeric" placeholder="0" data-filter-price-min></label><label><span>Максимум</span><input type="number" min="0" step="100" inputmode="numeric" placeholder="Без лимита" data-filter-price-max></label></div></fieldset>
+      </aside>
+
+      <div class="map-legend" data-map-legend role="group" aria-label="Легенда типов объектов"></div>
+      <div class="public-map__canvas" id="map-canvas" role="region" tabindex="-1" aria-label="Интерактивная карта туристических мест, услуг и активностей России"></div>
+      <div class="public-map__loading" data-map-loading aria-live="polite"><span></span> Загружаем карту впечатлений</div>
+      <p class="public-map__status" data-map-status role="status" aria-live="polite"></p>
+      <div class="public-map__results" id="map-search-results" data-map-results aria-live="polite"></div>
+      <button class="map-app__search-area" type="button" data-map-search-area hidden>Искать в этой области</button>
+
+      <section class="map-app__list" data-map-list hidden aria-labelledby="map-list-title">
+        <header><div><small>В этой области</small><h1 id="map-list-title">Места рядом на карте</h1></div><strong data-map-list-count></strong></header>
+        <div data-map-list-items></div>
+      </section>
+
+      <section class="map-sheet" data-map-sheet data-sheet-state="collapsed" hidden aria-labelledby="map-sheet-title">
+        <button class="map-sheet__handle" type="button" data-map-sheet-toggle aria-label="Развернуть карточку"><span></span></button>
+        <div class="map-sheet__content" data-map-sheet-content></div>
+      </section>
+
+      <nav class="map-app__switch" aria-label="Режим отображения">
+        <button type="button" data-map-view="map" aria-pressed="true"><span aria-hidden="true">⌖</span> Карта</button>
+        <button type="button" data-map-view="list" aria-pressed="false"><span aria-hidden="true">☷</span> Список</button>
+      </nav>
+    </section>
+  </main>
+
+  <section class="map-onboarding" data-map-onboarding hidden aria-modal="true" role="dialog" aria-labelledby="map-onboarding-title">
+    <div class="map-onboarding__backdrop" data-map-onboarding-close></div>
+    <div class="map-onboarding__card" tabindex="-1">
+      <button type="button" class="map-onboarding__close" data-map-onboarding-close aria-label="Закрыть подсказки">×</button>
+      <p class="eyebrow">Режим исследования</p>
+      <h2 id="map-onboarding-title">Добро пожаловать в режим исследования</h2>
+      <p>Ищите интересные места по всей России и собирайте идеи для следующего путешествия.</p>
+      <ul>
+        <li><span aria-hidden="true">⌕</span> Поиск мест и впечатлений</li>
+        <li><span aria-hidden="true">⌖</span> Объекты рядом с вами</li>
+        <li><span aria-hidden="true">≡</span> Фильтры, маршруты и подборки</li>
+      </ul>
+      <small>Коснитесь карты, чтобы начать путешествие</small>
+      <button class="button button--primary" type="button" data-map-onboarding-start>Начать исследование</button>
+    </div>
+  </section>
+
+  <aside class="map-tip" data-map-tip hidden role="status">
+    <p>Совет: используйте фильтры и поиск для исследования карты</p>
+    <button type="button" data-map-tip-close aria-label="Закрыть подсказку">×</button>
+  </aside>
+</body>
+</html>

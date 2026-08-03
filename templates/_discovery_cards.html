@@ -16,7 +16,7 @@
           {% if item.match_reasons %}<ul>{% for reason in item.match_reasons %}<li>{{ reason }}</li>{% endfor %}</ul>{% endif %}
           <footer>
             <a href="{{ item.href }}">Открыть <span aria-hidden="true">→</span></a>
-            {% if item.source == "entity" %}<a href="/?entity={{ item.slug | urlencode }}#map-section">На карте</a>{% endif %}
+            {% if item.source == "entity" %}<a href="/map?id={{ item.slug | urlencode }}">На карте</a>{% endif %}
           </footer>
         </div>
       </article>

@@ -25,6 +25,7 @@ from tourist03.dto.discovery import (
     SuperadminRouteUpsertRequestDTO,
 )
 from tourist03.public_catalog import safe_public_asset_url, validate_slug
+from tourist03.repositories import catalog as catalog_repo
 from tourist03.repositories import discovery as discovery_repo
 from tourist03.security import get_superadmin_session_principal, log_crm_audit_event
 
@@ -847,27 +848,47 @@ def api_public_discovery_home(
         if settings.feature_editorial_collections
         else []
     )
-    routes = (
-        discovery_repo.list_public_routes(limit=6)["items"]
+    routes_page = (
+        discovery_repo.list_public_routes(limit=6)
         if settings.feature_tourism_routes
-        else []
+        else {"items": [], "total": 0}
     )
+    routes = routes_page["items"]
     popular = (
         discovery_repo.list_popular_topics(limit=8)
         if settings.feature_discovery_search
         else []
     )
-    recently_updated = discovery_repo.list_recent_public_entities(limit=8)
+    preview_items = discovery_repo.list_recent_public_entities(limit=24)
     if not settings.feature_services:
-        recently_updated = [
+        preview_items = [
             item
-            for item in recently_updated
+            for item in preview_items
             if item.get("entity_kind") == "accommodation"
         ]
+    recently_updated = preview_items[:8]
+    facets = catalog_repo.list_public_catalog_facets(
+        entity_kinds=None if settings.feature_services else ["accommodation"]
+    )
+    kind_counts = {
+        str(item.get("value") or ""): int(item.get("count") or 0)
+        for item in facets.get("entity_kinds", [])
+    }
+    service_kinds = {"service", "rental", "food", "transport", "guide"}
+    counts = {
+        "accommodation": kind_counts.get("accommodation", 0),
+        "excursion": kind_counts.get("excursion", 0),
+        "service": sum(kind_counts.get(kind, 0) for kind in service_kinds),
+        "sight": kind_counts.get("sight", 0),
+        "route": int(routes_page.get("total") or len(routes)),
+        "total": sum(kind_counts.values()),
+    }
     response.headers["Cache-Control"] = "public, max-age=120, stale-while-revalidate=300"
     return {
         "collections": collections,
         "routes": routes,
         "recently_updated": recently_updated,
+        "preview_items": preview_items,
+        "counts": counts,
         "popular": popular,
     }

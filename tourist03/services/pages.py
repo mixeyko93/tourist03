@@ -72,6 +72,22 @@ def index_html(request: Request):
     return _public_index_response(request)
 
 
+def public_map_page(request: Request):
+    if (request.url.hostname or "").lower().startswith("crm."):
+        return react_map_page(request)
+    settings = request.app.state.settings
+    public_base_url = settings.public_base_url.rstrip("/")
+    template = PUBLIC_TEMPLATE_ENV.get_template("map.html")
+    return HTMLResponse(
+        template.render(
+            public_base_url=public_base_url,
+            features_json=json.dumps(settings.public_features, separators=(",", ":")),
+            telegram_webapp=settings.feature_telegram_webapp,
+        ),
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
+
+
 def _seo_text(value: str, *, fallback: str, limit: int) -> str:
     text = re.sub(r"\s+", " ", (value or "")).strip() or fallback
     if len(text) <= limit:
@@ -221,7 +237,7 @@ def public_place_page(request: Request, slug: str):
         "@type": "BreadcrumbList",
         "itemListElement": [
             {"@type": "ListItem", "position": 1, "name": "Туристика", "item": f"{public_base_url}/"},
-            {"@type": "ListItem", "position": 2, "name": "Карта", "item": f"{public_base_url}/#map-section"},
+            {"@type": "ListItem", "position": 2, "name": "Карта", "item": f"{public_base_url}/map"},
             {"@type": "ListItem", "position": 3, "name": place["name"], "item": canonical},
         ],
     }
@@ -583,7 +599,10 @@ def sitemap(request: Request):
     entries = [
         "  <url>\n"
         f"    <loc>{escape_html(f'{public_base_url}/')}</loc>\n"
-        "  </url>\n"
+        "  </url>\n",
+        "  <url>\n"
+        f"    <loc>{escape_html(f'{public_base_url}/map')}</loc>\n"
+        "  </url>\n",
     ]
     for place in catalog_repo.list_published_place_sitemap(
         entity_kinds=None

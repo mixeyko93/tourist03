@@ -53,10 +53,10 @@ class TourismDiscoveryBrowserTests(unittest.TestCase):
                 metrics["desktop"]["layout"]["visible_map_pixels"],
                 350,
             )
-            self.assertGreaterEqual(
-                metrics["mobile"]["layout"]["visible_map_pixels"],
-                200,
-            )
+            self.assertLess(metrics["mobile"]["layout"]["preview_top"], 844)
+            self.assertGreaterEqual(metrics["mobile"]["layout"]["preview_height"], 300)
+            self.assertIn("mobile homepage without Leaflet", metrics["mobile"]["scenarios"])
+            self.assertIn("map onboarding once", metrics["mobile"]["scenarios"])
             self.assertGreaterEqual(
                 metrics["bundle"]["headroom_to_10_percent_gzip_bytes"],
                 1024,

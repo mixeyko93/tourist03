@@ -95,6 +95,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .button--primary { gap: 16px; background: var(--ink); color: #fff; box-shadow: 0 14px 28px rgba(23, 33, 27, .2); }
 .button--primary:hover { background: #263a2e; box-shadow: 0 18px 34px rgba(23, 33, 27, .25); }
 .button--quiet { border: 1px solid var(--line); background: rgba(255, 255, 255, .56); color: var(--ink); }
+.discovery-preview { display: none; }
 .map-section { padding: 12px 0 clamp(74px, 8vw, 108px); background: #fff; }
 .section-heading { display: grid; grid-template-columns: 1.25fr .75fr; align-items: end; gap: 50px; margin-bottom: 36px; }
 .section-heading h2, .about-section h2, .benefits-section h2 { font-size: clamp(34px, 4.7vw, 60px); }
@@ -219,7 +220,36 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .hero__lead { margin-top: 14px; font-size: 15px; line-height: 1.5; }
   .hero__actions { display: grid; grid-template-columns: 1fr; margin-top: 20px; }
   .hero__actions .button { width: 100%; }
-  .map-section { padding: 18px 0 64px; }
+  .discovery-preview { display: block; padding: 22px 0 58px; background: #fff; }
+  .discovery-preview__inner { display: grid; gap: 20px; }
+  .discovery-preview__heading { display: grid; gap: 7px; }
+  .discovery-preview__heading .eyebrow { margin: 0; }
+  .discovery-preview__heading h2 { margin: 0; font-size: clamp(35px, 10vw, 42px); letter-spacing: -.065em; line-height: 1; }
+  .discovery-preview__heading > p:last-child { margin: 0; color: var(--ink-soft); font-size: 14px; font-weight: 650; }
+  .discovery-preview__counts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; gap: 8px; }
+  .discovery-preview__counts > div { display: grid; min-height: 66px; align-content: center; padding: 10px 12px; border: 1px solid rgba(23, 33, 27, .08); border-radius: 14px; background: #f4f7f2; }
+  .discovery-preview__counts > div:last-child { grid-column: 1 / -1; min-height: 52px; grid-template-columns: auto 1fr; align-items: center; gap: 8px; }
+  .discovery-preview__counts dt { color: var(--ink); font-size: 22px; font-weight: 800; letter-spacing: -.04em; }
+  .discovery-preview__counts dd { margin: 0; color: var(--ink-soft); font-size: 10px; font-weight: 700; }
+  .discovery-preview__map { position: relative; aspect-ratio: 1.75; overflow: hidden; border: 1px solid rgba(23, 33, 27, .08); border-radius: 22px; background: radial-gradient(circle at 80% 18%, rgba(35,183,199,.13), transparent 32%), linear-gradient(145deg, #eaf3ed, #dcece9); box-shadow: 0 16px 34px rgba(29, 50, 37, .12); }
+  .discovery-preview__map svg { position: absolute; inset: 8% 3%; width: 94%; height: 84%; }
+  .discovery-preview__map path { fill: rgba(255,255,255,.84); stroke: rgba(35, 126, 112, .28); stroke-width: 2; }
+  .discovery-preview__markers { position: absolute; inset: 0; }
+  .discovery-preview__marker { position: absolute; left: var(--x); top: var(--y); width: 30px; height: 30px; margin: -15px 0 0 -15px; border: 0; border-radius: 50% 50% 50% 0; background: var(--marker, var(--aqua-dark)); box-shadow: 0 4px 10px rgba(23, 33, 27, .24); cursor: pointer; opacity: 0; transform: rotate(-45deg) scale(.55); transition: opacity .35s ease, transform .35s ease; }
+  .discovery-preview__marker::after { position: absolute; inset: 9px; border: 2px solid #fff; border-radius: 50%; content: ""; }
+  .discovery-preview__marker.is-visible { opacity: 1; transform: rotate(-45deg) scale(1); }
+  .discovery-preview__marker.is-pulsing { animation: preview-marker-pulse 2.6s ease-in-out infinite; }
+  .discovery-preview__marker:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+  .discovery-preview__popover { position: absolute; z-index: 3; right: 12px; bottom: 12px; left: 12px; display: grid; padding: 13px 42px 13px 14px; border: 1px solid rgba(255,255,255,.28); border-radius: 15px; background: rgba(23, 33, 27, .94); box-shadow: 0 12px 30px rgba(23,33,27,.24); color: #fff; }
+  .discovery-preview__popover[hidden] { display: none; }
+  .discovery-preview__popover button { position: absolute; top: 7px; right: 7px; width: 34px; height: 34px; border-radius: 50%; background: rgba(255,255,255,.12); color: #fff; cursor: pointer; font-size: 18px; }
+  .discovery-preview__popover small { color: #7de1e9; font-size: 9px; font-weight: 800; text-transform: uppercase; }
+  .discovery-preview__popover strong { margin-top: 3px; font-size: 14px; }
+  .discovery-preview__popover span { color: rgba(255,255,255,.72); font-size: 10px; }
+  .discovery-preview__popover a { width: fit-content; margin-top: 8px; color: #fff; font-size: 10px; font-weight: 800; }
+  .discovery-preview__button { width: 100%; }
+  .discovery-preview__pulse { min-height: 20px; margin: -8px 0 0; color: var(--ink-soft); font-size: 11px; font-weight: 750; text-align: center; }
+  .map-section { display: none; }
   .section-heading { margin-bottom: 26px; }
   .section-heading--map { gap: 0; margin-bottom: 14px; }
   .section-heading--map .eyebrow { margin-bottom: 8px; }
@@ -249,6 +279,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .public-map-popup a { min-height: 34px; max-width: 100%; align-items: center; padding: 7px 9px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .leaflet-popup-content { margin: 10px 12px; }
   .public-map__status { right: 10px; bottom: 10px; left: 10px; max-width: none; font-size: 10px; }
+}
+
+@keyframes preview-marker-pulse {
+  50% { box-shadow: 0 4px 10px rgba(23, 33, 27, .24), 0 0 0 8px rgba(35, 183, 199, .13); }
 }
 
 @media (max-width: 360px) {

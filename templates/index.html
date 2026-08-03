@@ -19,13 +19,9 @@
   <link rel="icon" href="/static/brand/turistika-favicon.svg" type="image/svg+xml">
   <link rel="preload" href="/static/fonts/manrope/manrope-regular.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/static/fonts/manrope/manrope-extrabold.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
-  <link rel="stylesheet" href="/static/vendor/leaflet-markercluster/MarkerCluster.css">
   <!-- TOURISTIKA_RUNTIME_CONFIG -->
-  <link rel="stylesheet" href="/static/public/site.css?v=2026-07-28-07">
-  <script defer src="/static/vendor/leaflet/leaflet.js"></script>
-  <script defer src="/static/vendor/leaflet-markercluster/leaflet.markercluster.js"></script>
-  <script type="module" src="/static/public/site.js?v=2026-07-28-06"></script>
+  <link rel="stylesheet" href="/static/public/site.css?v=2026-08-03-01">
+  <script type="module" src="/static/public/site.js?v=2026-08-03-01"></script>
 </head>
 <body>
   <a class="skip-link" href="#main-content">Перейти к содержанию</a>
@@ -41,7 +37,7 @@
 
       <nav class="site-nav" aria-label="Основная навигация" data-navigation>
         <a href="#top">Главная</a>
-        <a href="#map-section">Карта</a>
+        <a href="/map" data-map-entry>Карта</a>
         <a href="/search" data-feature-link="discovery_search" hidden>Поиск</a>
         <a href="/search?source=collection" data-feature-link="editorial_collections" hidden>Подборки</a>
         <a href="/search?source=route" data-feature-link="tourism_routes" hidden>Маршруты</a>
@@ -66,7 +62,7 @@
   <div class="mobile-menu" id="mobile-menu" data-menu hidden>
     <nav aria-label="Мобильная навигация">
       <a href="#top">Главная</a>
-      <a href="#map-section">Карта</a>
+      <a href="/map">Карта</a>
       <a href="/search" data-feature-link="discovery_search" hidden>Поиск</a>
       <a href="/search?source=collection" data-feature-link="editorial_collections" hidden>Подборки</a>
       <a href="/search?source=route" data-feature-link="tourism_routes" hidden>Маршруты</a>
@@ -84,9 +80,39 @@
         <h1 id="hero-title">Откройте лучшие <br class="hero__desktop-break">места отдыха России</h1>
         <p class="hero__lead">Находите проживание, экскурсии, активности и полезные сервисы для путешествия — на одной живой карте.</p>
         <div class="hero__actions">
-          <button class="button button--primary" type="button" data-scroll-to="map-section">Открыть карту <span aria-hidden="true">↘</span></button>
+          <a class="button button--primary" href="/map" data-map-entry>Открыть карту <span aria-hidden="true">↘</span></a>
           <a class="button button--quiet" href="/add-place" data-placement-submissions hidden>Разместиться на карте</a>
         </div>
+      </div>
+    </section>
+
+    <section class="discovery-preview" data-discovery-preview aria-labelledby="discovery-preview-title">
+      <div class="site-frame discovery-preview__inner">
+        <div class="discovery-preview__heading">
+          <p class="eyebrow">Живая карта впечатлений</p>
+          <h2 id="discovery-preview-title">Исследуйте Россию</h2>
+          <p>Сегодня на карте можно найти</p>
+        </div>
+        <dl class="discovery-preview__counts" aria-live="polite">
+          <div><dt data-preview-count="accommodation">—</dt><dd>мест размещения</dd></div>
+          <div><dt data-preview-count="excursion">—</dt><dd>экскурсий</dd></div>
+          <div><dt data-preview-count="service">—</dt><dd>услуг</dd></div>
+          <div><dt data-preview-count="sight">—</dt><dd>достопримечательностей</dd></div>
+          <div><dt data-preview-count="route">—</dt><dd>маршрутов</dd></div>
+        </dl>
+        <div class="discovery-preview__map" aria-label="Мини-карта России с доступными туристическими объектами">
+          <svg viewBox="0 0 640 280" role="img" aria-labelledby="preview-map-title">
+            <title id="preview-map-title">Схематичная карта России</title>
+            <path d="M35 126 70 93l45 8 30-34 56 15 44-27 57 26 47-17 36 24 49-11 37 30 67-7 23 35 52 21-23 28-54-1-26 24-49-13-36 20-47-18-41 10-45-25-38 18-42-22-54 8-28-24-38 4-18-29Z"></path>
+          </svg>
+          <div class="discovery-preview__markers" data-preview-markers></div>
+          <article class="discovery-preview__popover" data-preview-popover hidden>
+            <button type="button" data-preview-close aria-label="Закрыть карточку">×</button>
+            <small data-preview-type></small><strong data-preview-name></strong><span data-preview-region></span><a data-preview-link href="/map">Открыть карту</a>
+          </article>
+        </div>
+        <a class="button button--primary discovery-preview__button" href="/map">Исследовать карту <span aria-hidden="true">→</span></a>
+        <p class="discovery-preview__pulse" data-preview-message aria-live="polite">Постройте своё путешествие</p>
       </div>
     </section>
 
