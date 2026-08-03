@@ -9,8 +9,14 @@ if (features.telegram_webapp) {
 document.querySelectorAll("[data-placement-submissions]").forEach((node) => {
   node.hidden = !features.placement_submissions;
 });
+document.querySelectorAll("[data-placement-unavailable]").forEach((node) => {
+  node.hidden = features.placement_submissions;
+});
 document.querySelectorAll("[data-feature-link]").forEach((node) => {
   node.hidden = !features[node.dataset.featureLink];
+});
+document.querySelectorAll("[data-telegram-unavailable]").forEach((node) => {
+  node.hidden = features.telegram_contact;
 });
 
 const menuToggle = document.querySelector("[data-menu-toggle]");
@@ -52,7 +58,52 @@ const mobileHome = window.matchMedia("(max-width: 520px)");
 let mapController;
 let mapPromise;
 let autocompleteAttached = false;
-const pendingMapController = Object.freeze({ search() {}, reset() {}, locate() {} });
+const pendingMapController = Object.freeze({ search() {}, clearSearch() {}, reset() {}, locate() {} });
+
+function installPlacementDialog() {
+  const dialog = document.querySelector("[data-placement-dialog]");
+  if (!dialog) return;
+  const status = dialog.querySelector("[data-placement-status]");
+  let restoreFocus = null;
+  const open = (trigger) => {
+    restoreFocus = trigger || document.activeElement;
+    setMenuState(false);
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "");
+    document.body.classList.add("placement-dialog-open");
+    window.setTimeout(() => dialog.querySelector("[data-placement-close]")?.focus(), 0);
+  };
+  const close = () => {
+    if (typeof dialog.close === "function" && dialog.open) dialog.close();
+    else dialog.removeAttribute("open");
+  };
+  document.querySelectorAll("[data-placement-open]").forEach((trigger) => {
+    trigger.addEventListener("click", (event) => {
+      event.preventDefault();
+      open(trigger);
+    });
+  });
+  dialog.querySelector("[data-placement-close]")?.addEventListener("click", close);
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) close();
+  });
+  dialog.addEventListener("close", () => {
+    document.body.classList.remove("placement-dialog-open");
+    restoreFocus?.focus?.();
+  });
+  dialog.addEventListener("cancel", () => {
+    document.body.classList.remove("placement-dialog-open");
+  });
+  dialog.querySelectorAll("[data-placement-message]").forEach((link) => {
+    link.addEventListener("click", () => {
+      const message = link.dataset.placementMessage || "";
+      if (!message || !navigator.clipboard?.writeText) return;
+      void navigator.clipboard.writeText(message).then(() => {
+        if (status) status.textContent = "Текст обращения скопирован — вставьте его в чат Telegram.";
+      }).catch(() => {});
+    });
+  });
+}
 
 function loadStylesheet(href) {
   if (document.querySelector(`link[href="${href}"]`)) return;
@@ -95,7 +146,7 @@ async function loadMapController() {
     loadStylesheet("/static/vendor/leaflet-markercluster/MarkerCluster.css");
     await loadScript("/static/vendor/leaflet/leaflet.js");
     await loadScript("/static/vendor/leaflet-markercluster/leaflet.markercluster.js");
-    const { initialisePublicMap } = await import("./map.js?v=2026-08-03-01");
+    const { initialisePublicMap } = await import("./map.js?v=2026-08-03-02");
     mapController = initialisePublicMap({
     shell: mapShell,
     canvas: mapCanvas,
@@ -144,6 +195,7 @@ menu?.querySelectorAll("a").forEach((link) => link.addEventListener("click", () 
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && menu && !menu.hidden) setMenuState(false);
 });
+installPlacementDialog();
 
 document.querySelectorAll("[data-map-entry]").forEach((entry) => {
   entry.addEventListener("click", (event) => {
@@ -167,12 +219,18 @@ searchInput?.addEventListener("input", () => {
   searchClear.hidden = !searchInput.value;
   void loadMapController().then((controller) => controller.search(searchInput.value));
 });
+searchInput?.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" || searchInput.hasAttribute("aria-activedescendant")) return;
+  event.preventDefault();
+  void loadMapController().then((controller) => controller.search(searchInput.value, { immediate: true }));
+  searchInput.blur();
+});
 searchInput?.addEventListener("focus", () => {
   void loadMapController();
   if (!features.discovery_search || autocompleteAttached || !mapAutocomplete) return;
   autocompleteAttached = true;
-  loadStylesheet("/static/public/autocomplete.css?v=2026-07-28-01");
-  import("./autocomplete.js?v=2026-07-28-01").then(({ attachAutocomplete }) => {
+  loadStylesheet("/static/public/autocomplete.css?v=2026-08-03-02");
+  import("./autocomplete.js?v=2026-08-03-02").then(({ attachAutocomplete }) => {
     attachAutocomplete(searchInput, mapAutocomplete, {
       onSelect(item) {
         if (["entity", "collection", "route"].includes(item.source) && item.href) {
@@ -181,6 +239,7 @@ searchInput?.addEventListener("focus", () => {
         }
         searchInput.value = item.value || item.title || "";
         void loadMapController().then((controller) => controller.search(searchInput.value));
+        searchInput.blur();
       },
     });
   }).catch(() => {});
@@ -189,8 +248,8 @@ searchClear?.addEventListener("click", () => {
   if (!searchInput) return;
   searchInput.value = "";
   searchClear.hidden = true;
-  void loadMapController().then((controller) => controller.search(""));
-  searchInput.focus();
+  void loadMapController().then((controller) => controller.clearSearch());
+  searchInput.blur();
 });
 document.querySelector("[data-map-locate]")?.addEventListener("click", () => void loadMapController().then((controller) => controller.locate()));
 mapFilterReset?.addEventListener("click", () => {

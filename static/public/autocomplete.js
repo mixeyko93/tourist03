@@ -6,6 +6,7 @@ export function attachAutocomplete(input, list, { onSelect, minLength = 2 } = {}
   let items = [];
   let timer = 0;
   let controller = null;
+  let lastQuery = "";
 
   const close = () => {
     active = -1;
@@ -25,6 +26,7 @@ export function attachAutocomplete(input, list, { onSelect, minLength = 2 } = {}
   const choose = (item) => {
     input.value = item.value || item.title;
     close();
+    input.blur();
     if (onSelect) onSelect(item);
     else if (item.href) location.assign(item.href);
   };
@@ -49,20 +51,23 @@ export function attachAutocomplete(input, list, { onSelect, minLength = 2 } = {}
     controller?.abort();
     const query = input.value.trim();
     if (query.length < minLength) {
+      lastQuery = "";
       close();
       return;
     }
+    if (query === lastQuery) return;
     timer = window.setTimeout(async () => {
       controller = new AbortController();
       try {
         const payload = await getJson(`/api/public/search/suggestions?q=${encodeURIComponent(query)}&limit=8`, { signal: controller.signal });
         items = payload.items || [];
+        lastQuery = query;
         active = -1;
         render();
       } catch (error) {
         if (error?.name !== "AbortError") close();
       }
-    }, 180);
+    }, 350);
   };
   input.addEventListener("input", load);
   input.addEventListener("keydown", (event) => {
@@ -77,6 +82,7 @@ export function attachAutocomplete(input, list, { onSelect, minLength = 2 } = {}
       choose(items[active]);
     } else if (event.key === "Escape") {
       close();
+      input.blur();
     }
   });
   input.addEventListener("blur", () => window.setTimeout(close, 100));

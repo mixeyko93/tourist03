@@ -1,5 +1,5 @@
 import { publicFeatures } from "./feature-flags.js";
-import { initialisePublicMap } from "./map.js?v=2026-08-03-01";
+import { initialisePublicMap } from "./map.js?v=2026-08-03-02";
 
 const ONBOARDING_KEY = "touristika:map-onboarding:v1";
 const features = publicFeatures();
@@ -103,11 +103,18 @@ function attachSearch() {
     searchClear.hidden = !searchInput.value;
     controller?.search(searchInput.value);
   });
+  searchInput.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || searchInput.hasAttribute("aria-activedescendant")) return;
+    event.preventDefault();
+    controller?.search(searchInput.value, { immediate: true });
+    searchInput.blur();
+    window.setTimeout(() => controller?.invalidate(), 160);
+  });
   searchInput.addEventListener("focus", () => {
     if (!features.discovery_search || autocompleteAttached || !autocomplete) return;
     autocompleteAttached = true;
-    loadStylesheet("/static/public/autocomplete.css?v=2026-07-28-01");
-    import("./autocomplete.js?v=2026-07-28-01").then(({ attachAutocomplete }) => {
+    loadStylesheet("/static/public/autocomplete.css?v=2026-08-03-02");
+    import("./autocomplete.js?v=2026-08-03-02").then(({ attachAutocomplete }) => {
       attachAutocomplete(searchInput, autocomplete, {
         onSelect(item) {
           if (item.source === "entity" && item.slug) {
@@ -120,6 +127,8 @@ function attachSearch() {
           }
           searchInput.value = item.value || item.title || "";
           controller?.search(searchInput.value);
+          searchInput.blur();
+          window.setTimeout(() => controller?.invalidate(), 160);
         },
       });
     }).catch(() => {});
@@ -127,8 +136,9 @@ function attachSearch() {
   searchClear.addEventListener("click", () => {
     searchInput.value = "";
     searchClear.hidden = true;
-    controller?.search("");
-    searchInput.focus();
+    controller?.clearSearch();
+    searchInput.blur();
+    window.setTimeout(() => controller?.invalidate(), 160);
   });
   if (query.get("focus") === "search") window.setTimeout(() => searchInput.focus(), 250);
 }
@@ -200,7 +210,12 @@ attachSearch();
 installOnboarding();
 waitForLeaflet().then(() => {
   controller = initialisePublicMap(nodes());
+  if (window.__TOURISTIKA_TEST_HOOKS__) window.__TOURISTIKA_TEST_MAP_CONTROLLER__ = controller;
 }).catch(() => {
   document.querySelector("[data-map-loading]").hidden = true;
   document.querySelector("[data-map-status]").textContent = "Карта временно недоступна. Попробуйте обновить страницу.";
 });
+
+window.visualViewport?.addEventListener("resize", () => {
+  window.setTimeout(() => controller?.invalidate(), 180);
+}, { passive: true });

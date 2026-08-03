@@ -2,6 +2,9 @@ import { catalogIconSvg } from "./catalog-icons.js?v=2026-07-27-03";
 
 const RUSSIA_VIEW = [61, 99];
 const RUSSIA_ZOOM = 3;
+const OBJECT_ZOOM = 11;
+const SEARCH_MAX_ZOOM = 9;
+const SEARCH_DEBOUNCE_MS = 400;
 const MAP_PAGE_SIZE = 200;
 const MAP_MAX_RESULTS = 10000;
 const MAP_REQUEST_CONCURRENCY = 4;
@@ -300,7 +303,9 @@ export function initialisePublicMap({
   if (!window.L || !canvas) {
     if (status) status.textContent = "Карта временно недоступна. Попробуйте обновить страницу.";
     if (loading) loading.hidden = true;
-    return { search() {}, reset() {}, locate() {} };
+    return {
+      search() {}, clearSearch() {}, reset() {}, locate() {}, refreshList() {}, invalidate() {}, selectById() {},
+    };
   }
 
   const map = window.L.map(canvas, {
@@ -308,6 +313,7 @@ export function initialisePublicMap({
     attributionControl: false,
     scrollWheelZoom: false,
   }).setView(RUSSIA_VIEW, RUSSIA_ZOOM);
+  if (window.__TOURISTIKA_TEST_HOOKS__) window.__TOURISTIKA_TEST_MAP__ = map;
   const tiles = window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 18,
     attribution: "&copy; OpenStreetMap",
@@ -321,14 +327,22 @@ export function initialisePublicMap({
   let requestController;
   let searchTimer;
   let inputTimer;
+  let areaPromptTimer;
+  let programmaticMoveTimer;
   const pageParams = new URLSearchParams(window.location.search);
   const requestedEntitySlug = pageParams.get("id") || pageParams.get("entity");
+  let requestedEntityPending = Boolean(requestedEntitySlug);
   searchQuery = pageParams.get("search") || pageParams.get("q") || "";
   let contextSlugs = null;
   let selectedEntity = null;
   let userLocation = null;
   let boundsQuery = null;
   let areaPromptReady = false;
+  let programmaticMove = false;
+  let userMovedMap = false;
+  let previousArea = null;
+  let currentArea = { center: [...RUSSIA_VIEW], zoom: RUSSIA_ZOOM };
+  let lastLoadedSearch = null;
   const deepLinkSelectValues = [
     [filterSubtype, pageParams.get("subtype")],
     [filterRegion, pageParams.get("region")],
@@ -346,6 +360,29 @@ export function initialisePublicMap({
     if (tilesFailed && status) status.textContent = "";
     tilesFailed = false;
   });
+
+  function snapshotArea() {
+    const center = map.getCenter();
+    return { center: [center.lat, center.lng], zoom: map.getZoom() };
+  }
+
+  function moveProgrammatically(callback) {
+    programmaticMove = true;
+    window.clearTimeout(programmaticMoveTimer);
+    callback();
+    programmaticMoveTimer = window.setTimeout(() => {
+      programmaticMove = false;
+      currentArea = snapshotArea();
+    }, 900);
+  }
+
+  function closeSelectedEntity() {
+    selectedEntity = null;
+    map.closePopup();
+    if (sheet) sheet.hidden = true;
+    renderList();
+    if (status) status.textContent = "Карточка закрыта. Карта останется в выбранной области.";
+  }
 
   function selectedKindValues() {
     return [...new Set(filterKinds.filter((input) => input.checked).flatMap((input) => (
@@ -442,6 +479,7 @@ export function initialisePublicMap({
       : null;
     sheetContent.innerHTML = `
       <article class="map-sheet-card">
+        <button class="map-sheet-card__close" type="button" data-sheet-close aria-label="Закрыть карточку объекта">×</button>
         ${cover ? `<img class="map-sheet-card__cover" src="${escapeHtml(cover)}" alt="" width="224" height="236" loading="lazy" decoding="async">` : '<div class="map-sheet-card__placeholder" aria-hidden="true">Т</div>'}
         <div class="map-sheet-card__body">
           <small>${escapeHtml(type)}${distance !== null ? ` · ${distance} км` : ""}</small>
@@ -459,15 +497,17 @@ export function initialisePublicMap({
       </article>`;
     sheetContent.querySelector("[data-sheet-share]")?.addEventListener("click", () => void shareEntity(entity));
     sheetContent.querySelector("[data-sheet-list]")?.addEventListener("click", () => onShowList?.(entity));
+    sheetContent.querySelector("[data-sheet-close]")?.addEventListener("click", closeSelectedEntity);
     sheet.hidden = false;
     setSheetState("medium");
   }
 
   function selectEntity(entity, { move = true } = {}) {
     selectedEntity = entity;
+    userMovedMap = false;
     const tip = document.querySelector("[data-map-tip]");
     if (tip) tip.hidden = true;
-    if (move) map.flyTo([entity.lat, entity.lng], Math.max(map.getZoom(), 10), { duration: 0.65 });
+    if (move) moveProgrammatically(() => map.flyTo([entity.lat, entity.lng], OBJECT_ZOOM, { duration: 0.65 }));
     if (appMode) renderSheet(entity);
     else window.setTimeout(() => markers.get(entityKey(entity))?.openPopup(), move ? 450 : 0);
     renderList();
@@ -648,26 +688,6 @@ function decorateMarker(marker, entity, onActivate) {
       : "По выбранным фильтрам объектов на карте нет.";
   }
 
-  function filtersActive() {
-    return Boolean(
-      searchQuery.trim()
-      || selectedKindValues().length
-      || filterSubtype?.value
-      || filterRegion?.value
-      || filterDistrict?.value
-      || filterCity?.value
-      || filterSeasonality?.value
-      || selectedAmenities().length
-      || filterPriceMin?.value
-      || filterPriceMax?.value
-      || filterOpenNow?.checked
-      || filterChildren?.checked
-      || filterPets?.checked
-      || filterParking?.checked
-      || filterWifi?.checked
-    );
-  }
-
   function queryParameters() {
     const query = new URLSearchParams({ map_only: "true" });
     if (searchQuery.trim()) query.set("q", searchQuery.trim());
@@ -736,7 +756,27 @@ function decorateMarker(marker, entity, onActivate) {
     };
   }
 
-  async function loadEntities({ initialiseFilters = false, facets = null } = {}) {
+  function fitSearchResults() {
+    const points = entities
+      .filter((entity) => markers.has(entityKey(entity)))
+      .map((entity) => [entity.lat, entity.lng]);
+    if (!points.length) return;
+    const compact = window.matchMedia("(max-width: 720px)").matches;
+    if (points.length === 1) {
+      moveProgrammatically(() => map.flyTo(points[0], SEARCH_MAX_ZOOM, { duration: 0.55 }));
+      return;
+    }
+    const bounds = window.L.latLngBounds(points);
+    if (!bounds.isValid()) return;
+    moveProgrammatically(() => map.fitBounds(bounds.pad(0.18), {
+      maxZoom: SEARCH_MAX_ZOOM,
+      animate: true,
+      paddingTopLeft: compact ? [24, 88] : [54, 74],
+      paddingBottomRight: compact ? [24, 190] : [54, 74],
+    }));
+  }
+
+  async function loadEntities({ initialiseFilters = false, facets = null, fitResults = false } = {}) {
     const minimumPrice = Number(filterPriceMin?.value);
     const maximumPrice = Number(filterPriceMax?.value);
     if (
@@ -766,20 +806,17 @@ function decorateMarker(marker, entity, onActivate) {
         });
       }
       renderMarkers(total);
+      lastLoadedSearch = searchQuery.trim();
       if (payload.truncated && status) {
         status.textContent = `Показаны первые ${entities.length} из ${total}. Уточните фильтры, чтобы увидеть остальные.`;
       }
-      if (filtersActive() && markers.size) {
-        const bounds = window.L.latLngBounds(
-          entities.filter((entity) => markers.has(entityKey(entity))).map((entity) => [entity.lat, entity.lng]),
-        );
-        if (bounds.isValid()) map.fitBounds(bounds.pad(0.25), { maxZoom: 10, animate: true });
-      }
-      if (requestedEntitySlug) {
+      if (fitResults && markers.size && !userMovedMap) fitSearchResults();
+      if (requestedEntityPending && requestedEntitySlug) {
         const requested = entities.find((entity) => (
           String(entity.slug || "") === requestedEntitySlug
           || String(entityKey(entity)) === requestedEntitySlug
         ));
+        requestedEntityPending = false;
         if (requested) focusEntity(requested);
       }
     } catch (error) {
@@ -838,8 +875,12 @@ function decorateMarker(marker, entity, onActivate) {
       if (aliases.some((alias) => deepKinds.has(alias))) input.checked = true;
     });
     updateSubtypeOptions();
-    await loadEntities({ initialiseFilters: true, facets });
-    if (deepLinkSelectValues.some(([, value]) => value)) await loadEntities();
+    await loadEntities({
+      initialiseFilters: true,
+      facets,
+      fitResults: Boolean(searchQuery.trim()) && !requestedEntitySlug,
+    });
+    if (deepLinkSelectValues.some(([, value]) => value)) await loadEntities({ fitResults: true });
     areaPromptReady = true;
   }
 
@@ -855,29 +896,44 @@ function decorateMarker(marker, entity, onActivate) {
     }
   }
 
-  function reset() {
+  function clearSearch({ resetFilters = false, restoreDefault = false } = {}) {
+    window.clearTimeout(searchTimer);
+    searchTimer = 0;
     searchQuery = "";
+    lastLoadedSearch = null;
     boundsQuery = null;
     if (searchArea) searchArea.hidden = true;
-    [filterSubtype, filterRegion, filterDistrict, filterCity, filterSeasonality, filterLegacyAmenity].forEach((select) => {
-      if (select) select.value = "";
-    });
-    [filterPriceMin, filterPriceMax].forEach((input) => {
-      if (input) input.value = "";
-    });
-    [
-      ...filterKinds,
-      filterOpenNow,
-      filterChildren,
-      filterPets,
-      filterParking,
-      filterWifi,
-      ...(filterAmenityOptions?.querySelectorAll("input[type='checkbox']") || []),
-    ].filter(Boolean).forEach((input) => { input.checked = false; });
-    updateSubtypeOptions();
+    selectedEntity = null;
+    map.closePopup();
+    if (sheet) sheet.hidden = true;
     results?.replaceChildren();
-    map.flyTo(RUSSIA_VIEW, RUSSIA_ZOOM, { duration: 0.65 });
+    if (resetFilters) {
+      [filterSubtype, filterRegion, filterDistrict, filterCity, filterSeasonality, filterLegacyAmenity].forEach((select) => {
+        if (select) select.value = "";
+      });
+      [filterPriceMin, filterPriceMax].forEach((input) => {
+        if (input) input.value = "";
+      });
+      [
+        ...filterKinds,
+        filterOpenNow,
+        filterChildren,
+        filterPets,
+        filterParking,
+        filterWifi,
+        ...(filterAmenityOptions?.querySelectorAll("input[type='checkbox']") || []),
+      ].filter(Boolean).forEach((input) => { input.checked = false; });
+      updateSubtypeOptions();
+    }
+    const target = restoreDefault ? { center: RUSSIA_VIEW, zoom: RUSSIA_ZOOM } : (previousArea || { center: RUSSIA_VIEW, zoom: RUSSIA_ZOOM });
+    previousArea = null;
+    userMovedMap = false;
+    moveProgrammatically(() => map.flyTo(target.center, target.zoom, { duration: 0.55 }));
     void loadEntities();
+  }
+
+  function reset() {
+    clearSearch({ resetFilters: true, restoreDefault: true });
   }
 
   function locate() {
@@ -897,7 +953,7 @@ function decorateMarker(marker, entity, onActivate) {
           fillColor: "#23b7c7",
           fillOpacity: 1,
         }).addTo(map);
-        map.flyTo(point, 10, { duration: 0.75 });
+        moveProgrammatically(() => map.flyTo(point, 10, { duration: 0.75 }));
         if (status) status.textContent = "Показали ваше местоположение. Нажмите «Искать рядом».";
         if (searchArea) {
           searchArea.textContent = "Искать рядом";
@@ -957,22 +1013,52 @@ function decorateMarker(marker, entity, onActivate) {
   } else {
     window.addEventListener("resize", () => map.invalidateSize({ animate: false }), { passive: true });
   }
-  map.on("moveend", renderList);
+  map.on("moveend", () => {
+    currentArea = snapshotArea();
+    renderList();
+    if (programmaticMove) window.requestAnimationFrame(() => { programmaticMove = false; });
+  });
   map.on("dragend zoomend", () => {
-    if (!areaPromptReady || !searchArea) return;
-    searchArea.textContent = "Искать в этой области";
-    searchArea.hidden = false;
+    if (programmaticMove || !areaPromptReady || !searchArea) return;
+    userMovedMap = true;
+    currentArea = snapshotArea();
+    window.clearTimeout(areaPromptTimer);
+    areaPromptTimer = window.setTimeout(() => {
+      searchArea.textContent = "Искать в этой области";
+      searchArea.hidden = false;
+    }, 350);
   });
   map.once("load", () => onMapReady?.());
   window.requestAnimationFrame(() => map.invalidateSize({ animate: false }));
   void bootstrap();
 
   return {
-    search(value) {
-      searchQuery = value || "";
+    search(value, { immediate = false } = {}) {
+      const next = String(value || "").trim();
+      const previous = searchQuery.trim();
       window.clearTimeout(searchTimer);
-      searchTimer = window.setTimeout(() => void loadEntities(), 220);
+      searchTimer = 0;
+      searchQuery = value || "";
+      if (!next) {
+        clearSearch();
+        return;
+      }
+      if (next.length < 2) {
+        requestController?.abort();
+        results?.replaceChildren();
+        if (status) status.textContent = "Введите минимум два символа.";
+        return;
+      }
+      if (!previous || previous.length < 2) previousArea = currentArea;
+      boundsQuery = null;
+      userMovedMap = false;
+      if (next === lastLoadedSearch) return;
+      searchTimer = window.setTimeout(() => {
+        searchTimer = 0;
+        void loadEntities({ fitResults: true });
+      }, immediate ? 0 : SEARCH_DEBOUNCE_MS);
     },
+    clearSearch,
     reset,
     locate,
     refreshList: renderList,

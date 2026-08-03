@@ -20,8 +20,8 @@
   <link rel="preload" href="/static/fonts/manrope/manrope-regular.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/static/fonts/manrope/manrope-extrabold.woff2" as="font" type="font/woff2" crossorigin>
   <!-- TOURISTIKA_RUNTIME_CONFIG -->
-  <link rel="stylesheet" href="/static/public/site.css?v=2026-08-03-01">
-  <script type="module" src="/static/public/site.js?v=2026-08-03-01"></script>
+  <link rel="stylesheet" href="/static/public/site.css?v=2026-08-03-02">
+  <script type="module" src="/static/public/site.js?v=2026-08-03-02"></script>
 </head>
 <body>
   <a class="skip-link" href="#main-content">Перейти к содержанию</a>
@@ -43,7 +43,7 @@
         <a href="/search?source=route" data-feature-link="tourism_routes" hidden>Маршруты</a>
         <a href="/nearby" data-feature-link="nearby_discovery" hidden>Рядом</a>
         <a href="#about">О проекте</a>
-        <a href="/add-place" data-placement-submissions hidden>Добавить объект</a>
+        <a href="#placement-options" data-placement-open>Разместить объект</a>
       </nav>
 
       <div class="site-header__actions">
@@ -68,7 +68,7 @@
       <a href="/search?source=route" data-feature-link="tourism_routes" hidden>Маршруты</a>
       <a href="/nearby" data-feature-link="nearby_discovery" hidden>Рядом</a>
       <a href="#about">О проекте</a>
-      <a href="/add-place" data-placement-submissions hidden>Добавить объект</a>
+      <a href="#placement-options" data-placement-open>Разместить объект</a>
     </nav>
   </div>
 
@@ -81,8 +81,7 @@
         <p class="hero__lead">Находите проживание, экскурсии, активности и полезные сервисы для путешествия — на одной живой карте.</p>
         <div class="hero__actions">
           <a class="button button--primary" href="/map" data-map-entry>Открыть карту <span aria-hidden="true">↘</span></a>
-          <a class="button button--quiet" href="__TOURISTIKA_TELEGRAM_CONTACT_URL__" target="_blank" rel="noopener noreferrer" data-feature-link="telegram_contact" hidden>Написать нам в Telegram</a>
-          <a class="button button--quiet" href="/add-place" data-placement-submissions hidden>Разместиться на карте</a>
+          <a class="button button--placement" href="#placement-options" data-placement-open>Разместить объект</a>
         </div>
       </div>
     </section>
@@ -270,6 +269,98 @@
       </div>
     </section>
   </main>
+
+  <dialog class="placement-dialog" id="placement-options" data-placement-dialog aria-labelledby="placement-dialog-title" aria-describedby="placement-dialog-description">
+    <div class="placement-dialog__surface">
+      <header class="placement-dialog__header">
+        <div>
+          <p class="eyebrow">Размещение в Туристике</p>
+          <h2 id="placement-dialog-title">Как вы хотите разместить объект?</h2>
+          <p id="placement-dialog-description">Заполните карточку самостоятельно или выберите помощь нашей команды.</p>
+        </div>
+        <button class="placement-dialog__close" type="button" data-placement-close aria-label="Закрыть варианты размещения">×</button>
+      </header>
+
+      <div class="placement-options" role="list">
+        <article class="placement-option placement-option--primary" role="listitem">
+          <span class="placement-option__number">01</span>
+          <p class="placement-option__label">Основной вариант</p>
+          <h3>Самостоятельное размещение</h3>
+          <ul>
+            <li>Самостоятельно заполните карточку объекта.</li>
+            <li>Отправьте её на модерацию.</li>
+            <li>Команда проверит данные и примет решение о публикации.</li>
+          </ul>
+          <a class="button button--primary" href="/add-place" data-placement-submissions hidden>Заполнить самостоятельно</a>
+          <p class="placement-option__availability" data-placement-unavailable hidden>Самостоятельное размещение временно недоступно.</p>
+        </article>
+
+        <article class="placement-option" role="listitem">
+          <span class="placement-option__number">02</span>
+          <h3>Помощь с заполнением</h3>
+          <ul>
+            <li>Помощь специалиста и проверка данных.</li>
+            <li>Подготовка объекта к публикации.</li>
+            <li>Выполнение в течение одного рабочего дня после получения данных.</li>
+          </ul>
+          <a class="button button--quiet" href="__TOURISTIKA_TELEGRAM_CONTACT_URL__" target="_blank" rel="noopener noreferrer" data-feature-link="telegram_contact" data-placement-message="Здравствуйте! Нужна помощь с заполнением карточки объекта." hidden>Заказать помощь</a>
+          <button class="button button--quiet" type="button" data-telegram-unavailable disabled hidden>Заказать помощь</button>
+        </article>
+
+        <article class="placement-option" role="listitem">
+          <span class="placement-option__number">03</span>
+          <h3>Размещение с фотосъёмкой</h3>
+          <ul>
+            <li>Выезд специалиста и фотосъёмка объекта.</li>
+            <li>Помощь в заполнении и подготовка фотографий.</li>
+            <li>Модерация и публикация объекта.</li>
+          </ul>
+          <a class="button button--quiet" href="__TOURISTIKA_TELEGRAM_CONTACT_URL__" target="_blank" rel="noopener noreferrer" data-feature-link="telegram_contact" data-placement-message="Здравствуйте! Хочу заказать размещение объекта с выездом на фотосъёмку." hidden>Заказать фотосъёмку</a>
+          <button class="button button--quiet" type="button" data-telegram-unavailable disabled hidden>Заказать фотосъёмку</button>
+        </article>
+
+        <article class="placement-option" role="listitem">
+          <span class="placement-option__number">04</span>
+          <h3>Карточка под ключ</h3>
+          <ul>
+            <li>Выезд и профессиональная фотосъёмка.</li>
+            <li>Полное заполнение карточки и продающее описание.</li>
+            <li>Структурирование преимуществ объекта.</li>
+            <li>Рекомендации по стоимости и позиционированию.</li>
+            <li>Маркетинговые формулировки и публикация после согласования.</li>
+          </ul>
+          <a class="button button--quiet" href="__TOURISTIKA_TELEGRAM_CONTACT_URL__" target="_blank" rel="noopener noreferrer" data-feature-link="telegram_contact" data-placement-message="Здравствуйте! Хочу заказать подготовку карточки объекта под ключ." hidden>Заказать карточку под ключ</a>
+          <button class="button button--quiet" type="button" data-telegram-unavailable disabled hidden>Заказать карточку под ключ</button>
+        </article>
+      </div>
+
+      <section class="placement-premium" aria-labelledby="placement-premium-title">
+        <div>
+          <p class="eyebrow">Дополнительная услуга</p>
+          <h3 id="placement-premium-title">Премиум-продвижение</h3>
+          <p>Подключается при создании карточки или после публикации и не заменяет размещение объекта.</p>
+        </div>
+        <ul>
+          <li>Приоритетное отображение в поиске и повышение позиции на карте.</li>
+          <li>Отметка «Премиум» или «Рекомендуем».</li>
+          <li>Выделение карточки и специальные подборки.</li>
+          <li>Возможность дальнейшего продвижения в соцсетях и рекламных каналах.</li>
+        </ul>
+        <div>
+          <a class="button button--primary" href="__TOURISTIKA_TELEGRAM_CONTACT_URL__" target="_blank" rel="noopener noreferrer" data-feature-link="telegram_contact" data-placement-message="Здравствуйте! Хочу подключить премиум-продвижение для объекта." hidden>Оставить заявку</a>
+          <button class="button button--primary" type="button" data-telegram-unavailable disabled hidden>Оставить заявку</button>
+          <small>Оплата на сайте пока недоступна. Стоимость уточнит команда.</small>
+        </div>
+      </section>
+
+      <aside class="placement-help">
+        <div><h3>Остались вопросы?</h3><p>Напишите нам — поможем выбрать подходящий вариант размещения.</p></div>
+        <a class="button button--quiet" href="__TOURISTIKA_TELEGRAM_CONTACT_URL__" target="_blank" rel="noopener noreferrer" data-feature-link="telegram_contact" hidden>Написать в Telegram</a>
+        <p class="placement-help__unavailable" data-telegram-unavailable hidden>Онлайн-помощь временно недоступна.</p>
+      </aside>
+      <p class="placement-dialog__status" role="status" aria-live="polite" data-placement-status></p>
+    </div>
+  </dialog>
 
   <footer class="site-footer" id="contacts">
     <div class="site-frame site-footer__grid">
