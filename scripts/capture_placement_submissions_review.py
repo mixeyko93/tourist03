@@ -334,6 +334,81 @@ def assert_coordinate_picker(browser, base_url: str, *, mobile: bool = False) ->
         context.close()
 
 
+def assert_turnstile_adapter(browser) -> None:
+    """Exercise the repository-owned explicit widget adapter in a real browser."""
+
+    page = browser.new_page()
+    try:
+        page.goto("about:blank")
+        page.evaluate(
+            """
+            () => {
+              window.__TOURISTIKA_SUBMISSION__ = {
+                captchaSiteKey: "browser-test-site-key",
+                captchaAction: "placement_submission",
+              };
+              window.__turnstileCalls = { render: 0, reset: 0, execute: 0 };
+              window.turnstile = {
+                render(_container, options) {
+                  window.__turnstileCalls.render += 1;
+                  window.__turnstileOptions = options;
+                  return 42;
+                },
+                reset(widgetId) {
+                  if (widgetId !== 42) throw new Error("wrong widget id");
+                  window.__turnstileCalls.reset += 1;
+                },
+                execute(widgetId) {
+                  if (widgetId !== 42) throw new Error("wrong widget id");
+                  window.__turnstileCalls.execute += 1;
+                  window.setTimeout(
+                    () => window.__turnstileOptions.callback("one-time-browser-token"),
+                    0,
+                  );
+                },
+              };
+            }
+            """
+        )
+        page.add_script_tag(
+            path=str(PROJECT_ROOT / "static" / "public" / "turnstile-adapter.js")
+        )
+        result = page.evaluate(
+            """
+            async () => {
+              const simultaneous = await Promise.allSettled([
+                window.touristikaCaptcha.execute(),
+                window.touristikaCaptcha.execute(),
+              ]);
+              window.touristikaCaptcha.reset();
+              return {
+                first: simultaneous[0].status,
+                firstToken: simultaneous[0].value,
+                second: simultaneous[1].status,
+                action: window.__turnstileOptions.action,
+                execution: window.__turnstileOptions.execution,
+                responseField: window.__turnstileOptions["response-field"],
+                calls: window.__turnstileCalls,
+              };
+            }
+            """
+        )
+        if result["first"] != "fulfilled" or result["firstToken"] != "one-time-browser-token":
+            raise AssertionError("Turnstile adapter did not resolve a one-time token")
+        if result["second"] != "rejected":
+            raise AssertionError("Turnstile adapter allowed simultaneous executions")
+        if (
+            result["action"] != "placement_submission"
+            or result["execution"] != "execute"
+            or result["responseField"] is not False
+        ):
+            raise AssertionError("Turnstile explicit widget options are unsafe")
+        if result["calls"]["render"] != 1 or result["calls"]["execute"] != 1:
+            raise AssertionError("Turnstile widget was rendered or executed more than once")
+    finally:
+        page.close()
+
+
 def fill_complete_form(page: Page, output_dir: Path | None = None, prefix: str = "desktop") -> float:
     fill_first_step(page)
     if output_dir:
@@ -601,6 +676,7 @@ def main() -> int:
 
             assert_coordinate_picker(browser, base_url)
             assert_coordinate_picker(browser, base_url, mobile=True)
+            assert_turnstile_adapter(browser)
 
             desktop = browser.new_page(viewport={"width": 1440, "height": 1000})
             mock_public_api(desktop)
@@ -716,6 +792,7 @@ def main() -> int:
             "coordinate_picker_mobile": True,
             "coordinate_picker_manual_input": True,
             "coordinate_picker_range_validation": True,
+            "turnstile_explicit_widget": True,
             "named_form_controls": True,
             "mobile_horizontal_overflow": False,
             "landing_loads_submission_bundle": False,

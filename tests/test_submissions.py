@@ -218,6 +218,34 @@ class SubmissionHttpTests(unittest.IsolatedAsyncioTestCase):
             response = await self.client.get("/api/public/submissions/config")
         self.assertEqual(response.status_code, 200)
 
+    async def test_add_place_renders_explicit_turnstile_adapter(self):
+        settings = Settings(
+            environment="test",
+            feature_placement_submissions=True,
+            public_base_url="https://turistika.test",
+            submission_captcha_provider="http",
+            submission_captcha_verify_url="https://captcha.test/siteverify",
+            submission_captcha_secret="test-secret",
+            submission_captcha_client_script_url="https://captcha.test/api.js?render=explicit",
+            submission_captcha_site_key="test-site-key",
+            submission_captcha_expected_hostname="turistika.test",
+            submission_captcha_expected_action="placement_submission",
+        )
+        app = app_module.create_app(settings)
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://testserver",
+        ) as client:
+            response = await client.get("/add-place")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("/static/public/turnstile-adapter.js", response.text)
+        self.assertIn("https://captcha.test/api.js?render=explicit", response.text)
+        self.assertIn('captchaAction: "placement_submission"', response.text)
+        self.assertLess(
+            response.text.index("/static/public/turnstile-adapter.js"),
+            response.text.index("https://captcha.test/api.js?render=explicit"),
+        )
+
     async def test_create_draft_returns_only_raw_token_to_creator(self):
         row = {
             "public_number": "TUR-2026-ABCDEFGH",

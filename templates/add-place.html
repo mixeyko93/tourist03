@@ -16,12 +16,16 @@
       testCaptcha: {{ "true" if test_captcha else "false" }},
       captchaToken: {{ captcha_test_token | tojson }},
       captchaProvider: {{ captcha_provider | tojson }},
-      captchaSiteKey: {{ captcha_site_key | tojson }}
+      captchaSiteKey: {{ captcha_site_key | tojson }},
+      captchaAction: {{ captcha_action | tojson }}
     };
   </script>
-  {% if captcha_client_script_url %}<script defer src="{{ captcha_client_script_url | e }}"></script>{% endif %}
+  {% if captcha_client_script_url %}
+  <script defer src="/static/public/turnstile-adapter.js?v=2026-08-10-01"></script>
+  <script defer src="{{ captcha_client_script_url | e }}"></script>
+  {% endif %}
   <script defer src="/static/vendor/leaflet/leaflet.js"></script>
-  <script type="module" src="/static/public/submission.js?v=2026-07-27-03"></script>
+  <script type="module" src="/static/public/submission.js?v=2026-08-10-01"></script>
 </head>
 <body>
   <a class="submission-skip" href="#submission-form">Перейти к форме</a>

@@ -41,6 +41,7 @@ class SubmissionBrowserSmokeTests(unittest.TestCase):
             self.assertTrue(metrics["browser_assertions"]["coordinate_picker_mobile"])
             self.assertTrue(metrics["browser_assertions"]["coordinate_picker_manual_input"])
             self.assertTrue(metrics["browser_assertions"]["coordinate_picker_range_validation"])
+            self.assertTrue(metrics["browser_assertions"]["turnstile_explicit_widget"])
             for filename in (
                 "desktop-step-1-applicant.png",
                 "desktop-submit-success.png",

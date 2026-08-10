@@ -858,6 +858,7 @@ async function submitForm(event) {
   } catch (error) {
     showError(error instanceof Error ? error.message : "Не удалось отправить заявку");
   } finally {
+    window.touristikaCaptcha?.reset?.();
     submitButton.disabled = false;
     submitButton.textContent = "Отправить заявку";
   }
