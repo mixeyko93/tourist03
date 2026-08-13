@@ -30,6 +30,7 @@ from tourist03.dto.submissions import (
 from tourist03.domain.telegram_support import build_telegram_deep_link
 from tourist03.repositories import catalog as catalog_repo
 from tourist03.repositories import submissions as submission_repo
+from tourist03.repositories import telegram_support as support_repo
 from tourist03.security import log_crm_audit_event
 from tourist03.submission_media import (
     SubmissionMediaError,
@@ -512,8 +513,34 @@ async def submit_public_submission(
                     "Объект не публикуется автоматически."
                 ),
                 applicant_action_url=tracking_url,
+                support_email=settings.support_notification_email,
                 severity="warning" if spam_score >= 60 else "info",
             )
+            if (
+                settings.feature_telegram_contact
+                and settings.telegram_support_chat_id < 0
+                and settings.telegram_support_topic_placement > 0
+            ):
+                with support_repo.transaction() as conn:
+                    support_repo.enqueue_outbox(
+                        conn,
+                        action="send_text_topic",
+                        dedupe_key=(
+                            f"submission:{finalized['id']}:placement_submission_new:"
+                            "support-topic"
+                        ),
+                        payload={
+                            "support_chat_id": settings.telegram_support_chat_id,
+                            "thread_id": settings.telegram_support_topic_placement,
+                            "text": (
+                                "Новая заявка на размещение\n"
+                                f"{finalized['public_number']} · {finalized['place_name']}\n"
+                                f"{finalized['region']} · {finalized['applicant_role']}\n"
+                                f"{settings.superadmin_base_url.rstrip('/')}/admin/submissions"
+                                f"?submission={finalized['id']}"
+                            ),
+                        },
+                    )
         except Exception:
             # Сбой outbox не должен отменять уже принятую заявку.
             pass

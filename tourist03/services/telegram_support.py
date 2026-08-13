@@ -526,6 +526,25 @@ def _handle_private_message(
         action="copy_user_to_topic",
         dedupe_key=f"message:{stored['id']}:to-topic",
     )
+    support_email = str(_setting(settings, "support_notification_email", "") or "").strip()
+    if support_email:
+        message_preview = (
+            message.text
+            or message.caption
+            or f"Получен файл: {message.file_name or message.message_kind}"
+        )
+        support_repo.enqueue_support_email_notification(
+            conn,
+            recipient_address=support_email,
+            event_type="telegram_support_message",
+            title=f"Новое сообщение: {ticket['public_number']}",
+            body=str(message_preview)[:2000],
+            dedupe_key=f"telegram-support:{stored['id']}:email",
+            metadata={
+                "ticket_id": int(ticket["id"]),
+                "message_id": int(stored["id"]),
+            },
+        )
     support_repo.mark_update(conn, message.update_id, "processed")
     return TelegramUpdateResult(True, ticket_id=int(ticket["id"]))
 

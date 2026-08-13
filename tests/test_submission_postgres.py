@@ -182,6 +182,43 @@ class SubmissionPostgresWorkflowTests(unittest.TestCase):
         )
         self.assertFalse(repeated_created)
         self.assertEqual(repeated["id"], submitted["id"])
+        notification_count = submissions.enqueue_submission_notifications(
+            submitted["id"],
+            event_type="placement_submission_new",
+            title="Новая заявка",
+            body="Проверьте заявку",
+            admin_action_url="https://admin.example/submissions",
+            applicant_email="owner@example.org",
+            applicant_title="Заявка принята",
+            applicant_body="Заявка передана на модерацию",
+            support_email="info@turistika.pro",
+        )
+        self.assertEqual(notification_count, 2)
+        with closing(self._connect()) as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT recipient_scope, recipient_address, channel
+                FROM crm.notification_events
+                WHERE submission_id = %s
+                ORDER BY recipient_scope
+                """,
+                (submitted["id"],),
+            )
+            self.assertEqual(
+                [dict(row) for row in cur.fetchall()],
+                [
+                    {
+                        "recipient_scope": "applicant",
+                        "recipient_address": "owner@example.org",
+                        "channel": "email",
+                    },
+                    {
+                        "recipient_scope": "support",
+                        "recipient_address": "info@turistika.pro",
+                        "channel": "email",
+                    },
+                ],
+            )
         filtered = submissions.list_submissions(
             applicant_role="owner",
             has_photos=True,

@@ -92,8 +92,8 @@ async def _deliver_one(bot: Bot, context: Mapping[str, Any]) -> dict:
         payload = {}
     ticket_id = context.get("ticket_id")
     private_chat_id = context.get("private_chat_id")
-    support_chat_id = context.get("support_chat_id")
-    thread_id = context.get("message_thread_id")
+    support_chat_id = context.get("support_chat_id") or payload.get("support_chat_id")
+    thread_id = context.get("message_thread_id") or payload.get("thread_id")
 
     if action == "create_topic":
         if not ticket_id or not support_chat_id:

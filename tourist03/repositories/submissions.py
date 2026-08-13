@@ -1354,6 +1354,7 @@ def enqueue_submission_notifications(
     applicant_title: str | None = None,
     applicant_body: str | None = None,
     applicant_action_url: str | None = None,
+    support_email: str | None = None,
     severity: str = "info",
 ) -> int:
     created = 0
@@ -1395,6 +1396,42 @@ def enqueue_submission_notifications(
                 (
                     int(submission_id),
                     int(recipient["id"]),
+                    event_type,
+                    title,
+                    body,
+                    admin_action_url,
+                    severity,
+                    dedupe_key,
+                    int(submission_id),
+                ),
+            )
+            created += cur.rowcount
+        if support_email:
+            dedupe_key = f"submission:{submission_id}:{event_type}:email:support"
+            cur.execute(
+                """
+                INSERT INTO crm.notification_events (
+                    submission_id,
+                    recipient_scope,
+                    recipient_address,
+                    channel,
+                    event_type,
+                    title,
+                    body,
+                    action_url,
+                    severity,
+                    dedupe_key,
+                    metadata
+                )
+                VALUES (
+                    %s, 'support', %s, 'email', %s, %s, %s, %s, %s, %s,
+                    jsonb_build_object('submission_id', %s)
+                )
+                ON CONFLICT (dedupe_key) WHERE dedupe_key IS NOT NULL DO NOTHING
+                """,
+                (
+                    int(submission_id),
+                    support_email,
                     event_type,
                     title,
                     body,

@@ -699,6 +699,52 @@ def enqueue_outbox(
     return dict(row) if row else None
 
 
+def enqueue_support_email_notification(
+    conn,
+    *,
+    recipient_address: str,
+    event_type: str,
+    title: str,
+    body: str,
+    dedupe_key: str,
+    action_url: Optional[str] = None,
+    metadata: Optional[Mapping[str, Any]] = None,
+) -> Optional[dict]:
+    """Queue a support email in the existing durable notification outbox."""
+
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO crm.notification_events (
+            recipient_scope,
+            recipient_address,
+            channel,
+            event_type,
+            title,
+            body,
+            action_url,
+            severity,
+            dedupe_key,
+            metadata
+        )
+        VALUES ('support', %s, 'email', %s, %s, %s, %s, 'info', %s, %s::jsonb)
+        ON CONFLICT (dedupe_key) WHERE dedupe_key IS NOT NULL DO NOTHING
+        RETURNING *
+        """,
+        (
+            recipient_address,
+            event_type,
+            title,
+            body,
+            action_url,
+            dedupe_key,
+            json.dumps(dict(metadata or {}), ensure_ascii=False),
+        ),
+    )
+    row = cur.fetchone()
+    return dict(row) if row else None
+
+
 def append_audit(
     conn,
     *,
@@ -977,6 +1023,12 @@ def claim_outbox_batch(
                                 'close_topic', 'reopen_topic'
                             )
                             AND tickets.message_thread_id IS NOT NULL
+                        )
+                        OR (
+                            outbox.action = 'send_text_topic'
+                            AND outbox.ticket_id IS NULL
+                            AND NULLIF(outbox.payload->>'support_chat_id', '') IS NOT NULL
+                            AND NULLIF(outbox.payload->>'thread_id', '') IS NOT NULL
                         )
                     )
                 ORDER BY outbox.next_attempt_at, outbox.id

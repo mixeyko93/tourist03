@@ -12,6 +12,49 @@ class RetryAfterError(RuntimeError):
 
 
 class TelegramDeliveryTests(unittest.IsolatedAsyncioTestCase):
+    async def test_system_topic_notification_uses_payload_destination(self):
+        bot = SimpleNamespace(
+            send_message=AsyncMock(return_value=SimpleNamespace(message_id=901))
+        )
+        context = {
+            "id": 9,
+            "action": "send_text_topic",
+            "ticket_id": None,
+            "payload": {
+                "support_chat_id": -10042,
+                "thread_id": 8,
+                "text": "Новая заявка",
+            },
+        }
+        with (
+            patch.object(
+                delivery.support_repo,
+                "claim_outbox_batch",
+                return_value=[{"id": 9, "claim_token": "claim-9"}],
+            ),
+            patch.object(
+                delivery.support_repo,
+                "load_delivery_context",
+                return_value=context,
+            ),
+            patch.object(
+                delivery.support_repo,
+                "mark_outbox_sent",
+                return_value=True,
+            ) as sent,
+        ):
+            result = await delivery.deliver_support_outbox_batch(bot)
+
+        self.assertEqual(result.sent, 1)
+        bot.send_message.assert_awaited_once_with(
+            chat_id=-10042,
+            message_thread_id=8,
+            text="Новая заявка",
+            parse_mode=None,
+            disable_web_page_preview=True,
+        )
+        self.assertEqual(sent.call_args.kwargs["destination_thread_id"], 8)
+
     async def test_create_topic_persists_thread_before_marking_sent(self):
         bot = SimpleNamespace(
             create_forum_topic=AsyncMock(

@@ -144,6 +144,45 @@ class TelegramSupportServiceTests(unittest.TestCase):
             5,
         )
 
+    def test_private_text_queues_support_email_when_configured(self):
+        self._base_patches()
+        settings = SimpleNamespace(
+            **vars(SETTINGS),
+            support_notification_email="info@turistika.pro",
+        )
+        ticket = {
+            "id": 10,
+            "public_number": "TG-TEST",
+            "source_snapshot": {},
+        }
+        with (
+            patch.object(service.support_repo, "is_user_blocked", return_value=False),
+            patch.object(service.support_repo, "count_recent_user_updates", return_value=1),
+            patch.object(service.support_repo, "get_open_ticket_for_user", return_value=ticket),
+            patch.object(service.support_repo, "enqueue_outbox"),
+            patch.object(
+                service.support_repo,
+                "create_message",
+                return_value={"id": 99},
+            ),
+            patch.object(
+                service.support_repo,
+                "enqueue_support_email_notification",
+            ) as enqueue_email,
+        ):
+            result = service.process_telegram_update(private_update(), settings)
+
+        self.assertEqual(result.ticket_id, 10)
+        enqueue_email.assert_called_once()
+        self.assertEqual(
+            enqueue_email.call_args.kwargs["recipient_address"],
+            "info@turistika.pro",
+        )
+        self.assertEqual(
+            enqueue_email.call_args.kwargs["dedupe_key"],
+            "telegram-support:99:email",
+        )
+
     def test_contact_deep_links_route_to_configured_static_topics(self):
         for offset, (source_type, expected_topic) in enumerate(
             {

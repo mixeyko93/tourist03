@@ -125,6 +125,7 @@ class Settings(BaseSettings):
     smtp_from_name: str = "Туристика"
     smtp_reply_to: str = ""
     smtp_test_email: str = ""
+    support_notification_email: str = ""
     smtp_security: Literal["ssl", "starttls", "plain"] = "starttls"
     smtp_use_ssl: Optional[bool] = None
     smtp_use_starttls: Optional[bool] = Field(

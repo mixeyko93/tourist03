@@ -166,6 +166,28 @@ class TelegramSupportPostgresTests(unittest.TestCase):
         self.assertEqual(completed["status"], "sent")
         self.assertIsNone(completed["claim_token"])
 
+    def test_system_topic_notification_can_be_claimed_without_ticket(self):
+        with support_repo.transaction() as conn:
+            queued = support_repo.enqueue_outbox(
+                conn,
+                action="send_text_topic",
+                dedupe_key="postgres:system-topic",
+                payload={
+                    "support_chat_id": -1004422437758,
+                    "thread_id": 8,
+                    "text": "Новая заявка",
+                },
+            )
+
+        claimed = support_repo.claim_outbox_batch(limit=1, lease_seconds=60)
+        self.assertEqual([row["id"] for row in claimed], [queued["id"]])
+        context = support_repo.load_delivery_context(
+            int(queued["id"]),
+            str(claimed[0]["claim_token"]),
+        )
+        self.assertIsNone(context["ticket_id"])
+        self.assertEqual(context["payload"]["thread_id"], 8)
+
     def test_expired_message_delivery_is_quarantined_not_reclaimed(self):
         with support_repo.transaction() as conn:
             queued = support_repo.enqueue_outbox(
