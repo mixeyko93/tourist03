@@ -1,18 +1,25 @@
 import { FileClock, ShieldCheck, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 
 import { ownerApi, type OwnerProfile } from "./api";
 import { ownerResetTokenFromLocation } from "./resetToken";
 
 export default function LoginPage({ onLogin }: { onLogin: (owner: OwnerProfile) => void }) {
-  const token = ownerResetTokenFromLocation(window.location.search, window.location.hash);
+  const [token] = useState(() => ownerResetTokenFromLocation(window.location.search, window.location.hash));
   const [mode, setMode] = useState<"login" | "forgot" | "reset">(token ? "reset" : "login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const fragment = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    if (fragment.has("reset")) {
+      window.history.replaceState({}, "", `${window.location.pathname}${window.location.search}`);
+    }
+  }, []);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
