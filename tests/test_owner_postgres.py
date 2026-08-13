@@ -312,7 +312,7 @@ class OwnerPortalPostgresTests(unittest.TestCase):
             requested_ip_hash="ip-hash",
             ttl_minutes=30,
             secret="test-secret-with-at-least-thirty-two-characters",
-            public_base_url="https://example.test",
+            owner_base_url="https://lk.example.test",
         )
         self.assertNotEqual(reset["token_hash"], raw_token)
         with _db_conn("auth") as conn:
@@ -332,6 +332,19 @@ class OwnerPortalPostgresTests(unittest.TestCase):
             payload = cur.fetchone()["action_payload"]
             self.assertEqual(payload["reset_id"], reset["id"])
             self.assertNotIn("token", payload)
+            cur.execute(
+                """
+                SELECT action_url
+                FROM crm.notification_events
+                WHERE event_type = 'owner_password_reset_requested'
+                ORDER BY id DESC
+                LIMIT 1
+                """
+            )
+            self.assertEqual(
+                cur.fetchone()["action_url"],
+                "https://lk.example.test/owner/reset-password",
+            )
 
     def test_stale_approved_request_is_rejected_without_partial_apply(self):
         change, _ = owner_repo.create_owner_change(self.owner["id"], self.camp_id)

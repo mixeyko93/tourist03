@@ -154,7 +154,7 @@ def create_owner_reset(
     requested_ip_hash: str | None,
     ttl_minutes: int,
     secret: str,
-    public_base_url: str,
+    owner_base_url: str,
 ) -> tuple[dict, str]:
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=max(int(ttl_minutes), 5))
     with _db_conn("auth") as conn:
@@ -205,7 +205,7 @@ def create_owner_reset(
             WHERE accounts.id = %s
             """,
             (
-                f"{public_base_url.rstrip('/')}/owner/reset-password",
+                f"{owner_base_url.rstrip('/')}/owner/reset-password",
                 _json(
                     {
                         "reset_id": reset["id"],
@@ -1944,6 +1944,7 @@ def create_owner_account(
     password_hash: str,
     display_name: str,
     company: str | None = None,
+    owner_base_url: str = "",
 ) -> dict:
     with _db_conn("auth") as conn:
         cur = conn.cursor()
@@ -1964,7 +1965,7 @@ def create_owner_account(
             event_type="owner_account_created",
             title="Добро пожаловать в Туристику",
             body="Кабинет владельца готов. Проверьте профиль и состояние карточек.",
-            action_url="/owner",
+            action_url=(f"{owner_base_url.rstrip('/')}/owner" if owner_base_url else "/owner"),
         )
         conn.commit()
         return row

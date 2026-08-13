@@ -3,9 +3,10 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 
 import { ownerApi, type OwnerProfile } from "./api";
+import { ownerResetTokenFromLocation } from "./resetToken";
 
 export default function LoginPage({ onLogin }: { onLogin: (owner: OwnerProfile) => void }) {
-  const token = new URLSearchParams(window.location.search).get("token") || "";
+  const token = ownerResetTokenFromLocation(window.location.search, window.location.hash);
   const [mode, setMode] = useState<"login" | "forgot" | "reset">(token ? "reset" : "login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

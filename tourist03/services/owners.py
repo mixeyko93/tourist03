@@ -53,6 +53,7 @@ from tourist03.owner_security import (
 )
 from tourist03.repositories import catalog as catalog_repo
 from tourist03.repositories import owners as owner_repo
+from tourist03.repositories import telegram_support as support_repo
 from tourist03.security import get_superadmin
 from tourist03.submission_media import (
     SubmissionMediaError,
@@ -184,7 +185,7 @@ def owner_forgot_password(request: Request, payload: OwnerForgotPasswordRequest)
             requested_ip_hash=ip_hash,
             ttl_minutes=request.app.state.settings.owner_password_reset_ttl_minutes,
             secret=request.app.state.settings.session_secret_key,
-            public_base_url=request.app.state.settings.public_base_url,
+            owner_base_url=request.app.state.settings.owner_base_url,
         )
     result = {
         "ok": True,
@@ -864,6 +865,7 @@ def superadmin_create_owner(request: Request, payload: OwnerAccountCreateRequest
             password_hash=password_hash,
             display_name=payload.display_name.strip(),
             company=(payload.company or "").strip() or None,
+            owner_base_url=request.app.state.settings.owner_base_url,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -871,6 +873,46 @@ def superadmin_create_owner(request: Request, payload: OwnerAccountCreateRequest
         if getattr(exc, "pgcode", None) == "23505":
             raise HTTPException(status_code=409, detail="Владелец с таким email уже существует") from exc
         raise
+    settings = request.app.state.settings
+    try:
+        with support_repo.transaction() as conn:
+            if settings.support_notification_email:
+                support_repo.enqueue_support_email_notification(
+                    conn,
+                    recipient_address=settings.support_notification_email,
+                    event_type="owner_account_created",
+                    title="Зарегистрирован новый владелец",
+                    body=(
+                        f"{row['display_name']} · {row['email']}"
+                        + (f" · {row['company']}" if row.get("company") else "")
+                    ),
+                    action_url=f"{settings.superadmin_base_url.rstrip('/')}/admin/owners",
+                    dedupe_key=f"owner-registration:{row['id']}:email:support",
+                    metadata={"owner_id": int(row["id"])},
+                )
+            if (
+                settings.feature_telegram_contact
+                and settings.telegram_support_chat_id < 0
+                and settings.telegram_support_topic_placement > 0
+            ):
+                support_repo.enqueue_outbox(
+                    conn,
+                    action="send_text_topic",
+                    dedupe_key=f"owner-registration:{row['id']}:support-topic",
+                    payload={
+                        "support_chat_id": settings.telegram_support_chat_id,
+                        "thread_id": settings.telegram_support_topic_placement,
+                        "text": (
+                            "Зарегистрирован новый владелец\n"
+                            f"{row['display_name']} · {row['email']}\n"
+                            f"{settings.superadmin_base_url.rstrip('/')}/admin/owners"
+                        ),
+                    },
+                )
+    except Exception:
+        # Учётная запись уже создана; временный сбой уведомлений не должен
+        # превращать успешную регистрацию в ошибку или провоцировать дубль.
+        pass
     return {"ok": True, "owner": owner_public(row)}
 
 
