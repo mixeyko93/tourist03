@@ -224,7 +224,7 @@ class PlacementMapBrowserTests(unittest.TestCase):
             trackpad_pinch = page.evaluate(
                 """async () => {
                     const map = window.__TOURISTIKA_TEST_MAP__;
-                    const canvas = document.querySelector('[data-map-canvas]');
+                    const canvas = document.querySelector('.public-map__canvas');
                     const bounds = canvas.getBoundingClientRect();
                     const initialZoom = map.getZoom();
                     const wheel = new WheelEvent('wheel', {
