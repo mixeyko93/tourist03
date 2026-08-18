@@ -149,10 +149,6 @@ def change_admin_submission_status(
             "Требуется уточнение",
             "Модератору нужна дополнительная информация по вашей заявке.",
         ),
-        "approved": (
-            "Заявка одобрена",
-            "Заявка прошла первичную модерацию. Публикация объекта выполняется отдельно.",
-        ),
         "rejected": (
             "Заявка отклонена",
             payload.public_comment or "Модератор завершил рассмотрение заявки.",
@@ -250,7 +246,15 @@ def approve_submission(
     except SubmissionValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     normalized = payload.model_copy(update={"status": "approved"})
-    return change_admin_submission_status(request, submission_id, normalized)
+    change_admin_submission_status(request, submission_id, normalized)
+    return create_submission_object_draft(
+        request,
+        submission_id,
+        SubmissionObjectDraftRequest(
+            idempotency_key=f"approved-{submission_id}-{current['public_number']}"
+        ),
+        publish=True,
+    )
 
 
 def reject_submission(
@@ -275,6 +279,8 @@ def create_submission_object_draft(
     request: Request,
     submission_id: int,
     payload: SubmissionObjectDraftRequest,
+    *,
+    publish: bool = True,
 ) -> dict:
     actor = _actor(request)
     try:
@@ -282,6 +288,7 @@ def create_submission_object_draft(
             submission_id,
             actor_id=actor.get("id"),
             idempotency_key=payload.idempotency_key,
+            publish=publish,
         )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -320,8 +327,8 @@ def create_submission_object_draft(
     if created:
         _audit(
             actor,
-            action_type="submission_object_draft_created",
-            action_label="Создан черновик объекта",
+            action_type="submission_object_published" if publish else "submission_object_draft_created",
+            action_label="Объект опубликован" if publish else "Создан черновик объекта",
             submission_id=submission_id,
             metadata={"camp_id": result["camp_id"]},
         )
@@ -335,21 +342,35 @@ def create_submission_object_draft(
             try:
                 submission_repo.enqueue_submission_notifications(
                     submission_id,
-                    event_type="placement_submission_object_draft_created",
-                    title=f"Создан черновик объекта: {detail['public_number']}",
+                    event_type=(
+                        "placement_submission_published"
+                        if publish
+                        else "placement_submission_object_draft_created"
+                    ),
+                    title=(
+                        f"Объект опубликован: {detail['public_number']}"
+                        if publish
+                        else f"Создан черновик объекта: {detail['public_number']}"
+                    ),
                     body=(
-                        f"Черновик каталога #{result['camp_id']} создан. "
-                        "Публикация требует отдельного решения суперадмина."
+                        f"Объект каталога #{result['camp_id']} опубликован на карте."
+                        if publish
+                        else f"Черновик каталога #{result['camp_id']} создан."
                     ),
                     admin_action_url=(
                         f"{settings.superadmin_base_url.rstrip('/')}"
                         f"/admin/bases/{result['camp_id']}"
                     ),
                     applicant_email=detail.get("applicant_email"),
-                    applicant_title=f"Карточка объекта подготовлена · {detail['public_number']}",
+                    applicant_title=(
+                        f"Объект опубликован · {detail['public_number']}"
+                        if publish
+                        else f"Карточка объекта подготовлена · {detail['public_number']}"
+                    ),
                     applicant_body=(
-                        "По заявке создан внутренний черновик карточки. "
-                        "Он ещё не опубликован и проходит финальную проверку."
+                        "Карточка объекта опубликована на карте Туристики."
+                        if publish
+                        else "По заявке создан внутренний черновик карточки."
                     ),
                     applicant_action_url=(
                         f"{settings.public_base_url}/submission-status"

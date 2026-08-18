@@ -114,8 +114,8 @@ class SubmissionPostgresWorkflowTests(unittest.TestCase):
             cursor_factory=RealDictCursor,
         )
 
-    def test_full_submission_moderation_and_idempotent_catalog_draft(self):
-        from tourist03.repositories import submissions
+    def test_full_submission_moderation_and_idempotent_catalog_publication(self):
+        from tourist03.repositories import catalog, submissions
 
         with closing(self._connect()) as conn, conn.cursor() as cur:
             cur.execute("SELECT id FROM catalog.place_types WHERE slug = 'recreation-base'")
@@ -261,13 +261,16 @@ class SubmissionPostgresWorkflowTests(unittest.TestCase):
             submitted["id"],
             actor_id=None,
             idempotency_key="object-draft-key-123456",
+            publish=True,
         )
         self.assertTrue(object_created)
-        self.assertEqual(result["publication_status"], "draft")
+        self.assertEqual(result["publication_status"], "published")
+        self.assertEqual(result["status"], "published")
         repeated_result, repeated_object_created = submissions.create_catalog_draft_from_submission(
             submitted["id"],
             actor_id=None,
             idempotency_key="object-draft-key-123456",
+            publish=True,
         )
         self.assertFalse(repeated_object_created)
         self.assertEqual(repeated_result["camp_id"], result["camp_id"])
@@ -282,9 +285,9 @@ class SubmissionPostgresWorkflowTests(unittest.TestCase):
                 (result["camp_id"],),
             )
             camp = dict(cur.fetchone())
-            self.assertEqual(camp["publication_status"], "draft")
-            self.assertEqual(camp["status"], "disabled")
-            self.assertFalse(camp["is_visible_on_map"])
+            self.assertEqual(camp["publication_status"], "published")
+            self.assertEqual(camp["status"], "active")
+            self.assertTrue(camp["is_visible_on_map"])
             self.assertFalse(camp["accepts_bookings"])
             cur.execute(
                 "SELECT contact_type, value FROM catalog.place_contacts WHERE camp_id = %s",
@@ -302,7 +305,7 @@ class SubmissionPostgresWorkflowTests(unittest.TestCase):
                 [
                     {
                         "url": "/static/uploads/submissions/staged/integration.jpg",
-                        "moderation_status": "pending",
+                        "moderation_status": "approved",
                         "cover": True,
                     }
                 ],
@@ -318,8 +321,21 @@ class SubmissionPostgresWorkflowTests(unittest.TestCase):
             )
             self.assertEqual(
                 [row["new_status"] for row in cur.fetchall()],
-                ["draft", "submitted", "new", "in_review", "approved", "object_draft_created"],
+                [
+                    "draft",
+                    "submitted",
+                    "new",
+                    "in_review",
+                    "approved",
+                    "object_draft_created",
+                    "published",
+                ],
             )
+
+        public_map = catalog.list_public_entities(map_only=True, limit=100)
+        published = [item for item in public_map["items"] if item["id"] == result["camp_id"]]
+        self.assertEqual(len(published), 1)
+        self.assertEqual(published[0]["name"], "Тестовый берег")
 
     def test_object_creation_rolls_back_all_catalog_writes_on_invalid_room(self):
         from tourist03.repositories import submissions

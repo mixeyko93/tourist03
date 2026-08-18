@@ -944,6 +944,7 @@ def create_catalog_draft_from_submission(
     *,
     actor_id: int | None,
     idempotency_key: str,
+    publish: bool = False,
 ) -> tuple[dict, bool]:
     conn = _pg_connect("moderation")
     try:
@@ -962,8 +963,75 @@ def create_catalog_draft_from_submission(
             return {}, False
         source = dict(source_row)
         if source.get("published_camp_id"):
+            camp_id = int(source["published_camp_id"])
+            if publish and source["status"] == "object_draft_created":
+                cur.execute(
+                    """
+                    UPDATE catalog.camps
+                    SET publication_status = 'published',
+                        status = 'active',
+                        visibility = 'public',
+                        is_visible_on_map = TRUE,
+                        published_at = COALESCE(published_at, NOW())
+                    WHERE id = %s
+                    RETURNING slug, publication_status
+                    """,
+                    (camp_id,),
+                )
+                camp = cur.fetchone()
+                if not camp:
+                    raise ValueError("Связанный объект каталога не найден")
+                cur.execute(
+                    """
+                    UPDATE catalog.camp_media
+                    SET moderation_status = 'approved'
+                    WHERE camp_id = %s AND moderation_status = 'pending'
+                    """,
+                    (camp_id,),
+                )
+                cur.execute(
+                    """
+                    UPDATE catalog.room_media
+                    SET moderation_status = 'approved'
+                    WHERE camp_id = %s AND moderation_status = 'pending'
+                    """,
+                    (camp_id,),
+                )
+                cur.execute(
+                    """
+                    UPDATE moderation.placement_submissions
+                    SET status = 'published',
+                        status_public_comment = 'Объект опубликован на карте'
+                    WHERE id = %s
+                    """,
+                    (int(submission_id),),
+                )
+                cur.execute(
+                    """
+                    INSERT INTO moderation.submission_status_history (
+                        submission_id,
+                        previous_status,
+                        new_status,
+                        actor_type,
+                        actor_id,
+                        public_comment
+                    )
+                    VALUES (
+                        %s, 'object_draft_created', 'published',
+                        'superadmin', %s, 'Объект опубликован на карте'
+                    )
+                    """,
+                    (int(submission_id), actor_id),
+                )
+                conn.commit()
+                return {
+                    "camp_id": camp_id,
+                    "slug": camp["slug"],
+                    "publication_status": camp["publication_status"],
+                    "status": "published",
+                }, True
             conn.commit()
-            return {"camp_id": int(source["published_camp_id"]), "status": source["status"]}, False
+            return {"camp_id": camp_id, "status": source["status"]}, False
         if source["status"] != "approved":
             raise ValueError("Черновик объекта можно создать только из одобренной заявки")
         if not (idempotency_key or "").strip():
@@ -1085,12 +1153,13 @@ def create_catalog_draft_from_submission(
                 price_mode,
                 currency,
                 is_visible_on_map,
-                accepts_bookings
+                accepts_bookings,
+                published_at
             )
             VALUES (
-                %s, %s, %s, 'draft', 'disabled', %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, %s::jsonb, %s, %s::jsonb, %s::jsonb,
-                %s, %s, %s::jsonb, 'hidden', %s, 'RUB', FALSE, FALSE
+                %s, %s, %s::jsonb, %s, %s, 'RUB', %s, FALSE, %s
             )
             RETURNING id, slug, publication_status
             """,
@@ -1098,6 +1167,8 @@ def create_catalog_draft_from_submission(
                 source["place_name"],
                 candidate,
                 source["place_type_id"],
+                "published" if publish else "draft",
+                "active" if publish else "disabled",
                 source["address"],
                 source["lat"],
                 source["lng"],
@@ -1115,7 +1186,10 @@ def create_catalog_draft_from_submission(
                 schema_key,
                 schema_version,
                 json.dumps(attributes, ensure_ascii=False),
+                "public" if publish else "hidden",
                 price_mode,
+                bool(publish),
+                datetime.now(timezone.utc) if publish else None,
             ),
         )
         camp = dict(cur.fetchone())
@@ -1259,9 +1333,15 @@ def create_catalog_draft_from_submission(
                         sort,
                         cover
                     )
-                    VALUES (%s, 'image', %s, 'upload', 'pending', %s, %s)
+                    VALUES (%s, 'image', %s, 'upload', %s, %s, %s)
                     """,
-                    (camp_id, url, int(media["sort_order"]), bool(media["is_cover"])),
+                    (
+                        camp_id,
+                        url,
+                        "approved" if publish else "pending",
+                        int(media["sort_order"]),
+                        bool(media["is_cover"]),
+                    ),
                 )
             else:
                 if not is_accommodation:
@@ -1283,12 +1363,13 @@ def create_catalog_draft_from_submission(
                         sort,
                         cover
                     )
-                    VALUES (%s, %s, 'image', %s, 'upload', 'pending', %s, %s)
+                    VALUES (%s, %s, 'image', %s, 'upload', %s, %s, %s)
                     """,
                     (
                         camp_id,
                         room_id,
                         url,
+                        "approved" if publish else "pending",
                         int(media["sort_order"]),
                         bool(media["is_cover"]),
                     ),
@@ -1306,11 +1387,17 @@ def create_catalog_draft_from_submission(
             """
             UPDATE moderation.placement_submissions
             SET published_camp_id = %s,
-                status = 'object_draft_created'
+                status = %s,
+                status_public_comment = %s
             WHERE id = %s
             RETURNING content_version
             """,
-            (camp_id, int(submission_id)),
+            (
+                camp_id,
+                "published" if publish else "object_draft_created",
+                "Объект опубликован на карте" if publish else None,
+                int(submission_id),
+            ),
         )
         cur.execute(
             """
@@ -1329,12 +1416,30 @@ def create_catalog_draft_from_submission(
             """,
             (int(submission_id), actor_id),
         )
+        if publish:
+            cur.execute(
+                """
+                INSERT INTO moderation.submission_status_history (
+                    submission_id,
+                    previous_status,
+                    new_status,
+                    actor_type,
+                    actor_id,
+                    public_comment
+                )
+                VALUES (
+                    %s, 'object_draft_created', 'published',
+                    'superadmin', %s, 'Объект опубликован на карте'
+                )
+                """,
+                (int(submission_id), actor_id),
+            )
         conn.commit()
         return {
             "camp_id": camp_id,
             "slug": camp["slug"],
             "publication_status": camp["publication_status"],
-            "status": "object_draft_created",
+            "status": "published" if publish else "object_draft_created",
         }, True
     except Exception:
         conn.rollback()

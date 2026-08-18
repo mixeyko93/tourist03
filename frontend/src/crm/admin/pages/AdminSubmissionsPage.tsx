@@ -203,7 +203,7 @@ export default function AdminSubmissionsPage() {
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">Этап 3.1</p>
             <h2 className="mt-2 text-3xl font-semibold tracking-[-0.05em]">Заявки на размещение</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Проверка данных заявителя, будущей карточки, медиа и истории. Одобрение не публикует объект автоматически.</p>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">Проверка данных заявителя, будущей карточки, медиа и истории. Одобрение сразу публикует объект на карте.</p>
           </div>
           <button type="button" className="admin-button gap-2" onClick={() => setReloadKey((value) => value + 1)}><RefreshCcw className="h-4 w-4" />Обновить</button>
         </div>
@@ -260,9 +260,9 @@ export default function AdminSubmissionsPage() {
                   <div className="flex flex-wrap gap-2">
                     {detail.status === "new" ? <button disabled={busy} className="admin-primary-button" onClick={() => perform(() => changePlacementSubmissionStatus(detail.id, "in_review", { contentVersion: detail.content_version }), "Заявка взята в работу.")}>Взять в работу</button> : null}
                     {detail.status === "in_review" ? <button disabled={busy} className="admin-button" onClick={() => { const comment = publicComment("Что нужно уточнить?"); if (comment) void perform(() => runPlacementSubmissionAction(detail.id, "request-clarification", "needs_clarification", { contentVersion: detail.content_version, publicComment: comment }), "Запрос уточнений сохранён."); }}>Запросить уточнение</button> : null}
-                    {detail.status === "in_review" ? <button disabled={busy} className="admin-primary-button" onClick={() => perform(() => runPlacementSubmissionAction(detail.id, "approve", "approved", { contentVersion: detail.content_version }), "Заявка одобрена. Объект ещё не опубликован.")}>Одобрить</button> : null}
+                    {detail.status === "in_review" ? <button disabled={busy} className="admin-primary-button" onClick={() => perform(() => runPlacementSubmissionAction(detail.id, "approve", "approved", { contentVersion: detail.content_version }), "Заявка одобрена, объект опубликован на карте.")}>Одобрить и опубликовать</button> : null}
                     {["new", "in_review", "needs_clarification"].includes(detail.status) ? <button disabled={busy} className="admin-button text-rose-300" onClick={() => { const reason = publicComment("Укажите причину отклонения"); if (reason) void perform(() => runPlacementSubmissionAction(detail.id, "reject", "rejected", { contentVersion: detail.content_version, publicComment: reason }), "Заявка отклонена."); }}>Отклонить</button> : null}
-                    {detail.status === "approved" ? <button disabled={busy} className="admin-primary-button gap-2" onClick={() => perform(() => createPlacementObjectDraft(detail.id, crypto.randomUUID()), "Создан безопасный черновик объекта.")}><FilePlus2 className="h-4 w-4" />Создать черновик объекта</button> : null}
+                    {detail.status === "approved" ? <button disabled={busy} className="admin-primary-button gap-2" onClick={() => perform(() => createPlacementObjectDraft(detail.id, crypto.randomUUID()), "Объект опубликован на карте.")}><CheckCircle2 className="h-4 w-4" />Опубликовать объект</button> : null}
                     {["published", "rejected", "withdrawn"].includes(detail.status) ? <button disabled={busy} className="admin-button" onClick={() => perform(() => runPlacementSubmissionAction(detail.id, "archive", "archived", { contentVersion: detail.content_version }), "Заявка перенесена в архив.")}>Архивировать</button> : null}
                     {detail.published_camp_id ? <a className="admin-button gap-2" href={`/admin/bases/${detail.published_camp_id}`}><ExternalLink className="h-4 w-4" />Открыть объект</a> : null}
                   </div>
@@ -297,7 +297,7 @@ export default function AdminSubmissionsPage() {
                   <section className="rounded-3xl border border-border bg-card/80 p-5 sm:p-6">
                     <div className="flex items-center justify-between gap-3">
                       <h3 className="text-lg font-semibold">Предпросмотр публичной карточки</h3>
-                      <span className="rounded-full border border-border px-2.5 py-1 text-[10px] font-semibold text-muted-foreground">Не опубликовано</span>
+                      <span className="rounded-full border border-border px-2.5 py-1 text-[10px] font-semibold text-muted-foreground">{detail.status === "published" ? "Опубликовано" : "Не опубликовано"}</span>
                     </div>
                     <article className="mt-4 overflow-hidden rounded-[28px] bg-[#f5f7f2] text-[#17211b] shadow-inner">
                       <div className="grid gap-6 p-6 md:grid-cols-[minmax(0,1fr)_220px] md:p-8">

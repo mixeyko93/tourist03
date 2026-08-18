@@ -37,6 +37,14 @@ class MobileExplorationTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn('<script defer src="/static/vendor/leaflet/leaflet.js"', response.text)
         self.assertNotIn('<link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css"', response.text)
 
+    async def test_header_map_link_opens_standalone_map_page(self):
+        response = await self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('<nav class="site-nav"', response.text)
+        self.assertIn('<a href="/map">Карта</a>', response.text)
+        self.assertNotIn('<a href="/map" data-map-entry>Карта</a>', response.text)
+
     async def test_map_is_public_app_page_with_deep_link_and_onboarding_controls(self):
         response = await self.client.get("/map", params={"id": "forest-lodge"})
         self.assertEqual(response.status_code, 200)
