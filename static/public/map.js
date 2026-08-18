@@ -10,6 +10,7 @@ const MAP_PAGE_SIZE = 200;
 const MAP_MAX_RESULTS = 10000;
 const MAP_REQUEST_CONCURRENCY = 4;
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+const PILOT_KIND_KEYS = Object.freeze(["accommodation", "activity", "event", "service", "rental"]);
 const KIND_COLORS = Object.freeze({
   accommodation: "#247da8",
   service: "#7b5aa6",
@@ -22,6 +23,13 @@ const KIND_COLORS = Object.freeze({
   guide: "#81691c",
   sight: "#81691c",
 });
+
+function pilotCategoryKey(value) {
+  const key = kindKey(value);
+  if (key === "accommodation") return "accommodation";
+  if (["activity", "event", "service", "rental"].includes(key)) return "activity";
+  return "";
+}
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>'"]/g, (character) => ({
@@ -45,10 +53,11 @@ function asItems(payload) {
 function entityKind(entity) {
   const candidate = entity?.entity_kind || entity?.place_type?.entity_kind || "accommodation";
   if (typeof candidate === "string") {
+    const pilotCategory = pilotCategoryKey(candidate);
     return {
       key: candidate,
       slug: candidate,
-      name: candidate === "accommodation" ? "Проживание" : "Туристический объект",
+      name: pilotCategory === "accommodation" ? "Проживание" : pilotCategory === "activity" ? "Активности" : "Туристический объект",
       icon_key: candidate,
       config: {},
     };
@@ -111,6 +120,8 @@ function safeImageUrl(value) {
 function accentColor(entityOrType) {
   const type = entityOrType?.place_type || entityOrType?.subtype ? subtype(entityOrType) : entityOrType;
   const kind = entityOrType?.entity_kind ? entityKind(entityOrType) : {};
+  const pilotCategory = pilotCategoryKey(kindKey(kind) || kindKey(type?.entity_kind));
+  if (pilotCategory) return KIND_COLORS[pilotCategory];
   const candidate = String(type?.config?.accent || kind?.config?.accent || "");
   if (HEX_COLOR.test(candidate)) return candidate;
   return KIND_COLORS[kindKey(kind) || kindKey(type?.entity_kind)] || "#247da8";
@@ -119,7 +130,7 @@ function accentColor(entityOrType) {
 function markerIcon(entity) {
   const type = subtype(entity);
   const kind = entityKind(entity);
-  const iconKey = type.icon_key || kind.icon_key || kindKey(kind) || entity.schema_key;
+  const iconKey = pilotCategoryKey(kindKey(kind)) || type.icon_key || kind.icon_key || kindKey(kind) || entity.schema_key;
   return window.L.divIcon({
     className: "public-map-marker-wrap",
     html: `<span class="public-map-marker" style="--marker-accent:${accentColor(entity)}" aria-hidden="true">${catalogIconSvg(iconKey)}</span>`,
@@ -288,6 +299,7 @@ export function initialisePublicMap({
   filterParking,
   filterWifi,
   filterReset,
+  filterApply,
   count,
   legend,
   onMapReady,
@@ -305,7 +317,7 @@ export function initialisePublicMap({
     if (status) status.textContent = "Карта временно недоступна. Попробуйте обновить страницу.";
     if (loading) loading.hidden = true;
     return {
-      search() {}, clearSearch() {}, reset() {}, locate() {}, refreshList() {}, invalidate() {}, selectById() {},
+      search() {}, clearSearch() {}, reset() {}, locate() {}, setCategory() {}, refreshList() {}, invalidate() {}, selectById() {},
     };
   }
 
@@ -437,7 +449,7 @@ export function initialisePublicMap({
     const selectedKinds = new Set(selectedKindValues());
     const available = entityTypes.filter((type) => {
       const typeKind = kindKey(type.entity_kind);
-      return !selectedKinds.size || !typeKind || selectedKinds.has(typeKind);
+      return pilotCategoryKey(typeKind) && (!selectedKinds.size || selectedKinds.has(typeKind));
     });
     replaceOptions(
       filterSubtype,
@@ -646,23 +658,18 @@ export function initialisePublicMap({
   function renderLegend() {
     if (!legend) return;
     legend.replaceChildren();
-    const visibleTypes = new Map();
+    const visibleCategories = new Map();
     entities.forEach((entity) => {
-      const type = subtype(entity);
       const kind = entityKind(entity);
-      const key = String(type.slug || type.key || kindKey(kind) || "");
-      if (!key || visibleTypes.has(key)) return;
-      visibleTypes.set(key, {
-        ...type,
-        name: type.name || kind.name || "Туристический объект",
-        icon_key: type.icon_key || kind.icon_key || kindKey(kind),
-        entity_kind: kind,
+      const category = pilotCategoryKey(kindKey(kind));
+      if (!category || visibleCategories.has(category)) return;
+      visibleCategories.set(category, {
+        name: category === "accommodation" ? "Проживание" : "Активности",
+        icon_key: category,
+        entity_kind: category,
       });
     });
-    [...visibleTypes.values()].sort((left, right) => (
-      Number(left.sort_order || 0) - Number(right.sort_order || 0)
-      || String(left.name).localeCompare(String(right.name), "ru")
-    )).forEach((type) => {
+    [...visibleCategories.values()].forEach((type) => {
       const item = document.createElement("span");
       item.style.setProperty("--legend-accent", accentColor(type));
       const icon = document.createElement("i");
@@ -673,7 +680,7 @@ export function initialisePublicMap({
       item.append(icon, label);
       legend.append(item);
     });
-    legend.hidden = visibleTypes.size === 0;
+    legend.hidden = visibleCategories.size === 0;
   }
 
 function decorateMarker(marker, entity, onActivate) {
@@ -734,7 +741,7 @@ function decorateMarker(marker, entity, onActivate) {
     const query = new URLSearchParams({ map_only: "true" });
     if (searchQuery.trim()) query.set("q", searchQuery.trim());
     const kinds = selectedKindValues();
-    if (kinds.length) query.set("entity_kind", kinds.join(","));
+    query.set("entity_kind", (kinds.length ? kinds : PILOT_KIND_KEYS).join(","));
     if (filterSubtype?.value) query.set("subtype", filterSubtype.value);
     if (filterRegion?.value) query.set("region", filterRegion.value);
     if (filterDistrict?.value) query.set("district", filterDistrict.value);
@@ -984,9 +991,10 @@ function decorateMarker(marker, entity, onActivate) {
       });
     }
     const deepKinds = new Set((pageParams.get("entity_kind") || pageParams.get("type") || "").split(",").filter(Boolean));
+    const deepCategory = pilotCategoryKey(pageParams.get("category"));
     filterKinds.forEach((input) => {
       const aliases = String(input.dataset.kindValues || input.value || "").split(",");
-      if (aliases.some((alias) => deepKinds.has(alias))) input.checked = true;
+      if (input.value === deepCategory || aliases.some((alias) => deepKinds.has(alias))) input.checked = true;
     });
     updateSubtypeOptions();
     await loadEntities({
@@ -1003,7 +1011,7 @@ function decorateMarker(marker, entity, onActivate) {
     if (!filterPanel || !filterToggle) return;
     filterPanel.hidden = !open;
     filterToggle.setAttribute("aria-expanded", String(open));
-    filterToggle.setAttribute("aria-label", open ? "Закрыть фильтры каталога" : "Открыть фильтры каталога");
+    filterToggle.setAttribute("aria-label", open ? "Закрыть фильтр каталога" : "Открыть фильтр каталога");
     if (open) {
       window.setTimeout(() => filterPanel.querySelector("input:not([tabindex='-1']), select, button")?.focus(), 0);
     } else if (restoreFocus) {
@@ -1055,6 +1063,38 @@ function decorateMarker(marker, entity, onActivate) {
     clearSearch({ resetFilters: true, restoreDefault: true });
   }
 
+  function setCategory(category) {
+    const selectedCategory = pilotCategoryKey(category);
+    if (!selectedCategory) return;
+    searchQuery = "";
+    lastLoadedSearch = null;
+    geocodeResult = null;
+    searchPending = false;
+    boundsQuery = null;
+    selectedEntity = null;
+    map.closePopup();
+    if (sheet) sheet.hidden = true;
+    results?.replaceChildren();
+    [filterSubtype, filterRegion, filterDistrict, filterCity, filterSeasonality, filterLegacyAmenity].forEach((select) => {
+      if (select) select.value = "";
+    });
+    [filterPriceMin, filterPriceMax].forEach((input) => {
+      if (input) input.value = "";
+    });
+    [
+      filterOpenNow,
+      filterChildren,
+      filterPets,
+      filterParking,
+      filterWifi,
+      ...(filterAmenityOptions?.querySelectorAll("input[type='checkbox']") || []),
+    ].filter(Boolean).forEach((input) => { input.checked = false; });
+    filterKinds.forEach((input) => { input.checked = input.value === selectedCategory; });
+    updateSubtypeOptions();
+    setFiltersOpen(false, { restoreFocus: false });
+    void loadEntities({ fitResults: true });
+  }
+
   function locate() {
     if (!navigator.geolocation) {
       if (status) status.textContent = "Геолокация не поддерживается этим браузером.";
@@ -1103,8 +1143,14 @@ function decorateMarker(marker, entity, onActivate) {
     });
   });
   filterReset?.addEventListener("click", reset);
+  filterApply?.addEventListener("click", () => setFiltersOpen(false));
   filterToggle?.addEventListener("click", () => setFiltersOpen(Boolean(filterPanel?.hidden)));
   filterClose?.addEventListener("click", () => setFiltersOpen(false));
+  filterPanel?.addEventListener("wheel", (event) => {
+    if (filterPanel.scrollHeight <= filterPanel.clientHeight || !event.deltaY) return;
+    event.preventDefault();
+    filterPanel.scrollTop += event.deltaY;
+  }, { passive: false });
   searchArea?.addEventListener("click", () => {
     const bounds = map.getBounds();
     boundsQuery = [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()]
@@ -1120,10 +1166,8 @@ function decorateMarker(marker, entity, onActivate) {
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && filterPanel && !filterPanel.hidden) setFiltersOpen(false);
   });
-  if (window.matchMedia("(max-width: 520px)").matches && filterPanel) {
+  if (filterPanel) {
     setFiltersOpen(false, { restoreFocus: false });
-  } else if (filterPanel && filterToggle) {
-    filterToggle.setAttribute("aria-expanded", String(!filterPanel.hidden));
   }
 
   if ("ResizeObserver" in window) {
@@ -1187,6 +1231,7 @@ function decorateMarker(marker, entity, onActivate) {
     clearSearch,
     reset,
     locate,
+    setCategory,
     refreshList: renderList,
     invalidate() {
       if (!keyboardOpen) map.invalidateSize({ animate: false });

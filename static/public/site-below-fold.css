@@ -3,8 +3,10 @@
 .about-section__copy { display: grid; align-content: end; gap: 16px; padding-bottom: 5px; }
 .about-section__copy p { margin: 0; color: var(--ink-soft); font-size: 16px; font-weight: 600; line-height: 1.78; }
 .places-section { padding: clamp(70px, 9vw, 122px) 0; background: #fff; }
-.place-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 0; padding: 0; list-style: none; }
-.place-grid li { position: relative; min-height: 228px; padding: 25px; overflow: hidden; border: 1px solid var(--line); border-radius: 20px; background: linear-gradient(145deg, #f9fbf7, #eef5f0); transition: transform .2s ease, box-shadow .2s ease; }
+.place-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+.place-grid li { position: relative; min-height: 228px; overflow: hidden; border: 1px solid var(--line); border-radius: 20px; background: linear-gradient(145deg, #f9fbf7, #eef5f0); transition: transform .2s ease, box-shadow .2s ease; }
+.place-grid a { display: block; min-height: inherit; padding: 25px; }
+.place-grid a:focus-visible { border-radius: 18px; outline-offset: -5px; }
 .place-grid li:nth-child(2n) { background: linear-gradient(145deg, #eff7f8, #f8fbfa); }
 .place-grid li:nth-child(3n) { background: linear-gradient(145deg, #f9f4ed, #fbf9f5); }
 .place-grid li:hover { box-shadow: 0 16px 36px rgba(29, 50, 37, .12); transform: translateY(-3px); }

@@ -48,6 +48,7 @@ const mapFilterPets = document.querySelector("[data-filter-pets]");
 const mapFilterParking = document.querySelector("[data-filter-parking]");
 const mapFilterWifi = document.querySelector("[data-filter-wifi]");
 const mapFilterReset = document.querySelector("[data-filter-reset]");
+const mapFilterApply = document.querySelector("[data-filter-apply]");
 const mapCount = document.querySelector("[data-map-count]");
 const mapLegend = document.querySelector("[data-map-legend]");
 const mapAutocomplete = document.querySelector("[data-map-autocomplete]");
@@ -58,7 +59,7 @@ const mobileHome = window.matchMedia("(max-width: 520px)");
 let mapController;
 let mapPromise;
 let autocompleteAttached = false;
-const pendingMapController = Object.freeze({ search() {}, clearSearch() {}, reset() {}, locate() {} });
+const pendingMapController = Object.freeze({ search() {}, clearSearch() {}, reset() {}, locate() {}, setCategory() {} });
 
 function installPlacementDialog() {
   const dialog = document.querySelector("[data-placement-dialog]");
@@ -81,7 +82,7 @@ function installPlacementDialog() {
     window.setTimeout(() => supportCard?.querySelector("a[href], button:not([tabindex='-1'])")?.focus(), 0);
   };
   const open = (trigger) => {
-    restoreFocus = trigger || document.activeElement;
+    restoreFocus = trigger?.closest("[data-menu]") ? menuToggle : trigger || document.activeElement;
     setMenuState(false);
     if (typeof dialog.showModal === "function") dialog.showModal();
     else dialog.setAttribute("open", "");
@@ -185,7 +186,7 @@ async function loadMapController() {
     loadStylesheet("/static/vendor/leaflet-markercluster/MarkerCluster.css");
     await loadScript("/static/vendor/leaflet/leaflet.js");
     await loadScript("/static/vendor/leaflet-markercluster/leaflet.markercluster.js");
-    const { initialisePublicMap } = await import("./map.js?v=2026-08-03-03");
+    const { initialisePublicMap } = await import("./map.js?v=2026-08-18-02");
     mapController = initialisePublicMap({
     shell: mapShell,
     canvas: mapCanvas,
@@ -212,6 +213,7 @@ async function loadMapController() {
     filterParking: mapFilterParking,
     filterWifi: mapFilterWifi,
     filterReset: mapFilterReset,
+    filterApply: mapFilterApply,
     count: mapCount,
     legend: mapLegend,
     });
@@ -245,13 +247,15 @@ document.querySelectorAll("[data-map-entry]").forEach((entry) => {
   });
 });
 
-document.querySelector("[data-open-search]")?.addEventListener("click", () => {
-  if (mobileHome.matches) {
-    location.assign("/map?focus=search");
-    return;
-  }
-  document.getElementById("map-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  void loadMapController().then(() => window.setTimeout(() => searchInput?.focus(), 250));
+document.querySelectorAll("[data-map-category]").forEach((link) => {
+  link.addEventListener("click", (event) => {
+    if (mobileHome.matches) return;
+    event.preventDefault();
+    if (searchInput) searchInput.value = "";
+    if (searchClear) searchClear.hidden = true;
+    document.getElementById("map-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    void loadMapController().then((controller) => controller.setCategory(link.dataset.mapCategory));
+  });
 });
 
 searchInput?.addEventListener("input", () => {
@@ -318,7 +322,7 @@ if (!mobileHome.matches && "IntersectionObserver" in window && mapShell) {
 }
 
 if (mobileHome.matches && discoveryPreview) {
-  const loadPreview = () => import("./discovery-preview.js?v=2026-08-03-01")
+  const loadPreview = () => import("./discovery-preview.js?v=2026-08-18-02")
     .then(({ initialiseDiscoveryPreview }) => initialiseDiscoveryPreview(discoveryPreview))
     .catch(() => {});
   if ("IntersectionObserver" in window) {
@@ -359,7 +363,7 @@ if (
 }
 
 if (belowFold) {
-  const loadBelowFold = () => loadStylesheet("/static/public/site-below-fold.css?v=2026-07-28-01");
+  const loadBelowFold = () => loadStylesheet("/static/public/site-below-fold.css?v=2026-08-18-02");
   if ("IntersectionObserver" in window) {
     const belowFoldObserver = new IntersectionObserver((entries) => {
       if (entries.some((entry) => entry.isIntersecting)) {

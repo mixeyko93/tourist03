@@ -6,13 +6,13 @@
   <meta name="theme-color" content="#f5f7f2">
   <meta name="color-scheme" content="light">
   <title>Исследовать Россию на карте — Туристика</title>
-  <meta name="description" content="Интерактивная карта туристических мест, услуг, экскурсий и маршрутов России.">
+  <meta name="description" content="Интерактивная карта баз отдыха и активностей России.">
   <link rel="canonical" href="{{ public_base_url }}/map">
   <meta property="og:type" content="website">
   <meta property="og:locale" content="ru_RU">
   <meta property="og:site_name" content="Туристика">
   <meta property="og:title" content="Исследовать Россию на карте — Туристика">
-  <meta property="og:description" content="Находите места, услуги и впечатления на одной интерактивной карте.">
+  <meta property="og:description" content="Базы отдыха и активности на одной живой карте России.">
   <meta property="og:url" content="{{ public_base_url }}/map">
   <meta property="og:image" content="{{ public_base_url }}/static/brand/turistika-logo-stacked.svg">
   <link rel="icon" href="/static/brand/turistika-favicon.svg" type="image/svg+xml">
@@ -20,13 +20,13 @@
   <link rel="preload" href="/static/fonts/manrope/manrope-extrabold.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="/static/vendor/leaflet-markercluster/MarkerCluster.css">
-  <link rel="stylesheet" href="/static/public/site.css?v=2026-08-03-03">
-  <link rel="stylesheet" href="/static/public/map-page.css?v=2026-08-03-03">
+  <link rel="stylesheet" href="/static/public/site.css?v=2026-08-18-02">
+  <link rel="stylesheet" href="/static/public/map-page.css?v=2026-08-18-02">
   <script>window.__TOURISTIKA_FEATURES__={{ features_json | safe }};</script>
   {% if telegram_webapp %}<script src="https://telegram.org/js/telegram-web-app.js"></script>{% endif %}
   <script defer src="/static/vendor/leaflet/leaflet.js"></script>
   <script defer src="/static/vendor/leaflet-markercluster/leaflet.markercluster.js"></script>
-  <script type="module" src="/static/public/map-page.js?v=2026-08-03-03"></script>
+  <script type="module" src="/static/public/map-page.js?v=2026-08-18-02"></script>
 </head>
 <body class="map-page">
   <a class="skip-link" href="#map-canvas">Перейти к карте</a>
@@ -47,13 +47,14 @@
         <label class="map-search" for="map-search">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="5.8"></circle><path d="m16 16 4.1 4.1"></path></svg>
           <span class="visually-hidden">Поиск по карте</span>
-          <input id="map-search" type="search" placeholder="Места, услуги, впечатления" autocomplete="off" aria-controls="map-search-results" data-map-search>
+          <input id="map-search" type="search" placeholder="Базы отдыха и активности" autocomplete="off" aria-controls="map-search-results" data-map-search>
           <button type="button" class="map-search__clear" data-search-clear aria-label="Очистить поиск" hidden>×</button>
         </label>
         <div class="map-autocomplete" id="map-autocomplete" role="listbox" data-map-autocomplete hidden></div>
         <div class="map-tools" aria-label="Управление картой">
-          <button type="button" data-map-filter-toggle aria-label="Открыть фильтры каталога" aria-expanded="false" aria-controls="map-filters" title="Фильтры">
+          <button class="map-tools__filter" type="button" data-map-filter-toggle aria-label="Открыть фильтр каталога" aria-expanded="false" aria-controls="map-filters" title="Фильтр">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"></path></svg>
+            <span>Фильтр</span>
           </button>
           <button type="button" data-map-locate aria-label="Показать моё местоположение" title="Моё местоположение">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 6.6 18-6.6-3.7L5.4 21 12 3Z"></path></svg>
@@ -64,20 +65,16 @@
         </div>
       </div>
 
-      <aside class="map-filters" id="map-filters" data-map-filters aria-label="Фильтры единого каталога" hidden>
+      <aside class="map-filters" id="map-filters" data-map-filters aria-label="Фильтр карты" hidden>
         <div class="map-filters__heading">
-          <div><span>Фильтры</span><strong data-map-count>0 результатов</strong></div>
-          <div class="map-filters__heading-actions"><button type="button" data-filter-reset>Сбросить</button><button class="map-filters__close" type="button" data-map-filter-close aria-label="Закрыть фильтры">×</button></div>
+          <div><span>Фильтр</span><strong data-map-count>0 результатов</strong></div>
+          <div class="map-filters__heading-actions"><button type="button" data-filter-reset>Сбросить</button><button class="map-filters__close" type="button" data-map-filter-close aria-label="Закрыть фильтр">×</button></div>
         </div>
         <fieldset class="map-filter-fieldset map-filter-kinds">
           <legend>Показывать</legend>
           <div class="map-filter-chip-grid map-filter-chip-grid--kinds">
             <label><input type="checkbox" value="accommodation" data-kind-values="accommodation" data-filter-kind><span>Проживание</span></label>
-            <label><input type="checkbox" value="service" data-kind-values="service,rental" data-filter-kind><span>Услуги</span></label>
-            <label><input type="checkbox" value="activity" data-kind-values="activity,event" data-filter-kind><span>Активности</span></label>
-            <label><input type="checkbox" value="food" data-kind-values="food" data-filter-kind><span>Питание</span></label>
-            <label><input type="checkbox" value="transport" data-kind-values="transport" data-filter-kind><span>Транспорт</span></label>
-            <label><input type="checkbox" value="excursion" data-kind-values="excursion,guide,sight" data-filter-kind><span>Экскурсии</span></label>
+            <label><input type="checkbox" value="activity" data-kind-values="activity,event,service,rental" data-filter-kind><span>Активности</span></label>
           </div>
         </fieldset>
         <div class="map-filter-grid">
@@ -96,6 +93,7 @@
         </div></fieldset>
         <fieldset class="map-filter-fieldset" data-filter-amenities hidden><legend>Дополнительно</legend><div class="map-filter-chip-grid" data-filter-amenity-options></div><select class="visually-hidden" tabindex="-1" aria-hidden="true" aria-label="Удобства" data-filter-amenity><option value="">Все удобства</option></select></fieldset>
         <fieldset class="map-filter-fieldset"><legend>Цена от, ₽</legend><div class="map-filter-price"><label><span>Минимум</span><input type="number" min="0" step="100" inputmode="numeric" placeholder="0" data-filter-price-min></label><label><span>Максимум</span><input type="number" min="0" step="100" inputmode="numeric" placeholder="Без лимита" data-filter-price-max></label></div></fieldset>
+        <button class="map-filters__apply" type="button" data-filter-apply>Показать результаты</button>
       </aside>
 
       <div class="map-legend" data-map-legend role="group" aria-label="Легенда типов объектов"></div>

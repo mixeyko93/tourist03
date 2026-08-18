@@ -49,7 +49,8 @@ class PlacementMapBrowserTests(unittest.TestCase):
             page = context.new_page()
 
             page.goto(base_url, wait_until="domcontentloaded")
-            trigger = page.locator(".hero__actions [data-placement-open]")
+            page.locator("[data-menu-toggle]").click()
+            trigger = page.locator(".mobile-menu [data-placement-open]")
             trigger.click()
             dialog = page.locator("[data-placement-dialog]")
             self.assertTrue(dialog.evaluate("node => node.open"))
@@ -70,7 +71,8 @@ class PlacementMapBrowserTests(unittest.TestCase):
                 self.assertTrue(support.evaluate("node => node.hidden"))
             page.keyboard.press("Escape")
             self.assertFalse(dialog.evaluate("node => node.open"))
-            self.assertTrue(trigger.evaluate("node => document.activeElement === node"))
+            page.wait_for_function("document.activeElement === document.querySelector('[data-menu-toggle]')")
+            self.assertTrue(page.locator("[data-menu-toggle]").evaluate("node => document.activeElement === node"))
 
             catalog_requests = []
             page.on(

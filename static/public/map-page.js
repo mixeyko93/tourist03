@@ -1,5 +1,5 @@
 import { publicFeatures } from "./feature-flags.js";
-import { initialisePublicMap } from "./map.js?v=2026-08-03-03";
+import { initialisePublicMap } from "./map.js?v=2026-08-18-02";
 
 const ONBOARDING_KEY = "touristika:map-onboarding:v1";
 const features = publicFeatures();
@@ -71,6 +71,7 @@ function nodes() {
     filterParking: document.querySelector("[data-filter-parking]"),
     filterWifi: document.querySelector("[data-filter-wifi]"),
     filterReset: document.querySelector("[data-filter-reset]"),
+    filterApply: document.querySelector("[data-filter-apply]"),
     count: document.querySelector("[data-map-count]"),
     legend: document.querySelector("[data-map-legend]"),
     list,

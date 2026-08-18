@@ -1,13 +1,13 @@
 const COLORS = Object.freeze({
   accommodation: "#247da8",
-  excursion: "#81691c",
-  sight: "#81691c",
-  service: "#7b5aa6",
-  rental: "#7b5aa6",
   activity: "#d06c32",
-  food: "#a34f4f",
-  transport: "#376c5a",
 });
+
+function pilotCategory(key) {
+  if (key === "accommodation") return "accommodation";
+  if (["activity", "event", "service", "rental"].includes(key)) return "activity";
+  return "";
+}
 
 function shuffled(items) {
   const result = [...items];
@@ -64,11 +64,18 @@ export async function initialiseDiscoveryPreview(root) {
     const response = await fetch("/api/public/discovery/home", { headers: { Accept: "application/json" } });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const payload = await response.json();
-    Object.entries(payload.counts || {}).forEach(([key, value]) => {
+    const counts = payload.counts || {};
+    const pilotCounts = {
+      accommodation: Number(counts.accommodation) || 0,
+      activity: ["activity", "event", "service", "rental"].reduce((total, key) => total + (Number(counts[key]) || 0), 0),
+    };
+    Object.entries(pilotCounts).forEach(([key, value]) => {
       const node = root.querySelector(`[data-preview-count="${key}"]`);
-      if (node) node.textContent = new Intl.NumberFormat("ru-RU").format(Number(value) || 0);
+      if (node) node.textContent = new Intl.NumberFormat("ru-RU").format(value);
     });
-    const items = shuffled(payload.preview_items || payload.recently_updated || []).slice(0, 24);
+    const items = shuffled(payload.preview_items || payload.recently_updated || [])
+      .filter((entity) => pilotCategory(kindKey(entity)))
+      .slice(0, 24);
     const occupied = [];
     items.forEach((entity, index) => {
       const marker = document.createElement("button");
@@ -79,7 +86,7 @@ export async function initialiseDiscoveryPreview(root) {
       marker.className = "discovery-preview__marker";
       marker.style.setProperty("--x", `${position.x}%`);
       marker.style.setProperty("--y", `${position.y}%`);
-      marker.style.setProperty("--marker", COLORS[kindKey(entity)] || "#087184");
+      marker.style.setProperty("--marker", COLORS[pilotCategory(kindKey(entity))] || "#087184");
       marker.setAttribute("aria-label", `Открыть подсказку: ${entity.title || entity.name || "туристический объект"}`);
       marker.addEventListener("click", () => {
         popover.querySelector("[data-preview-type]").textContent = kindName(entity);
@@ -97,7 +104,7 @@ export async function initialiseDiscoveryPreview(root) {
       }, 140 + index * 110);
     });
     popover.querySelector("[data-preview-close]")?.addEventListener("click", () => { popover.hidden = true; });
-    const total = Number(payload.counts?.total || 0);
+    const total = pilotCounts.accommodation + pilotCounts.activity;
     const messages = [
       total ? `Более ${new Intl.NumberFormat("ru-RU").format(total)} интересных мест по России` : "Открывайте новые места по всей России",
       "Популярные впечатления уже на карте",

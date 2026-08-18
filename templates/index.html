@@ -6,13 +6,13 @@
   <meta name="theme-color" content="#f5f7f2">
   <meta name="color-scheme" content="light">
   <title>Туристика — твоя карта впечатлений</title>
-  <meta name="description" content="Туристика — единая карта мест, услуг и впечатлений России. Находите проживание, экскурсии, активности, прокат, еду и транспорт.">
+  <meta name="description" content="Туристика — базы отдыха и активности на одной живой карте России.">
   <link rel="canonical" href="__TOURISTIKA_PUBLIC_BASE_URL__/">
   <meta property="og:type" content="website">
   <meta property="og:locale" content="ru_RU">
   <meta property="og:site_name" content="Туристика">
   <meta property="og:title" content="Туристика — твоя карта впечатлений">
-  <meta property="og:description" content="Единая карта путешествий по России: проживание, услуги, активности, экскурсии, еда и транспорт.">
+  <meta property="og:description" content="Базы отдыха и активности на одной живой карте России.">
   <meta property="og:url" content="__TOURISTIKA_PUBLIC_BASE_URL__/">
   <meta property="og:image" content="__TOURISTIKA_PUBLIC_BASE_URL__/static/brand/turistika-logo-stacked.svg">
   <meta name="twitter:card" content="summary_large_image">
@@ -20,8 +20,8 @@
   <link rel="preload" href="/static/fonts/manrope/manrope-regular.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/static/fonts/manrope/manrope-extrabold.woff2" as="font" type="font/woff2" crossorigin>
   <!-- TOURISTIKA_RUNTIME_CONFIG -->
-  <link rel="stylesheet" href="/static/public/site.css?v=2026-08-03-03">
-  <script type="module" src="/static/public/site.js?v=2026-08-03-03"></script>
+  <link rel="stylesheet" href="/static/public/site.css?v=2026-08-18-02">
+  <script type="module" src="/static/public/site.js?v=2026-08-18-02"></script>
 </head>
 <body>
   <a class="skip-link" href="#main-content">Перейти к содержанию</a>
@@ -38,19 +38,11 @@
       <nav class="site-nav" aria-label="Основная навигация" data-navigation>
         <a href="#top">Главная</a>
         <a href="/map" data-map-entry>Карта</a>
-        <a href="/search" data-feature-link="discovery_search" hidden>Поиск</a>
-        <a href="/search?source=collection" data-feature-link="editorial_collections" hidden>Подборки</a>
-        <a href="/search?source=route" data-feature-link="tourism_routes" hidden>Маршруты</a>
-        <a href="/nearby" data-feature-link="nearby_discovery" hidden>Рядом</a>
         <a href="#about">О проекте</a>
         <a href="#placement-options" data-placement-open>Разместить объект</a>
       </nav>
 
       <div class="site-header__actions">
-        <button class="icon-button icon-button--search" type="button" data-open-search aria-label="Открыть поиск по карте">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="5.8"></circle><path d="m16 16 4.1 4.1"></path></svg>
-          <span>Поиск</span>
-        </button>
         <button class="icon-button icon-button--menu" type="button" data-menu-toggle aria-label="Открыть меню" aria-controls="mobile-menu" aria-expanded="false">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
           <span>Меню</span>
@@ -63,10 +55,6 @@
     <nav aria-label="Мобильная навигация">
       <a href="#top">Главная</a>
       <a href="/map">Карта</a>
-      <a href="/search" data-feature-link="discovery_search" hidden>Поиск</a>
-      <a href="/search?source=collection" data-feature-link="editorial_collections" hidden>Подборки</a>
-      <a href="/search?source=route" data-feature-link="tourism_routes" hidden>Маршруты</a>
-      <a href="/nearby" data-feature-link="nearby_discovery" hidden>Рядом</a>
       <a href="#about">О проекте</a>
       <a href="#placement-options" data-placement-open>Разместить объект</a>
     </nav>
@@ -78,10 +66,9 @@
       <div class="site-frame hero__content">
         <p class="eyebrow"><span aria-hidden="true">✦</span> Цифровой гид по России</p>
         <h1 id="hero-title">Откройте лучшие <br class="hero__desktop-break">места отдыха России</h1>
-        <p class="hero__lead">Находите проживание, экскурсии, активности и полезные сервисы для путешествия — на одной живой карте.</p>
+        <p class="hero__lead">Базы отдыха и активности на одной живой карте.</p>
         <div class="hero__actions">
           <a class="button button--primary" href="/map" data-map-entry>Открыть карту <span aria-hidden="true">↘</span></a>
-          <a class="button button--placement" href="#placement-options" data-placement-open>Разместить объект</a>
         </div>
       </div>
     </section>
@@ -94,11 +81,8 @@
           <p>Сегодня на карте можно найти</p>
         </div>
         <dl class="discovery-preview__counts" aria-live="polite">
-          <div><dt data-preview-count="accommodation">—</dt><dd>мест размещения</dd></div>
-          <div><dt data-preview-count="excursion">—</dt><dd>экскурсий</dd></div>
-          <div><dt data-preview-count="service">—</dt><dd>услуг</dd></div>
-          <div><dt data-preview-count="sight">—</dt><dd>достопримечательностей</dd></div>
-          <div><dt data-preview-count="route">—</dt><dd>маршрутов</dd></div>
+          <div><dt data-preview-count="accommodation">—</dt><dd>мест проживания</dd></div>
+          <div><dt data-preview-count="activity">—</dt><dd>активностей</dd></div>
         </dl>
         <div class="discovery-preview__map" aria-label="Мини-карта России с доступными туристическими объектами">
           <svg viewBox="0 0 640 280" role="img" aria-labelledby="preview-map-title">
@@ -123,7 +107,7 @@
             <p class="eyebrow">Карта впечатлений</p>
             <h2 id="map-title">Начните с места,<br>куда хочется поехать</h2>
           </div>
-          <p>Ищите по названию, формату путешествия или городу. Проживание, услуги и впечатления показаны вместе.</p>
+          <p>Ищите базы отдыха и активности по названию, формату путешествия или городу.</p>
         </div>
 
         <div class="public-map" data-map-shell>
@@ -131,13 +115,14 @@
             <label class="map-search" for="map-search">
               <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="5.8"></circle><path d="m16 16 4.1 4.1"></path></svg>
               <span class="visually-hidden">Поиск по карте</span>
-              <input id="map-search" type="search" placeholder="Места, услуги и впечатления" autocomplete="off" aria-controls="map-search-results" data-map-search>
+              <input id="map-search" type="search" placeholder="Базы отдыха и активности" autocomplete="off" aria-controls="map-search-results" data-map-search>
               <button type="button" class="map-search__clear" data-search-clear aria-label="Очистить поиск" hidden>×</button>
             </label>
             <div class="map-autocomplete" id="map-autocomplete" role="listbox" data-map-autocomplete hidden></div>
             <div class="map-tools" aria-label="Управление картой">
-              <button type="button" data-map-filter-toggle aria-label="Открыть фильтры каталога" aria-expanded="true" aria-controls="map-filters" title="Фильтры">
+              <button class="map-tools__filter" type="button" data-map-filter-toggle aria-label="Открыть фильтр каталога" aria-expanded="false" aria-controls="map-filters" title="Фильтр">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"></path></svg>
+                <span>Фильтр</span>
               </button>
               <button type="button" data-map-locate aria-label="Показать моё местоположение" title="Моё местоположение">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 6.6 18-6.6-3.7L5.4 21 12 3Z"></path></svg>
@@ -147,26 +132,22 @@
               </button>
             </div>
           </div>
-          <aside class="map-filters" id="map-filters" data-map-filters aria-label="Фильтры единого каталога">
+          <aside class="map-filters" id="map-filters" data-map-filters aria-label="Фильтр карты" hidden>
             <div class="map-filters__heading">
               <div>
-                <span>Фильтры</span>
+                <span>Фильтр</span>
                 <strong data-map-count>0 результатов</strong>
               </div>
               <div class="map-filters__heading-actions">
                 <button type="button" data-filter-reset>Сбросить</button>
-                <button class="map-filters__close" type="button" data-map-filter-close aria-label="Закрыть фильтры">×</button>
+                <button class="map-filters__close" type="button" data-map-filter-close aria-label="Закрыть фильтр">×</button>
               </div>
             </div>
             <fieldset class="map-filter-fieldset map-filter-kinds">
               <legend>Показывать</legend>
               <div class="map-filter-chip-grid map-filter-chip-grid--kinds">
                 <label><input type="checkbox" value="accommodation" data-kind-values="accommodation" data-filter-kind><span>Проживание</span></label>
-                <label><input type="checkbox" value="service" data-kind-values="service,rental" data-filter-kind><span>Услуги</span></label>
-                <label><input type="checkbox" value="activity" data-kind-values="activity,event" data-filter-kind><span>Активности</span></label>
-                <label><input type="checkbox" value="food" data-kind-values="food" data-filter-kind><span>Питание</span></label>
-                <label><input type="checkbox" value="transport" data-kind-values="transport" data-filter-kind><span>Транспорт</span></label>
-                <label><input type="checkbox" value="excursion" data-kind-values="excursion,guide,sight" data-filter-kind><span>Экскурсии</span></label>
+                <label><input type="checkbox" value="activity" data-kind-values="activity,event,service,rental" data-filter-kind><span>Активности</span></label>
               </div>
             </fieldset>
             <div class="map-filter-grid">
@@ -200,6 +181,7 @@
                 <label><span>Максимум</span><input type="number" min="0" step="100" inputmode="numeric" placeholder="Без лимита" data-filter-price-max></label>
               </div>
             </fieldset>
+            <button class="map-filters__apply" type="button" data-filter-apply>Показать результаты</button>
           </aside>
           <div class="map-legend" data-map-legend role="group" aria-label="Легенда типов объектов"></div>
           <div class="public-map__canvas" id="map" role="region" tabindex="0" aria-label="Интерактивная карта туристических мест, услуг и активностей России"></div>
@@ -238,17 +220,13 @@
         <div class="section-heading">
           <div>
             <p class="eyebrow">Выбирайте свой формат</p>
-            <h2 id="places-title">Что можно найти</h2>
+            <h2 id="places-title">Что можно найти на карте</h2>
           </div>
-          <p>Собираем разные части путешествия, чтобы нужный вариант находился на одной карте — от ночлега до маршрута на воде.</p>
+          <p>Выберите категорию — карта откроется сразу с нужным фильтром.</p>
         </div>
         <ul class="place-grid" role="list">
-          <li><span class="place-grid__number">01</span><span class="place-grid__icon" aria-hidden="true">⌂</span><h3>Проживание</h3><p>Базы, отели, глэмпинги и другие места для остановки.</p></li>
-          <li><span class="place-grid__number">02</span><span class="place-grid__icon" aria-hidden="true">◇</span><h3>Экскурсии</h3><p>Маршруты и истории, которые помогают увидеть больше.</p></li>
-          <li><span class="place-grid__number">03</span><span class="place-grid__icon" aria-hidden="true">⌁</span><h3>Вода</h3><p>Лодки, катера, SUP, каяки и рыбалка.</p></li>
-          <li><span class="place-grid__number">04</span><span class="place-grid__icon" aria-hidden="true">△</span><h3>Активности</h3><p>Квадроциклы, конные прогулки и сезонные впечатления.</p></li>
-          <li><span class="place-grid__number">05</span><span class="place-grid__icon" aria-hidden="true">○</span><h3>Еда и отдых</h3><p>Рестораны, кафе, бани и места для спокойной паузы.</p></li>
-          <li><span class="place-grid__number">06</span><span class="place-grid__icon" aria-hidden="true">→</span><h3>Транспорт</h3><p>Трансферы и прокат, которые связывают маршрут.</p></li>
+          <li><a href="/map?category=accommodation" data-map-category="accommodation"><span class="place-grid__number">01</span><span class="place-grid__icon" aria-hidden="true">⌂</span><h3>Проживание</h3><p>Базы отдыха, кемпинги, хостелы и другие места для остановки.</p></a></li>
+          <li><a href="/map?category=activity" data-map-category="activity"><span class="place-grid__number">02</span><span class="place-grid__icon" aria-hidden="true">△</span><h3>Активности</h3><p>Лодки, квадроциклы, SUP-борды и другие варианты активного отдыха.</p></a></li>
         </ul>
       </div>
     </section>
