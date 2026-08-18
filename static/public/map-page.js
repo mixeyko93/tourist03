@@ -1,5 +1,5 @@
 import { publicFeatures } from "./feature-flags.js";
-import { initialisePublicMap } from "./map.js?v=2026-08-18-04";
+import { initialisePublicMap } from "./map.js?v=2026-08-18-05";
 
 const ONBOARDING_KEY = "touristika:map-onboarding:v1";
 const features = publicFeatures();

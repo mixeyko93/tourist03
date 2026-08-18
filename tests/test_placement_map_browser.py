@@ -220,6 +220,53 @@ class PlacementMapBrowserTests(unittest.TestCase):
                     "document.documentElement.scrollWidth > document.documentElement.clientWidth + 1"
                 )
             )
+
+            trackpad_pinch = page.evaluate(
+                """async () => {
+                    const map = window.__TOURISTIKA_TEST_MAP__;
+                    const canvas = document.querySelector('[data-map-canvas]');
+                    const bounds = canvas.getBoundingClientRect();
+                    const initialZoom = map.getZoom();
+                    const wheel = new WheelEvent('wheel', {
+                        bubbles: true,
+                        cancelable: true,
+                        ctrlKey: true,
+                        deltaY: -180,
+                        clientX: bounds.left + bounds.width / 2,
+                        clientY: bounds.top + bounds.height / 2,
+                    });
+                    canvas.dispatchEvent(wheel);
+                    await new Promise((resolve) => setTimeout(resolve, 120));
+                    const wheelZoom = map.getZoom();
+
+                    map.setZoom(initialZoom, {animate: false});
+                    const gesture = (type, scale) => {
+                        const event = new Event(type, {bubbles: true, cancelable: true});
+                        Object.defineProperties(event, {
+                            scale: {value: scale},
+                            clientX: {value: bounds.left + bounds.width / 2},
+                            clientY: {value: bounds.top + bounds.height / 2},
+                        });
+                        canvas.dispatchEvent(event);
+                        return event.defaultPrevented;
+                    };
+                    const safariStartPrevented = gesture('gesturestart', 1);
+                    const safariChangePrevented = gesture('gesturechange', 2);
+                    gesture('gestureend', 2);
+                    return {
+                        wheelPrevented: wheel.defaultPrevented,
+                        wheelZoomed: wheelZoom > initialZoom,
+                        safariStartPrevented,
+                        safariChangePrevented,
+                        safariZoomed: map.getZoom() > initialZoom,
+                    };
+                }"""
+            )
+            self.assertTrue(trackpad_pinch["wheelPrevented"])
+            self.assertTrue(trackpad_pinch["wheelZoomed"])
+            self.assertTrue(trackpad_pinch["safariStartPrevented"])
+            self.assertTrue(trackpad_pinch["safariChangePrevented"])
+            self.assertTrue(trackpad_pinch["safariZoomed"])
             browser.close()
 
 

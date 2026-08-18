@@ -48,6 +48,9 @@
     let activeLayer = null;
     let logoControl = null;
     let switchedToFallback = false;
+    let yandexTileLoaded = false;
+    let initialFailureTimer = null;
+    let initialTileErrors = 0;
 
     function notifyLoad(event) {
       if (typeof config.onLoad === "function") config.onLoad({ provider, event });
@@ -58,6 +61,10 @@
     }
 
     function addOsmLayer(reason) {
+      if (initialFailureTimer) {
+        global.clearTimeout(initialFailureTimer);
+        initialFailureTimer = null;
+      }
       provider = "osm";
       ensureAttributionControl(map, L, config.attributionPosition);
       activeLayer = L.tileLayer(OSM_TILE_URL, {
@@ -70,22 +77,37 @@
       if (reason && typeof config.onFallback === "function") config.onFallback({ reason, provider });
     }
 
+    function switchToFallback() {
+      if (switchedToFallback || yandexTileLoaded) return;
+      switchedToFallback = true;
+      if (map.hasLayer(activeLayer)) map.removeLayer(activeLayer);
+      if (logoControl) {
+        map.removeControl(logoControl);
+        logoControl = null;
+      }
+      addOsmLayer("yandex-initial-load-failed");
+    }
+
     if (!apiKey) {
       addOsmLayer("missing-api-key");
     } else {
       const tileUrl = YANDEX_TILE_URL.replace("{apikey}", encodeURIComponent(apiKey));
       activeLayer = L.tileLayer(tileUrl, { maxZoom });
       logoControl = createYandexLogoControl(map, L, config.logoPosition);
-      activeLayer.on("tileload", notifyLoad);
-      activeLayer.on("tileerror", (event) => {
-        if (switchedToFallback) return;
-        switchedToFallback = true;
-        if (map.hasLayer(activeLayer)) map.removeLayer(activeLayer);
-        if (logoControl) {
-          map.removeControl(logoControl);
-          logoControl = null;
+      activeLayer.on("tileload", (event) => {
+        yandexTileLoaded = true;
+        if (initialFailureTimer) {
+          global.clearTimeout(initialFailureTimer);
+          initialFailureTimer = null;
         }
-        addOsmLayer("yandex-tile-error");
+        notifyLoad(event);
+      });
+      activeLayer.on("tileerror", (event) => {
+        notifyError(event);
+        if (switchedToFallback || yandexTileLoaded) return;
+        initialTileErrors += 1;
+        if (initialTileErrors < 3 || initialFailureTimer) return;
+        initialFailureTimer = global.setTimeout(switchToFallback, 1200);
       });
       activeLayer.addTo(map);
     }

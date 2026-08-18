@@ -104,6 +104,15 @@ class MapSearchContractTests(unittest.TestCase):
         self.assertIn("requestController?.abort()", source)
         self.assertIn("Искать в этой области", source)
 
+    def test_map_owns_trackpad_pinch_while_pointer_is_over_canvas(self):
+        source = (ROOT / "static/public/map.js").read_text(encoding="utf-8")
+        self.assertIn("scrollWheelZoom: true", source)
+        self.assertIn("touchZoom: true", source)
+        self.assertIn('canvas.addEventListener("gesturestart"', source)
+        self.assertIn('canvas.addEventListener("gesturechange"', source)
+        self.assertIn('canvas.addEventListener("gestureend"', source)
+        self.assertIn("event.preventDefault()", source)
+
 
 if __name__ == "__main__":
     unittest.main()

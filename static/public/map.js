@@ -273,6 +273,39 @@ async function optionalJson(url) {
   }
 }
 
+function enableSafariTrackpadPinch(map, canvas) {
+  let gestureStartZoom = null;
+
+  function gesturePoint(event) {
+    const bounds = canvas.getBoundingClientRect();
+    const clientX = Number.isFinite(event.clientX) ? event.clientX : bounds.left + bounds.width / 2;
+    const clientY = Number.isFinite(event.clientY) ? event.clientY : bounds.top + bounds.height / 2;
+    return window.L.point(clientX - bounds.left, clientY - bounds.top);
+  }
+
+  canvas.addEventListener("gesturestart", (event) => {
+    event.preventDefault();
+    gestureStartZoom = map.getZoom();
+  }, { passive: false });
+
+  canvas.addEventListener("gesturechange", (event) => {
+    if (gestureStartZoom === null) return;
+    event.preventDefault();
+    const scale = Math.max(0.25, Math.min(4, Number(event.scale) || 1));
+    const targetZoom = Math.max(
+      map.getMinZoom(),
+      Math.min(map.getMaxZoom(), gestureStartZoom + Math.log2(scale)),
+    );
+    map.setZoomAround(gesturePoint(event), targetZoom);
+  }, { passive: false });
+
+  canvas.addEventListener("gestureend", (event) => {
+    if (gestureStartZoom === null) return;
+    event.preventDefault();
+    gestureStartZoom = null;
+  }, { passive: false });
+}
+
 export function initialisePublicMap({
   shell,
   canvas,
@@ -324,8 +357,10 @@ export function initialisePublicMap({
   const map = window.L.map(canvas, {
     zoomControl: false,
     attributionControl: false,
-    scrollWheelZoom: false,
+    scrollWheelZoom: true,
+    touchZoom: true,
   }).setView(DEFAULT_REGION_VIEW, DEFAULT_REGION_ZOOM);
+  enableSafariTrackpadPinch(map, canvas);
   if (window.__TOURISTIKA_TEST_HOOKS__) window.__TOURISTIKA_TEST_MAP__ = map;
   let tilesFailed = false;
   const baseLayerController = window.TouristikaMapTiles.addBaseLayer(map, {
