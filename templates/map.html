@@ -22,11 +22,12 @@
   <link rel="stylesheet" href="/static/vendor/leaflet-markercluster/MarkerCluster.css">
   <link rel="stylesheet" href="/static/public/site.css?v=2026-08-18-02">
   <link rel="stylesheet" href="/static/public/map-page.css?v=2026-08-18-02">
-  <script>window.__TOURISTIKA_FEATURES__={{ features_json | safe }};</script>
+  <script>window.__TOURISTIKA_FEATURES__={{ features_json | safe }};window.__TOURISTIKA_MAPS__={{ maps_json | safe }};</script>
   {% if telegram_webapp %}<script src="https://telegram.org/js/telegram-web-app.js"></script>{% endif %}
+  <script src="/static/map-tiles.js?v=2026-08-18-01"></script>
   <script defer src="/static/vendor/leaflet/leaflet.js"></script>
   <script defer src="/static/vendor/leaflet-markercluster/leaflet.markercluster.js"></script>
-  <script type="module" src="/static/public/map-page.js?v=2026-08-18-02"></script>
+  <script type="module" src="/static/public/map-page.js?v=2026-08-18-04"></script>
 </head>
 <body class="map-page">
   <a class="skip-link" href="#map-canvas">Перейти к карте</a>

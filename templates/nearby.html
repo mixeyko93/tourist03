@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><meta name="theme-color" content="#f5f7f2">
   <title>{{ title }}</title><meta name="description" content="{{ description }}"><meta name="robots" content="noindex,follow"><link rel="canonical" href="{{ canonical }}">
-  <link rel="icon" href="/static/brand/turistika-favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css"><link rel="stylesheet" href="/static/public/discovery.css?v=2026-07-28-01"><script defer src="/static/vendor/leaflet/leaflet.js"></script><script type="module" src="/static/public/nearby.js?v=2026-07-28-01"></script>
+  <link rel="icon" href="/static/brand/turistika-favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css"><link rel="stylesheet" href="/static/public/discovery.css?v=2026-07-28-01"><script>window.__TOURISTIKA_MAPS__={{ maps_config | tojson }};</script><script src="/static/map-tiles.js?v=2026-08-18-01"></script><script defer src="/static/vendor/leaflet/leaflet.js"></script><script type="module" src="/static/public/nearby.js?v=2026-08-18-01"></script>
 </head>
 <body>
   <a class="discovery-skip" href="#nearby-results">Перейти к результатам</a>

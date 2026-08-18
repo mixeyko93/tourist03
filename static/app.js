@@ -810,9 +810,6 @@ const screens = {
 
 // ==== Карта Leaflet, кластеры, иконки и т.п. ====
 const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([51.83, 107.58], 9);
-const __osmTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-  maxZoom: 19
-}).addTo(map);
 
 // Если тайлы не грузятся (нет интернета/блокировка) — покажем подсказку поверх карты
 (function initMapTileErrorHint(){
@@ -850,9 +847,17 @@ const __osmTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.p
     } catch (_) {}
   };
   try {
-    __osmTiles.on('tileerror', show);
-    __osmTiles.on('tileload', hide);
-  } catch (_) {}
+    if (window.TouristikaMapTiles) {
+      window.TouristikaMapTiles.addBaseLayer(map, { maxZoom: 19, onError: show, onLoad: hide });
+    } else {
+      const fallbackTiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+      }).addTo(map);
+      fallbackTiles.on('tileerror', show);
+      fallbackTiles.on('tileload', hide);
+    }
+  } catch (_) { show(); }
 })();
 
 const cluster = (typeof L.markerClusterGroup === 'function')

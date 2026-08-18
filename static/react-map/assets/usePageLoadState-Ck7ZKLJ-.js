@@ -1,1 +1,0 @@
-import{r as s}from"./index-CHvpjVa5.js";function f(e){const[t,l]=s.useState(!1),[a,u]=s.useState(!1),r=s.useRef(null);return s.useEffect(()=>(!e&&!t?r.current=setTimeout(()=>{l(!0),u(!0)},60):!e&&t&&u(!0),()=>{r.current&&clearTimeout(r.current)}),[e,t]),{showInitialSkeleton:e&&!t,showRefreshOverlay:e&&t,isPageVisible:a}}export{f as u};

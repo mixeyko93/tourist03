@@ -716,10 +716,7 @@ function initialiseCoordinateMap() {
   }
   const mapNode = document.querySelector("[data-coordinate-map]");
   coordinateMap = window.L.map(mapNode, { zoomControl:true }).setView([55.3, 86.0], 4);
-  window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    maxZoom:19,
-  }).addTo(coordinateMap);
+  window.TouristikaMapTiles.addBaseLayer(coordinateMap, { maxZoom:19 });
   const setMarker = (lat, lng) => {
     if (!coordinateMap) return;
     if (!coordinateMarker) coordinateMarker = window.L.marker([lat, lng]).addTo(coordinateMap);

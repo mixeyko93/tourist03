@@ -12,10 +12,7 @@ function initialize() {
   try { points = JSON.parse(root.dataset.points || "[]"); } catch {}
   try { geojson = JSON.parse(root.dataset.geojson || "null"); } catch {}
   const map = window.L.map(root, { scrollWheelZoom: false });
-  window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "&copy; OpenStreetMap",
-    maxZoom: 18,
-  }).addTo(map);
+  window.TouristikaMapTiles.addBaseLayer(map, { maxZoom: 18 });
   const bounds = [];
   points.forEach((point, index) => {
     if (!Number.isFinite(Number(point.lat)) || !Number.isFinite(Number(point.lng))) return;

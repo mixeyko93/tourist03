@@ -19,13 +19,15 @@
       captchaSiteKey: {{ captcha_site_key | tojson }},
       captchaAction: {{ captcha_action | tojson }}
     };
+    window.__TOURISTIKA_MAPS__ = {{ maps_config | tojson }};
   </script>
   {% if captcha_client_script_url %}
   <script defer src="/static/public/turnstile-adapter.js?v=2026-08-10-01"></script>
   <script defer src="{{ captcha_client_script_url | e }}"></script>
   {% endif %}
   <script defer src="/static/vendor/leaflet/leaflet.js"></script>
-  <script type="module" src="/static/public/submission.js?v=2026-08-10-01"></script>
+  <script src="/static/map-tiles.js?v=2026-08-18-01"></script>
+  <script type="module" src="/static/public/submission.js?v=2026-08-18-01"></script>
 </head>
 <body>
   <a class="submission-skip" href="#submission-form">Перейти к форме</a>

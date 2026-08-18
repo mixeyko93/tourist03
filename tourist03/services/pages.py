@@ -38,6 +38,12 @@ SCHEMA_ORG_TYPES = frozenset(
         "TouristTrip",
     }
 )
+
+
+def _maps_runtime_config(settings) -> dict:
+    return {"yandexTilesApiKey": settings.yandex_maps_tiles_api_key}
+
+
 ENTITY_SCHEMA_ORG_FALLBACKS = {
     "accommodation": "LodgingBusiness",
     "food": "Restaurant",
@@ -59,6 +65,8 @@ def _public_index_response(request: Request):
     runtime_config = (
         "<script>window.__TOURISTIKA_FEATURES__="
         + json.dumps(settings.public_features, separators=(",", ":"))
+        + ";window.__TOURISTIKA_MAPS__="
+        + json.dumps(_maps_runtime_config(settings), separators=(",", ":"))
         + ";</script>"
     )
     if settings.feature_telegram_webapp:
@@ -106,6 +114,7 @@ def public_map_page(request: Request):
         template.render(
             public_base_url=public_base_url,
             features_json=json.dumps(settings.public_features, separators=(",", ":")),
+            maps_json=json.dumps(_maps_runtime_config(settings), separators=(",", ":")),
             telegram_webapp=settings.feature_telegram_webapp,
         ),
         headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
@@ -315,6 +324,7 @@ def _discovery_page_context(request: Request) -> dict:
         "features": settings.public_features,
         "local_recent_history": settings.feature_local_recent_history,
         "telegram_contact_url": build_telegram_deep_link(settings),
+        "maps_config": _maps_runtime_config(settings),
     }
 
 
@@ -526,6 +536,7 @@ def _standalone_public_page(request: Request, template_name: str) -> HTMLRespons
             captcha_site_key=settings.submission_captcha_site_key,
             captcha_action=settings.submission_captcha_expected_action,
             telegram_contact_url=build_telegram_deep_link(settings),
+            maps_config=_maps_runtime_config(settings),
         ),
         headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
     )
@@ -612,6 +623,12 @@ def react_map_page(request: Request):
         try:
             html = Path(react_index).read_text(encoding="utf-8")
             html = html.replace("<title>Туристика Панель</title>", f"<title>{_react_shell_title(request)}</title>", 1)
+            maps_script = (
+                "<script>window.__TOURISTIKA_MAPS__="
+                + json.dumps(_maps_runtime_config(request.app.state.settings), separators=(",", ":"))
+                + ";</script>"
+            )
+            html = html.replace("</head>", f"    {maps_script}\n  </head>", 1)
             if request.url.path == "/owner" or request.url.path.startswith("/owner/"):
                 owner_preloads = (
                     '<link rel="preload" href="/static/fonts/manrope/manrope-extrabold.woff2" '

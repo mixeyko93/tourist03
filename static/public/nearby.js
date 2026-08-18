@@ -28,10 +28,7 @@ function initializeMap() {
     return;
   }
   map = window.L.map(mapRoot, { zoomControl: true }).setView([61.5, 96.5], 3);
-  window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "&copy; OpenStreetMap",
-    maxZoom: 18,
-  }).addTo(map);
+  window.TouristikaMapTiles.addBaseLayer(map, { maxZoom: 18 });
   map.on("click", ({ latlng }) => setPoint(latlng.lat, latlng.lng, { pan: false }));
 }
 

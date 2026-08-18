@@ -327,16 +327,24 @@ export function initialisePublicMap({
     scrollWheelZoom: false,
   }).setView(DEFAULT_REGION_VIEW, DEFAULT_REGION_ZOOM);
   if (window.__TOURISTIKA_TEST_HOOKS__) window.__TOURISTIKA_TEST_MAP__ = map;
-  const tiles = window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  let tilesFailed = false;
+  const baseLayerController = window.TouristikaMapTiles.addBaseLayer(map, {
     maxZoom: 18,
-    attribution: "&copy; OpenStreetMap",
-  }).addTo(map);
+    onError() {
+      if (!tilesFailed && status) status.textContent = "Часть карты не загрузилась. Проверьте подключение к интернету.";
+      tilesFailed = true;
+    },
+    onLoad() {
+      if (tilesFailed && status) status.textContent = "";
+      tilesFailed = false;
+    },
+  });
+  if (window.__TOURISTIKA_TEST_HOOKS__) window.__TOURISTIKA_TEST_BASE_LAYER__ = baseLayerController;
   const markerLayer = createClusterLayer().addTo(map);
   const markers = new Map();
   let entities = [];
   let entityTypes = [];
   let searchQuery = "";
-  let tilesFailed = false;
   let requestController;
   let searchTimer;
   let inputTimer;
@@ -371,14 +379,6 @@ export function initialisePublicMap({
   ];
 
   window.L.control.zoom({ position: "bottomright" }).addTo(map);
-  tiles.on("tileerror", () => {
-    if (!tilesFailed && status) status.textContent = "Часть карты не загрузилась. Проверьте подключение к интернету.";
-    tilesFailed = true;
-  });
-  tiles.on("tileload", () => {
-    if (tilesFailed && status) status.textContent = "";
-    tilesFailed = false;
-  });
 
   function snapshotArea() {
     const center = map.getCenter();

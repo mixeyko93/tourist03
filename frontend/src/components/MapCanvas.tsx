@@ -38,9 +38,15 @@ export const MapCanvas = forwardRef<MapCanvasHandle, MapCanvasProps>(function Ma
       attributionControl: false,
     }).setView(DEFAULT_CENTER, DEFAULT_ZOOM);
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-    }).addTo(map);
+    if (window.TouristikaMapTiles) {
+      window.TouristikaMapTiles.addBaseLayer(map, { maxZoom: 19, leaflet: L });
+    } else {
+      L.control.attribution({ prefix: false }).addTo(map);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      }).addTo(map);
+    }
 
     markersRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;

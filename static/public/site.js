@@ -186,7 +186,7 @@ async function loadMapController() {
     loadStylesheet("/static/vendor/leaflet-markercluster/MarkerCluster.css");
     await loadScript("/static/vendor/leaflet/leaflet.js");
     await loadScript("/static/vendor/leaflet-markercluster/leaflet.markercluster.js");
-    const { initialisePublicMap } = await import("./map.js?v=2026-08-18-02");
+    const { initialisePublicMap } = await import("./map.js?v=2026-08-18-04");
     mapController = initialisePublicMap({
     shell: mapShell,
     canvas: mapCanvas,

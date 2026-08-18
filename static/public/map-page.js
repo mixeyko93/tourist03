@@ -1,5 +1,5 @@
 import { publicFeatures } from "./feature-flags.js";
-import { initialisePublicMap } from "./map.js?v=2026-08-18-02";
+import { initialisePublicMap } from "./map.js?v=2026-08-18-04";
 
 const ONBOARDING_KEY = "touristika:map-onboarding:v1";
 const features = publicFeatures();
@@ -217,7 +217,8 @@ installOnboarding();
 waitForLeaflet().then(() => {
   controller = initialisePublicMap(nodes());
   if (window.__TOURISTIKA_TEST_HOOKS__) window.__TOURISTIKA_TEST_MAP_CONTROLLER__ = controller;
-}).catch(() => {
+}).catch((error) => {
+  console.error("Failed to initialise the public map", error);
   document.querySelector("[data-map-loading]").hidden = true;
   document.querySelector("[data-map-status]").textContent = "Карта временно недоступна. Попробуйте обновить страницу.";
 });

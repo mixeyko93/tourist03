@@ -13,9 +13,11 @@
   <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="/static/public/discovery.css?v=2026-07-28-01">
   <script defer src="/static/vendor/leaflet/leaflet.js"></script>
+  <script>window.__TOURISTIKA_MAPS__={{ maps_config | tojson }};</script>
+  <script src="/static/map-tiles.js?v=2026-08-18-01"></script>
   <script type="application/ld+json">{{ structured_data | tojson }}</script>
   <script type="application/ld+json">{{ breadcrumbs_data | tojson }}</script>
-  <script type="module" src="/static/public/route-detail.js?v=2026-07-28-01"></script>
+  <script type="module" src="/static/public/route-detail.js?v=2026-08-18-01"></script>
 </head>
 <body data-history-kind="route" data-history-slug="{{ route.slug }}" data-history-title="{{ route.title }}">
   <a class="discovery-skip" href="#route-points">Перейти к точкам маршрута</a>

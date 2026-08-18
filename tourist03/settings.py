@@ -110,6 +110,7 @@ class Settings(BaseSettings):
     vk_token: str = ""
     vk_group_id: str = ""
     tourist_webapp_url: str = ""
+    yandex_maps_tiles_api_key: str = ""
 
     smtp_host: str = ""
     smtp_port: int = 587
